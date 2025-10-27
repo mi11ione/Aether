@@ -1,0 +1,1797 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%lld amplitudes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld amplitudes"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld ampiezze"
+          }
+        }
+      }
+    },
+    "%lld qubits" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld qubits"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld qubit"
+          }
+        }
+      }
+    },
+    "%lld states" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld states"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld stati"
+          }
+        }
+      }
+    },
+    "Algorithm Details" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algorithm Details"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dettagli Algoritmo"
+          }
+        }
+      }
+    },
+    "Annealing steps:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annealing steps:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passi di annealing:"
+          }
+        }
+      }
+    },
+    "Audio Codecs" : {
+      "comment" : "Audio codecs label",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio Codecs"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codec Audio"
+          }
+        }
+      }
+    },
+    "Audiovisual Compression Foundation" : {
+      "comment" : "Compression overlay title",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audiovisual Compression Foundation"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fondamenti della Compressione Audiovisiva"
+          }
+        }
+      }
+    },
+    "Bloch Spheres" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloch Spheres"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfere di Bloch"
+          }
+        }
+      }
+    },
+    "Build a circuit and run it to see Bloch sphere visualizations" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Build a circuit and run it to see Bloch sphere visualizations"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Costruisci un circuito ed eseguilo per vedere le visualizzazioni della sfera di Bloch"
+          }
+        }
+      }
+    },
+    "Build Your First Circuit" : {
+      "comment" : "TipKit: First gate tip title",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Build Your First Circuit"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Costruisci il Tuo Primo Circuito"
+          }
+        }
+      }
+    },
+    "Circuit Details" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Circuit Details"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dettagli Circuito"
+          }
+        }
+      }
+    },
+    "Classical" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Classical"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Classico"
+          }
+        }
+      }
+    },
+    "Classical FFT" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Classical FFT"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FFT Classica"
+          }
+        }
+      }
+    },
+    "Close" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi"
+          }
+        }
+      }
+    },
+    "CNOT" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CNOT"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CNOT"
+          }
+        }
+      }
+    },
+    "CNOT creates quantum entanglement - measuring one qubit instantly affects the other, regardless of distance." : {
+      "comment" : "TipKit: Entanglement tip message",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CNOT creates quantum entanglement - measuring one qubit instantly affects the other, regardless of distance."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CNOT crea entanglement quantistico - misurare un qubit influenza istantaneamente l'altro, indipendentemente dalla distanza."
+          }
+        }
+      }
+    },
+    "Compression Foundation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compression Foundation"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fondamenti della Compressione"
+          }
+        }
+      }
+    },
+    "cool" : {
+
+    },
+    "Couplings:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couplings:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accoppiamenti:"
+          }
+        }
+      }
+    },
+    "Drag gates from the palette to build your quantum circuit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag gates from the palette to build your quantum circuit"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trascina le porte dalla palette per costruire il tuo circuito quantistico"
+          }
+        }
+      }
+    },
+    "Empty Circuit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empty Circuit"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Circuito Vuoto"
+          }
+        }
+      }
+    },
+    "Energy:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Energy:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Energia:"
+          }
+        }
+      }
+    },
+    "Entanglement" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entanglement"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entanglement"
+          }
+        }
+      }
+    },
+    "Entanglement Generated" : {
+      "comment" : "TipKit: Entanglement tip title",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entanglement Generated"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entanglement Generato"
+          }
+        }
+      }
+    },
+    "Exploring quantum algorithms for compression. These are the foundations that will transform audiovisual production when quantum hardware matures." : {
+      "comment" : "Educational message body",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exploring quantum algorithms for compression. These are the foundations that will transform audiovisual production when quantum hardware matures."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esplorando algoritmi quantistici per la compressione. Queste sono le fondamenta che trasformeranno la produzione audiovisiva quando l'hardware quantistico maturerà."
+          }
+        }
+      }
+    },
+    "Export" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esporta"
+          }
+        }
+      }
+    },
+    "Export as PDF" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export as PDF"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esporta come PDF"
+          }
+        }
+      }
+    },
+    "Export as SVG" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export as SVG"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esporta come SVG"
+          }
+        }
+      }
+    },
+    "FFT converts spatial/temporal data to frequency domain. Video codecs use DCT, audio codecs use MDCT - both are FFT variants. This is the foundation of compression." : {
+      "comment" : "FFT compression explanation",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FFT converts spatial/temporal data to frequency domain. Video codecs use DCT, audio codecs use MDCT - both are FFT variants. This is the foundation of compression."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FFT converte dati spaziali/temporali nel dominio delle frequenze. I codec video usano DCT, i codec audio usano MDCT - entrambi varianti FFT. Questa è la base della compressione."
+          }
+        }
+      }
+    },
+    "Found state:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found state:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stato trovato:"
+          }
+        }
+      }
+    },
+    "Gate Palette" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gate Palette"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Palette Porte"
+          }
+        }
+      }
+    },
+    "Gates:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gates:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porte:"
+          }
+        }
+      }
+    },
+    "Grover iterations:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grover iterations:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iterazioni Grover:"
+          }
+        }
+      }
+    },
+    "Grover Search" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grover Search"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricerca di Grover"
+          }
+        }
+      }
+    },
+    "Grover's algorithm provides quadratic speedup for searching unsorted databases, requiring O(√N) operations compared to classical O(N)." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grover's algorithm provides quadratic speedup for searching unsorted databases, requiring O(√N) operations compared to classical O(N)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'algoritmo di Grover fornisce un'accelerazione quadratica per la ricerca in database non ordinati, richiedendo O(√N) operazioni rispetto a O(N) classico."
+          }
+        }
+      }
+    },
+    "Grover's Search Algorithm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grover's Search Algorithm"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algoritmo di Ricerca di Grover"
+          }
+        }
+      }
+    },
+    "H.264, JPEG → DCT (FFT variant)" : {
+      "comment" : "Video codec details",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "H.264, JPEG → DCT (FFT variant)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "H.264, JPEG → DCT (variante FFT)"
+          }
+        }
+      }
+    },
+    "Hadamard" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hadamard"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hadamard"
+          }
+        }
+      }
+    },
+    "High" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "High"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alto"
+          }
+        }
+      }
+    },
+    "Long press any gate and drag it onto a qubit wire. Watch the quantum state evolve in real-time." : {
+      "comment" : "TipKit: First gate tip message",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Long press any gate and drag it onto a qubit wire. Watch the quantum state evolve in real-time."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tieni premuta qualsiasi porta e trascinala su un filo di qubit. Osserva lo stato quantistico evolversi in tempo reale."
+          }
+        }
+      }
+    },
+    "Looking for state:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Looking for state:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cercando stato:"
+          }
+        }
+      }
+    },
+    "Low" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Low"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Basso"
+          }
+        }
+      }
+    },
+    "Measurement Probabilities" : {
+      "comment" : "Probabilities view title",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Measurement Probabilities"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Probabilità di Misura"
+          }
+        }
+      }
+    },
+    "Measures quantum correlations between qubit pairs. High values indicate entanglement - measuring one qubit instantly affects the other. Diagonal is always 1 (perfect self-correlation)." : {
+      "comment" : "Entanglement explanation",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Measures quantum correlations between qubit pairs. High values indicate entanglement - measuring one qubit instantly affects the other. Diagonal is always 1 (perfect self-correlation)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Misura le correlazioni quantistiche tra coppie di qubit. Valori alti indicano entanglement - misurare un qubit influenza istantaneamente l'altro. La diagonale è sempre 1 (perfetta auto-correlazione)."
+          }
+        }
+      }
+    },
+    "MP3, AAC → MDCT (FFT variant)" : {
+      "comment" : "Audio codec details",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MP3, AAC → MDCT (FFT variant)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MP3, AAC → MDCT (variante FFT)"
+          }
+        }
+      }
+    },
+    "Multi-Qubit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Multi-Qubit"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Multi-Qubit"
+          }
+        }
+      }
+    },
+    "Mutual information between qubit pairs" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mutual information between qubit pairs"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informazione mutua tra coppie di qubit"
+          }
+        }
+      }
+    },
+    "No Entanglement Data" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Entanglement Data"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun Dato di Entanglement"
+          }
+        }
+      }
+    },
+    "No Probabilities" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Probabilities"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuna Probabilità"
+          }
+        }
+      }
+    },
+    "No State Yet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No State Yet"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuno Stato Ancora"
+          }
+        }
+      }
+    },
+    "Optimization Problem" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optimization Problem"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Problema di Ottimizzazione"
+          }
+        }
+      }
+    },
+    "Optimization Result" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optimization Result"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Risultato Ottimizzazione"
+          }
+        }
+      }
+    },
+    "Pauli-X" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauli-X"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauli-X"
+          }
+        }
+      }
+    },
+    "Pauli-Y" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauli-Y"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauli-Y"
+          }
+        }
+      }
+    },
+    "Pauli-Z" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauli-Z"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauli-Z"
+          }
+        }
+      }
+    },
+    "Pause" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausa"
+          }
+        }
+      }
+    },
+    "Performance Comparison" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Performance Comparison"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confronto Prestazioni"
+          }
+        }
+      }
+    },
+    "Phase" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Phase"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fase"
+          }
+        }
+      }
+    },
+    "Probabilities" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Probabilities"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Probabilità"
+          }
+        }
+      }
+    },
+    "Quantum" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantum"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantistico"
+          }
+        }
+      }
+    },
+    "Quantum Annealing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantum Annealing"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annealing Quantistico"
+          }
+        }
+      }
+    },
+    "Quantum annealing uses quantum fluctuations to find optimal solutions to combinatorial optimization problems." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantum annealing uses quantum fluctuations to find optimal solutions to combinatorial optimization problems."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'annealing quantistico utilizza fluttuazioni quantistiche per trovare soluzioni ottimali a problemi di ottimizzazione combinatoria."
+          }
+        }
+      }
+    },
+    "Quantum FFT" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantum FFT"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FFT Quantistica"
+          }
+        }
+      }
+    },
+    "Quantum Fourier Transform" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantum Fourier Transform"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trasformata di Fourier Quantistica"
+          }
+        }
+      }
+    },
+    "Quantum State" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantum State"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stato Quantistico"
+          }
+        }
+      }
+    },
+    "Qubit %lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qubit %lld"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qubit %lld"
+          }
+        }
+      }
+    },
+    "Qubit Entanglement" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qubit Entanglement"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entanglement dei Qubit"
+          }
+        }
+      }
+    },
+    "Qubits:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qubits:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qubit:"
+          }
+        }
+      }
+    },
+    "Re-run Annealing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Re-run Annealing"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riesegui Annealing"
+          }
+        }
+      }
+    },
+    "Re-run Comparison" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Re-run Comparison"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riesegui Confronto"
+          }
+        }
+      }
+    },
+    "Re-run Search" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Re-run Search"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riesegui Ricerca"
+          }
+        }
+      }
+    },
+    "Reset" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ripristina"
+          }
+        }
+      }
+    },
+    "Rotations" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotations"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotazioni"
+          }
+        }
+      }
+    },
+    "Run" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esegui"
+          }
+        }
+      }
+    },
+    "Run Annealing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run Annealing"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esegui Annealing"
+          }
+        }
+      }
+    },
+    "Run Comparison" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run Comparison"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esegui Confronto"
+          }
+        }
+      }
+    },
+    "Run Search" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run Search"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esegui Ricerca"
+          }
+        }
+      }
+    },
+    "Run the circuit to analyze qubit entanglement" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run the circuit to analyze qubit entanglement"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esegui il circuito per analizzare l'entanglement dei qubit"
+          }
+        }
+      }
+    },
+    "Run the circuit to see measurement probabilities" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run the circuit to see measurement probabilities"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esegui il circuito per vedere le probabilità di misurazione"
+          }
+        }
+      }
+    },
+    "S Gate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "S Gate"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porta S"
+          }
+        }
+      }
+    },
+    "Same quantum algorithm, audiovisual applications" : {
+      "comment" : "Compression overlay summary",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same quantum algorithm, audiovisual applications"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stesso algoritmo quantistico, applicazioni audiovisive"
+          }
+        }
+      }
+    },
+    "Search Result" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search Result"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Risultato Ricerca"
+          }
+        }
+      }
+    },
+    "Search space:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search space:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spazio di ricerca:"
+          }
+        }
+      }
+    },
+    "Search Target" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search Target"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obiettivo Ricerca"
+          }
+        }
+      }
+    },
+    "Single Qubit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Single Qubit"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qubit Singolo"
+          }
+        }
+      }
+    },
+    "Solution:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solution:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soluzione:"
+          }
+        }
+      }
+    },
+    "Speedup:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speedup:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accelerazione:"
+          }
+        }
+      }
+    },
+    "State Space:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "State Space:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spazio degli Stati:"
+          }
+        }
+      }
+    },
+    "Step" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Step"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passo"
+          }
+        }
+      }
+    },
+    "Success!" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Success!"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Successo!"
+          }
+        }
+      }
+    },
+    "Superposition Created" : {
+      "comment" : "TipKit: Superposition tip title",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Superposition Created"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sovrapposizione Creata"
+          }
+        }
+      }
+    },
+    "Supporting Demos" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supporting Demos"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo di Supporto"
+          }
+        }
+      }
+    },
+    "SWAP" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SWAP"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SWAP"
+          }
+        }
+      }
+    },
+    "T Gate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "T Gate"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porta T"
+          }
+        }
+      }
+    },
+    "The Hadamard gate creates superposition - the qubit is now in both |0⟩ and |1⟩ states simultaneously. Watch the Bloch sphere move to the equator." : {
+      "comment" : "TipKit: Superposition tip message",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Hadamard gate creates superposition - the qubit is now in both |0⟩ and |1⟩ states simultaneously. Watch the Bloch sphere move to the equator."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La porta Hadamard crea sovrapposizione - il qubit è ora contemporaneamente negli stati |0⟩ e |1⟩. Guarda la sfera di Bloch muoversi verso l'equatore."
+          }
+        }
+      }
+    },
+    "The QFT is the quantum analogue of the discrete Fourier transform, fundamental for signal processing and compression algorithms." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The QFT is the quantum analogue of the discrete Fourier transform, fundamental for signal processing and compression algorithms."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La QFT è l'analogo quantistico della trasformata di Fourier discreta, fondamentale per l'elaborazione dei segnali e gli algoritmi di compressione."
+          }
+        }
+      }
+    },
+    "Toffoli" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toffoli"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toffoli"
+          }
+        }
+      }
+    },
+    "Total gates:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total gates:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porte totali:"
+          }
+        }
+      }
+    },
+    "Understanding Quantum Potential" : {
+      "comment" : "Educational message title",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Understanding Quantum Potential"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comprendere il Potenziale Quantistico"
+          }
+        }
+      }
+    },
+    "Variables:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Variables:"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Variabili:"
+          }
+        }
+      }
+    },
+    "VFX" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VFX"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VFX"
+          }
+        }
+      }
+    },
+    "VFX Application: Ray tracing path optimization, global illumination. Classical gradient descent gets stuck in local minima, quantum tunneling finds global optimum." : {
+      "comment" : "Annealing VFX application",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VFX Application: Ray tracing path optimization, global illumination. Classical gradient descent gets stuck in local minima, quantum tunneling finds global optimum."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applicazione VFX: Ottimizzazione percorsi ray tracing, illuminazione globale. La discesa del gradiente classica si blocca nei minimi locali, il tunneling quantistico trova l'ottimo globale."
+          }
+        }
+      }
+    },
+    "VFX Application: Searching video footage for objects, frames, or patterns. For 1 million frames, classical needs ~500k checks, quantum needs ~1000." : {
+      "comment" : "Grover VFX application",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VFX Application: Searching video footage for objects, frames, or patterns. For 1 million frames, classical needs ~500k checks, quantum needs ~1000."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applicazione VFX: Ricerca di oggetti, fotogrammi o pattern nei filmati. Per 1 milione di fotogrammi, il classico richiede ~500k controlli, il quantistico ~1000."
+          }
+        }
+      }
+    },
+    "Video Codecs" : {
+      "comment" : "Video codecs label",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video Codecs"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codec Video"
+          }
+        }
+      }
+    },
+    "When measured, the quantum state collapses to one outcome. Probability = |amplitude|²" : {
+      "comment" : "Probabilities explanation",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When measured, the quantum state collapses to one outcome. Probability = |amplitude|²"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quando misurato, lo stato quantistico collassa in un risultato. Probabilità = |ampiezza|²"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
