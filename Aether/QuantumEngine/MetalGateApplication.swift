@@ -96,14 +96,23 @@ final class MetalGateApplication {
     func apply(gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {
         switch gate {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
-             .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ:
+             .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
+             .u1, .u2, .u3, .sx, .sy, .customSingleQubit:
             applySingleQubitGate(gate: gate, qubit: qubits[0], state: state)
 
         case let .cnot(control, target):
             applyCNOT(control: control, target: target, state: state)
 
         case let .controlledPhase(_, control, target),
-             let .swap(control, target):
+             let .controlledRotationX(_, control, target),
+             let .controlledRotationY(_, control, target),
+             let .controlledRotationZ(_, control, target),
+             let .swap(control, target),
+             let .sqrtSwap(control, target),
+             let .cz(control, target),
+             let .cy(control, target),
+             let .ch(control, target),
+             let .customTwoQubit(_, control, target):
             applyTwoQubitGate(gate: gate, control: control, target: target, state: state)
 
         case let .toffoli(c1, c2, target):

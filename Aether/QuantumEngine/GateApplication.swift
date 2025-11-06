@@ -31,17 +31,27 @@ enum GateApplication {
 
         switch gate {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
-             .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ:
+             .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
+             .u1, .u2, .u3, .sx, .sy, .customSingleQubit:
             precondition(qubits.count == 1, "Single-qubit gate requires exactly 1 qubit")
             return applySingleQubitGate(gate: gate, qubit: qubits[0], state: state)
 
         case let .cnot(control, target):
             return applyCNOT(control: control, target: target, state: state)
 
-        case let .controlledPhase(_, control, target):
+        case let .cz(control, target):
+            return applyCZ(control: control, target: target, state: state)
+
+        case let .cy(control, target),
+             let .ch(control, target),
+             let .controlledPhase(_, control, target),
+             let .controlledRotationX(_, control, target),
+             let .controlledRotationY(_, control, target),
+             let .controlledRotationZ(_, control, target),
+             let .customTwoQubit(_, control, target):
             return applyTwoQubitGate(gate: gate, control: control, target: target, state: state)
 
-        case let .swap(q1, q2):
+        case let .swap(q1, q2), let .sqrtSwap(q1, q2):
             return applyTwoQubitGate(gate: gate, control: q1, target: q2, state: state)
 
         case let .toffoli(c1, c2, target):
@@ -164,6 +174,33 @@ enum GateApplication {
                 newAmplitudes[i ^ targetMask] = state.amplitudes[i]
             } else {
                 newAmplitudes[i] = state.amplitudes[i]
+            }
+        }
+
+        return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
+    }
+
+    /// CZ gate application (Controlled-Z)
+    /// Diagonal gate: only applies phase when both qubits are |1⟩
+    /// Much faster than general 4×4 matrix multiplication
+    /// - Parameters:
+    ///   - control: Control qubit index
+    ///   - target: Target qubit index
+    ///   - state: Current quantum state
+    /// - Returns: Transformed state
+    private static func applyCZ(
+        control: Int,
+        target: Int,
+        state: QuantumState
+    ) -> QuantumState {
+        var newAmplitudes = state.amplitudes
+
+        let controlMask = 1 << control
+        let targetMask = 1 << target
+
+        for i in 0 ..< state.stateSpaceSize {
+            if (i & controlMask) != 0, (i & targetMask) != 0 {
+                newAmplitudes[i] = -newAmplitudes[i]
             }
         }
 

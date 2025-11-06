@@ -6,7 +6,7 @@ import Foundation
 /// Generic complex number type supporting Float and Double precision.
 /// Implements complete complex arithmetic including polar conversions and exponential form.
 /// Type constraint ensures only Double and Float are supported for mathematical operations.
-struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, CustomStringConvertible, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral, AdditiveArithmetic, Sendable {
+struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomStringConvertible, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral, AdditiveArithmetic, Sendable {
     // MARK: - Properties
 
     let real: T

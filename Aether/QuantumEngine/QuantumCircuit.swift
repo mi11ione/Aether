@@ -169,12 +169,26 @@ struct QuantumCircuit: CustomStringConvertible {
         for operation in operations {
             let gateMax: Int = switch operation.gate {
             case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
-                 .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ:
+                 .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
+                 .u1, .u2, .u3, .sx, .sy, .customSingleQubit:
                 operation.qubits.max() ?? -1
-            case let .cnot(control, target): max(control, target)
-            case let .controlledPhase(_, control, target): max(control, target)
-            case let .swap(q1, q2): max(q1, q2)
-            case let .toffoli(c1, c2, target): max(c1, c2, target)
+
+            case let .cnot(control, target),
+                 let .cz(control, target),
+                 let .cy(control, target),
+                 let .ch(control, target),
+                 let .controlledPhase(_, control, target),
+                 let .controlledRotationX(_, control, target),
+                 let .controlledRotationY(_, control, target),
+                 let .controlledRotationZ(_, control, target),
+                 let .customTwoQubit(_, control, target):
+                max(control, target)
+
+            case let .swap(q1, q2), let .sqrtSwap(q1, q2):
+                max(q1, q2)
+
+            case let .toffoli(c1, c2, target):
+                max(c1, c2, target)
             }
 
             maxQubit = max(maxQubit, gateMax)
@@ -541,6 +555,100 @@ extension QuantumCircuit {
             }
 
             circuit.append(gate: .toffoli(control1: controls[0], control2: controls[1], target: ancillaQubits[0]), qubits: [])
+        }
+    }
+
+    /// Append multi-controlled Y gate using ancilla decomposition
+    /// Decomposes C^n(Y) into multi-controlled X with basis change
+    /// - Parameters:
+    ///   - circuit: Circuit to append to
+    ///   - controls: Control qubit indices
+    ///   - target: Target qubit index
+    static func appendMultiControlledY(to circuit: inout QuantumCircuit, controls: [Int], target: Int) {
+        let n = controls.count
+
+        if n == 0 {
+            circuit.append(gate: .pauliY, toQubit: target)
+        } else if n == 1 {
+            circuit.append(gate: .cy(control: controls[0], target: target), qubits: [])
+        } else {
+            // C^n(Y) = S†·C^n(X)·S (since Y = S†XS up to global phase)
+            circuit.append(gate: .phase(theta: -Double.pi / 2.0), toQubit: target) // S†
+            appendMultiControlledX(to: &circuit, controls: controls, target: target)
+            circuit.append(gate: .sGate, toQubit: target) // S
+        }
+    }
+
+    /// Append multi-controlled Z gate (more efficient than C^n(X))
+    /// Diagonal gate structure allows for efficient implementation
+    /// - Parameters:
+    ///   - circuit: Circuit to append to
+    ///   - controls: Control qubit indices
+    ///   - target: Target qubit index
+    static func appendMultiControlledZ(to circuit: inout QuantumCircuit, controls: [Int], target: Int) {
+        let n = controls.count
+
+        if n == 0 {
+            circuit.append(gate: .pauliZ, toQubit: target)
+        } else if n == 1 {
+            circuit.append(gate: .cz(control: controls[0], target: target), qubits: [])
+        } else {
+            // For n ≥ 2: Use H-C^n(X)-H decomposition
+            // C^n(Z) = H_{target} · C^n(X) · H_{target}
+            circuit.append(gate: .hadamard, toQubit: target)
+            appendMultiControlledX(to: &circuit, controls: controls, target: target)
+            circuit.append(gate: .hadamard, toQubit: target)
+        }
+    }
+
+    /// Append multi-controlled arbitrary single-qubit unitary gate
+    /// Applies any single-qubit gate U with n control qubits
+    /// Uses decomposition based on gate type for optimal implementation
+    /// - Parameters:
+    ///   - circuit: Circuit to append to
+    ///   - gate: Single-qubit gate to apply (must be single-qubit)
+    ///   - controls: Control qubit indices
+    ///   - target: Target qubit index
+    static func appendMultiControlledU(
+        to circuit: inout QuantumCircuit,
+        gate: QuantumGate,
+        controls: [Int],
+        target: Int
+    ) {
+        precondition(gate.qubitsRequired == 1, "Multi-controlled U requires single-qubit gate")
+
+        let n = controls.count
+
+        if n == 0 {
+            circuit.append(gate: gate, toQubit: target)
+        } else {
+            switch gate {
+            case .pauliX:
+                appendMultiControlledX(to: &circuit, controls: controls, target: target)
+            case .pauliY:
+                appendMultiControlledY(to: &circuit, controls: controls, target: target)
+            case .pauliZ:
+                appendMultiControlledZ(to: &circuit, controls: controls, target: target)
+            case .hadamard:
+                // C^n(H) using basis rotation
+                circuit.append(gate: .rotationY(theta: .pi / 4), toQubit: target)
+                appendMultiControlledZ(to: &circuit, controls: controls, target: target)
+                circuit.append(gate: .rotationY(theta: -.pi / 4), toQubit: target)
+            default:
+                // For arbitrary U: decompose into controlled operations
+                // Apply V then C^n(X) then V† then C^n(X) then V
+                // This implements the multi-controlled unitary
+                circuit.append(gate: gate, toQubit: target)
+                appendMultiControlledX(to: &circuit, controls: controls, target: target)
+
+                let matrix = gate.matrix()
+                let adjointMatrix = QuantumGate.conjugateTranspose(matrix)
+                let adjointGate = try! QuantumGate.createCustomSingleQubit(matrix: adjointMatrix)
+                circuit.append(gate: adjointGate, toQubit: target)
+
+                appendMultiControlledX(to: &circuit, controls: controls, target: target)
+                circuit.append(gate: gate, toQubit: target)
+            }
         }
     }
 
