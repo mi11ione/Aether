@@ -97,9 +97,11 @@ struct QuantumSimulatorTests {
 
         let captured = await tracker.capturedProgress
         #expect(captured != nil)
-        #expect(captured!.total == 10)
-        #expect(captured!.executed > 0)
-        #expect(captured!.percentage > 0.0 && captured!.percentage <= 1.0)
+        if let progress = captured {
+            #expect(progress.total == 10)
+            #expect(progress.executed > 0)
+            #expect(progress.percentage > 0.0 && progress.percentage <= 1.0)
+        }
     }
 
     @Test("Simulator provides current state during execution")
@@ -125,8 +127,10 @@ struct QuantumSimulatorTests {
 
         let state = await tracker.capturedState
         #expect(state != nil)
-        #expect(state!.numQubits == 2)
-        #expect(state!.isNormalized())
+        if let capturedState = state {
+            #expect(capturedState.numQubits == 2)
+            #expect(capturedState.isNormalized())
+        }
     }
 
     @Test("Simulator tracks execution status")
@@ -294,9 +298,9 @@ struct QuantumSimulatorTests {
         #expect(error1.errorDescription != nil)
         #expect(error2.errorDescription != nil)
         #expect(error3.errorDescription != nil)
-        #expect(error1.errorDescription!.contains("executing"))
-        #expect(error2.errorDescription!.contains("invalid"))
-        #expect(error3.errorDescription!.contains("Metal"))
+        #expect(error1.errorDescription?.contains("executing") == true)
+        #expect(error2.errorDescription?.contains("invalid") == true)
+        #expect(error3.errorDescription?.contains("Metal") == true)
     }
 
     @Test("Simulator throws alreadyExecuting when concurrent execution attempted")

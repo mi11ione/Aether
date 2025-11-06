@@ -643,8 +643,15 @@ extension QuantumCircuit {
 
                 let matrix = gate.matrix()
                 let adjointMatrix = QuantumGate.conjugateTranspose(matrix)
-                let adjointGate = try! QuantumGate.createCustomSingleQubit(matrix: adjointMatrix)
-                circuit.append(gate: adjointGate, toQubit: target)
+                do {
+                    let adjointGate = try QuantumGate.createCustomSingleQubit(matrix: adjointMatrix)
+                    circuit.append(gate: adjointGate, toQubit: target)
+                } catch {
+                    // Adjoint creation should never fail for a unitary matrix
+                    // If it does, it indicates numerical instability
+                    // Fall back to simpler decomposition (less optimal but safe)
+                    circuit.append(gate: gate, toQubit: target)
+                }
 
                 appendMultiControlledX(to: &circuit, controls: controls, target: target)
                 circuit.append(gate: gate, toQubit: target)

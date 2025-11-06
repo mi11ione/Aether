@@ -117,12 +117,15 @@ struct QuantumState: CustomStringConvertible, Sendable {
         var magnitudesSquared = [Double](repeating: 0.0, count: amplitudes.count)
         interleavedAmps.withUnsafeBufferPointer { interleavedPtr in
             magnitudesSquared.withUnsafeMutableBufferPointer { magPtr in
+                guard let interleavedBase = interleavedPtr.baseAddress,
+                      let magBase = magPtr.baseAddress else { return }
+
                 var splitComplex = DSPDoubleSplitComplex(
-                    realp: UnsafeMutablePointer(mutating: interleavedPtr.baseAddress!),
-                    imagp: UnsafeMutablePointer(mutating: interleavedPtr.baseAddress! + 1)
+                    realp: UnsafeMutablePointer(mutating: interleavedBase),
+                    imagp: UnsafeMutablePointer(mutating: interleavedBase + 1)
                 )
 
-                vDSP_zvmagsD(&splitComplex, 2, magPtr.baseAddress!, 1, vDSP_Length(amplitudes.count))
+                vDSP_zvmagsD(&splitComplex, 2, magBase, 1, vDSP_Length(amplitudes.count))
             }
         }
 

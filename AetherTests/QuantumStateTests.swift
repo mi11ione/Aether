@@ -434,8 +434,8 @@ struct StateErrorHandlingTests {
 
         #expect(error1.errorDescription != nil)
         #expect(error2.errorDescription != nil)
-        #expect(error1.errorDescription!.contains("normalize"))
-        #expect(error2.errorDescription!.contains("invalid"))
+        #expect(error1.errorDescription?.contains("normalize") == true)
+        #expect(error2.errorDescription?.contains("invalid") == true)
     }
 
     @Test("Normalizing near-zero state throws error")
