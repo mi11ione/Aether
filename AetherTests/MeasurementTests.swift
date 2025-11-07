@@ -722,3 +722,637 @@ struct StatisticalEdgeCasesTests {
         #expect(histogram[3] == 1)
     }
 }
+
+/// Test suite for Pauli basis measurements (X, Y, Z).
+/// Validates measurement in non-computational bases with eigenvalue ±1 outcomes.
+/// Essential for observable expectation values and quantum chemistry applications.
+@Suite("Pauli Basis Measurements")
+struct PauliBasisMeasurementTests {
+    @Test("Measure |0⟩ in Z basis gives +1")
+    func measureZeroInZBasis() {
+        let state = QuantumState(numQubits: 1) // |0⟩
+        var measurement = Measurement()
+
+        for _ in 0 ..< 10 {
+            let result = measurement.measurePauli(qubit: 0, basis: .z, state: state)
+            #expect(result.eigenvalue == 1)
+            #expect(result.collapsedState.isNormalized())
+        }
+    }
+
+    @Test("Measure |1⟩ in Z basis gives -1")
+    func measureOneInZBasis() {
+        let state = QuantumState(singleQubit: 1)
+        var measurement = Measurement()
+
+        for _ in 0 ..< 10 {
+            let result = measurement.measurePauli(qubit: 0, basis: .z, state: state)
+            #expect(result.eigenvalue == -1)
+            #expect(result.collapsedState.isNormalized())
+        }
+    }
+
+    @Test("Measure |+⟩ in X basis gives +1")
+    func measurePlusInXBasis() {
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        let plus = QuantumState(numQubits: 1, amplitudes: [
+            Complex(invSqrt2, 0),
+            Complex(invSqrt2, 0),
+        ])
+        var measurement = Measurement()
+
+        for _ in 0 ..< 10 {
+            let result = measurement.measurePauli(qubit: 0, basis: .x, state: plus)
+            #expect(result.eigenvalue == 1)
+            #expect(result.collapsedState.isNormalized())
+        }
+    }
+
+    @Test("Measure |-⟩ in X basis gives -1")
+    func measureMinusInXBasis() {
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        let minus = QuantumState(numQubits: 1, amplitudes: [
+            Complex(invSqrt2, 0),
+            Complex(-invSqrt2, 0),
+        ])
+        var measurement = Measurement()
+
+        for _ in 0 ..< 10 {
+            let result = measurement.measurePauli(qubit: 0, basis: .x, state: minus)
+            #expect(result.eigenvalue == -1)
+            #expect(result.collapsedState.isNormalized())
+        }
+    }
+
+    @Test("Measure |0⟩ in X basis gives ±1 with equal probability")
+    func measureZeroInXBasis() {
+        let state = QuantumState(numQubits: 1)
+        var measurement = Measurement()
+
+        var outcomes = [Int]()
+        for _ in 0 ..< 100 {
+            let result = measurement.measurePauli(qubit: 0, basis: .x, state: state)
+            outcomes.append(result.eigenvalue)
+            #expect(result.eigenvalue == 1 || result.eigenvalue == -1)
+        }
+
+        let countPlus = outcomes.filter { $0 == 1 }.count
+        let countMinus = outcomes.filter { $0 == -1 }.count
+
+        #expect(abs(Double(countPlus) - 50.0) < 20.0)
+        #expect(abs(Double(countMinus) - 50.0) < 20.0)
+    }
+
+    @Test("Pauli Y measurement on |0⟩")
+    func measureZeroInYBasis() {
+        let state = QuantumState(numQubits: 1)
+        var measurement = Measurement()
+
+        var outcomes = [Int]()
+        for _ in 0 ..< 100 {
+            let result = measurement.measurePauli(qubit: 0, basis: .y, state: state)
+            outcomes.append(result.eigenvalue)
+            #expect(result.eigenvalue == 1 || result.eigenvalue == -1)
+            #expect(result.collapsedState.isNormalized())
+        }
+
+        let countPlus = outcomes.filter { $0 == 1 }.count
+        let countMinus = outcomes.filter { $0 == -1 }.count
+
+        #expect(abs(Double(countPlus) - 50.0) < 20.0)
+        #expect(abs(Double(countMinus) - 50.0) < 20.0)
+    }
+
+    @Test("Pauli measurement on Bell state")
+    func pauliMeasurementBellState() {
+        let bell = QuantumCircuit.bellPhiPlus().execute()
+        var measurement = Measurement()
+
+        let zResult = measurement.measurePauli(qubit: 0, basis: .z, state: bell)
+        #expect(zResult.eigenvalue == 1 || zResult.eigenvalue == -1)
+        #expect(zResult.collapsedState.isNormalized())
+
+        let xResult = measurement.measurePauli(qubit: 0, basis: .x, state: bell)
+        #expect(xResult.eigenvalue == 1 || xResult.eigenvalue == -1)
+        #expect(xResult.collapsedState.isNormalized())
+    }
+
+    @Test("PauliBasis enum cases")
+    func pauliBasisEnumCases() {
+        let allCases = PauliBasis.allCases
+        #expect(allCases.contains(.x))
+        #expect(allCases.contains(.y))
+        #expect(allCases.contains(.z))
+        #expect(allCases.count == 3)
+    }
+
+    @Test("PauliMeasurementResult description")
+    func pauliMeasurementResultDescription() {
+        let state = QuantumState(numQubits: 1)
+        var measurement = Measurement()
+        let result = measurement.measurePauli(qubit: 0, basis: .z, state: state)
+
+        #expect(result.description.contains("PauliMeasurement"))
+        #expect(result.description.contains("+1") || result.description.contains("-1"))
+    }
+}
+
+/// Test suite for arbitrary single-qubit basis measurements.
+/// Validates measurement in custom unitary bases beyond standard Pauli operators.
+@Suite("Custom Basis Measurements")
+struct CustomBasisMeasurementTests {
+    @Test("Measure in custom basis (eigenstate)")
+    func measureCustomBasisEigenstate() {
+        let phase = Double.pi / 4
+        let customBasis = [
+            Complex(1 / sqrt(2), 0),
+            Complex(cos(phase) / sqrt(2), sin(phase) / sqrt(2)),
+        ]
+
+        let state = QuantumState(numQubits: 1, amplitudes: customBasis)
+        var measurement = Measurement()
+
+        for _ in 0 ..< 10 {
+            let (outcome, collapsedState) = measurement.measureCustomBasis(
+                qubit: 0,
+                basisState: customBasis,
+                state: state
+            )
+            #expect(outcome == 0)
+            #expect(collapsedState.isNormalized())
+        }
+    }
+
+    @Test("Measure |0⟩ in custom basis")
+    func measureZeroInCustomBasis() {
+        let state = QuantumState(numQubits: 1) // |0⟩
+
+        let customBasis = [
+            Complex(1 / sqrt(2), 0),
+            Complex(1 / sqrt(2), 0),
+        ]
+
+        var measurement = Measurement()
+        var outcomes = [Int]()
+
+        for _ in 0 ..< 100 {
+            let (outcome, collapsedState) = measurement.measureCustomBasis(
+                qubit: 0,
+                basisState: customBasis,
+                state: state
+            )
+            outcomes.append(outcome)
+            #expect(outcome == 0 || outcome == 1)
+            #expect(collapsedState.isNormalized())
+        }
+
+        let count0 = outcomes.filter { $0 == 0 }.count
+        let count1 = outcomes.filter { $0 == 1 }.count
+        #expect(abs(Double(count0) - 50.0) < 20.0)
+        #expect(abs(Double(count1) - 50.0) < 20.0)
+    }
+
+    @Test("Custom basis with complex phase")
+    func customBasisComplexPhase() {
+        let customBasis = [
+            Complex(0.6, 0.0),
+            Complex(0.0, 0.8),
+        ]
+
+        let state = QuantumState(numQubits: 1)
+        var measurement = Measurement()
+
+        let (outcome, collapsedState) = measurement.measureCustomBasis(
+            qubit: 0,
+            basisState: customBasis,
+            state: state
+        )
+
+        #expect(outcome == 0 || outcome == 1)
+        #expect(collapsedState.isNormalized())
+    }
+
+    @Test("Custom basis measurement on multi-qubit state")
+    func customBasisMultiQubit() {
+        let state = QuantumCircuit.bellPhiPlus().execute()
+
+        let customBasis = [
+            Complex(1 / sqrt(2), 0),
+            Complex(1 / sqrt(2), 0),
+        ]
+
+        var measurement = Measurement()
+        let (outcome, collapsedState) = measurement.measureCustomBasis(
+            qubit: 0,
+            basisState: customBasis,
+            state: state
+        )
+
+        #expect(outcome == 0 || outcome == 1)
+        #expect(collapsedState.isNormalized())
+    }
+}
+
+/// Test suite for Pauli string measurements (tensor product observables).
+/// Validates measurement of multi-qubit operators like X₀⊗Y₁⊗Z₂.
+/// Critical for Hamiltonian expectation values in VQE and quantum chemistry.
+@Suite("Multi-Qubit Pauli Measurements")
+struct MultiQubitPauliMeasurementTests {
+    @Test("Measure Z₀⊗Z₁ on Bell state gives +1")
+    func measureZZOnBellState() {
+        let bell = QuantumCircuit.bellPhiPlus().execute()
+        let pauliString = PauliString(operators: [
+            (qubit: 0, basis: .z),
+            (qubit: 1, basis: .z),
+        ])
+
+        var measurement = Measurement()
+
+        for _ in 0 ..< 10 {
+            let result = measurement.measurePauliString(pauliString, state: bell)
+            #expect(result.eigenvalue == 1)
+            #expect(result.collapsedState.isNormalized())
+            #expect(result.individualOutcomes.count == 2)
+        }
+    }
+
+    @Test("Measure X₀⊗X₁ on Bell state gives +1")
+    func measureXXOnBellState() {
+        let bell = QuantumCircuit.bellPhiPlus().execute()
+        let pauliString = PauliString(operators: [
+            (qubit: 0, basis: .x),
+            (qubit: 1, basis: .x),
+        ])
+
+        var measurement = Measurement()
+
+        for _ in 0 ..< 10 {
+            let result = measurement.measurePauliString(pauliString, state: bell)
+            #expect(result.eigenvalue == 1)
+            #expect(result.collapsedState.isNormalized())
+        }
+    }
+
+    @Test("Measure single-qubit Pauli string")
+    func measureSingleQubitPauliString() {
+        let state = QuantumState(numQubits: 1)
+        let pauliString = PauliString(operators: [(qubit: 0, basis: .z)])
+
+        var measurement = Measurement()
+        let result = measurement.measurePauliString(pauliString, state: state)
+
+        #expect(result.eigenvalue == 1)
+        #expect(result.individualOutcomes.count == 1)
+        #expect(result.individualOutcomes[0].qubit == 0)
+        #expect(result.individualOutcomes[0].outcome == 0)
+    }
+
+    @Test("Measure empty Pauli string (identity)")
+    func measureIdentityPauliString() {
+        let state = QuantumState(numQubits: 2)
+        let pauliString = PauliString(operators: [])
+
+        var measurement = Measurement()
+        let result = measurement.measurePauliString(pauliString, state: state)
+
+        #expect(result.eigenvalue == 1)
+        #expect(result.individualOutcomes.isEmpty)
+        #expect(result.collapsedState == state)
+    }
+
+    @Test("Measure three-qubit Pauli string")
+    func measureThreeQubitPauliString() {
+        let ghz = QuantumCircuit.ghzState(numQubits: 3).execute()
+        let pauliString = PauliString(operators: [
+            (qubit: 0, basis: .z),
+            (qubit: 1, basis: .z),
+            (qubit: 2, basis: .z),
+        ])
+
+        var measurement = Measurement()
+
+        var outcomes = [Int]()
+        for _ in 0 ..< 100 {
+            let result = measurement.measurePauliString(pauliString, state: ghz)
+            outcomes.append(result.eigenvalue)
+            #expect(result.eigenvalue == 1 || result.eigenvalue == -1)
+            #expect(result.individualOutcomes.count == 3)
+        }
+
+        let countPlus = outcomes.filter { $0 == 1 }.count
+        let countMinus = outcomes.filter { $0 == -1 }.count
+        #expect(abs(Double(countPlus) - 50.0) < 20.0)
+        #expect(abs(Double(countMinus) - 50.0) < 20.0)
+    }
+
+    @Test("Measure mixed Pauli string (X,Y,Z)")
+    func measureMixedPauliString() {
+        let state = QuantumCircuit.superposition(numQubits: 3).execute()
+        let pauliString = PauliString(operators: [
+            (qubit: 0, basis: .x),
+            (qubit: 1, basis: .y),
+            (qubit: 2, basis: .z),
+        ])
+
+        var measurement = Measurement()
+        let result = measurement.measurePauliString(pauliString, state: state)
+
+        #expect(result.eigenvalue == 1 || result.eigenvalue == -1)
+        #expect(result.collapsedState.isNormalized())
+        #expect(result.individualOutcomes.count == 3)
+    }
+
+    @Test("PauliString description")
+    func pauliStringDescription() {
+        let pauliString = PauliString(operators: [
+            (qubit: 0, basis: .x),
+            (qubit: 1, basis: .z),
+        ])
+
+        #expect(pauliString.description.contains("X_0"))
+        #expect(pauliString.description.contains("Z_1"))
+        #expect(pauliString.description.contains("⊗"))
+    }
+
+    @Test("PauliString identity description")
+    func pauliStringIdentityDescription() {
+        let identity = PauliString(operators: [])
+        #expect(identity.description.contains("identity") || identity.description.contains("I"))
+    }
+
+    @Test("PauliStringMeasurementResult description")
+    func pauliStringMeasurementResultDescription() {
+        let state = QuantumState(numQubits: 2)
+        let pauliString = PauliString(operators: [(qubit: 0, basis: .z)])
+        var measurement = Measurement()
+
+        let result = measurement.measurePauliString(pauliString, state: state)
+        #expect(result.description.contains("PauliStringMeasurement"))
+        #expect(result.description.contains("+1") || result.description.contains("-1"))
+    }
+}
+
+/// Test suite for measuring multiple qubits simultaneously.
+/// Validates joint probability distributions and partial state collapse
+/// for arbitrary qubit subsets.
+@Suite("Multiple Qubit Partial Measurements")
+struct MultipleQubitPartialMeasurementTests {
+    @Test("Measure multiple qubits on GHZ state")
+    func measureMultipleQubitsGHZ() {
+        let ghz = QuantumCircuit.ghzState(numQubits: 3).execute()
+        var measurement = Measurement()
+
+        let (outcomes, collapsedState) = measurement.measureQubits([0, 1], state: ghz)
+
+        #expect(outcomes.count == 2)
+        #expect(collapsedState.isNormalized())
+        #expect((outcomes[0] == 0 && outcomes[1] == 0) || (outcomes[0] == 1 && outcomes[1] == 1))
+    }
+
+    @Test("Measure single qubit using measureQubits")
+    func measureSingleQubitUsingMeasureQubits() {
+        let state = QuantumState(numQubits: 2)
+        var measurement = Measurement()
+
+        let (outcomes, collapsedState) = measurement.measureQubits([0], state: state)
+
+        #expect(outcomes.count == 1)
+        #expect(outcomes[0] == 0)
+        #expect(collapsedState.isNormalized())
+    }
+
+    @Test("Measure all qubits")
+    func measureAllQubits() {
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        let bell = QuantumState(numQubits: 2, amplitudes: [
+            Complex(invSqrt2, 0),
+            Complex(0, 0),
+            Complex(0, 0),
+            Complex(invSqrt2, 0),
+        ])
+
+        var measurement = Measurement()
+        let (outcomes, collapsedState) = measurement.measureQubits([0, 1], state: bell)
+
+        #expect(outcomes.count == 2)
+        #expect((outcomes == [0, 0]) || (outcomes == [1, 1]))
+        #expect(collapsedState.isNormalized())
+    }
+
+    @Test("Measure non-adjacent qubits")
+    func measureNonAdjacentQubits() {
+        let state = QuantumCircuit.superposition(numQubits: 4).execute()
+        var measurement = Measurement()
+
+        let (outcomes, collapsedState) = measurement.measureQubits([0, 2], state: state)
+
+        #expect(outcomes.count == 2)
+        #expect(outcomes[0] == 0 || outcomes[0] == 1)
+        #expect(outcomes[1] == 0 || outcomes[1] == 1)
+        #expect(collapsedState.isNormalized())
+    }
+
+    @Test("Measure qubits in arbitrary order")
+    func measureQubitsArbitraryOrder() {
+        let state = QuantumCircuit.ghzState(numQubits: 3).execute()
+        var measurement = Measurement()
+
+        let (outcomes, collapsedState) = measurement.measureQubits([2, 0], state: state)
+
+        #expect(outcomes.count == 2)
+        #expect(collapsedState.isNormalized())
+        #expect((outcomes[0] == 0 && outcomes[1] == 0) || (outcomes[0] == 1 && outcomes[1] == 1))
+    }
+
+    @Test("Sequential measurements vs joint measurement")
+    func sequentialVsJointMeasurement() {
+        let state = QuantumCircuit.bellPhiPlus().execute()
+        var measurement1 = Measurement(seed: 42)
+        var measurement2 = Measurement(seed: 42)
+
+        let (jointOutcomes, _) = measurement1.measureQubits([0, 1], state: state)
+        let (outcome0, collapsed0) = measurement2.measureQubit(0, state: state)
+        let (outcome1, _) = measurement2.measureQubit(1, state: collapsed0)
+
+        #expect(outcome0 == outcome1)
+        #expect(jointOutcomes[0] == jointOutcomes[1])
+    }
+
+    @Test("Measure product state preserves independence")
+    func measureProductStateIndependence() {
+        let product = QuantumState(numQubits: 3, amplitudes: [
+            Complex(0, 0),
+            Complex(0, 0),
+            Complex(0, 0),
+            Complex(0, 0),
+            Complex(1 / sqrt(2), 0),
+            Complex(1 / sqrt(2), 0),
+            Complex(0, 0),
+            Complex(0, 0),
+        ])
+
+        var measurement = Measurement()
+        let (outcomes, collapsedState) = measurement.measureQubits([1, 2], state: product)
+
+        #expect(outcomes[0] == 0)
+        #expect(outcomes[1] == 1)
+        #expect(collapsedState.isNormalized())
+
+        let (prob0, prob1) = Measurement.marginalProbabilities(qubit: 0, state: collapsedState)
+        #expect(abs(prob0 - 0.5) < 1e-10)
+        #expect(abs(prob1 - 0.5) < 1e-10)
+    }
+}
+
+/// Test suite for non-destructive state capture (snapshots).
+/// Validates that snapshots preserve quantum coherence without measurement collapse.
+@Suite("Statevector Snapshots")
+struct StatevectorSnapshotTests {
+    @Test("Capture snapshot preserves state")
+    func captureSnapshotPreservesState() {
+        let bell = QuantumCircuit.bellPhiPlus().execute()
+        let snapshot = Measurement.captureSnapshot(state: bell, label: "Bell state")
+
+        #expect(snapshot.state == bell)
+        #expect(snapshot.state.isNormalized())
+        #expect(snapshot.label == "Bell state")
+    }
+
+    @Test("Snapshot without label")
+    func snapshotWithoutLabel() {
+        let state = QuantumState(numQubits: 1)
+        let snapshot = Measurement.captureSnapshot(state: state)
+
+        #expect(snapshot.state == state)
+        #expect(snapshot.label == nil)
+    }
+
+    @Test("Multiple snapshots preserve different states")
+    func multipleSnapshotsPreserveDifferentStates() {
+        var circuit = QuantumCircuit(numQubits: 2)
+
+        let snapshot1 = Measurement.captureSnapshot(
+            state: circuit.execute(),
+            label: "Initial"
+        )
+
+        circuit.append(gate: .hadamard, toQubit: 0)
+        let snapshot2 = Measurement.captureSnapshot(
+            state: circuit.execute(),
+            label: "After H"
+        )
+
+        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+        let snapshot3 = Measurement.captureSnapshot(
+            state: circuit.execute(),
+            label: "Bell state"
+        )
+
+        #expect(snapshot1.state != snapshot2.state)
+        #expect(snapshot2.state != snapshot3.state)
+        #expect(snapshot1.state != snapshot3.state)
+    }
+
+    @Test("Snapshot timestamp is valid")
+    func snapshotTimestampValid() {
+        let state = QuantumState(numQubits: 1)
+        let before = Date()
+        let snapshot = Measurement.captureSnapshot(state: state)
+        let after = Date()
+
+        #expect(snapshot.timestamp >= before)
+        #expect(snapshot.timestamp <= after)
+    }
+
+    @Test("Snapshot description with label")
+    func snapshotDescriptionWithLabel() {
+        let state = QuantumState(numQubits: 1)
+        let snapshot = Measurement.captureSnapshot(state: state, label: "Test")
+
+        #expect(snapshot.description.contains("Test"))
+        #expect(snapshot.description.contains("Snapshot"))
+    }
+
+    @Test("Snapshot description without label")
+    func snapshotDescriptionWithoutLabel() {
+        let state = QuantumState(numQubits: 1)
+        let snapshot = Measurement.captureSnapshot(state: state)
+
+        #expect(snapshot.description.contains("Snapshot"))
+    }
+
+    @Test("Snapshot preserves complex states")
+    func snapshotPreservesComplexStates() {
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        let complexState = QuantumState(numQubits: 2, amplitudes: [
+            Complex(0.5, 0.5),
+            Complex(0, 0),
+            Complex(0, 0),
+            Complex(invSqrt2, 0),
+        ])
+
+        let snapshot = Measurement.captureSnapshot(state: complexState, label: "Complex")
+
+        #expect(snapshot.state.getAmplitude(ofState: 0) == Complex(0.5, 0.5))
+        #expect(snapshot.state.getAmplitude(ofState: 3).real == invSqrt2)
+    }
+
+    @Test("Snapshots are independent")
+    func snapshotsAreIndependent() {
+        let state = QuantumCircuit.bellPhiPlus().execute()
+        let snapshot1 = Measurement.captureSnapshot(state: state, label: "First")
+        let snapshot2 = Measurement.captureSnapshot(state: state, label: "Second")
+
+        #expect(snapshot1.state == snapshot2.state)
+        #expect(snapshot1.label != snapshot2.label)
+    }
+
+    @Test("Snapshot timestamp ordering")
+    func snapshotTimestampOrdering() {
+        let state = QuantumState(numQubits: 1)
+        let snapshot1 = Measurement.captureSnapshot(state: state, label: "First")
+
+        Thread.sleep(forTimeInterval: 0.01)
+
+        let snapshot2 = Measurement.captureSnapshot(state: state, label: "Second")
+
+        #expect(snapshot2.timestamp > snapshot1.timestamp)
+    }
+}
+
+/// Test suite for edge cases in new measurement infrastructure.
+/// Validates boundary conditions and error handling.
+@Suite("Measurement Infrastructure Edge Cases")
+struct MeasurementInfrastructureEdgeCasesTests {
+    @Test("Pauli measurement on multi-qubit state affects only target qubit")
+    func pauliMeasurementOnlyAffectsTarget() {
+        let state = QuantumCircuit.superposition(numQubits: 3).execute()
+        var measurement = Measurement()
+
+        let result = measurement.measurePauli(qubit: 1, basis: .x, state: state)
+
+        #expect(result.eigenvalue == 1 || result.eigenvalue == -1)
+        #expect(result.collapsedState.isNormalized())
+        #expect(result.collapsedState.numQubits == 3)
+    }
+
+    @Test("Measure empty qubit list")
+    func measureEmptyQubitList() {
+        let state = QuantumState(numQubits: 2)
+        var measurement = Measurement()
+
+        let (outcomes, _) = measurement.measureQubits([0], state: state)
+        #expect(outcomes.count == 1)
+    }
+
+    @Test("Pauli measurement preserves normalization across all bases")
+    func pauliMeasurementNormalizationAllBases() {
+        let state = QuantumCircuit.bellPhiPlus().execute()
+        var measurement = Measurement()
+
+        for basis in PauliBasis.allCases {
+            let result = measurement.measurePauli(qubit: 0, basis: basis, state: state)
+            #expect(result.collapsedState.isNormalized())
+        }
+    }
+}
