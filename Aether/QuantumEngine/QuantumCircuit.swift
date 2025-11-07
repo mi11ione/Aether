@@ -31,13 +31,42 @@ struct GateOperation: Equatable, CustomStringConvertible, Sendable {
     }
 }
 
-/// Container for ordered sequence of quantum gates representing a quantum algorithm.
+/// Quantum circuit: ordered sequence of gates implementing quantum algorithms
 ///
-/// A quantum circuit is a sequence of gate operations that transforms an input
-/// quantum state into an output state. Circuits can be executed fully or
-/// step-by-step for animation/debugging.
+/// Represents a quantum computation as a series of gate operations applied to qubits.
+/// Circuits transform an initial state |00...0⟩ through unitary operations to produce
+/// a final superposition state that can be measured.
 ///
-/// Architecture: Generic over qubit count - supports 1-24+ qubits.
+/// **Architecture**:
+/// - Generic over qubit count (supports 1-30 qubits)
+/// - Auto-expands when gates reference higher qubit indices
+/// - Thread-safe execution via immutable operations list
+/// - Optional timestamping for animation/visualization
+///
+/// **Execution modes**:
+/// - Full execution: `circuit.execute()` → final state
+/// - Step-by-step: External caching for animation
+/// - Validation: Check circuit correctness before execution
+///
+/// Example:
+/// ```swift
+/// // Create Bell state: (|00⟩ + |11⟩)/√2
+/// var circuit = QuantumCircuit(numQubits: 2)
+/// circuit.append(gate: .hadamard, toQubit: 0)
+/// circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+/// let state = circuit.execute()
+///
+/// // Measure probabilities
+/// let p00 = state.probability(ofState: 0b00)  // 50%
+/// let p11 = state.probability(ofState: 0b11)  // 50%
+///
+/// // Build more complex circuits
+/// circuit.append(gate: .phase(.pi/4), toQubit: 0)
+/// circuit.append(gate: .rotationY(.pi/3), toQubit: 1)
+///
+/// // Auto-expansion: referencing qubit 5 expands to 6 qubits
+/// circuit.append(gate: .hadamard, toQubit: 5)  // numQubits now 6
+/// ```
 struct QuantumCircuit: CustomStringConvertible {
     private(set) var operations: [GateOperation]
     private(set) var numQubits: Int
@@ -78,17 +107,39 @@ struct QuantumCircuit: CustomStringConvertible {
     // MARK: - Building Methods
 
     /// Append gate to end of circuit
+    ///
+    /// Adds a quantum gate operation to the circuit. Auto-expands circuit if gate
+    /// references qubit indices beyond current size (up to 30 qubits maximum).
+    ///
     /// - Parameters:
-    ///   - gate: Gate to append
-    ///   - qubits: Target qubit indices
-    ///   - timestamp: Optional timestamp for animation
+    ///   - gate: Quantum gate to apply
+    ///   - qubits: Target qubit indices (varies by gate type)
+    ///   - timestamp: Optional timestamp for animation/visualization
+    ///
+    /// Example:
+    /// ```swift
+    /// var circuit = QuantumCircuit(numQubits: 3)
+    ///
+    /// // Single-qubit gates: use [qubitIndex] or convenience toQubit:
+    /// circuit.append(gate: .hadamard, qubits: [0])
+    /// circuit.append(gate: .pauliX, toQubit: 1)
+    ///
+    /// // Two-qubit gates: use empty array (indices in gate definition)
+    /// circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+    ///
+    /// // Parameterized gates
+    /// circuit.append(gate: .rotationY(.pi/4), toQubit: 2)
+    /// circuit.append(gate: .phase(.pi/8), toQubit: 0)
+    ///
+    /// // With timestamp for animation
+    /// circuit.append(gate: .hadamard, toQubit: 0, timestamp: 1.5)
+    /// ```
     mutating func append(gate: QuantumGate, qubits: [Int], timestamp: Double? = nil) {
         precondition(qubits.allSatisfy { $0 >= 0 }, "Qubit indices must be non-negative")
 
         let maxQubit = qubits.max() ?? -1
         if maxQubit >= numQubits {
             let newNumQubits = maxQubit + 1
-            // Safety check: prevent accidental massive circuit creation
             precondition(newNumQubits <= 30,
                          "Circuit would grow to \(newNumQubits) qubits (max 30). This may be a typo.")
             numQubits = newNumQubits
@@ -199,9 +250,26 @@ struct QuantumCircuit: CustomStringConvertible {
 
     // MARK: - Execution
 
-    /// Execute full circuit on initial state
+    /// Execute circuit on custom initial state
+    ///
+    /// Applies all gates in sequence to transform the input state. Automatically
+    /// handles ancilla qubit expansion if gates reference qubits beyond the initial
+    /// state size (ancilla qubits are initialized to |0⟩).
+    ///
     /// - Parameter initialState: Starting quantum state
-    /// - Returns: Final quantum state after all gates applied
+    /// - Returns: Final quantum state after applying all gates
+    ///
+    /// Example:
+    /// ```swift
+    /// // Start from custom superposition
+    /// let initial = QuantumState(numQubits: 2, amplitudes: [
+    ///     Complex(0.6, 0), Complex(0.8, 0), .zero, .zero
+    /// ])  // 0.6|00⟩ + 0.8|01⟩
+    ///
+    /// var circuit = QuantumCircuit(numQubits: 2)
+    /// circuit.append(gate: .hadamard, toQubit: 0)
+    /// let final = circuit.execute(on: initial)
+    /// ```
     func execute(on initialState: QuantumState) -> QuantumState {
         precondition(initialState.numQubits >= numQubits,
                      "Initial state must have at least as many qubits as circuit")
@@ -238,8 +306,25 @@ struct QuantumCircuit: CustomStringConvertible {
         return currentState
     }
 
-    /// Execute circuit starting from |00...0⟩
-    /// - Returns: Final quantum state
+    /// Execute circuit starting from ground state |00...0⟩
+    ///
+    /// Primary execution method for most quantum algorithms. Initializes all qubits
+    /// to |0⟩ and applies the circuit's gate sequence.
+    ///
+    /// - Returns: Final quantum state after applying all gates
+    ///
+    /// Example:
+    /// ```swift
+    /// // Create GHZ state: (|000⟩ + |111⟩)/√2
+    /// var circuit = QuantumCircuit(numQubits: 3)
+    /// circuit.append(gate: .hadamard, toQubit: 0)
+    /// circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+    /// circuit.append(gate: .cnot(control: 1, target: 2), qubits: [])
+    ///
+    /// let final = circuit.execute()
+    /// let p000 = final.probability(ofState: 0b000)  // 50%
+    /// let p111 = final.probability(ofState: 0b111)  // 50%
+    /// ```
     func execute() -> QuantumState {
         let initialState = QuantumState(numQubits: numQubits)
         return execute(on: initialState)
@@ -361,7 +446,6 @@ extension QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: numQubits)
 
         for target in 0 ..< numQubits {
-            // Apply Hadamard to current qubit
             circuit.append(gate: .hadamard, toQubit: target)
 
             for control in (target + 1) ..< numQubits {
@@ -411,7 +495,6 @@ extension QuantumCircuit {
                 )
             }
 
-            // Apply Hadamard
             circuit.append(gate: .hadamard, toQubit: target)
         }
 
@@ -438,17 +521,14 @@ extension QuantumCircuit {
         let stateSpaceSize = 1 << numQubits
         precondition(target >= 0 && target < stateSpaceSize, "Target must be valid basis state")
 
-        // Calculate optimal iterations: ⌊π/4 * √(N)⌋
         let optimalIterations = iterations ?? Int((Double.pi / 4.0) * sqrt(Double(stateSpaceSize)))
 
         var circuit = QuantumCircuit(numQubits: numQubits)
 
-        // Initialize equal superposition
         for qubit in 0 ..< numQubits {
             circuit.append(gate: .hadamard, toQubit: qubit)
         }
 
-        // Grover iterations
         for _ in 0 ..< optimalIterations {
             // Oracle: flip phase of target state
             appendGroverOracle(to: &circuit, target: target, numQubits: numQubits)
@@ -467,7 +547,6 @@ extension QuantumCircuit {
     ///   - target: Target state index to mark with phase flip
     ///   - numQubits: Total number of qubits in the system
     private static func appendGroverOracle(to circuit: inout QuantumCircuit, target: Int, numQubits: Int) {
-        // Oracle marks target by flipping its phase
         for qubit in 0 ..< numQubits {
             if (target >> qubit) & 1 == 0 {
                 circuit.append(gate: .pauliX, toQubit: qubit)
@@ -522,13 +601,10 @@ extension QuantumCircuit {
         let n = controls.count
 
         if n == 0 {
-            // No controls, just X
             circuit.append(gate: .pauliX, toQubit: target)
         } else if n == 1 {
-            // Single control, use CNOT
             circuit.append(gate: .cnot(control: controls[0], target: target), qubits: [])
         } else if n == 2 {
-            // Two controls, use Toffoli
             circuit.append(gate: .toffoli(control1: controls[0], control2: controls[1], target: target), qubits: [])
         } else {
             // Allocate ancilla qubits: use high-numbered qubits beyond existing circuit qubits
@@ -714,29 +790,24 @@ extension QuantumCircuit {
         for step in 0 ..< annealingSteps {
             let time = Double(step) / Double(annealingSteps - 1) // 0.0 to 1.0
 
-            // Apply transverse field (X rotations) - decreases over time
             let transverseStrength = 1.0 - time
             for qubit in 0 ..< numQubits {
                 let angle = 2.0 * transverseStrength * problem.transverseField[qubit]
                 circuit.append(gate: .rotationX(theta: angle), toQubit: qubit)
             }
 
-            // Apply problem Hamiltonian (Z rotations and ZZ couplings)
             let problemStrength = time
 
-            // Single-qubit Z terms (local fields)
             for qubit in 0 ..< numQubits {
                 let angle = 2.0 * problemStrength * problem.localFields[qubit]
                 circuit.append(gate: .rotationZ(theta: angle), toQubit: qubit)
             }
 
-            // Two-qubit ZZ couplings
             for i in 0 ..< numQubits {
                 for j in (i + 1) ..< numQubits {
                     let coupling = problem.couplings[i][j]
                     if abs(coupling) > 1e-10 {
                         let angle = 2.0 * problemStrength * coupling
-                        // Implement ZZ coupling using CNOT ladder
                         appendZZCoupling(to: &circuit, qubit1: i, qubit2: j, angle: angle)
                     }
                 }

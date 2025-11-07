@@ -3,27 +3,86 @@
 
 import Foundation
 
-/// State preparation utilities for initializing quantum states beyond |00...0⟩
+/// State preparation: efficient initialization of quantum states
 ///
-/// Provides efficient methods for preparing common quantum states:
-/// - Basis states: |i⟩ for any computational basis state
-/// - Bell states: All four maximally entangled two-qubit states
-/// - W states: Symmetric entangled states robust to qubit loss
-/// - Dicke states: Fixed Hamming weight superposition states
+/// Provides optimized methods for creating common quantum states beyond ground state |00...0⟩.
+/// Supports both direct statevector construction and circuit-based preparation depending
+/// on use case. Direct construction is faster for simulation; circuits are hardware-compatible.
+///
+/// **Supported states**:
+/// - **Basis states**: |i⟩ for any i ∈ [0, 2^n-1] (computational basis)
+/// - **Bell states**: All four maximally entangled EPR pairs
+/// - **W states**: Symmetric n-qubit entanglement robust to particle loss
+/// - **Dicke states**: Fixed Hamming weight superpositions for metrology
+///
+/// **Preparation strategies**:
+/// - **Direct construction** (QuantumState extension): O(2^n) memory, fast initialization
+/// - **Circuit-based** (QuantumCircuit extension): O(poly(n)) gates, hardware-compatible
+///
+/// **Usage patterns**:
+/// - Simulation: Use direct construction for speed
+/// - Hardware: Use circuit-based for gate decomposition
+/// - Testing: Both approaches produce identical quantum states
+///
+/// Example:
+/// ```swift
+/// // Direct basis state preparation
+/// let state5 = QuantumState.basisState(numQubits: 3, basisStateIndex: 5)  // |101⟩
+///
+/// // Circuit-based basis state
+/// let circuit = QuantumCircuit.basisStateCircuit(numQubits: 3, basisStateIndex: 5)
+/// let state = circuit.execute()  // Same as above
+///
+/// // Bell state preparation
+/// let bellCircuit = QuantumCircuit.bellPhiPlus()
+/// let bellState = bellCircuit.execute()  // (|00⟩ + |11⟩)/√2
+///
+/// // W state for 3 qubits
+/// let w3 = QuantumCircuit.wState(numQubits: 3)
+/// // (|100⟩ + |010⟩ + |001⟩)/√3
+///
+/// // Dicke state: exactly 2 ones among 4 qubits
+/// let dicke = QuantumCircuit.dickeState(numQubits: 4, numOnes: 2)
+/// // (|0011⟩ + |0101⟩ + |0110⟩ + |1001⟩ + |1010⟩ + |1100⟩)/√6
+/// ```
 extension QuantumState {
     // MARK: - Basis State Preparation
 
-    /// Create quantum state initialized to basis state |i⟩
-    /// Uses binary representation: |i⟩ where i ∈ [0, 2^n-1]
+    /// Create computational basis state |i⟩ via direct construction
+    ///
+    /// Prepares state where only basis state |i⟩ has amplitude 1, all others zero.
+    /// Uses binary representation with little-endian qubit ordering. More efficient
+    /// than circuit-based preparation for simulation.
+    ///
+    /// **Binary encoding**: For index i, qubit k = (i >> k) & 1 (little-endian)
     ///
     /// - Parameters:
-    ///   - numQubits: Number of qubits
-    ///   - basisStateIndex: Index of computational basis state (0 to 2^n-1)
-    /// - Returns: Quantum state |i⟩ with amplitude 1 at index i, 0 elsewhere
+    ///   - numQubits: Number of qubits (n)
+    ///   - basisStateIndex: Index i ∈ [0, 2^n-1]
+    /// - Returns: Quantum state |i⟩
     ///
     /// Example:
-    /// - basisState(numQubits: 3, basisStateIndex: 5) creates |101⟩
-    /// - Efficient: O(2^n) memory but O(1) initialization (single amplitude set)
+    /// ```swift
+    /// // Single qubit states
+    /// let zero = QuantumState.basisState(numQubits: 1, basisStateIndex: 0)  // |0⟩
+    /// let one = QuantumState.basisState(numQubits: 1, basisStateIndex: 1)   // |1⟩
+    ///
+    /// // Multi-qubit states
+    /// let state5 = QuantumState.basisState(numQubits: 3, basisStateIndex: 5)
+    /// // |101⟩ since 5 = 0b101 (qubit 0 = 1, qubit 1 = 0, qubit 2 = 1)
+    ///
+    /// let state7 = QuantumState.basisState(numQubits: 3, basisStateIndex: 7)
+    /// // |111⟩ since 7 = 0b111
+    ///
+    /// // Verify probabilities
+    /// let p5 = state5.probability(ofState: 5)  // 1.0
+    /// let p0 = state5.probability(ofState: 0)  // 0.0
+    /// ```
+    ///
+    /// **Complexity**:
+    /// - Time: O(2^n) for amplitude array allocation, O(1) for initialization
+    /// - Memory: O(2^n) for full statevector
+    /// - Practical limit: n ≤ 30 qubits
     static func basisState(numQubits: Int, basisStateIndex: Int) -> QuantumState {
         precondition(numQubits > 0, "Number of qubits must be positive")
         precondition(numQubits <= 30, "Number of qubits too large (would exceed memory)")
@@ -42,10 +101,36 @@ extension QuantumState {
 extension QuantumCircuit {
     // MARK: - Bell State Variants
 
-    /// Create Bell state |Φ⁺⟩ = (|00⟩ + |11⟩)/√2
-    /// Alias for bellState() to provide consistent naming with other Bell state variants
-    /// Construction: H(0) · CNOT(0,1)
-    /// - Returns: Circuit that creates |Φ⁺⟩ from |00⟩
+    /// Create circuit for Bell state |Φ⁺⟩ = (|00⟩ + |11⟩)/√2
+    ///
+    /// Prepares maximally entangled EPR pair through Hadamard + CNOT.
+    /// This is the canonical Bell state used in quantum teleportation,
+    /// superdense coding, and quantum cryptography.
+    ///
+    /// **Construction**: H(0) · CNOT(0,1) on |00⟩
+    ///
+    /// **Properties**:
+    /// - Maximal entanglement (entanglement entropy = 1 bit)
+    /// - Perfect correlations: measuring qubit 0 → qubit 1 same result
+    /// - CHSH inequality violation: demonstrates quantum nonlocality
+    ///
+    /// - Returns: 2-qubit circuit that creates |Φ⁺⟩ from ground state
+    ///
+    /// Example:
+    /// ```swift
+    /// let circuit = QuantumCircuit.bellPhiPlus()
+    /// let state = circuit.execute()
+    ///
+    /// // Verify Bell state structure
+    /// let p00 = state.probability(ofState: 0b00)  // 0.5
+    /// let p11 = state.probability(ofState: 0b11)  // 0.5
+    /// let p01 = state.probability(ofState: 0b01)  // 0.0
+    /// let p10 = state.probability(ofState: 0b10)  // 0.0
+    ///
+    /// // Single-qubit marginals are maximally mixed
+    /// let (p0_q0, p1_q0) = state.singleQubitProbabilities(qubit: 0)
+    /// // p0_q0 = 0.5, p1_q0 = 0.5
+    /// ```
     static func bellPhiPlus() -> QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
@@ -53,9 +138,22 @@ extension QuantumCircuit {
         return circuit
     }
 
-    /// Create Bell state |Φ⁻⟩ = (|00⟩ - |11⟩)/√2
-    /// Construction: H(0) · Z(0) · CNOT(0,1)
-    /// - Returns: Circuit that creates |Φ⁻⟩ from |00⟩
+    /// Create circuit for Bell state |Φ⁻⟩ = (|00⟩ - |11⟩)/√2
+    ///
+    /// Maximally entangled state with relative negative phase between |00⟩ and |11⟩.
+    /// Related to |Φ⁺⟩ by local Z gate (phase flip).
+    ///
+    /// **Construction**: H(0) · Z(0) · CNOT(0,1) on |00⟩
+    ///
+    /// - Returns: 2-qubit circuit that creates |Φ⁻⟩ from ground state
+    ///
+    /// Example:
+    /// ```swift
+    /// let circuit = QuantumCircuit.bellPhiMinus()
+    /// let state = circuit.execute()
+    /// let p00 = state.probability(ofState: 0b00)  // 0.5
+    /// let p11 = state.probability(ofState: 0b11)  // 0.5
+    /// ```
     static func bellPhiMinus() -> QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
@@ -64,9 +162,22 @@ extension QuantumCircuit {
         return circuit
     }
 
-    /// Create Bell state |Ψ⁺⟩ = (|01⟩ + |10⟩)/√2
-    /// Construction: H(0) · X(1) · CNOT(0,1)
-    /// - Returns: Circuit that creates |Ψ⁺⟩ from |00⟩
+    /// Create circuit for Bell state |Ψ⁺⟩ = (|01⟩ + |10⟩)/√2
+    ///
+    /// Maximally entangled state with perfect anti-correlations: measuring qubits
+    /// yields opposite outcomes. Related to |Φ⁺⟩ by local X gate (bit flip on qubit 1).
+    ///
+    /// **Construction**: H(0) · X(1) · CNOT(0,1) on |00⟩
+    ///
+    /// - Returns: 2-qubit circuit that creates |Ψ⁺⟩ from ground state
+    ///
+    /// Example:
+    /// ```swift
+    /// let circuit = QuantumCircuit.bellPsiPlus()
+    /// let state = circuit.execute()
+    /// let p01 = state.probability(ofState: 0b01)  // 0.5
+    /// let p10 = state.probability(ofState: 0b10)  // 0.5
+    /// ```
     static func bellPsiPlus() -> QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
@@ -75,9 +186,22 @@ extension QuantumCircuit {
         return circuit
     }
 
-    /// Create Bell state |Ψ⁻⟩ = (|01⟩ - |10⟩)/√2
-    /// Construction: H(0) · Z(0) · X(1) · CNOT(0,1)
-    /// - Returns: Circuit that creates |Ψ⁻⟩ from |00⟩
+    /// Create circuit for Bell state |Ψ⁻⟩ = (|01⟩ - |10⟩)/√2
+    ///
+    /// Maximally entangled state combining anti-correlation with relative phase.
+    /// This is the singlet state, important in quantum information and many-body physics.
+    ///
+    /// **Construction**: H(0) · Z(0) · X(1) · CNOT(0,1) on |00⟩
+    ///
+    /// - Returns: 2-qubit circuit that creates |Ψ⁻⟩ from ground state
+    ///
+    /// Example:
+    /// ```swift
+    /// let circuit = QuantumCircuit.bellPsiMinus()
+    /// let state = circuit.execute()
+    /// let p01 = state.probability(ofState: 0b01)  // 0.5
+    /// let p10 = state.probability(ofState: 0b10)  // 0.5
+    /// ```
     static func bellPsiMinus() -> QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
@@ -89,29 +213,48 @@ extension QuantumCircuit {
 
     // MARK: - W State Preparation
 
-    /// Create W state |W_n⟩ = (|100...0⟩ + |010...0⟩ + ... + |00...01⟩)/√n
+    /// Create W state: symmetric n-qubit entanglement robust to particle loss
     ///
-    /// The W state is a symmetric entangled state robust to single-qubit loss.
-    /// Unlike GHZ state, measuring one qubit in a W state leaves others entangled.
+    /// W state is equal superposition over all computational basis states with exactly
+    /// one |1⟩. Unlike GHZ states, W states remain entangled after measuring one qubit,
+    /// making them robust to particle loss and useful for distributed quantum computing.
     ///
-    /// Properties:
-    /// - Equal superposition over all n-qubit states with exactly one |1⟩
-    /// - Highly entangled but robust to particle loss
-    /// - Different entanglement structure than GHZ state
+    /// **Mathematical definition**: |W_n⟩ = (|100...0⟩ + |010...0⟩ + ... + |00...01⟩)/√n
     ///
-    /// Algorithm: Direct state construction (statevector-based)
-    /// - Enumerate all basis states with Hamming weight 1
-    /// - Set equal amplitude 1/√n for each
-    /// - Efficient and exact for simulation
+    /// **Properties**:
+    /// - Symmetric under qubit permutation
+    /// - Measuring one qubit → others remain entangled (unlike GHZ)
+    /// - Hamming weight = 1 (exactly one qubit in |1⟩)
+    /// - Different entanglement class than Bell/GHZ states
+    ///
+    /// **Algorithm**: Direct statevector construction
+    /// - Enumerate all 2^n basis states, select those with weight 1
+    /// - Assign amplitude 1/√n to each selected state
     ///
     /// - Parameter numQubits: Number of qubits (n ≥ 2)
-    /// - Returns: Quantum state |W_n⟩
+    /// - Returns: W state |W_n⟩
     ///
-    /// Example: |W_3⟩ = (|100⟩ + |010⟩ + |001⟩)/√3
+    /// Example:
+    /// ```swift
+    /// // W state for 3 qubits
+    /// let w3 = QuantumCircuit.wState(numQubits: 3)
+    /// // |W_3⟩ = (|100⟩ + |010⟩ + |001⟩)/√3
     ///
-    /// Complexity:
-    /// - Time: O(2^n) to enumerate states
-    /// - Memory: O(2^n) for state vector
+    /// // Verify structure
+    /// let p100 = w3.probability(ofState: 0b100)  // 1/3
+    /// let p010 = w3.probability(ofState: 0b010)  // 1/3
+    /// let p001 = w3.probability(ofState: 0b001)  // 1/3
+    /// let p000 = w3.probability(ofState: 0b000)  // 0.0
+    /// let p111 = w3.probability(ofState: 0b111)  // 0.0
+    ///
+    /// // W state for 4 qubits
+    /// let w4 = QuantumCircuit.wState(numQubits: 4)
+    /// // |W_4⟩ = (|1000⟩ + |0100⟩ + |0010⟩ + |0001⟩)/2
+    /// ```
+    ///
+    /// **Complexity**:
+    /// - Time: O(2^n) statevector enumeration
+    /// - Memory: O(2^n) for full statevector
     /// - Practical limit: n ≤ 20 qubits
     static func wState(numQubits: Int) -> QuantumState {
         precondition(numQubits >= 2, "W state requires at least 2 qubits")
@@ -135,29 +278,53 @@ extension QuantumCircuit {
 
     // MARK: - Dicke State Preparation
 
-    /// Create Dicke state |D_k^n⟩ with exactly k ones among n qubits
+    /// Create Dicke state: equal superposition with fixed Hamming weight
     ///
-    /// Dicke state is equal superposition over all basis states with Hamming weight k.
-    /// Example: |D_2^4⟩ = (|0011⟩+|0101⟩+|0110⟩+|1001⟩+|1010⟩+|1100⟩)/√6
+    /// Dicke state |D_k^n⟩ is uniform superposition over all n-qubit computational
+    /// basis states with exactly k qubits in |1⟩. Generalizes W states (k=1) and
+    /// appears in quantum metrology, collective spin models, and quantum sensing.
     ///
-    /// Applications:
-    /// - Quantum metrology and sensing
-    /// - Collective spin systems
-    /// - Quantum error correction
+    /// **Mathematical definition**: |D_k^n⟩ = Σ|x⟩/√(C(n,k)) where |x| has k ones
+    /// **Superposition size**: C(n,k) = n!/(k!(n-k)!) basis states
     ///
-    /// Algorithm: Direct state construction (statevector-based)
-    /// - Enumerate all n-bit strings with k ones
-    /// - Set equal amplitude 1/√(C(n,k)) for each
-    /// - Efficient for small k or small (n-k)
+    /// **Applications**:
+    /// - Quantum metrology: Heisenberg-limited sensing
+    /// - Collective spins: Symmetric Dicke manifold
+    /// - Quantum error correction: Certain code spaces
+    ///
+    /// **Algorithm**: Direct statevector construction
+    /// - Count all basis states with Hamming weight k: C(n,k)
+    /// - Assign amplitude 1/√(C(n,k)) to each
     ///
     /// - Parameters:
     ///   - numQubits: Total number of qubits (n)
-    ///   - numOnes: Number of qubits in |1⟩ state (k), where 0 ≤ k ≤ n
-    /// - Returns: Quantum state |D_k^n⟩
+    ///   - numOnes: Number of |1⟩ qubits (k), where 0 ≤ k ≤ n
+    /// - Returns: Dicke state |D_k^n⟩
     ///
-    /// Complexity:
-    /// - Time: O(2^n) to enumerate states
-    /// - Memory: O(2^n) for state vector
+    /// Example:
+    /// ```swift
+    /// // Dicke state with 2 ones among 4 qubits
+    /// let d24 = QuantumCircuit.dickeState(numQubits: 4, numOnes: 2)
+    /// // |D_2^4⟩ = (|0011⟩+|0101⟩+|0110⟩+|1001⟩+|1010⟩+|1100⟩)/√6
+    ///
+    /// // Verify: C(4,2) = 6 states, each with probability 1/6
+    /// let p0011 = d24.probability(ofState: 0b0011)  // 1/6 ≈ 0.167
+    /// let p0000 = d24.probability(ofState: 0b0000)  // 0.0 (wrong weight)
+    ///
+    /// // Special cases
+    /// let d04 = QuantumCircuit.dickeState(numQubits: 4, numOnes: 0)
+    /// // |0000⟩ (ground state)
+    ///
+    /// let d14 = QuantumCircuit.dickeState(numQubits: 4, numOnes: 1)
+    /// // |W_4⟩ = (|1000⟩+|0100⟩+|0010⟩+|0001⟩)/2
+    ///
+    /// let d44 = QuantumCircuit.dickeState(numQubits: 4, numOnes: 4)
+    /// // |1111⟩ (all-ones state)
+    /// ```
+    ///
+    /// **Complexity**:
+    /// - Time: O(2^n) statevector enumeration
+    /// - Memory: O(2^n) for full statevector
     /// - Practical limit: n ≤ 20 qubits
     static func dickeState(numQubits: Int, numOnes: Int) -> QuantumState {
         precondition(numQubits > 0, "Number of qubits must be positive")
@@ -188,20 +355,41 @@ extension QuantumCircuit {
 
     // MARK: - Basis State Preparation Circuit
 
-    /// Create circuit that prepares computational basis state |i⟩ from |00...0⟩
+    /// Create circuit for computational basis state |i⟩ (hardware-compatible)
     ///
-    /// Uses binary representation of i to apply X gates:
-    /// - If bit k of i is 1, apply X to qubit k
-    /// - Result: |00...0⟩ → |i⟩ with O(n) gates (not O(2^n))
+    /// Generates gate sequence that transforms |00...0⟩ → |i⟩ using only X gates.
+    /// More hardware-compatible than direct statevector construction. Uses binary
+    /// representation: apply X to qubit k if bit k of i is 1.
+    ///
+    /// **Gate count**: O(n) gates (at most n X gates, not exponential)
+    /// **Little-endian**: Qubit 0 corresponds to LSB of basisStateIndex
     ///
     /// - Parameters:
-    ///   - numQubits: Number of qubits
-    ///   - basisStateIndex: Target basis state index (0 to 2^n-1)
-    /// - Returns: Circuit that prepares |i⟩
+    ///   - numQubits: Number of qubits (n)
+    ///   - basisStateIndex: Target basis state i ∈ [0, 2^n-1]
+    /// - Returns: Circuit that prepares |i⟩ from ground state
     ///
     /// Example:
-    /// - basisStateCircuit(numQubits: 4, basisStateIndex: 11) prepares |1011⟩
-    /// - Applies: X(0), X(1), X(3) (bits 0,1,3 are set in binary 1011)
+    /// ```swift
+    /// // Prepare |101⟩ (index 5 = 0b101)
+    /// let circuit = QuantumCircuit.basisStateCircuit(numQubits: 3, basisStateIndex: 5)
+    /// // Applies: X(0), X(2) since bits 0 and 2 are set
+    /// let state = circuit.execute()
+    /// let p5 = state.probability(ofState: 5)  // 1.0
+    ///
+    /// // Prepare |1011⟩ (index 11 = 0b1011)
+    /// let circuit2 = QuantumCircuit.basisStateCircuit(numQubits: 4, basisStateIndex: 11)
+    /// // Applies: X(0), X(1), X(3)
+    ///
+    /// // Prepare |0000⟩ (index 0 = 0b0000)
+    /// let circuit3 = QuantumCircuit.basisStateCircuit(numQubits: 4, basisStateIndex: 0)
+    /// // Applies: no gates (already ground state)
+    /// ```
+    ///
+    /// **Complexity**:
+    /// - Gates: O(popcount(i)) ≤ O(n) X gates
+    /// - Circuit depth: O(1) (all X gates commute)
+    /// - Execution: O(2^n) for statevector simulation
     static func basisStateCircuit(numQubits: Int, basisStateIndex: Int) -> QuantumCircuit {
         precondition(numQubits > 0, "Number of qubits must be positive")
         precondition(numQubits <= 30, "Number of qubits too large")

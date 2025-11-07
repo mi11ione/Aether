@@ -3,8 +3,70 @@
 
 import Foundation
 
-/// Thread-safe quantum simulator using Swift actors
-/// Supports async execution with cancellation and progress reporting
+/// Async quantum simulator: thread-safe circuit execution with GPU acceleration
+///
+/// Actor-based quantum simulator providing asynchronous circuit execution with
+/// automatic GPU acceleration, progress reporting, and cancellation support.
+/// Designed for UI applications and long-running quantum computations.
+///
+/// **Architecture**:
+/// - Swift actor: Thread-safe, prevents data races
+/// - Automatic GPU: Uses Metal for states ≥ 2^10 qubits (configurable)
+/// - Progress tracking: Real-time execution monitoring
+/// - Cancellation: Cooperative task cancellation via Task.checkCancellation()
+/// - Batch execution: Parallel circuit execution with task groups
+///
+/// **GPU acceleration**:
+/// - Automatic threshold: Switches to Metal when numQubits ≥ 10
+/// - Significant speedup: 2-10x for large states (depends on hardware)
+/// - Fallback: CPU implementation if Metal unavailable
+///
+/// **Use cases**:
+/// - UI applications: Non-blocking circuit execution
+/// - Progress bars: Real-time feedback for long computations
+/// - Parallel execution: Run multiple circuits concurrently
+/// - Cancellable tasks: User can interrupt long operations
+///
+/// Example:
+/// ```swift
+/// // Basic async execution
+/// let circuit = QuantumCircuit.bellPhiPlus()
+/// let simulator = await QuantumSimulator()
+/// let state = try await simulator.execute(circuit)
+///
+/// // With progress updates (for UI)
+/// let largeCircuit = QuantumCircuit(numQubits: 15)
+/// // ... add many gates ...
+///
+/// let finalState = try await simulator.executeWithProgress(largeCircuit) { progress in
+///     print("Progress: \(Int(progress * 100))%")
+///     // Update UI progress bar on main thread
+///     await MainActor.run {
+///         progressBar.progress = progress
+///     }
+/// }
+///
+/// // Cancellable execution
+/// let task = Task {
+///     try await simulator.execute(veryLongCircuit)
+/// }
+/// // Later: user cancels operation
+/// task.cancel()
+/// // Simulator will throw CancellationError
+///
+/// // Batch execution (parallel)
+/// let circuits = [circuit1, circuit2, circuit3]
+/// let results = try await simulator.executeBatch(circuits)
+/// // All circuits run in parallel
+///
+/// // Convenience: execute directly on circuit
+/// let state2 = try await circuit.executeAsync()
+///
+/// // GPU acceleration (automatic)
+/// let gpuSimulator = await QuantumSimulator(useMetalAcceleration: true)
+/// let bigCircuit = QuantumCircuit(numQubits: 12)  // Will use GPU
+/// let result = try await gpuSimulator.execute(bigCircuit)
+/// ```
 actor QuantumSimulator {
     /// Current quantum state
     private var currentState: QuantumState?

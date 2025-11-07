@@ -3,16 +3,66 @@
 
 import Foundation
 
-/// Enumeration of all quantum gates with their unitary matrix representations.
+/// Quantum gates: unitary transformations for quantum circuits
 ///
-/// Gates are the building blocks of quantum circuits. Each gate applies a specific
-/// unitary transformation to quantum states. All gates preserve normalization
-/// (probability conservation) through unitarity: U†U = I.
+/// Defines all supported quantum gates with their matrix representations and metadata.
+/// Gates are the fundamental building blocks of quantum computation, implementing
+/// reversible unitary transformations that preserve quantum state normalization.
 ///
-/// Gate types:
-/// - Single-qubit gates: 2×2 complex matrices (Pauli, Hadamard, Phase, Rotation)
-/// - Two-qubit gates: 4×4 complex matrices (CNOT, Controlled-Phase, SWAP)
-/// - Multi-qubit gates: 8×8+ matrices (Toffoli, etc.)
+/// **Mathematical foundation**:
+/// - Unitarity: U†U = I (probability conservation, reversibility)
+/// - Single-qubit: 2×2 complex matrices operating on C²
+/// - Two-qubit: 4×4 complex matrices operating on C⁴
+/// - Multi-qubit: 2^n × 2^n matrices operating on C^(2^n)
+///
+/// **Gate categories**:
+/// - **Pauli gates**: X (bit flip), Y (bit+phase flip), Z (phase flip)
+/// - **Hadamard**: Creates superposition (basis rotation)
+/// - **Phase gates**: P(θ), S (π/2), T (π/4), U1(λ)
+/// - **Rotation gates**: Rx(θ), Ry(θ), Rz(θ) - parameterized rotations
+/// - **IBM gates**: U1, U2, U3 (universal single-qubit gates)
+/// - **Controlled gates**: CNOT, CZ, CY, CH, controlled rotations
+/// - **Multi-qubit**: SWAP, √SWAP, Toffoli (CCNOT)
+/// - **Custom gates**: User-defined unitaries with validation
+///
+/// **Usage patterns**:
+/// - Single-qubit: Apply to specific qubit in circuit
+/// - Controlled gates: Specify control and target qubits
+/// - Matrix access: Use `matrix()` to get unitary representation
+/// - Validation: Gates validate qubit indices and matrix unitarity
+///
+/// Example:
+/// ```swift
+/// // Single-qubit gates
+/// let x = QuantumGate.pauliX
+/// let h = QuantumGate.hadamard
+/// let rz = QuantumGate.rotationZ(theta: .pi/4)
+///
+/// // Two-qubit gates
+/// let cnot = QuantumGate.cnot(control: 0, target: 1)
+/// let cphase = QuantumGate.controlledPhase(theta: .pi/2, control: 1, target: 2)
+///
+/// // Multi-qubit gates
+/// let toffoli = QuantumGate.toffoli(control1: 0, control2: 1, target: 2)
+///
+/// // Create Bell state circuit
+/// var circuit = QuantumCircuit(numQubits: 2)
+/// circuit.append(gate: .hadamard, toQubit: 0)
+/// circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+/// let bellState = circuit.execute()
+///
+/// // Custom gate with validation
+/// let customMatrix = [
+///     [Complex(0.5, 0.5), Complex(0.5, -0.5)],
+///     [Complex(0.5, -0.5), Complex(0.5, 0.5)]
+/// ]
+/// let customGate = try QuantumGate.createCustomSingleQubit(matrix: customMatrix)
+///
+/// // Gate properties
+/// print(cnot.qubitsRequired)  // 2
+/// print(rz.isParameterized)   // true
+/// print(h.isHermitian)        // true
+/// ```
 enum QuantumGate: Equatable, Hashable, CustomStringConvertible {
     // MARK: - Single-Qubit Gates
 
@@ -193,8 +243,32 @@ enum QuantumGate: Equatable, Hashable, CustomStringConvertible {
 
     // MARK: - Matrix Generation
 
-    /// Generate unitary matrix for this gate
-    /// - Returns: 2D array of complex numbers representing the gate
+    /// Generate unitary matrix representation of gate
+    ///
+    /// Returns the complex matrix that represents this gate's action on quantum states.
+    /// Matrix size depends on gate type: 2×2 for single-qubit, 4×4 for two-qubit,
+    /// 8×8 for three-qubit gates. All matrices satisfy U†U = I (unitarity).
+    ///
+    /// - Returns: 2D array of complex numbers (2×2, 4×4, or 8×8)
+    ///
+    /// Example:
+    /// ```swift
+    /// // Hadamard matrix: (1/√2)[[1,1],[1,-1]]
+    /// let h = QuantumGate.hadamard
+    /// let hMatrix = h.matrix()
+    /// // [[0.707+0i, 0.707+0i],
+    /// //  [0.707+0i, -0.707+0i]]
+    ///
+    /// // Pauli-X matrix: [[0,1],[1,0]]
+    /// let x = QuantumGate.pauliX
+    /// let xMatrix = x.matrix()
+    /// // [[0+0i, 1+0i],
+    /// //  [1+0i, 0+0i]]
+    ///
+    /// // CNOT matrix: 4×4 identity with last two rows swapped
+    /// let cnot = QuantumGate.cnot(control: 0, target: 1)
+    /// let cnotMatrix = cnot.matrix()
+    /// ```
     func matrix() -> [[Complex<Double>]] {
         switch self {
         case .identity: identityMatrix()
@@ -508,9 +582,27 @@ enum QuantumGate: Equatable, Hashable, CustomStringConvertible {
 
     // MARK: - Validation
 
-    /// Validate qubit indices for this gate
+    /// Validate qubit indices for gate application
+    ///
+    /// Checks that all qubit indices are within bounds and distinct (no qubit
+    /// appears multiple times). Required before applying gate to ensure circuit
+    /// correctness.
+    ///
     /// - Parameter maxAllowedQubit: Maximum allowed qubit index (inclusive)
     /// - Returns: True if all qubit indices are valid and distinct
+    ///
+    /// Example:
+    /// ```swift
+    /// let cnot = QuantumGate.cnot(control: 0, target: 1)
+    /// cnot.validateQubitIndices(maxAllowedQubit: 2)  // true
+    /// cnot.validateQubitIndices(maxAllowedQubit: 0)  // false (target=1 > max)
+    ///
+    /// let invalid = QuantumGate.cnot(control: 0, target: 0)
+    /// invalid.validateQubitIndices(maxAllowedQubit: 5)  // false (control == target)
+    ///
+    /// let toffoli = QuantumGate.toffoli(control1: 0, control2: 1, target: 2)
+    /// toffoli.validateQubitIndices(maxAllowedQubit: 3)  // true
+    /// ```
     func validateQubitIndices(maxAllowedQubit: Int) -> Bool {
         switch self {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
@@ -594,9 +686,34 @@ enum QuantumGate: Equatable, Hashable, CustomStringConvertible {
 // MARK: - Matrix Utilities
 
 extension QuantumGate {
-    /// Check if matrix is unitary: U†U = I
-    /// - Parameter matrix: Matrix to check
-    /// - Returns: True if unitary within tolerance
+    /// Verify matrix unitarity: U†U = I
+    ///
+    /// Checks if matrix preserves quantum state normalization through unitary condition.
+    /// All valid quantum gates must be unitary for probability conservation and
+    /// reversibility. Uses numerical tolerance (1e-10) for floating-point comparison.
+    ///
+    /// **Unitarity condition**: U†U = I where U† is conjugate transpose
+    ///
+    /// - Parameter matrix: Square complex matrix to check
+    /// - Returns: True if unitary within tolerance (1e-10)
+    ///
+    /// Example:
+    /// ```swift
+    /// // Hadamard is unitary
+    /// let hMatrix = QuantumGate.hadamard.matrix()
+    /// QuantumGate.isUnitary(hMatrix)  // true
+    ///
+    /// // Invalid matrix: not unitary
+    /// let invalid = [
+    ///     [Complex(1, 0), Complex(1, 0)],
+    ///     [Complex(0, 0), Complex(1, 0)]
+    /// ]
+    /// QuantumGate.isUnitary(invalid)  // false
+    ///
+    /// // Identity is trivially unitary
+    /// let identity = QuantumGate.identity.matrix()
+    /// QuantumGate.isUnitary(identity)  // true
+    /// ```
     static func isUnitary(_ matrix: [[Complex<Double>]]) -> Bool {
         let n = matrix.count
         guard matrix.allSatisfy({ $0.count == n }) else { return false }
@@ -658,10 +775,49 @@ extension QuantumGate {
 
     // MARK: - Custom Gate Factory Methods
 
-    /// Create custom single-qubit unitary gate with validation
-    /// - Parameter matrix: 2×2 complex matrix
+    /// Create validated custom single-qubit gate
+    ///
+    /// Builds custom quantum gate from user-provided 2×2 complex matrix.
+    /// Validates matrix size and unitarity before creating gate. Useful for
+    /// research, custom algorithms, and gate decomposition.
+    ///
+    /// - Parameter matrix: 2×2 complex matrix (must be unitary)
     /// - Returns: Custom single-qubit gate
-    /// - Throws: Error if matrix is not unitary or wrong size
+    /// - Throws: QuantumGateError if matrix invalid or non-unitary
+    ///
+    /// Example:
+    /// ```swift
+    /// // Custom rotation gate
+    /// let angle = Double.pi / 6
+    /// let customMatrix = [
+    ///     [Complex(cos(angle), 0), Complex(-sin(angle), 0)],
+    ///     [Complex(sin(angle), 0), Complex(cos(angle), 0)]
+    /// ]
+    /// let gate = try QuantumGate.createCustomSingleQubit(matrix: customMatrix)
+    ///
+    /// // Use in circuit
+    /// var circuit = QuantumCircuit(numQubits: 1)
+    /// circuit.append(gate: gate, toQubit: 0)
+    ///
+    /// // Invalid: wrong size
+    /// let wrongSize = [[Complex(1, 0)]]
+    /// do {
+    ///     let _ = try QuantumGate.createCustomSingleQubit(matrix: wrongSize)
+    /// } catch QuantumGateError.invalidMatrixSize(let msg) {
+    ///     print(msg)  // "Custom single-qubit gate requires 2×2 matrix"
+    /// }
+    ///
+    /// // Invalid: not unitary
+    /// let notUnitary = [
+    ///     [Complex(2, 0), Complex(0, 0)],
+    ///     [Complex(0, 0), Complex(1, 0)]
+    /// ]
+    /// do {
+    ///     let _ = try QuantumGate.createCustomSingleQubit(matrix: notUnitary)
+    /// } catch QuantumGateError.notUnitary(let msg) {
+    ///     print(msg)  // "Matrix is not unitary (U†U ≠ I)"
+    /// }
+    /// ```
     static func createCustomSingleQubit(matrix: [[Complex<Double>]]) throws -> QuantumGate {
         guard matrix.count == 2, matrix.allSatisfy({ $0.count == 2 }) else {
             throw QuantumGateError.invalidMatrixSize("Custom single-qubit gate requires 2×2 matrix")
@@ -674,13 +830,53 @@ extension QuantumGate {
         return .customSingleQubit(matrix: matrix)
     }
 
-    /// Create custom two-qubit unitary gate with validation
+    /// Create validated custom two-qubit gate
+    ///
+    /// Builds custom two-qubit gate from user-provided 4×4 complex matrix.
+    /// Validates matrix size and unitarity. Useful for custom entangling operations,
+    /// variational quantum circuits, and quantum algorithm research.
+    ///
     /// - Parameters:
-    ///   - matrix: 4×4 complex matrix
+    ///   - matrix: 4×4 complex matrix (must be unitary)
     ///   - control: Control qubit index
     ///   - target: Target qubit index
     /// - Returns: Custom two-qubit gate
-    /// - Throws: Error if matrix is not unitary or wrong size
+    /// - Throws: QuantumGateError if matrix invalid or non-unitary
+    ///
+    /// Example:
+    /// ```swift
+    /// // Custom controlled rotation
+    /// let theta = Double.pi / 4
+    /// let c = cos(theta / 2)
+    /// let s = sin(theta / 2)
+    /// let customMatrix = [
+    ///     [Complex(1, 0), Complex(0, 0), Complex(0, 0), Complex(0, 0)],
+    ///     [Complex(0, 0), Complex(1, 0), Complex(0, 0), Complex(0, 0)],
+    ///     [Complex(0, 0), Complex(0, 0), Complex(c, 0), Complex(-s, 0)],
+    ///     [Complex(0, 0), Complex(0, 0), Complex(s, 0), Complex(c, 0)]
+    /// ]
+    /// let gate = try QuantumGate.createCustomTwoQubit(
+    ///     matrix: customMatrix,
+    ///     control: 0,
+    ///     target: 1
+    /// )
+    ///
+    /// // Use in circuit
+    /// var circuit = QuantumCircuit(numQubits: 2)
+    /// circuit.append(gate: gate, qubits: [])
+    ///
+    /// // Invalid: wrong size
+    /// let wrongSize = [[Complex(1, 0)]]
+    /// do {
+    ///     let _ = try QuantumGate.createCustomTwoQubit(
+    ///         matrix: wrongSize,
+    ///         control: 0,
+    ///         target: 1
+    ///     )
+    /// } catch QuantumGateError.invalidMatrixSize(let msg) {
+    ///     print(msg)  // "Custom two-qubit gate requires 4×4 matrix"
+    /// }
+    /// ```
     static func createCustomTwoQubit(
         matrix: [[Complex<Double>]],
         control: Int,

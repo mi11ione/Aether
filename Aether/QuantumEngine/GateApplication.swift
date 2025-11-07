@@ -3,19 +3,54 @@
 
 import Foundation
 
-/// Gate application engine - core quantum simulation logic.
+/// Gate application: CPU-based quantum gate execution engine
 ///
-/// Applies quantum gates to quantum states through matrix-vector multiplication.
-/// Implements efficient algorithms that avoid computing full tensor products.
+/// Implements efficient quantum gate application through optimized matrix-vector multiplication
+/// without computing exponentially large tensor products. This is the core classical simulation
+/// algorithm that transforms quantum states according to gate matrices.
 ///
-/// Mathematical basis:
-/// - Full state transformation: |ψ'⟩ = U|ψ⟩
-/// - Single-qubit gate affects 2^(n-1) amplitude pairs
-/// - Multi-qubit gate affects larger amplitude groups
-/// - Complexity: O(2^n) operations per gate (cannot be faster)
+/// **Mathematical foundation**:
+/// - State transformation: |ψ'⟩ = U|ψ⟩ where U is unitary gate matrix
+/// - Single-qubit gate: Affects 2^(n-1) amplitude pairs in statevector
+/// - Two-qubit gate: Affects 2^(n-2) amplitude quartets
+/// - Computational complexity: O(2^n) per gate (fundamental quantum simulation limit)
 ///
-/// Architecture: Generic over n qubits - no hardcoded limits.
-/// Works identically for 1-24+ qubits, only difference is array size.
+/// **Architecture**:
+/// - Zero tensor products: Never computes full 2^n × 2^n matrices
+/// - Direct amplitude updates: Applies 2×2 or 4×4 matrices to state vector subsets
+/// - Generic qubit count: Works identically for 1-30+ qubits
+/// - Optimized special cases: CNOT, CZ, Toffoli faster than general matrix multiplication
+///
+/// **Algorithm efficiency**:
+/// - Single-qubit: Only processes (qubit=0) indices, updates pairs via XOR
+/// - Two-qubit: Masks select 4-tuples differing only in control/target bits
+/// - CNOT: Simple amplitude swap, no matrix multiplication
+/// - Toffoli: Conditional swap based on control qubit states
+///
+/// **Little-endian qubit ordering**:
+/// Qubit 0 is LSB in state index. For |01⟩ (state index 1):
+/// - Qubit 0 = |1⟩ (LSB)
+/// - Qubit 1 = |0⟩ (MSB)
+///
+/// Example:
+/// ```swift
+/// // Apply Hadamard to qubit 0: creates superposition
+/// let initial = QuantumState(numQubits: 2)  // |00⟩
+/// let after = GateApplication.apply(gate: .hadamard, to: [0], state: initial)
+/// // Result: (|00⟩ + |01⟩)/√2
+///
+/// // Apply CNOT(0→1): creates Bell state
+/// let cnot = QuantumGate.cnot(control: 0, target: 1)
+/// let bell = GateApplication.apply(gate: cnot, to: [], state: after)
+/// // Result: (|00⟩ + |11⟩)/√2
+///
+/// // Custom gate application
+/// let rotationY = QuantumGate.rotationY(angle: .pi / 4)
+/// let rotated = GateApplication.apply(gate: rotationY, to: [1], state: bell)
+///
+/// // Convenience method
+/// let result = initial.applying(gate: .hadamard, toQubit: 0)
+/// ```
 enum GateApplication {
     // MARK: - Main Application Function
 

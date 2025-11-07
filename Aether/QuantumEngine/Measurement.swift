@@ -4,28 +4,81 @@
 import Foundation
 import GameplayKit
 
-/// Result of a quantum measurement
+/// Quantum measurement outcome with collapsed state
+///
+/// Encapsulates the result of measuring a quantum state: the classical outcome
+/// and the post-measurement collapsed state. Implements state collapse postulate
+/// from quantum mechanics.
+///
+/// Example:
+/// ```swift
+/// var measurement = Measurement()
+/// let result = measurement.measure(state: bellState)
+/// // result.outcome: 0 or 3 (50% each for Bell state)
+/// // result.collapsedState: |00⟩ or |11⟩ (deterministic after collapse)
+/// ```
 struct MeasurementResult: Equatable, CustomStringConvertible {
-    /// Classical outcome (basis state index)
+    /// Classical outcome (basis state index i ∈ [0, 2^n-1])
     let outcome: Int
 
-    /// Post-measurement quantum state (collapsed)
+    /// Post-measurement state |i⟩ (collapsed to measured outcome)
     let collapsedState: QuantumState
 
-    /// String representation
     var description: String {
         "Measurement: outcome=\(outcome), state=\(collapsedState)"
     }
 }
 
-/// Quantum measurement system implementing Born rule.
+/// Quantum measurement: Born rule implementation with state collapse
 ///
-/// Provides measurement operations for quantum states following the Born rule:
-/// - Probability of measuring basis state |i⟩ is P(i) = |cᵢ|²
-/// - Measurement collapses the state to the measured outcome
-/// - Supports full measurement (all qubits) and partial measurement (subset)
+/// Implements projective measurement in the computational basis following quantum mechanics:
+/// - **Born rule**: Probability P(i) = |cᵢ|² for measuring basis state |i⟩
+/// - **State collapse**: Measurement projects state onto measured outcome
+/// - **Partial measurement**: Measure subset of qubits, leaving others in superposition
+/// - **Reproducibility**: Optional seeded RNG for deterministic results
 ///
-/// Supports both random and seeded (reproducible) measurements.
+/// **Measurement types**:
+/// - Full measurement: All qubits → single basis state outcome
+/// - Partial measurement: One qubit → probabilistic collapse, others remain quantum
+///
+/// **Statistical analysis**:
+/// - Multiple runs for frequency distribution
+/// - Chi-squared goodness-of-fit testing
+/// - Histogram generation and comparison
+///
+/// **RNG modes**:
+/// - System RNG (default): True randomness, non-reproducible
+/// - Seeded RNG: Reproducible measurements for testing and debugging
+///
+/// Example:
+/// ```swift
+/// // Create Bell state (|00⟩ + |11⟩)/√2
+/// let circuit = QuantumCircuit.bellPhiPlus()
+/// let state = circuit.execute()
+///
+/// // Single measurement
+/// var measurement = Measurement()
+/// let result = measurement.measure(state: state)
+/// // result.outcome: 0 (|00⟩) or 3 (|11⟩) with 50% probability each
+///
+/// // Multiple measurements for statistics
+/// let outcomes = Measurement.runMultiple(circuit: circuit, numRuns: 1000)
+/// let counts = Measurement.histogram(outcomes: outcomes, numQubits: 2)
+/// // counts ≈ [500, 0, 0, 500] (roughly equal |00⟩ and |11⟩)
+///
+/// // Seeded measurement (reproducible)
+/// var seededMeasurement = Measurement(seed: 42)
+/// let result1 = seededMeasurement.measure(state: state)
+/// var seededMeasurement2 = Measurement(seed: 42)
+/// let result2 = seededMeasurement2.measure(state: state)
+/// // result1.outcome == result2.outcome (deterministic)
+///
+/// // Partial measurement
+/// var partialMeasurement = Measurement()
+/// let (outcome, collapsed) = partialMeasurement.measureQubit(0, state: state)
+/// // outcome: 0 or 1 (50% each for Bell state)
+/// // collapsed: Other qubit still entangled with measured result
+/// ```
 struct Measurement {
     /// Random number generator for measurement sampling
     private var rng: any RandomNumberGenerator
@@ -96,11 +149,44 @@ struct Measurement {
 
     // MARK: - Full Measurement
 
-    /// Perform full measurement of all qubits (computational basis).
-    /// Implements Born rule: P(i) = |cᵢ|²
+    /// Measure all qubits in computational basis (Born rule)
     ///
-    /// - Parameter state: Quantum state to measure
-    /// - Returns: Measurement result with outcome and collapsed state
+    /// Performs projective measurement of entire quantum state, sampling outcome
+    /// according to P(i) = |cᵢ|². Collapses state to measured basis state |i⟩.
+    /// This is the standard measurement operation in quantum computing.
+    ///
+    /// **Process**:
+    /// 1. Calculate probability distribution P(i) = |cᵢ|² for all i
+    /// 2. Sample outcome according to probabilities (roulette wheel)
+    /// 3. Collapse state to |outcome⟩
+    ///
+    /// - Parameter state: Normalized quantum state to measure
+    /// - Returns: Measurement result containing outcome and collapsed state
+    ///
+    /// Example:
+    /// ```swift
+    /// // Measure superposition |+⟩ = (|0⟩ + |1⟩)/√2
+    /// let plus = QuantumState(numQubits: 1, amplitudes: [
+    ///     Complex(1/sqrt(2), 0),
+    ///     Complex(1/sqrt(2), 0)
+    /// ])
+    /// var measurement = Measurement()
+    /// let result = measurement.measure(state: plus)
+    /// // result.outcome: 0 or 1 (50% each)
+    /// // result.collapsedState: |0⟩ or |1⟩
+    ///
+    /// // Measure Bell state (|00⟩ + |11⟩)/√2
+    /// let bell = QuantumCircuit.bellPhiPlus().execute()
+    /// let bellResult = measurement.measure(state: bell)
+    /// // bellResult.outcome: 0 (|00⟩) or 3 (|11⟩) with equal probability
+    ///
+    /// // Seeded measurement for reproducibility
+    /// var seeded = Measurement(seed: 123)
+    /// let r1 = seeded.measure(state: plus)
+    /// var seeded2 = Measurement(seed: 123)
+    /// let r2 = seeded2.measure(state: plus)
+    /// // r1.outcome == r2.outcome (same seed → same result)
+    /// ```
     mutating func measure(state: QuantumState) -> MeasurementResult {
         precondition(state.isNormalized(), "State must be normalized before measurement")
 
@@ -135,13 +221,52 @@ struct Measurement {
 
     // MARK: - Partial Measurement
 
-    /// Measure a single qubit, leaving others in superposition.
-    /// Implements marginalization over unmeasured qubits.
+    /// Measure single qubit, leaving others in superposition
+    ///
+    /// Performs projective measurement of one qubit while preserving quantum coherence
+    /// in unmeasured qubits. Implements partial trace / marginalization. The collapsed
+    /// state maintains entanglement structure for unmeasured qubits.
+    ///
+    /// **Process**:
+    /// 1. Calculate marginal probabilities P(qubit=0) and P(qubit=1)
+    /// 2. Sample outcome (0 or 1)
+    /// 3. Collapse: zero incompatible amplitudes, renormalize rest
+    ///
+    /// **Applications**: Sequential measurements, mid-circuit measurement, error correction
     ///
     /// - Parameters:
-    ///   - qubit: Index of qubit to measure
-    ///   - state: Quantum state to measure
-    /// - Returns: Measurement result (0 or 1) and partially collapsed state
+    ///   - qubit: Qubit index to measure (0 to n-1)
+    ///   - state: Normalized quantum state
+    /// - Returns: Tuple (outcome ∈ {0,1}, partially collapsed state)
+    ///
+    /// Example:
+    /// ```swift
+    /// // Create Bell state (|00⟩ + |11⟩)/√2
+    /// let bell = QuantumCircuit.bellPhiPlus().execute()
+    ///
+    /// // Measure qubit 0
+    /// var measurement = Measurement()
+    /// let (outcome, collapsed) = measurement.measureQubit(0, state: bell)
+    ///
+    /// // If outcome = 0: collapsed = |00⟩ (qubit 1 also collapsed to |0⟩)
+    /// // If outcome = 1: collapsed = |11⟩ (qubit 1 also collapsed to |1⟩)
+    /// // Each with 50% probability
+    ///
+    /// // Bell state exhibits perfect correlation
+    /// let p00 = collapsed.probability(ofState: 0b00)  // 1.0 or 0.0
+    /// let p11 = collapsed.probability(ofState: 0b11)  // 0.0 or 1.0
+    ///
+    /// // Product state example: |+⟩⊗|0⟩
+    /// let product = QuantumState(numQubits: 2, amplitudes: [
+    ///     Complex(1/sqrt(2), 0),  // |00⟩
+    ///     Complex(0, 0),          // |01⟩
+    ///     Complex(1/sqrt(2), 0),  // |10⟩
+    ///     Complex(0, 0)           // |11⟩
+    /// ])
+    /// let (outcome2, collapsed2) = measurement.measureQubit(0, state: product)
+    /// // outcome2: 0 or 1 (50% each)
+    /// // collapsed2: |00⟩ or |10⟩ (qubit 1 unaffected, still |0⟩)
+    /// ```
     mutating func measureQubit(_ qubit: Int, state: QuantumState) -> (outcome: Int, collapsedState: QuantumState) {
         precondition(qubit >= 0 && qubit < state.numQubits, "Qubit index out of bounds")
         precondition(state.isNormalized(), "State must be normalized before measurement")
@@ -219,13 +344,52 @@ struct Measurement {
 
     // MARK: - Multiple Measurements (Statistics)
 
-    /// Run circuit multiple times and collect measurement outcomes.
-    /// Used for statistical validation and visualization.
+    /// Execute circuit multiple times and collect measurement statistics
+    ///
+    /// Runs circuit repeatedly, measuring final state each time to build empirical
+    /// probability distribution. Essential for validating quantum algorithms and
+    /// visualizing measurement outcomes. Use with `histogram()` for frequency analysis.
+    ///
+    /// **Use cases**:
+    /// - Algorithm validation (compare observed vs expected distribution)
+    /// - Visualization (plot measurement frequencies)
+    /// - Statistical testing (chi-squared goodness-of-fit)
     ///
     /// - Parameters:
     ///   - circuit: Quantum circuit to execute
-    ///   - numRuns: Number of measurement runs
-    /// - Returns: Array of outcomes
+    ///   - numRuns: Number of independent executions (≥ 1000 recommended for statistics)
+    /// - Returns: Array of measurement outcomes [outcome₁, outcome₂, ..., outcomeₙ]
+    ///
+    /// Example:
+    /// ```swift
+    /// // Measure Bell state 1000 times
+    /// let bellCircuit = QuantumCircuit.bellPhiPlus()
+    /// var measurement = Measurement()
+    /// let outcomes = measurement.runMultiple(circuit: bellCircuit, numRuns: 1000)
+    ///
+    /// // Convert to histogram
+    /// let counts = Measurement.histogram(outcomes: outcomes, numQubits: 2)
+    /// // counts ≈ [~500, 0, 0, ~500] for Bell state
+    /// print("Measured |00⟩: \(counts[0]) times")
+    /// print("Measured |11⟩: \(counts[3]) times")
+    ///
+    /// // Compare to expected distribution
+    /// let expected = [0.5, 0.0, 0.0, 0.5]
+    /// let error = Measurement.compareDistributions(
+    ///     observed: counts,
+    ///     expected: expected,
+    ///     totalRuns: 1000
+    /// )
+    /// // error < 0.1 (within 10% for reasonable sample size)
+    ///
+    /// // Chi-squared test
+    /// let chiSq = Measurement.chiSquared(
+    ///     observed: counts,
+    ///     expected: expected,
+    ///     totalRuns: 1000
+    /// )
+    /// // chiSq.chiSquared < critical value → good fit
+    /// ```
     mutating func runMultiple(circuit: QuantumCircuit, numRuns: Int) -> [Int] {
         precondition(numRuns > 0, "Number of runs must be positive")
 
