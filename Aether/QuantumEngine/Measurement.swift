@@ -98,6 +98,24 @@ struct PauliMeasurementResult: Equatable, CustomStringConvertible {
     }
 }
 
+/// Single Pauli operator on a specific qubit
+///
+/// Represents one Pauli operator (X, Y, or Z) applied to a specific qubit.
+/// Used as building blocks for PauliString (tensor product of operators).
+///
+/// Example:
+/// ```swift
+/// let xOn0 = PauliOperator(qubit: 0, basis: .x)  // X₀
+/// let zOn2 = PauliOperator(qubit: 2, basis: .z)  // Z₂
+/// ```
+struct PauliOperator: Equatable, Sendable {
+    /// Target qubit index (0 to n-1)
+    let qubit: Int
+
+    /// Pauli basis (X, Y, or Z)
+    let basis: PauliBasis
+}
+
 /// Pauli string operator for multi-qubit measurements
 ///
 /// Represents a tensor product of Pauli operators, e.g., X₀⊗Y₁⊗Z₂.
@@ -128,14 +146,14 @@ struct PauliMeasurementResult: Equatable, CustomStringConvertible {
 /// let singlePauli = PauliString(operators: [(qubit: 2, basis: .z)])
 /// ```
 struct PauliString: Equatable, CustomStringConvertible, Sendable {
-    /// Array of (qubit index, Pauli basis) pairs
+    /// Array of Pauli operators
     /// Identity operators on unspecified qubits
-    let operators: [(qubit: Int, basis: PauliBasis)]
+    let operators: [PauliOperator]
 
     /// Create Pauli string from operator list
     /// - Parameter operators: List of (qubit, basis) pairs
     init(operators: [(qubit: Int, basis: PauliBasis)]) {
-        self.operators = operators
+        self.operators = operators.map { PauliOperator(qubit: $0.qubit, basis: $0.basis) }
     }
 
     var description: String {
@@ -146,17 +164,23 @@ struct PauliString: Equatable, CustomStringConvertible, Sendable {
         let terms = operators.map { "\($0.basis.rawValue.uppercased())_\($0.qubit)" }
         return terms.joined(separator: "⊗")
     }
+}
 
-    /// Manual Equatable conformance for arrays of tuples
-    static func == (lhs: PauliString, rhs: PauliString) -> Bool {
-        guard lhs.operators.count == rhs.operators.count else { return false }
-        for (l, r) in zip(lhs.operators, rhs.operators) {
-            if l.qubit != r.qubit || l.basis != r.basis {
-                return false
-            }
-        }
-        return true
-    }
+/// Individual qubit measurement outcome
+///
+/// Records the measurement result (0 or 1) for a specific qubit.
+/// Used in multi-qubit measurement results to track individual qubit outcomes.
+///
+/// Example:
+/// ```swift
+/// let outcome = MeasurementOutcome(qubit: 0, outcome: 1)  // Qubit 0 measured as |1⟩
+/// ```
+struct MeasurementOutcome: Equatable {
+    /// Qubit index that was measured
+    let qubit: Int
+
+    /// Measurement result: 0 or 1 (computational basis)
+    let outcome: Int
 }
 
 /// Multi-qubit Pauli measurement result
@@ -191,28 +215,11 @@ struct PauliStringMeasurementResult: Equatable, CustomStringConvertible {
     let collapsedState: QuantumState
 
     /// Individual measurement outcomes for each qubit
-    /// Array of (qubit index, outcome ∈ {0,1})
-    let individualOutcomes: [(qubit: Int, outcome: Int)]
+    let individualOutcomes: [MeasurementOutcome]
 
     var description: String {
         let outcomeStr = individualOutcomes.map { "q\($0.qubit)=\($0.outcome)" }.joined(separator: ", ")
         return "PauliStringMeasurement: eigenvalue=\(eigenvalue > 0 ? "+1" : "-1"), outcomes=[\(outcomeStr)]"
-    }
-
-    /// Manual Equatable conformance for arrays of tuples
-    static func == (lhs: PauliStringMeasurementResult, rhs: PauliStringMeasurementResult) -> Bool {
-        guard lhs.eigenvalue == rhs.eigenvalue,
-              lhs.collapsedState == rhs.collapsedState,
-              lhs.individualOutcomes.count == rhs.individualOutcomes.count
-        else {
-            return false
-        }
-        for (l, r) in zip(lhs.individualOutcomes, rhs.individualOutcomes) {
-            if l.qubit != r.qubit || l.outcome != r.outcome {
-                return false
-            }
-        }
-        return true
     }
 }
 
@@ -732,8 +739,8 @@ struct Measurement {
         precondition(state.isNormalized(), "State must be normalized before measurement")
 
         // Validate all qubit indices
-        for (qubit, _) in pauliString.operators {
-            precondition(qubit >= 0 && qubit < state.numQubits, "Qubit index \(qubit) out of bounds")
+        for op in pauliString.operators {
+            precondition(op.qubit >= 0 && op.qubit < state.numQubits, "Qubit index \(op.qubit) out of bounds")
         }
 
         // Check for duplicate qubits (measuring same qubit in multiple bases is undefined)
@@ -755,8 +762,8 @@ struct Measurement {
 
         // Apply basis rotations to diagonalize all Pauli operators
         var rotatedState = state
-        for (qubit, basis) in pauliString.operators {
-            rotatedState = Self.rotateToPauliBasis(qubit: qubit, basis: basis, state: rotatedState)
+        for op in pauliString.operators {
+            rotatedState = Self.rotateToPauliBasis(qubit: op.qubit, basis: op.basis, state: rotatedState)
         }
 
         // Measure all qubits involved in the Pauli string
@@ -764,19 +771,19 @@ struct Measurement {
 
         // Compute individual eigenvalues and product
         var productEigenvalue = 1
-        var individualOutcomes: [(qubit: Int, outcome: Int)] = []
+        var individualOutcomes: [MeasurementOutcome] = []
 
-        for (index, (qubit, _)) in pauliString.operators.enumerated() {
+        for (index, op) in pauliString.operators.enumerated() {
             let outcome = outcomes[index]
             let eigenvalue = (outcome == 0) ? 1 : -1
             productEigenvalue *= eigenvalue
-            individualOutcomes.append((qubit: qubit, outcome: outcome))
+            individualOutcomes.append(MeasurementOutcome(qubit: op.qubit, outcome: outcome))
         }
 
         // Rotate collapsed state back to original basis (reverse order)
         var finalState = collapsedRotated
-        for (qubit, basis) in pauliString.operators.reversed() {
-            finalState = Self.rotateFromPauliBasis(qubit: qubit, basis: basis, state: finalState)
+        for op in pauliString.operators.reversed() {
+            finalState = Self.rotateFromPauliBasis(qubit: op.qubit, basis: op.basis, state: finalState)
         }
 
         return PauliStringMeasurementResult(

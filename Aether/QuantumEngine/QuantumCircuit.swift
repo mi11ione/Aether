@@ -67,7 +67,7 @@ struct GateOperation: Equatable, CustomStringConvertible, Sendable {
 /// // Auto-expansion: referencing qubit 5 expands to 6 qubits
 /// circuit.append(gate: .hadamard, toQubit: 5)  // numQubits now 6
 /// ```
-struct QuantumCircuit: CustomStringConvertible {
+struct QuantumCircuit: Equatable, CustomStringConvertible {
     private(set) var operations: [GateOperation]
     private(set) var numQubits: Int
 
@@ -900,14 +900,5 @@ extension QuantumCircuit {
         circuit.append(gate: .cnot(control: qubit1, target: qubit2), qubits: [])
         circuit.append(gate: .rotationZ(theta: 2.0 * angle), toQubit: qubit2)
         circuit.append(gate: .cnot(control: qubit1, target: qubit2), qubits: [])
-    }
-}
-
-// MARK: - Equatable
-
-extension QuantumCircuit: Equatable {
-    static func == (lhs: QuantumCircuit, rhs: QuantumCircuit) -> Bool {
-        lhs.numQubits == rhs.numQubits &&
-            lhs.operations == rhs.operations
     }
 }

@@ -77,7 +77,7 @@ enum QuantumStateError: Error, LocalizedError {
 /// // Full probability distribution
 /// let allProbs = bellState.probabilities()  // [0.5, 0, 0, 0.5]
 /// ```
-struct QuantumState: CustomStringConvertible, Sendable {
+struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     // MARK: - Properties
 
     /// Array of complex amplitudes representing quantum state
@@ -595,25 +595,5 @@ struct QuantumState: CustomStringConvertible, Sendable {
         }
 
         return "QuantumState(\(numQubits) qubits): " + terms.joined(separator: " + ")
-    }
-}
-
-// MARK: - Equatable
-
-extension QuantumState: Equatable {
-    /// Compare two quantum states for equality
-    /// - Parameters:
-    ///   - lhs: Left-hand side quantum state
-    ///   - rhs: Right-hand side quantum state
-    /// - Returns: True if states have same qubit count and amplitudes (within tolerance)
-    static func == (lhs: QuantumState, rhs: QuantumState) -> Bool {
-        guard lhs.numQubits == rhs.numQubits else { return false }
-        guard lhs.amplitudes.count == rhs.amplitudes.count else { return false }
-
-        for (a, b) in zip(lhs.amplitudes, rhs.amplitudes) {
-            if a != b { return false }
-        }
-
-        return true
     }
 }
