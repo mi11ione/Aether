@@ -335,7 +335,7 @@ struct ComplexTypeSystemTests {
 /// Test suite for string representation and CustomStringConvertible.
 /// Validates human-readable output formats for debugging
 /// and educational quantum computing interfaces.
-@Suite("String Representation")
+@Suite("Complex String Representation")
 struct ComplexStringRepresentationTests {
     @Test("Real-only number displays correctly")
     func descriptionRealOnly() {

@@ -295,7 +295,7 @@ struct QuantumStateEqualityTests {
 /// Test suite for string representation.
 /// Validates CustomStringConvertible implementation for debugging
 /// and educational quantum state visualization.
-@Suite("String Representation")
+@Suite("Quantum State String Representation")
 struct QuantumStateDescriptionTests {
     @Test("Single qubit |0⟩ description")
     func singleQubitZeroDescription() {
@@ -383,7 +383,7 @@ struct LargeStateVectorizedTests {
 /// Test suite for quantum state validation.
 /// Validates state invariants: amplitude count, normalization,
 /// and absence of NaN/Inf values for robust simulation.
-@Suite("State Validation")
+@Suite("Quantum State Validation")
 struct StateValidationTests {
     @Test("Valid state passes validation")
     func validStatePassesValidation() {

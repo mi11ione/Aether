@@ -537,7 +537,7 @@ struct Measurement {
     ///   - basis: Pauli basis to rotate to
     ///   - state: Input quantum state
     /// - Returns: Rotated state where Pauli operator is diagonal
-    private static func rotateToPauliBasis(qubit: Int, basis: PauliBasis, state: QuantumState) -> QuantumState {
+    static func rotateToPauliBasis(qubit: Int, basis: PauliBasis, state: QuantumState) -> QuantumState {
         switch basis {
         case .x:
             // X basis: Apply H to rotate |+⟩→|0⟩, |-⟩→|1⟩
