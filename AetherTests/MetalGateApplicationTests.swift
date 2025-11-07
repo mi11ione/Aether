@@ -8,7 +8,7 @@ import Testing
 /// Test suite for Metal GPU-accelerated gate application.
 /// Validates that Metal compute shaders produce identical results to CPU implementation,
 /// ensuring mathematical correctness while providing performance acceleration for large states.
-@Suite("Metal Gate Application Tests")
+@Suite("Metal Gate Application")
 struct MetalGateApplicationTests {
     @Test("Metal applies Hadamard gate correctly")
     func metalAppliesHadamard() {

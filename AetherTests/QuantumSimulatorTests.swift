@@ -7,7 +7,7 @@ import Testing
 /// Test suite for QuantumSimulator actor.
 /// Validates Swift concurrency features: async execution, progress reporting,
 /// task cancellation, and thread-safe quantum circuit simulation.
-@Suite("Quantum Simulator Tests")
+@Suite("Quantum Simulator")
 struct QuantumSimulatorTests {
     @Test("Simulator executes simple circuit asynchronously")
     func simulatorExecutesSimpleCircuit() async throws {

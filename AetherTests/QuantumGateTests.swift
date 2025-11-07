@@ -224,7 +224,7 @@ struct SelfInverseGateTests {
 /// Test suite for parameterized quantum gates.
 /// Validates angle-dependent gates (Phase, Rotation) and their special cases,
 /// ensuring correct phase and rotation operations in quantum circuits.
-@Suite("Parameterized Gate Tests")
+@Suite("Parameterized Gate")
 struct ParameterizedGateTests {
     @Test("Phase(0) equals identity")
     func phaseZeroIsIdentity() {
@@ -348,7 +348,7 @@ struct GateDescriptionTests {
 /// Test suite for Toffoli (CCNOT) gate.
 /// Validates three-qubit controlled gate implementation,
 /// matrix generation, and unitary properties.
-@Suite("Toffoli Gate Tests")
+@Suite("Toffoli Gate")
 struct ToffoliGateTests {
     @Test("Toffoli gate is unitary")
     func toffoliIsUnitary() {

@@ -378,7 +378,7 @@ struct CircuitDescriptionTests {
 /// Test suite for quantum circuit scalability.
 /// Validates circuit performance and correctness across varying qubit counts,
 /// demonstrating robust quantum simulation capabilities from small to large system sizes.
-@Suite("Scalability Tests")
+@Suite("Circuit Scalability")
 struct CircuitScalabilityTests {
     @Test("Circuit works with 8 qubits")
     func eightQubitCircuit() {
@@ -420,7 +420,7 @@ struct CircuitScalabilityTests {
 /// Test suite for Quantum Fourier Transform circuit factory.
 /// Validates QFT algorithm implementation, the cornerstone of Shor's algorithm
 /// and quantum phase estimation, transforming between computational and frequency domains.
-@Suite("QFT Circuit Tests")
+@Suite("QFT Circuit")
 struct QFTCircuitTests {
     @Test("QFT circuit creates valid structure")
     func qftCircuitStructure() {
@@ -519,7 +519,7 @@ struct QFTCircuitTests {
 /// Test suite for state caching in step-through execution.
 /// Validates intermediate state caching for efficient scrubbing through quantum circuits,
 /// enabling smooth animation and debugging without recomputing from scratch.
-@Suite("State Caching Tests")
+@Suite("State Caching")
 struct StateCachingTests {
     @Test("Cached step execution matches full execution")
     func cachedStepMatchesFullExecution() {
@@ -622,7 +622,7 @@ struct StateCachingTests {
 /// Test suite for Grover search algorithm circuit factory.
 /// Validates quantum search implementation providing O(√N) speedup over classical O(N),
 /// testing oracle construction, diffusion operators, and amplitude amplification.
-@Suite("Grover Circuit Tests")
+@Suite("Grover Circuit")
 struct GroverCircuitTests {
     @Test("Grover circuit structure is valid")
     func groverCircuitStructure() {
@@ -849,7 +849,7 @@ struct GroverCircuitTests {
 /// Test suite for uncovered QuantumCircuit initialization and operations.
 /// Validates circuit construction with predefined operations, timestamp annotations,
 /// validation edge cases, and multi-controlled gate decomposition strategies.
-@Suite("Circuit Coverage Tests")
+@Suite("Circuit Coverage")
 struct CircuitCoverageTests {
     @Test("Initialize circuit with predefined operations")
     func initWithOperations() {

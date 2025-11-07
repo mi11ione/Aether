@@ -114,7 +114,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
     }
 
     /// Magnitude squared: |z|² = a² + b² (optimized, no sqrt)
-    nonisolated var magnitudeSquared: T {
+    var magnitudeSquared: T {
         real * real + imaginary * imaginary
     }
 

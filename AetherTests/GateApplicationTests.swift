@@ -253,7 +253,7 @@ struct NormalizationPreservationTests {
 /// Test suite for multi-qubit system operations.
 /// Validates gate independence and correct addressing in composite systems,
 /// ensuring proper tensor product structure maintenance.
-@Suite("Multi-Qubit System Tests")
+@Suite("Multi-Qubit System")
 struct MultiQubitSystemTests {
     @Test("Gate on qubit 0 doesn't affect qubit 1")
     func gateOnQubit0Independent() {
@@ -275,7 +275,7 @@ struct MultiQubitSystemTests {
 /// Test suite for gate application scalability.
 /// Demonstrates generic algorithms work identically from 1 to 24+ qubits,
 /// proving serious quantum simulation capability beyond toy implementations.
-@Suite("Scalability Tests")
+@Suite("Gate Application Scalability")
 struct GateApplicationScalabilityTests {
     @Test("Single-qubit gate works on 8-qubit system")
     func eightQubitSystem() {
@@ -312,7 +312,7 @@ struct GateApplicationScalabilityTests {
 /// Test suite for phase gate applications.
 /// Validates relative phase operations and special cases (S, T gates),
 /// essential for quantum algorithms requiring phase manipulation.
-@Suite("Phase Gate Tests")
+@Suite("Phase Gate")
 struct PhaseGateTests {
     @Test("Phase(0) acts as identity")
     func phaseZeroIsIdentity() {
@@ -430,7 +430,7 @@ struct ToffoliGateApplicationTests {
 /// Test suite for SWAP and Controlled-Phase gate applications.
 /// Validates two-qubit gates beyond CNOT, ensuring correct matrix-based
 /// gate application for qubit routing and phase operations.
-@Suite("SWAP and Controlled-Phase Tests")
+@Suite("SWAP and Controlled-Phase")
 struct SwapAndControlledPhaseTests {
     @Test("SWAP gate exchanges qubits")
     func swapExchangesQubits() {
@@ -492,7 +492,7 @@ struct SwapAndControlledPhaseTests {
 
 /// Test suite for convenience extension methods.
 /// Validates QuantumState.applying helper methods for ergonomic gate application.
-@Suite("Convenience Extension Tests")
+@Suite("Convenience Extension")
 struct ConvenienceExtensionTests {
     @Test("applying(gate:to:) convenience method works")
     func applyingWithArrayWorks() {

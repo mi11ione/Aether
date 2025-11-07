@@ -38,10 +38,10 @@ struct QuantumState: CustomStringConvertible, Sendable {
     private(set) var amplitudes: [Complex<Double>]
 
     /// Number of qubits in this quantum system
-    nonisolated let numQubits: Int
+    let numQubits: Int
 
     /// Size of state space (2^numQubits)
-    nonisolated var stateSpaceSize: Int { 1 << numQubits }
+    var stateSpaceSize: Int { 1 << numQubits }
 
     // MARK: - Initialization
 
@@ -106,7 +106,7 @@ struct QuantumState: CustomStringConvertible, Sendable {
 
     /// Private helper: Compute magnitude squared for all amplitudes using Accelerate
     /// - Returns: Array of amplitude values
-    private nonisolated func computeMagnitudesSquaredVectorized() -> [Double] {
+    private func computeMagnitudesSquaredVectorized() -> [Double] {
         var interleavedAmps = [Double]()
         interleavedAmps.reserveCapacity(amplitudes.count * 2)
         for amp in amplitudes {
@@ -135,7 +135,7 @@ struct QuantumState: CustomStringConvertible, Sendable {
     /// Calculate probability of measuring specific computational basis state
     /// - Parameter stateIndex: Index of basis state (0 to 2^n-1)
     /// - Returns: Probability P(i) = |cᵢ|² (Born rule)
-    nonisolated func probability(ofState stateIndex: Int) -> Double {
+    func probability(ofState stateIndex: Int) -> Double {
         precondition(stateIndex >= 0 && stateIndex < stateSpaceSize,
                      "State index out of bounds")
         return amplitudes[stateIndex].magnitudeSquared
@@ -176,7 +176,7 @@ struct QuantumState: CustomStringConvertible, Sendable {
 
     /// Check if state is properly normalized
     /// - Returns: True if Σ|cᵢ|² ≈ 1.0 within tolerance
-    nonisolated func isNormalized() -> Bool {
+    func isNormalized() -> Bool {
         let sum: Double
 
         if amplitudes.count >= 64 {
@@ -311,7 +311,7 @@ extension QuantumState: Equatable {
     ///   - lhs: Left-hand side quantum state
     ///   - rhs: Right-hand side quantum state
     /// - Returns: True if states have same qubit count and amplitudes (within tolerance)
-    nonisolated static func == (lhs: QuantumState, rhs: QuantumState) -> Bool {
+    static func == (lhs: QuantumState, rhs: QuantumState) -> Bool {
         guard lhs.numQubits == rhs.numQubits else { return false }
         guard lhs.amplitudes.count == rhs.amplitudes.count else { return false }
 

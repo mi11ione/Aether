@@ -205,7 +205,7 @@ struct QuantumStateValidationTests {
 /// Test suite for Bell state (entangled) configurations.
 /// Validates maximally entangled two-qubit states
 /// fundamental to quantum algorithms and teleportation.
-@Suite("Bell State Tests")
+@Suite("Quantum Bell State")
 struct QuantumStateBellStateTests {
     @Test("Bell state (|00⟩ + |11⟩)/√2 is normalized")
     func bellStateNormalized() {
@@ -241,7 +241,7 @@ struct QuantumStateBellStateTests {
 /// Test suite for scalability across qubit counts.
 /// Demonstrates generic architecture handles 1-24+ qubits identically,
 /// proving serious quantum simulation capability beyond toy implementations.
-@Suite("Scalability Tests")
+@Suite("Quantum State Scalability")
 struct QuantumStateScalabilityTests {
     @Test("State space size scales exponentially")
     func stateSpaceSizeScaling() {

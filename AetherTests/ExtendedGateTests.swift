@@ -8,7 +8,7 @@ import Testing
 /// Test suite for extended two-qubit and controlled gates.
 /// Validates CZ, CY, and CH behavior, including symmetry, superposition
 /// creation, and unitarity across the extended gate set.
-@Suite("Extended Gate Set Tests")
+@Suite("Extended Gate Set")
 struct ExtendedGateTests {
     @Test("CZ gate creates Bell state variant")
     func testCZGate() {
@@ -69,7 +69,7 @@ struct ExtendedGateTests {
 /// Test suite for IBM universal single-qubit gates.
 /// Validates U1/U2/U3 behavior, including phase-only U1, superposition from U2,
 /// universal expressivity of U3, and unitarity of parameterized matrices.
-@Suite("IBM Universal Gates Tests")
+@Suite("IBM Universal Gates")
 struct IDMUniversalGateTests {
     @Test("U1 gate is pure phase")
     func testU1Gate() {
@@ -114,7 +114,7 @@ struct IDMUniversalGateTests {
 /// Test suite for square-root gates.
 /// Verifies SX and SY square to their respective Pauli gates and that √SWAP
 /// composes to SWAP while maintaining matrix unitarity.
-@Suite("Square Root Gates Tests")
+@Suite("Square Root Gates")
 struct SquareRootGatesTests {
     @Test("SX gate squared equals X")
     func testSXSquared() {
@@ -157,7 +157,7 @@ struct SquareRootGatesTests {
 /// Test suite for controlled rotation gates.
 /// Validates CRx/CRy/CRz control semantics (no-op when control=0), correct
 /// target rotation when control=1, and unitary matrix properties.
-@Suite("Controlled Rotation Gates Tests")
+@Suite("Controlled Rotation Gates")
 struct ControlledRotationGatesTests {
     @Test("CRx gate with control=0 is identity")
     func testCRxControlOff() {
@@ -215,7 +215,7 @@ struct ControlledRotationGatesTests {
 /// Test suite for custom unitary gates.
 /// Ensures size checks and unitarity validation for user-provided matrices and
 /// verifies successful integration of custom gates into circuits.
-@Suite("Custom Unitary Gates Tests")
+@Suite("Custom Unitary Gates")
 struct CustomUnitaryGatesTests {
     @Test("Custom single-qubit gate validates unitarity")
     func testCustomSingleQubitValidation() throws {
@@ -303,7 +303,7 @@ struct CustomUnitaryGatesTests {
 /// Test suite for multi-controlled gates.
 /// Validates decompositions for C^n(Y) and C^n(Z), ensuring correct behavior
 /// with multiple controls and expected output state probabilities.
-@Suite("Multi-Controlled Gates Tests")
+@Suite("Multi-Controlled Gates")
 struct MultiControlledGatesTests {
     @Test("Multi-controlled Y with 0 controls")
     func testMultiControlledY0() {
@@ -485,7 +485,7 @@ struct MultiControlledGatesTests {
 /// Test suite for extended gate properties.
 /// Confirms qubit requirements, gate validation rules, matrix unitarity, and
 /// human-readable descriptions for newly added gates.
-@Suite("Gate Property Tests")
+@Suite("Gate Property")
 struct GatePropertyTests {
     @Test("All new gates have correct qubit requirements")
     func testQubitRequirements() {
@@ -569,7 +569,7 @@ struct GatePropertyTests {
 /// Test suite for numerical precision and composition.
 /// Ensures normalization preservation under extended gates and verifies IBM
 /// gate composition equivalences within numerical tolerance.
-@Suite("Numerical Precision Tests")
+@Suite("Numerical Precision")
 struct NumericalPrecisionTests {
     @Test("Gates preserve normalization")
     func testNormalizationPreservation() {
