@@ -28,6 +28,7 @@
 /// 2. `applyCNOT`: Optimized controlled-NOT with conditional amplitude swap
 /// 3. `applyTwoQubitGate`: General 4×4 matrix-vector for arbitrary two-qubit gates
 /// 4. `applyToffoli`: Double-controlled NOT (three-qubit gate)
+/// 5. `csrSparseMatVec`: CSR sparse matrix-vector multiply for Hamiltonian expectation values
 ///
 /// Example usage (from Swift):
 /// ```swift
@@ -342,5 +343,90 @@ kernel void applyToffoli(
             // Otherwise: identity
             outputAmplitudes[gid] = amplitudes[gid];
         }
+    }
+}
+
+// MARK: - CSR Sparse Matrix-Vector Multiply Kernel
+
+/// CSR Sparse Matrix-Vector Multiply: output = H * input (for Hamiltonian expectation values)
+///
+/// Implements sparse matrix-vector multiplication using CSR (Compressed Sparse Row) format
+/// for quantum Hamiltonian expectation values. Each thread computes one output element
+/// by accumulating the dot product of one sparse row with the input vector.
+///
+/// **Algorithm:**
+/// - Each thread row: Computes output[row] = Σⱼ H[row,j] * input[j]
+/// - CSR iteration: Loop from rowPointers[row] to rowPointers[row+1]-1
+/// - For each k: Accumulate values[k] * input[columnIndices[k]]
+///
+/// **Parallelization:**
+/// - Threads: dimension (one per matrix row)
+/// - Memory access: Each thread reads O(nnz/dimension) sparse elements (average non-zeros per row)
+/// - Computation: Complex multiplication + addition per non-zero element
+///
+/// **CSR Format:**
+/// - rowPointers[i] = index in columnIndices/values where row i starts
+/// - rowPointers[i+1] - rowPointers[i] = number of non-zeros in row i
+/// - columnIndices[k] = column index of k-th non-zero element
+/// - values[k] = complex value of k-th non-zero element
+///
+/// **Example:**
+/// ```
+/// Matrix: [[1+i, 0, 2], [0, 3, 0], [4-i, 0, 5]]
+/// CSR:
+///   rowPointers = [0, 2, 3, 5]
+///   columnIndices = [0, 2, 1, 0, 2]
+///   values = [1+i, 2+0i, 3+0i, 4-i, 5+0i]
+///
+/// Row 0: start=0, end=2 → H[0,0]*input[0] + H[0,2]*input[2]
+/// Row 1: start=2, end=3 → H[1,1]*input[1]
+/// Row 2: start=3, end=5 → H[2,0]*input[0] + H[2,2]*input[2]
+/// ```
+///
+/// **Parameters:**
+/// - rowPointers: CSR row pointers [dimension+1] - indices into columnIndices
+/// - columnIndices: CSR column indices [nnz] - column index of each non-zero
+/// - values: Complex values [nnz] - non-zero matrix elements
+/// - input: Input vector [dimension] - quantum state |ψ⟩
+/// - output: Output vector [dimension] - result H|ψ⟩ (write-only)
+/// - dimension: Matrix dimension (2^numQubits)
+/// - row: Thread ID (0 to dimension-1)
+///
+/// Example usage (from Swift):
+/// ```swift
+/// // Build CSR sparse Hamiltonian once
+/// let sparseH = SparseHamiltonian(observable: hamiltonian)
+///
+/// // VQE iteration: compute ⟨ψ|H|ψ⟩ = ⟨ψ|(H|ψ⟩)
+/// for iteration in 0..<100 {
+///     let state = prepareAnsatz(parameters: params)
+///     let energy = sparseH.expectationValue(state: state)
+///     // GPU computes H|ψ⟩ in parallel, then CPU computes inner product
+/// }
+/// ```
+kernel void csrSparseMatVec(
+    device const uint *rowPointers [[buffer(0)]],
+    device const uint *columnIndices [[buffer(1)]],
+    device const ComplexFloat *values [[buffer(2)]],
+    device const ComplexFloat *input [[buffer(3)]],
+    device ComplexFloat *output [[buffer(4)]],
+    constant uint &dimension [[buffer(5)]],
+    uint row [[thread_position_in_grid]]
+) {
+    if (row < dimension) {
+        const uint start = rowPointers[row];
+        const uint end = rowPointers[row + 1];
+
+        ComplexFloat sum = ComplexFloat{0.0, 0.0};
+
+        for (uint k = start; k < end; k++) {
+            const uint col = columnIndices[k];
+            const ComplexFloat value = values[k];
+            const ComplexFloat inputElement = input[col];
+
+            sum = complexAdd(sum, complexMultiply(value, inputElement));
+        }
+
+        output[row] = sum;
     }
 }
