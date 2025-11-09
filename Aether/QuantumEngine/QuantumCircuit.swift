@@ -137,9 +137,9 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
     public mutating func append(gate: QuantumGate, qubits: [Int], timestamp: Double? = nil) {
         precondition(qubits.allSatisfy { $0 >= 0 }, "Qubit indices must be non-negative")
 
-        let maxQubit = qubits.max() ?? -1
+        let maxQubit: Int = qubits.max() ?? -1
         if maxQubit >= numQubits {
-            let newNumQubits = maxQubit + 1
+            let newNumQubits: Int = maxQubit + 1
             precondition(newNumQubits <= 30,
                          "Circuit would grow to \(newNumQubits) qubits (max 30). This may be a typo.")
             numQubits = newNumQubits
@@ -215,7 +215,7 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
     /// Used to detect ancilla qubits that may exceed logical circuit size
     /// - Returns: Maximum qubit index, or numQubits-1 if no operations
     public func maxQubitUsed() -> Int {
-        var maxQubit = numQubits - 1
+        var maxQubit: Int = numQubits - 1
 
         for operation in operations {
             let gateMax: Int = switch operation.gate {
@@ -250,6 +250,28 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
 
     // MARK: - Execution
 
+    /// Expand state with ancilla qubits if needed
+    /// - Parameters:
+    ///   - state: Initial state to potentially expand
+    ///   - maxQubit: Maximum qubit index needed
+    /// - Returns: Expanded state or original state if no expansion needed
+    static func expandStateForAncilla(_ state: QuantumState, maxQubit: Int) -> QuantumState {
+        guard maxQubit >= state.numQubits else { return state }
+
+        let numAncillaQubits = maxQubit - state.numQubits + 1
+        let expandedSize = 1 << (state.numQubits + numAncillaQubits)
+
+        // Copy original amplitudes; rest are zero (ancilla in |0⟩)
+        // In little-endian ordering, ancilla are high-order bits
+        // So original amplitudes stay at same indices (where ancilla bits are 0)
+        var expandedAmplitudes = AmplitudeVector(repeating: .zero, count: expandedSize)
+        for i in 0 ..< state.stateSpaceSize {
+            expandedAmplitudes[i] = state.amplitudes[i]
+        }
+
+        return QuantumState(numQubits: maxQubit + 1, amplitudes: expandedAmplitudes)
+    }
+
     /// Execute circuit on custom initial state
     ///
     /// Applies all gates in sequence to transform the input state. Automatically
@@ -276,24 +298,7 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
         precondition(validate(), "Circuit validation failed")
 
         let maxQubit = maxQubitUsed()
-        var currentState = initialState
-
-        // Expand state if ancilla qubits are referenced
-        // This handles tensor product: |ψ⟩ ⊗ |0...0⟩ where ancilla are in |0⟩
-        if maxQubit >= initialState.numQubits {
-            let numAncillaQubits = maxQubit - initialState.numQubits + 1
-            let expandedSize = 1 << (initialState.numQubits + numAncillaQubits)
-
-            // Copy original amplitudes; rest are zero (ancilla in |0⟩)
-            // In little-endian ordering, ancilla are high-order bits
-            // So original amplitudes stay at same indices (where ancilla bits are 0)
-            var expandedAmplitudes = [Complex<Double>](repeating: .zero, count: expandedSize)
-            for i in 0 ..< initialState.stateSpaceSize {
-                expandedAmplitudes[i] = initialState.amplitudes[i]
-            }
-
-            currentState = QuantumState(numQubits: maxQubit + 1, amplitudes: expandedAmplitudes)
-        }
+        var currentState = Self.expandStateForAncilla(initialState, maxQubit: maxQubit)
 
         for operation in operations {
             currentState = GateApplication.apply(
@@ -343,22 +348,8 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
         precondition(upToIndex >= 0 && upToIndex <= operations.count,
                      "Index out of bounds")
 
-        // Check if ancilla qubits are needed
         let maxQubit = maxQubitUsed()
-        var currentState = initialState
-
-        // Expand state if needed (same logic as execute(on:))
-        if maxQubit >= initialState.numQubits {
-            let numAncillaQubits = maxQubit - initialState.numQubits + 1
-            let expandedSize = 1 << (initialState.numQubits + numAncillaQubits)
-
-            var expandedAmplitudes = [Complex<Double>](repeating: .zero, count: expandedSize)
-            for i in 0 ..< initialState.stateSpaceSize {
-                expandedAmplitudes[i] = initialState.amplitudes[i]
-            }
-
-            currentState = QuantumState(numQubits: maxQubit + 1, amplitudes: expandedAmplitudes)
-        }
+        var currentState = Self.expandStateForAncilla(initialState, maxQubit: maxQubit)
 
         for i in 0 ..< upToIndex {
             currentState = GateApplication.apply(
@@ -521,7 +512,7 @@ public extension QuantumCircuit {
         let stateSpaceSize = 1 << numQubits
         precondition(target >= 0 && target < stateSpaceSize, "Target must be valid basis state")
 
-        let optimalIterations = iterations ?? Int((Double.pi / 4.0) * sqrt(Double(stateSpaceSize)))
+        let optimalIterations: Int = iterations ?? Int((Double.pi / 4.0) * sqrt(Double(stateSpaceSize)))
 
         var circuit = QuantumCircuit(numQubits: numQubits)
 
@@ -717,17 +708,12 @@ public extension QuantumCircuit {
                 circuit.append(gate: gate, toQubit: target)
                 appendMultiControlledX(to: &circuit, controls: controls, target: target)
 
+                // Apply adjoint V†
                 let matrix = gate.matrix()
                 let adjointMatrix = QuantumGate.conjugateTranspose(matrix)
-                do {
-                    let adjointGate = try QuantumGate.createCustomSingleQubit(matrix: adjointMatrix)
-                    circuit.append(gate: adjointGate, toQubit: target)
-                } catch {
-                    // Adjoint creation should never fail for a unitary matrix
-                    // If it does, it indicates numerical instability
-                    // Fall back to simpler decomposition (less optimal but safe)
-                    circuit.append(gate: gate, toQubit: target)
-                }
+                // Use .customSingleQubit directly - adjoint of unitary is always unitary
+                // Validation would be redundant overhead since we know gate is valid
+                circuit.append(gate: .customSingleQubit(matrix: adjointMatrix), toQubit: target)
 
                 appendMultiControlledX(to: &circuit, controls: controls, target: target)
                 circuit.append(gate: gate, toQubit: target)

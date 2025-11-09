@@ -4,17 +4,20 @@
 import Foundation
 import Metal
 
+/// GPU-compatible complex number representation (real, imaginary)
+public typealias GPUComplex = (Float, Float)
+
 /// Shared Metal resources: one-time pipeline compilation for all simulator instances
 ///
 /// Compiles compute shaders once at app launch and shares them globally.
 /// Prevents expensive re-compilation when creating multiple simulators.
 private enum MetalResources {
-    static let device: MTLDevice? = MTLCreateSystemDefaultDevice()
-    static let commandQueue: MTLCommandQueue? = device?.makeCommandQueue()
-    static let library: MTLLibrary? = device?.makeDefaultLibrary()
+    fileprivate static let device: MTLDevice? = MTLCreateSystemDefaultDevice()
+    fileprivate static let commandQueue: MTLCommandQueue? = device?.makeCommandQueue()
+    fileprivate static let library: MTLLibrary? = device?.makeDefaultLibrary()
 
     // Lazily compiled pipeline states (shared across all instances)
-    static let singleQubitPipeline: MTLComputePipelineState? = {
+    fileprivate static let singleQubitPipeline: MTLComputePipelineState? = {
         guard let device, let library,
               let function = library.makeFunction(name: "applySingleQubitGate")
         else {
@@ -23,7 +26,7 @@ private enum MetalResources {
         return try? device.makeComputePipelineState(function: function)
     }()
 
-    static let cnotPipeline: MTLComputePipelineState? = {
+    fileprivate static let cnotPipeline: MTLComputePipelineState? = {
         guard let device, let library,
               let function = library.makeFunction(name: "applyCNOT")
         else {
@@ -32,7 +35,7 @@ private enum MetalResources {
         return try? device.makeComputePipelineState(function: function)
     }()
 
-    static let twoQubitPipeline: MTLComputePipelineState? = {
+    fileprivate static let twoQubitPipeline: MTLComputePipelineState? = {
         guard let device, let library,
               let function = library.makeFunction(name: "applyTwoQubitGate")
         else {
@@ -41,7 +44,7 @@ private enum MetalResources {
         return try? device.makeComputePipelineState(function: function)
     }()
 
-    static let toffoliPipeline: MTLComputePipelineState? = {
+    fileprivate static let toffoliPipeline: MTLComputePipelineState? = {
         guard let device, let library,
               let function = library.makeFunction(name: "applyToffoli")
         else {
@@ -179,16 +182,16 @@ public final class MetalGateApplication {
 
     private func applySingleQubitGate(gate: QuantumGate, qubit: Int, state: QuantumState) -> QuantumState {
         // Convert amplitudes to Float for GPU
-        var floatAmplitudes = state.amplitudes.map { amp in
+        var floatAmplitudes: [GPUComplex] = state.amplitudes.map { amp in
             (Float(amp.real), Float(amp.imaginary))
         }
 
-        var floatMatrix = gate.matrix().flatMap { row in
+        var floatMatrix: [GPUComplex] = gate.matrix().flatMap { row in
             row.flatMap { [(Float($0.real), Float($0.imaginary))] }
         }
 
-        let stateSize = state.stateSpaceSize
-        let bufferSize = stateSize * MemoryLayout<(Float, Float)>.stride
+        let stateSize: Int = state.stateSpaceSize
+        let bufferSize: Int = stateSize * MemoryLayout<GPUComplex>.stride
 
         guard let amplitudeBuffer = device.makeBuffer(
             bytes: &floatAmplitudes,
@@ -199,7 +202,7 @@ public final class MetalGateApplication {
             return GateApplication.apply(gate: gate, to: [qubit], state: state)
         }
 
-        let matrixSize = 4 * MemoryLayout<(Float, Float)>.stride
+        let matrixSize = 4 * MemoryLayout<GPUComplex>.stride
         guard let matrixBuffer = device.makeBuffer(
             bytes: &floatMatrix,
             length: matrixSize,
@@ -239,12 +242,12 @@ public final class MetalGateApplication {
         commandBuffer.waitUntilCompleted()
 
         let resultPointer = amplitudeBuffer.contents().bindMemory(
-            to: (Float, Float).self,
+            to: GPUComplex.self,
             capacity: stateSize
         )
 
-        let newAmplitudes = (0 ..< stateSize).map { i -> Complex<Double> in
-            let (real, imag) = resultPointer[i]
+        let newAmplitudes: AmplitudeVector = (0 ..< stateSize).map { i -> Complex<Double> in
+            let (real, imag): GPUComplex = resultPointer[i]
             return Complex(Double(real), Double(imag))
         }
 
@@ -257,9 +260,9 @@ public final class MetalGateApplication {
     }
 
     private func applyCNOT(control: Int, target: Int, state: QuantumState) -> QuantumState {
-        var floatAmplitudes = state.amplitudes.map { (Float($0.real), Float($0.imaginary)) }
-        let stateSize = state.stateSpaceSize
-        let bufferSize = stateSize * MemoryLayout<(Float, Float)>.stride
+        var floatAmplitudes: [GPUComplex] = state.amplitudes.map { (Float($0.real), Float($0.imaginary)) }
+        let stateSize: Int = state.stateSpaceSize
+        let bufferSize: Int = stateSize * MemoryLayout<GPUComplex>.stride
 
         guard let inputBuffer = device.makeBuffer(bytes: &floatAmplitudes, length: bufferSize, options: .storageModeShared),
               let outputBuffer = device.makeBuffer(length: bufferSize, options: .storageModeShared),
@@ -289,8 +292,8 @@ public final class MetalGateApplication {
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
 
-        let resultPointer = outputBuffer.contents().bindMemory(to: (Float, Float).self, capacity: stateSize)
-        let newAmplitudes = (0 ..< stateSize).map { Complex(Double(resultPointer[$0].0), Double(resultPointer[$0].1)) }
+        let resultPointer = outputBuffer.contents().bindMemory(to: GPUComplex.self, capacity: stateSize)
+        let newAmplitudes: AmplitudeVector = (0 ..< stateSize).map { Complex(Double(resultPointer[$0].0), Double(resultPointer[$0].1)) }
 
         guard newAmplitudes.allSatisfy(\.isFinite) else {
             print("GPU CNOT computation produced invalid values (NaN/Inf) - falling back to CPU")
@@ -301,18 +304,18 @@ public final class MetalGateApplication {
     }
 
     private func applyTwoQubitGate(gate: QuantumGate, control: Int, target: Int, state: QuantumState) -> QuantumState {
-        var floatAmplitudes = state.amplitudes.map { (Float($0.real), Float($0.imaginary)) }
-        let stateSize = state.stateSpaceSize
-        let bufferSize = stateSize * MemoryLayout<(Float, Float)>.stride
+        var floatAmplitudes: [GPUComplex] = state.amplitudes.map { (Float($0.real), Float($0.imaginary)) }
+        let stateSize: Int = state.stateSpaceSize
+        let bufferSize: Int = stateSize * MemoryLayout<GPUComplex>.stride
 
-        var floatMatrix: [(Float, Float)] = []
+        var floatMatrix: [GPUComplex] = []
         for row in gate.matrix() {
             for element in row {
                 floatMatrix.append((Float(element.real), Float(element.imaginary)))
             }
         }
 
-        let matrixSize = 16 * MemoryLayout<(Float, Float)>.stride
+        let matrixSize = 16 * MemoryLayout<GPUComplex>.stride
 
         guard let inputBuffer = device.makeBuffer(bytes: &floatAmplitudes, length: bufferSize, options: .storageModeShared),
               let matrixBuffer = device.makeBuffer(bytes: &floatMatrix, length: matrixSize, options: .storageModeShared),
@@ -343,8 +346,8 @@ public final class MetalGateApplication {
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
 
-        let resultPointer = inputBuffer.contents().bindMemory(to: (Float, Float).self, capacity: stateSize)
-        let newAmplitudes = (0 ..< stateSize).map { Complex(Double(resultPointer[$0].0), Double(resultPointer[$0].1)) }
+        let resultPointer = inputBuffer.contents().bindMemory(to: GPUComplex.self, capacity: stateSize)
+        let newAmplitudes: AmplitudeVector = (0 ..< stateSize).map { Complex(Double(resultPointer[$0].0), Double(resultPointer[$0].1)) }
 
         guard newAmplitudes.allSatisfy(\.isFinite) else {
             print("GPU two-qubit gate computation produced invalid values (NaN/Inf) - falling back to CPU")
@@ -355,9 +358,9 @@ public final class MetalGateApplication {
     }
 
     private func applyToffoli(control1: Int, control2: Int, target: Int, state: QuantumState) -> QuantumState {
-        var floatAmplitudes = state.amplitudes.map { (Float($0.real), Float($0.imaginary)) }
-        let stateSize = state.stateSpaceSize
-        let bufferSize = stateSize * MemoryLayout<(Float, Float)>.stride
+        var floatAmplitudes: [GPUComplex] = state.amplitudes.map { (Float($0.real), Float($0.imaginary)) }
+        let stateSize: Int = state.stateSpaceSize
+        let bufferSize: Int = stateSize * MemoryLayout<GPUComplex>.stride
 
         guard let inputBuffer = device.makeBuffer(bytes: &floatAmplitudes, length: bufferSize, options: .storageModeShared),
               let outputBuffer = device.makeBuffer(length: bufferSize, options: .storageModeShared),
@@ -389,8 +392,8 @@ public final class MetalGateApplication {
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
 
-        let resultPointer = outputBuffer.contents().bindMemory(to: (Float, Float).self, capacity: stateSize)
-        let newAmplitudes = (0 ..< stateSize).map { Complex(Double(resultPointer[$0].0), Double(resultPointer[$0].1)) }
+        let resultPointer = outputBuffer.contents().bindMemory(to: GPUComplex.self, capacity: stateSize)
+        let newAmplitudes: AmplitudeVector = (0 ..< stateSize).map { Complex(Double(resultPointer[$0].0), Double(resultPointer[$0].1)) }
 
         guard newAmplitudes.allSatisfy(\.isFinite) else {
             print("GPU Toffoli computation produced invalid values (NaN/Inf) - falling back to CPU")

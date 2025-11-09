@@ -74,11 +74,11 @@ public extension QuantumCircuit {
         precondition(numInputQubits > 0, "Must have at least 1 input qubit")
         precondition(numInputQubits <= 20, "Too many qubits for simulation")
 
-        let numQubits = numInputQubits + 1
+        let numQubits: Int = numInputQubits + 1
         var circuit = QuantumCircuit(numQubits: numQubits)
 
-        let inputQubits = Array(0 ..< numInputQubits)
-        let outputQubit = numInputQubits
+        let inputQubits: [Int] = Array(0 ..< numInputQubits)
+        let outputQubit: Int = numInputQubits
 
         circuit.append(gate: .pauliX, toQubit: outputQubit)
 
@@ -138,12 +138,12 @@ public extension QuantumCircuit {
         precondition(numQubits > 0, "Must have at least 1 qubit")
         precondition(numQubits <= 20, "Too many qubits for simulation")
 
-        let numInputQubits = numQubits
-        let totalQubits = numInputQubits + 1
+        let numInputQubits: Int = numQubits
+        let totalQubits: Int = numInputQubits + 1
         var circuit = QuantumCircuit(numQubits: totalQubits)
 
-        let inputQubits = Array(0 ..< numInputQubits)
-        let outputQubit = numInputQubits
+        let inputQubits: [Int] = Array(0 ..< numInputQubits)
+        let outputQubit: Int = numInputQubits
 
         circuit.append(gate: .pauliX, toQubit: outputQubit)
         for qubit in 0 ..< totalQubits {
@@ -207,11 +207,11 @@ public extension QuantumCircuit {
         precondition(numQubits > 0, "Must have at least 1 qubit")
         precondition(numQubits <= 15, "Simon's algorithm requires 2n qubits - use n≤15")
 
-        let totalQubits = numQubits * 2
+        let totalQubits: Int = numQubits * 2
         var circuit = QuantumCircuit(numQubits: totalQubits)
 
-        let inputQubits = Array(0 ..< numQubits)
-        let outputQubits = Array(numQubits ..< totalQubits)
+        let inputQubits: [Int] = Array(0 ..< numQubits)
+        let outputQubits: [Int] = Array(numQubits ..< totalQubits)
 
         for qubit in inputQubits {
             circuit.append(gate: .hadamard, toQubit: qubit)
@@ -333,10 +333,10 @@ public extension QuantumState {
         precondition(qubits.allSatisfy { $0 >= 0 && $0 < numQubits },
                      "All qubit indices must be valid")
 
-        let probs = probabilities()
+        let probs: [Double] = probabilities()
         // Safe to force unwrap: probabilities() always returns 2^n elements
         // for valid quantum states, so max(by:) can never return nil.
-        let maxIndex = probs.indices.max(by: { probs[$0] < probs[$1] })!
+        let maxIndex: Int = probs.indices.max(by: { probs[$0] < probs[$1] })!
 
         return qubits.map { qubit in
             (maxIndex >> qubit) & 1
@@ -347,7 +347,7 @@ public extension QuantumState {
     /// - Parameter qubits: Indices of qubits to check
     /// - Returns: True if all qubits are in |0⟩ state (within threshold)
     func allQubitsAreZero(_ qubits: [Int]) -> Bool {
-        let measurements = measureQubits(qubits)
+        let measurements: [Int] = measureQubits(qubits)
         return measurements.allSatisfy { $0 == 0 }
     }
 }

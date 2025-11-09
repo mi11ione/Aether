@@ -454,7 +454,7 @@ struct QFTCircuitTests {
 
     @Test("Inverse QFT reverses QFT")
     func inverseQFTReversesQFT() {
-        var amplitudes = [Complex<Double>](repeating: .zero, count: 8)
+        var amplitudes = AmplitudeVector(repeating: .zero, count: 8)
         amplitudes[5] = .one
         let initialState = QuantumState(numQubits: 3, amplitudes: amplitudes)
 
@@ -498,7 +498,7 @@ struct QFTCircuitTests {
         let n = 3
 
         for k in 0 ..< (1 << n) {
-            var amplitudes = [Complex<Double>](repeating: .zero, count: 1 << n)
+            var amplitudes = AmplitudeVector(repeating: .zero, count: 1 << n)
             amplitudes[k] = .one
             let initialState = QuantumState(numQubits: n, amplitudes: amplitudes)
 
@@ -774,7 +774,7 @@ struct GroverCircuitTests {
             outcomes.append(result.outcome)
         }
 
-        var counts = [Int: Int]()
+        var counts = ShotAllocation()
         for outcome in outcomes {
             counts[outcome, default: 0] += 1
         }

@@ -150,13 +150,13 @@ public extension Observable {
     /// print("Reduced to \(groups.count) groups")
     /// ```
     func qwcGroups() async -> [QWCGroup] {
-        let hash = termsHash
+        let hash: Int = termsHash
 
         if let cached = await Self.cache.getQWCGroups(hash: hash, terms: terms) {
             return cached
         }
 
-        let groups = QWCGrouper.group(terms: terms)
+        let groups: [QWCGroup] = QWCGrouper.group(terms: terms)
         await Self.cache.setQWCGroups(hash: hash, terms: terms, groups: groups)
         return groups
     }
@@ -181,14 +181,14 @@ public extension Observable {
     /// print("Reduced to \(partitions.count) partitions (100-250× reduction)")
     /// ```
     func unitaryPartitions(numQubits: Int, config: UnitaryPartitioner.Config = .default) async -> [UnitaryPartition] {
-        let hash = termsHash ^ numQubits
+        let hash: Int = termsHash ^ numQubits
 
         if let cached = await Self.cache.getUnitaryPartitions(hash: hash, terms: terms) {
             return cached
         }
 
         let partitioner = UnitaryPartitioner(config: config)
-        let partitions = partitioner.partition(terms: terms, numQubits: numQubits)
+        let partitions: [UnitaryPartition] = partitioner.partition(terms: terms, numQubits: numQubits)
         await Self.cache.setUnitaryPartitions(hash: hash, terms: terms, partitions: partitions)
         return partitions
     }
@@ -233,7 +233,7 @@ public extension Observable {
 
     /// Select optimal measurement strategy automatically.
     private func selectOptimalStrategy(numQubits: Int) -> MeasurementStrategy {
-        let numTerms = terms.count
+        let numTerms: Int = terms.count
 
         if numTerms < 20 { return .termByTerm }
         if numTerms < 500 || numQubits > 15 { return .qwcGrouping }
@@ -296,7 +296,7 @@ public extension Observable {
         config: ShotAllocator.Config = .default
     ) async -> ShotAllocation {
         let allocator = ShotAllocator(config: config)
-        let groups = await qwcGroups()
+        let groups: [QWCGroup] = await qwcGroups()
         return allocator.allocateForGroups(groups: groups, totalShots: totalShots, state: state)
     }
 
@@ -341,12 +341,12 @@ public extension Observable {
     /// - Parameter numQubits: Number of qubits (optional, for unitary partitioning)
     /// - Returns: Detailed statistics
     func measurementOptimizationStatistics(numQubits: Int? = nil) async -> MeasurementOptimizationStats {
-        let numTerms = terms.count
-        let groups = await qwcGroups()
-        let numGroups = groups.count
+        let numTerms: Int = terms.count
+        let groups: [QWCGroup] = await qwcGroups()
+        let numGroups: Int = groups.count
 
-        let qwcReduction = numTerms > 0 ? Double(numTerms) / Double(max(numGroups, 1)) : 1.0
-        let qwcSpeedup = qwcReduction
+        let qwcReduction: Double = numTerms > 0 ? Double(numTerms) / Double(max(numGroups, 1)) : 1.0
+        let qwcSpeedup: Double = qwcReduction
 
         var numPartitions: Int?
         var unitaryReduction: Double?
@@ -385,18 +385,18 @@ public extension Observable {
         tolerance: Double = 1e-6,
         numQubits: Int? = nil
     ) async -> Bool {
-        let exactValue = expectationValue(state: state)
+        let exactValue: Double = expectationValue(state: state)
 
-        let groups = await qwcGroups()
-        let qwcValue = computeExpectationFromGroups(groups: groups, state: state)
+        let groups: [QWCGroup] = await qwcGroups()
+        let qwcValue: Double = computeExpectationFromGroups(groups: groups, state: state)
         if abs(exactValue - qwcValue) > tolerance {
             print("QWC grouping validation failed: |exact - qwc| = \(abs(exactValue - qwcValue))")
             return false
         }
 
         if let nQubits = numQubits, nQubits <= 12 {
-            let partitions = await unitaryPartitions(numQubits: nQubits)
-            let unitaryValue = computeExpectationFromPartitions(
+            let partitions: [UnitaryPartition] = await unitaryPartitions(numQubits: nQubits)
+            let unitaryValue: Double = computeExpectationFromPartitions(
                 partitions: partitions,
                 state: state
             )
@@ -419,8 +419,11 @@ public extension Observable {
 
         for group in groups {
             for (coeff, pauliString) in group.terms {
-                let observable = Observable(terms: [(coefficient: coeff, pauliString: pauliString)])
-                total += observable.expectationValue(state: state)
+                let pauliExpectation = Observable.computePauliExpectation(
+                    pauliString: pauliString,
+                    state: state
+                )
+                total += coeff * pauliExpectation
             }
         }
 
@@ -436,8 +439,11 @@ public extension Observable {
 
         for partition in partitions {
             for (coeff, pauliString) in partition.terms {
-                let observable = Observable(terms: [(coefficient: coeff, pauliString: pauliString)])
-                total += observable.expectationValue(state: state)
+                let pauliExpectation = Observable.computePauliExpectation(
+                    pauliString: pauliString,
+                    state: state
+                )
+                total += coeff * pauliExpectation
             }
         }
 

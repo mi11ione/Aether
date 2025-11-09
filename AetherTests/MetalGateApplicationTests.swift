@@ -50,7 +50,7 @@ struct MetalGateApplicationTests {
     func metalAppliesCNOT() {
         guard let metal = MetalGateApplication() else { return }
 
-        var amplitudes = [Complex<Double>](repeating: .zero, count: 16)
+        var amplitudes = AmplitudeVector(repeating: .zero, count: 16)
         amplitudes[2] = .one
         let state = QuantumState(numQubits: 4, amplitudes: amplitudes)
 
@@ -82,7 +82,7 @@ struct MetalGateApplicationTests {
     func metalAppliesToffoli() {
         guard let metal = MetalGateApplication() else { return }
 
-        var amplitudes = [Complex<Double>](repeating: .zero, count: 16)
+        var amplitudes = AmplitudeVector(repeating: .zero, count: 16)
         amplitudes[3] = .one
         let state = QuantumState(numQubits: 4, amplitudes: amplitudes)
 
@@ -227,7 +227,7 @@ struct MetalGateApplicationTests {
     func metalAppliesSwap() {
         guard let metal = MetalGateApplication() else { return }
 
-        var amplitudes = [Complex<Double>](repeating: .zero, count: 16)
+        var amplitudes = AmplitudeVector(repeating: .zero, count: 16)
         amplitudes[1] = .one
         let state = QuantumState(numQubits: 4, amplitudes: amplitudes)
         let newState = metal.apply(gate: .swap(qubit1: 0, qubit2: 1), to: [0, 1], state: state)

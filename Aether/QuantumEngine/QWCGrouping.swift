@@ -57,8 +57,8 @@ public enum QWCGrouper {
     public static func group(terms: PauliTerms) -> [QWCGroup] {
         guard !terms.isEmpty else { return [] }
 
-        let graph = buildConflictGraph(terms: terms)
-        let coloring = colorGraphDSATUR(graph: graph)
+        let graph: [[Int]] = buildConflictGraph(terms: terms)
+        let coloring: [Int] = colorGraphDSATUR(graph: graph)
 
         return buildGroups(terms: terms, coloring: coloring)
     }
@@ -67,8 +67,8 @@ public enum QWCGrouper {
 
     /// Build conflict graph where edges represent non-QWC pairs.
     private static func buildConflictGraph(terms: PauliTerms) -> [[Int]] {
-        let n = terms.count
-        var adjacencyList = Array(repeating: [Int](), count: n)
+        let n: Int = terms.count
+        var adjacencyList: [[Int]] = Array(repeating: [Int](), count: n)
 
         for i in 0 ..< n {
             for j in (i + 1) ..< n {
@@ -92,19 +92,19 @@ public enum QWCGrouper {
     /// DSATUR provides better coloring than simple greedy for most graphs.
     /// Time complexity: O(n²) where n = number of vertices
     private static func colorGraphDSATUR(graph: [[Int]]) -> [Int] {
-        let n = graph.count
-        var colors = Array(repeating: -1, count: n)
-        var saturationDegree = Array(repeating: 0, count: n)
-        var neighborColors = Array(repeating: Set<Int>(), count: n)
+        let n: Int = graph.count
+        var colors: [Int] = Array(repeating: -1, count: n)
+        var saturationDegree: [Int] = Array(repeating: 0, count: n)
+        var neighborColors: [Set<Int>] = Array(repeating: Set<Int>(), count: n)
 
         for _ in 0 ..< n {
-            var selectedVertex = -1
-            var maxSaturation = -1
-            var maxDegree = -1
+            var selectedVertex: Int = -1
+            var maxSaturation: Int = -1
+            var maxDegree: Int = -1
 
             for v in 0 ..< n where colors[v] == -1 {
-                let saturation = saturationDegree[v]
-                let degree = graph[v].count
+                let saturation: Int = saturationDegree[v]
+                let degree: Int = graph[v].count
 
                 if saturation > maxSaturation ||
                     (saturation == maxSaturation && degree > maxDegree)
@@ -117,7 +117,7 @@ public enum QWCGrouper {
 
             guard selectedVertex != -1 else { break }
 
-            let forbiddenColors = neighborColors[selectedVertex]
+            let forbiddenColors: Set<Int> = neighborColors[selectedVertex]
             var color = 0
             while forbiddenColors.contains(color) {
                 color += 1
@@ -146,16 +146,15 @@ public enum QWCGrouper {
         var colorToTerms: [Int: PauliTerms] = [:]
 
         for (index, color) in coloring.enumerated() {
-            if colorToTerms[color] == nil { colorToTerms[color] = [] }
-            colorToTerms[color]?.append(terms[index])
+            colorToTerms[color, default: []].append(terms[index])
         }
 
         var groups: [QWCGroup] = []
 
         for (_, groupTerms) in colorToTerms.sorted(by: { $0.key < $1.key }) {
-            let pauliStrings = groupTerms.map(\.pauliString)
+            let pauliStrings: [PauliString] = groupTerms.map(\.pauliString)
 
-            guard let basis = PauliCommutation.measurementBasis(for: pauliStrings) else {
+            guard let basis: MeasurementBasis = PauliCommutation.measurementBasis(for: pauliStrings) else {
                 preconditionFailure("Invalid QWC group - measurement basis could not be determined. " +
                     "This indicates a bug in graph coloring or conflict detection.")
             }
@@ -205,12 +204,12 @@ public enum QWCGrouper {
     /// // - Reduction: 41.7×
     /// ```
     public static func statistics(for groups: [QWCGroup]) -> GroupingStats {
-        let numGroups = groups.count
-        let groupSizes = groups.map(\.terms.count)
-        let numTerms = groupSizes.reduce(0, +)
-        let largestGroupSize = groupSizes.max() ?? 0
-        let averageGroupSize = numGroups > 0 ? Double(numTerms) / Double(numGroups) : 0.0
-        let reductionFactor = numGroups > 0 ? Double(numTerms) / Double(numGroups) : 1.0
+        let numGroups: Int = groups.count
+        let groupSizes: [Int] = groups.map(\.terms.count)
+        let numTerms: Int = groupSizes.reduce(0, +)
+        let largestGroupSize: Int = groupSizes.max() ?? 0
+        let averageGroupSize: Double = numGroups > 0 ? Double(numTerms) / Double(numGroups) : 0.0
+        let reductionFactor: Double = numGroups > 0 ? Double(numTerms) / Double(numGroups) : 1.0
 
         return GroupingStats(
             numTerms: numTerms,

@@ -136,7 +136,7 @@ public final class SparseHamiltonian {
     public init(observable: Observable) {
         self.observable = observable
 
-        var maxQubit = -1
+        var maxQubit: Int = -1
         for (_, pauliString) in observable.terms {
             for op in pauliString.operators {
                 maxQubit = max(maxQubit, op.qubit)
@@ -146,7 +146,7 @@ public final class SparseHamiltonian {
         numQubits = max(maxQubit + 1, 1)
         dimension = 1 << numQubits
 
-        let cooMatrix = Self.buildCOOMatrix(from: observable, dimension: dimension)
+        let cooMatrix: [COOElement] = Self.buildCOOMatrix(from: observable, dimension: dimension)
         nnz = cooMatrix.count
 
         if numQubits >= 8, let metalBackend = Self.tryMetalGPUBackend(
@@ -213,7 +213,7 @@ public final class SparseHamiltonian {
         }
 
         let tolerance = 1e-12
-        let nonZeros = elements.compactMap { index, value -> COOElement? in
+        let nonZeros: [COOElement] = elements.compactMap { index, value -> COOElement? in
             guard abs(value.magnitude) > tolerance else { return nil }
             return COOElement(row: index.row, col: index.col, value: value)
         }
@@ -259,11 +259,11 @@ public final class SparseHamiltonian {
         elements.reserveCapacity(dimension)
 
         for row in 0 ..< dimension {
-            var col = row
+            var col: Int = row
             var phase = Complex<Double>.one
 
             for qubit in 0 ..< numQubits {
-                let rowBit = (row >> qubit) & 1
+                let rowBit: Int = (row >> qubit) & 1
 
                 if let pauli = pauliMap[qubit] {
                     switch pauli {
@@ -322,12 +322,12 @@ public final class SparseHamiltonian {
         guard let kernelFunction = library.makeFunction(name: "csrSparseMatVec") else { return nil }
         guard let pipelineState = try? device.makeComputePipelineState(function: kernelFunction) else { return nil }
 
-        let (rowPointers, columnIndices, values) = convertCOOtoCSR(
+        let (rowPointers, columnIndices, values): ([UInt32], [UInt32], AmplitudeVector) = convertCOOtoCSR(
             cooMatrix: cooMatrix,
             numRows: dimension
         )
 
-        var float32Values: [(Float, Float)] = []
+        var float32Values: [GPUComplex] = []
         for value in values {
             float32Values.append((Float(value.real), Float(value.imaginary)))
         }
@@ -349,7 +349,7 @@ public final class SparseHamiltonian {
 
         guard let valueBuffer = device.makeBuffer(
             bytes: float32Values,
-            length: float32Values.count * MemoryLayout<(Float, Float)>.stride,
+            length: float32Values.count * MemoryLayout<GPUComplex>.stride,
             options: storageMode
         ) else { return nil }
 
@@ -385,10 +385,10 @@ public final class SparseHamiltonian {
     private static func convertCOOtoCSR(
         cooMatrix: [COOElement],
         numRows: Int
-    ) -> (rowPointers: [UInt32], columnIndices: [UInt32], values: [Complex<Double>]) {
+    ) -> (rowPointers: [UInt32], columnIndices: [UInt32], values: AmplitudeVector) {
         var rowPointers = [UInt32](repeating: 0, count: numRows + 1)
         var columnIndices: [UInt32] = []
-        var values: [Complex<Double>] = []
+        var values: AmplitudeVector = []
 
         for element in cooMatrix {
             rowPointers[element.row + 1] += 1
@@ -429,7 +429,7 @@ public final class SparseHamiltonian {
             return nil
         }
 
-        let nnz = cooMatrix.count
+        let nnz: Int = cooMatrix.count
 
         var realRows: [Int32] = []
         var realCols: [Int32] = []
@@ -516,7 +516,7 @@ public final class SparseHamiltonian {
             return nil
         }
 
-        let nnz = rows.count
+        let nnz: Int = rows.count
 
         guard nnz > 0 else {
             var emptyRows: [Int32] = [0]
@@ -637,19 +637,21 @@ public final class SparseHamiltonian {
         values: MTLBuffer,
         nnz _: Int
     ) -> Double {
-        var float32State: [(Float, Float)] = []
-        for amplitude in state.amplitudes {
-            float32State.append((Float(amplitude.real), Float(amplitude.imaginary)))
+        let float32State = [GPUComplex](unsafeUninitializedCapacity: dimension) { buffer, count in
+            for i in 0 ..< dimension {
+                buffer[i] = (Float(state.amplitudes[i].real), Float(state.amplitudes[i].imaginary))
+            }
+            count = dimension
         }
 
         guard let inputBuffer = device.makeBuffer(
             bytes: float32State,
-            length: dimension * MemoryLayout<(Float, Float)>.stride,
+            length: dimension * MemoryLayout<GPUComplex>.stride,
             options: .storageModeShared
         ) else { return observable.expectationValue(state: state) }
 
         guard let outputBuffer = device.makeBuffer(
-            length: dimension * MemoryLayout<(Float, Float)>.stride,
+            length: dimension * MemoryLayout<GPUComplex>.stride,
             options: .storageModeShared
         ) else { return observable.expectationValue(state: state) }
 
@@ -670,8 +672,8 @@ public final class SparseHamiltonian {
         var dim = UInt32(dimension)
         encoder.setBytes(&dim, length: MemoryLayout<UInt32>.stride, index: 5)
 
-        let threadGroupSize = min(pipelineState.maxTotalThreadsPerThreadgroup, dimension)
-        let threadGroups = (dimension + threadGroupSize - 1) / threadGroupSize
+        let threadGroupSize: Int = min(pipelineState.maxTotalThreadsPerThreadgroup, dimension)
+        let threadGroups: Int = (dimension + threadGroupSize - 1) / threadGroupSize
 
         encoder.dispatchThreadgroups(
             MTLSize(width: threadGroups, height: 1, depth: 1),
@@ -683,7 +685,7 @@ public final class SparseHamiltonian {
         commandBuffer.waitUntilCompleted()
 
         let outputPointer = outputBuffer.contents().bindMemory(
-            to: (Float, Float).self,
+            to: GPUComplex.self,
             capacity: dimension
         )
 
@@ -729,12 +731,17 @@ public final class SparseHamiltonian {
         imagMatrix: SparseMatrix_Double,
         dimension: Int
     ) -> Double {
-        var stateReal = [Double](repeating: 0.0, count: dimension)
-        var stateImag = [Double](repeating: 0.0, count: dimension)
-
-        for i in 0 ..< dimension {
-            stateReal[i] = state.amplitudes[i].real
-            stateImag[i] = state.amplitudes[i].imaginary
+        var stateReal = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
+            for i in 0 ..< dimension {
+                buffer[i] = state.amplitudes[i].real
+            }
+            count = dimension
+        }
+        var stateImag = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
+            for i in 0 ..< dimension {
+                buffer[i] = state.amplitudes[i].imaginary
+            }
+            count = dimension
         }
 
         var resultReal = [Double](repeating: 0.0, count: dimension)
@@ -808,9 +815,9 @@ public final class SparseHamiltonian {
 
     private func estimatedMemoryUsage() -> Int {
         // CSR format: rowPointers (dimension+1) + columnIndices (nnz) + values (nnz)
-        let rowPointerBytes = (dimension + 1) * MemoryLayout<UInt32>.stride
-        let columnIndexBytes = nnz * MemoryLayout<UInt32>.stride
-        let valueBytes = nnz * MemoryLayout<Complex<Double>>.stride
+        let rowPointerBytes: Int = (dimension + 1) * MemoryLayout<UInt32>.stride
+        let columnIndexBytes: Int = nnz * MemoryLayout<UInt32>.stride
+        let valueBytes: Int = nnz * MemoryLayout<Complex<Double>>.stride
 
         return rowPointerBytes + columnIndexBytes + valueBytes
     }
@@ -845,14 +852,14 @@ public struct SparseMatrixStatistics: CustomStringConvertible {
     public var description: String {
         let sparsityPercent = String(format: "%.4f%%", sparsity * 100)
         let memoryKB = Double(memoryBytes) / 1024.0
-        let memoryMB = memoryKB / 1024.0
+        let memoryMB: Double = memoryKB / 1024.0
 
-        let memoryStr = memoryMB >= 1.0 ?
+        let memoryStr: String = memoryMB >= 1.0 ?
             String(format: "%.2f MB", memoryMB) :
             String(format: "%.2f KB", memoryKB)
 
         let denseMemoryMB = Double(dimension * dimension * 16) / (1024.0 * 1024.0)
-        let compressionRatio = denseMemoryMB * 1024.0 * 1024.0 / Double(memoryBytes)
+        let compressionRatio: Double = denseMemoryMB * 1024.0 * 1024.0 / Double(memoryBytes)
 
         return """
         Sparse Hamiltonian Statistics:

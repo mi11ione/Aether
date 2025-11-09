@@ -91,7 +91,7 @@ public extension QuantumState {
         precondition(basisStateIndex >= 0 && basisStateIndex < stateSpaceSize,
                      "Basis state index \(basisStateIndex) out of bounds [0, \(stateSpaceSize - 1)]")
 
-        var amplitudes = [Complex<Double>](repeating: .zero, count: stateSpaceSize)
+        var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
         amplitudes[basisStateIndex] = .one
 
         return QuantumState(numQubits: numQubits, amplitudes: amplitudes)
@@ -261,22 +261,38 @@ public extension QuantumCircuit {
         precondition(numQubits <= 20, "W state with >20 qubits requires too much memory")
 
         let stateSpaceSize = 1 << numQubits
-        var amplitudes = [Complex<Double>](repeating: .zero, count: stateSpaceSize)
+        var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
 
         // W state is equal superposition over all states with exactly one |1⟩
         // These are states with Hamming weight 1: |100...0⟩, |010...0⟩, etc.
-        let amplitude = Complex(1.0 / sqrt(Double(numQubits)), 0.0)
+        // Direct calculation: only n states need to be set (powers of 2)
+        let amplitude: Complex<Double> = Complex(1.0 / sqrt(Double(numQubits)), 0.0)
 
-        for i in 0 ..< stateSpaceSize {
-            if i.nonzeroBitCount == 1 {
-                amplitudes[i] = amplitude
-            }
+        for qubit in 0 ..< numQubits {
+            amplitudes[1 << qubit] = amplitude
         }
 
         return QuantumState(numQubits: numQubits, amplitudes: amplitudes)
     }
 
     // MARK: - Dicke State Preparation
+
+    /// Compute binomial coefficient C(n, k) = n! / (k! * (n-k)!)
+    /// Uses multiplicative formula to avoid overflow: C(n,k) = ∏(i=1 to k) (n-k+i)/i
+    private static func binomialCoefficient(_ n: Int, _ k: Int) -> Int {
+        guard k >= 0, k <= n else { return 0 }
+        guard k > 0, k < n else { return 1 }
+
+        // Use symmetry: C(n,k) = C(n,n-k), choose smaller k
+        let kOpt = min(k, n - k)
+
+        var result = 1
+        for i in 0 ..< kOpt {
+            result = result * (n - i) / (i + 1)
+        }
+
+        return result
+    }
 
     /// Create Dicke state: equal superposition with fixed Hamming weight
     ///
@@ -333,16 +349,10 @@ public extension QuantumCircuit {
                      "Number of ones must be between 0 and \(numQubits)")
 
         let stateSpaceSize = 1 << numQubits
-        var amplitudes = [Complex<Double>](repeating: .zero, count: stateSpaceSize)
+        var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
 
-        var count = 0
-        for i in 0 ..< stateSpaceSize {
-            if i.nonzeroBitCount == numOnes {
-                count += 1
-            }
-        }
-
-        let amplitude = Complex(1.0 / sqrt(Double(count)), 0.0)
+        let count = binomialCoefficient(numQubits, numOnes)
+        let amplitude: Complex<Double> = Complex(1.0 / sqrt(Double(count)), 0.0)
 
         for i in 0 ..< stateSpaceSize {
             if i.nonzeroBitCount == numOnes {

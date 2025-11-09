@@ -219,7 +219,7 @@ struct ControlledRotationGatesTests {
 struct CustomUnitaryGatesTests {
     @Test("Custom single-qubit gate validates unitarity")
     func testCustomSingleQubitValidation() throws {
-        let validMatrix: [[Complex<Double>]] = [
+        let validMatrix: GateMatrix = [
             [.zero, .one],
             [.one, .zero],
         ]
@@ -230,7 +230,7 @@ struct CustomUnitaryGatesTests {
 
     @Test("Custom single-qubit gate rejects non-unitary")
     func testCustomSingleQubitNonUnitary() {
-        let invalidMatrix: [[Complex<Double>]] = [
+        let invalidMatrix: GateMatrix = [
             [.one, .one],
             [.one, .one],
         ]
@@ -242,7 +242,7 @@ struct CustomUnitaryGatesTests {
 
     @Test("Custom single-qubit gate rejects wrong size")
     func testCustomSingleQubitWrongSize() {
-        let invalidMatrix: [[Complex<Double>]] = [
+        let invalidMatrix: GateMatrix = [
             [.one, .zero, .zero],
             [.zero, .one, .zero],
             [.zero, .zero, .one],
@@ -255,7 +255,7 @@ struct CustomUnitaryGatesTests {
 
     @Test("Custom two-qubit gate validates unitarity")
     func testCustomTwoQubitValidation() throws {
-        let validMatrix: [[Complex<Double>]] = [
+        let validMatrix: GateMatrix = [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
             [.zero, .zero, .zero, .one],
@@ -268,7 +268,7 @@ struct CustomUnitaryGatesTests {
 
     @Test("Custom two-qubit gate rejects non-unitary")
     func testCustomTwoQubitNonUnitary() {
-        let invalidMatrix: [[Complex<Double>]] = [
+        let invalidMatrix: GateMatrix = [
             [.one, .one, .zero, .zero],
             [.one, .one, .zero, .zero],
             [.zero, .zero, .one, .one],
@@ -283,7 +283,7 @@ struct CustomUnitaryGatesTests {
     @Test("Custom gate works in circuit")
     func testCustomGateInCircuit() throws {
         let invSqrt2 = 1.0 / sqrt(2.0)
-        let hadamardMatrix: [[Complex<Double>]] = [
+        let hadamardMatrix: GateMatrix = [
             [Complex(invSqrt2, 0.0), Complex(invSqrt2, 0.0)],
             [Complex(invSqrt2, 0.0), Complex(-invSqrt2, 0.0)],
         ]
@@ -548,14 +548,14 @@ struct GatePropertyTests {
         #expect(QuantumGate.controlledRotationY(theta: 1.5, control: 0, target: 1).description.contains("CRy"))
         #expect(QuantumGate.controlledRotationZ(theta: 1.5, control: 0, target: 1).description.contains("CRz"))
 
-        let customSingleMatrix: [[Complex<Double>]] = [
+        let customSingleMatrix: GateMatrix = [
             [.zero, .one],
             [.one, .zero],
         ]
         let customSingleGate = try! QuantumGate.createCustomSingleQubit(matrix: customSingleMatrix)
         #expect(customSingleGate.description == "CustomU(2×2)")
 
-        let customTwoMatrix: [[Complex<Double>]] = [
+        let customTwoMatrix: GateMatrix = [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
             [.zero, .zero, .zero, .one],

@@ -56,7 +56,7 @@ public extension Observable {
     /// let energy = hamiltonian.expectationValue(state: state)  // Accurate
     /// ```
     func truncate(threshold: Double) -> Observable {
-        let significantTerms = terms.filter { abs($0.coefficient) >= threshold }
+        let significantTerms: PauliTerms = terms.filter { abs($0.coefficient) >= threshold }
 
         if significantTerms.isEmpty, let largest = terms.max(by: { abs($0.coefficient) < abs($1.coefficient) }) {
             return Observable(terms: [largest])
@@ -83,8 +83,8 @@ public extension Observable {
             return Observable(terms: [])
         }
 
-        let sortedTerms = terms.sorted { abs($0.coefficient) > abs($1.coefficient) }
-        let topTerms = Array(sortedTerms.prefix(k))
+        let sortedTerms: PauliTerms = terms.sorted { abs($0.coefficient) > abs($1.coefficient) }
+        let topTerms: PauliTerms = Array(sortedTerms.prefix(k))
 
         return Observable(terms: topTerms)
     }
@@ -96,8 +96,8 @@ public extension Observable {
     ///   - state: Quantum state to evaluate on
     /// - Returns: Absolute error |⟨H⟩ - ⟨H'⟩|
     func approximationError(approximate: Observable, state: QuantumState) -> Double {
-        let exactValue = expectationValue(state: state)
-        let approxValue = approximate.expectationValue(state: state)
+        let exactValue: Double = expectationValue(state: state)
+        let approxValue: Double = approximate.expectationValue(state: state)
         return abs(exactValue - approxValue)
     }
 
@@ -108,10 +108,10 @@ public extension Observable {
     ///   - state: Quantum state to evaluate on
     /// - Returns: Relative error |⟨H⟩ - ⟨H'⟩| / |⟨H⟩|
     func relativeApproximationError(approximate: Observable, state: QuantumState) -> Double {
-        let exactValue = expectationValue(state: state)
+        let exactValue: Double = expectationValue(state: state)
         guard abs(exactValue) > 1e-10 else { return 0.0 }
 
-        let approxValue = approximate.expectationValue(state: state)
+        let approxValue: Double = approximate.expectationValue(state: state)
         return abs(exactValue - approxValue) / abs(exactValue)
     }
 
@@ -165,7 +165,7 @@ public extension Observable {
     /// - Parameter schedule: Adaptive threshold schedule
     /// - Returns: Truncated observable for current iteration
     func adaptiveTruncate(schedule: AdaptiveSchedule) -> Observable {
-        let threshold = schedule.threshold()
+        let threshold: Double = schedule.threshold()
         return truncate(threshold: threshold)
     }
 
@@ -192,14 +192,14 @@ public extension Observable {
 
     /// Compute approximation statistics.
     func approximationStatistics(approximate: Observable) -> ApproximationStats {
-        let originalTerms = terms.count
-        let approximateTerms = approximate.terms.count
+        let originalTerms: Int = terms.count
+        let approximateTerms: Int = approximate.terms.count
 
-        let originalSum = terms.reduce(0.0) { $0 + abs($1.coefficient) }
-        let approximateSum = approximate.terms.reduce(0.0) { $0 + abs($1.coefficient) }
+        let originalSum: Double = terms.reduce(0.0) { $0 + abs($1.coefficient) }
+        let approximateSum: Double = approximate.terms.reduce(0.0) { $0 + abs($1.coefficient) }
 
-        let reductionFactor = originalTerms > 0 ? Double(originalTerms) / Double(approximateTerms) : 1.0
-        let retention = originalSum > 0 ? approximateSum / originalSum : 0.0
+        let reductionFactor: Double = originalTerms > 0 ? Double(originalTerms) / Double(approximateTerms) : 1.0
+        let retention: Double = originalSum > 0 ? approximateSum / originalSum : 0.0
 
         return ApproximationStats(
             originalTerms: originalTerms,
@@ -225,7 +225,7 @@ public extension Observable {
         state: QuantumState,
         tolerance: Double
     ) -> Bool {
-        let error = approximationError(approximate: approximate, state: state)
+        let error: Double = approximationError(approximate: approximate, state: state)
         return error <= tolerance
     }
 
@@ -243,12 +243,12 @@ public extension Observable {
     ) -> Double {
         // Binary search for optimal threshold
         var low = 0.0
-        var high = terms.map { abs($0.coefficient) }.max() ?? 1.0
+        var high: Double = terms.map { abs($0.coefficient) }.max() ?? 1.0
 
         for _ in 0 ..< searchSteps {
-            let mid = (low + high) / 2.0
-            let approx = truncate(threshold: mid)
-            let error = approximationError(approximate: approx, state: state)
+            let mid: Double = (low + high) / 2.0
+            let approx: Observable = truncate(threshold: mid)
+            let error: Double = approximationError(approximate: approx, state: state)
 
             if error <= maxError {
                 // Can increase threshold (more aggressive truncation)

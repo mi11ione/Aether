@@ -412,9 +412,9 @@ enum GateTestUtilities {
     /// - Returns: Product matrix
     /// - Throws: MatrixError if dimensions are incompatible
     static func matrixMultiply(
-        _ a: [[Complex<Double>]],
-        _ b: [[Complex<Double>]]
-    ) throws -> [[Complex<Double>]] {
+        _ a: GateMatrix,
+        _ b: GateMatrix
+    ) throws -> GateMatrix {
         guard !a.isEmpty, !b.isEmpty else {
             throw MatrixError.emptyMatrix
         }
@@ -456,8 +456,8 @@ enum GateTestUtilities {
     ///   - tolerance: Maximum allowed difference (default: 1e-10)
     /// - Returns: True if matrices are equal within tolerance
     static func matricesEqual(
-        _ a: [[Complex<Double>]],
-        _ b: [[Complex<Double>]],
+        _ a: GateMatrix,
+        _ b: GateMatrix,
         tolerance: Double = 1e-10
     ) -> Bool {
         guard a.count == b.count else { return false }
@@ -483,7 +483,7 @@ enum GateTestUtilities {
     ///   - tolerance: Maximum allowed difference from identity (default: 1e-10)
     /// - Returns: True if matrix is identity within tolerance
     static func isIdentityMatrix(
-        _ matrix: [[Complex<Double>]],
+        _ matrix: GateMatrix,
         tolerance: Double = 1e-10
     ) -> Bool {
         guard !matrix.isEmpty else { return false }
@@ -514,7 +514,7 @@ enum GateTestUtilities {
     /// Create identity matrix of given size
     /// - Parameter size: Matrix dimension
     /// - Returns: Identity matrix
-    static func identityMatrix(size: Int) -> [[Complex<Double>]] {
+    static func identityMatrix(size: Int) -> GateMatrix {
         var matrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: size), count: size)
         for i in 0 ..< size {
             matrix[i][i] = .one
@@ -525,7 +525,7 @@ enum GateTestUtilities {
     /// Get matrix dimensions
     /// - Parameter matrix: Matrix to analyze
     /// - Returns: Tuple of (rows, columns)
-    static func matrixDimensions(_ matrix: [[Complex<Double>]]) -> (rows: Int, cols: Int)? {
+    static func matrixDimensions(_ matrix: GateMatrix) -> (rows: Int, cols: Int)? {
         guard !matrix.isEmpty else { return nil }
         let rows = matrix.count
         let cols = matrix[0].count
@@ -540,7 +540,7 @@ enum GateTestUtilities {
     ///   - tolerance: Tolerance for comparisons
     /// - Returns: True if matrix is unitary
     static func isUnitary(
-        _ matrix: [[Complex<Double>]],
+        _ matrix: GateMatrix,
         tolerance: Double = 1e-10
     ) -> Bool {
         guard let dims = matrixDimensions(matrix), dims.rows == dims.cols else {
@@ -559,7 +559,7 @@ enum GateTestUtilities {
     /// Compute conjugate transpose of matrix (U†)
     /// - Parameter matrix: Input matrix
     /// - Returns: Conjugate transpose
-    private static func conjugateTranspose(_ matrix: [[Complex<Double>]]) -> [[Complex<Double>]] {
+    private static func conjugateTranspose(_ matrix: GateMatrix) -> GateMatrix {
         guard let dims = matrixDimensions(matrix) else {
             return []
         }

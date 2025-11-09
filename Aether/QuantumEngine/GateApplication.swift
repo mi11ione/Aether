@@ -3,6 +3,12 @@
 
 import Foundation
 
+/// Amplitude vector for quantum states
+public typealias AmplitudeVector = [Complex<Double>]
+
+/// Gate matrix representation
+public typealias GateMatrix = [AmplitudeVector]
+
 /// Gate application: CPU-based quantum gate execution engine
 ///
 /// Implements efficient quantum gate application through optimized matrix-vector multiplication
@@ -107,24 +113,24 @@ public enum GateApplication {
         qubit: Int,
         state: QuantumState
     ) -> QuantumState {
-        let gateMatrix = gate.matrix()
-        let g00 = gateMatrix[0][0]
-        let g01 = gateMatrix[0][1]
-        let g10 = gateMatrix[1][0]
-        let g11 = gateMatrix[1][1]
+        let gateMatrix: GateMatrix = gate.matrix()
+        let g00: Complex<Double> = gateMatrix[0][0]
+        let g01: Complex<Double> = gateMatrix[0][1]
+        let g10: Complex<Double> = gateMatrix[1][0]
+        let g11: Complex<Double> = gateMatrix[1][1]
 
         // Create new amplitude array (allocate directly instead of copying)
-        var newAmplitudes = [Complex<Double>](repeating: .zero, count: state.stateSpaceSize)
+        var newAmplitudes = AmplitudeVector(repeating: .zero, count: state.stateSpaceSize)
         let bitMask = 1 << qubit
 
         for i in 0 ..< state.stateSpaceSize {
             // Only process indices where target qubit is 0
             // (to avoid processing each pair twice)
             if (i & bitMask) == 0 {
-                let j = i | bitMask
+                let j: Int = i | bitMask
 
-                let ci = state.amplitudes[i]
-                let cj = state.amplitudes[j]
+                let ci: Complex<Double> = state.amplitudes[i]
+                let cj: Complex<Double> = state.amplitudes[j]
 
                 newAmplitudes[i] = g00 * ci + g01 * cj
                 newAmplitudes[j] = g10 * ci + g11 * cj
@@ -149,27 +155,27 @@ public enum GateApplication {
         target: Int,
         state: QuantumState
     ) -> QuantumState {
-        let gateMatrix = gate.matrix()
-        var newAmplitudes = state.amplitudes
+        let gateMatrix: GateMatrix = gate.matrix()
+        var newAmplitudes = AmplitudeVector(repeating: .zero, count: state.stateSpaceSize)
 
         // States differing only in control and target qubits
         let controlMask = 1 << control
         let targetMask = 1 << target
-        let bothMask = controlMask | targetMask
+        let bothMask: Int = controlMask | targetMask
 
-        let stateSize = state.stateSpaceSize
+        let stateSize: Int = state.stateSpaceSize
 
         for i in 0 ..< stateSize {
             if (i & bothMask) == 0 {
-                let i00 = i // control=0, target=0
-                let i01 = i | targetMask // control=0, target=1
-                let i10 = i | controlMask // control=1, target=0
-                let i11 = i | bothMask // control=1, target=1
+                let i00: Int = i // control=0, target=0
+                let i01: Int = i | targetMask // control=0, target=1
+                let i10: Int = i | controlMask // control=1, target=0
+                let i11: Int = i | bothMask // control=1, target=1
 
-                let c00 = state.amplitudes[i00]
-                let c01 = state.amplitudes[i01]
-                let c10 = state.amplitudes[i10]
-                let c11 = state.amplitudes[i11]
+                let c00: Complex<Double> = state.amplitudes[i00]
+                let c01: Complex<Double> = state.amplitudes[i01]
+                let c10: Complex<Double> = state.amplitudes[i10]
+                let c11: Complex<Double> = state.amplitudes[i11]
 
                 newAmplitudes[i00] = gateMatrix[0][0] * c00 + gateMatrix[0][1] * c01 +
                     gateMatrix[0][2] * c10 + gateMatrix[0][3] * c11
@@ -199,7 +205,7 @@ public enum GateApplication {
         target: Int,
         state: QuantumState
     ) -> QuantumState {
-        var newAmplitudes = Array(repeating: Complex<Double>.zero, count: state.stateSpaceSize)
+        var newAmplitudes: AmplitudeVector = Array(repeating: Complex<Double>.zero, count: state.stateSpaceSize)
 
         let controlMask = 1 << control
         let targetMask = 1 << target
@@ -228,14 +234,16 @@ public enum GateApplication {
         target: Int,
         state: QuantumState
     ) -> QuantumState {
-        var newAmplitudes = state.amplitudes
+        var newAmplitudes = AmplitudeVector(repeating: .zero, count: state.stateSpaceSize)
 
         let controlMask = 1 << control
         let targetMask = 1 << target
 
         for i in 0 ..< state.stateSpaceSize {
             if (i & controlMask) != 0, (i & targetMask) != 0 {
-                newAmplitudes[i] = -newAmplitudes[i]
+                newAmplitudes[i] = -state.amplitudes[i]
+            } else {
+                newAmplitudes[i] = state.amplitudes[i]
             }
         }
 
@@ -257,7 +265,7 @@ public enum GateApplication {
         target: Int,
         state: QuantumState
     ) -> QuantumState {
-        var newAmplitudes = Array(repeating: Complex<Double>.zero, count: state.stateSpaceSize)
+        var newAmplitudes: AmplitudeVector = Array(repeating: Complex<Double>.zero, count: state.stateSpaceSize)
 
         let c1Mask = 1 << control1
         let c2Mask = 1 << control2

@@ -115,21 +115,8 @@ public actor QuantumSimulator {
             QuantumState(numQubits: circuit.numQubits)
         }
 
-        let maxQubit = circuit.maxQubitUsed()
-        var state: QuantumState
-        if maxQubit >= startState.numQubits {
-            let numAncillaQubits = maxQubit - startState.numQubits + 1
-            let expandedSize = 1 << (startState.numQubits + numAncillaQubits)
-
-            var expandedAmplitudes = [Complex<Double>](repeating: .zero, count: expandedSize)
-            for i in 0 ..< startState.stateSpaceSize {
-                expandedAmplitudes[i] = startState.amplitudes[i]
-            }
-
-            state = QuantumState(numQubits: maxQubit + 1, amplitudes: expandedAmplitudes)
-        } else {
-            state = startState
-        }
+        let maxQubit: Int = circuit.maxQubitUsed()
+        var state = QuantumCircuit.expandStateForAncilla(startState, maxQubit: maxQubit)
         currentState = state
 
         for (index, operation) in circuit.operations.enumerated() {
@@ -182,22 +169,8 @@ public actor QuantumSimulator {
             QuantumState(numQubits: circuit.numQubits)
         }
 
-        // Check if ancilla qubits are needed and expand state if necessary
-        let maxQubit = circuit.maxQubitUsed()
-        var state: QuantumState
-        if maxQubit >= startState.numQubits {
-            let numAncillaQubits = maxQubit - startState.numQubits + 1
-            let expandedSize = 1 << (startState.numQubits + numAncillaQubits)
-
-            var expandedAmplitudes = [Complex<Double>](repeating: .zero, count: expandedSize)
-            for i in 0 ..< startState.stateSpaceSize {
-                expandedAmplitudes[i] = startState.amplitudes[i]
-            }
-
-            state = QuantumState(numQubits: maxQubit + 1, amplitudes: expandedAmplitudes)
-        } else {
-            state = startState
-        }
+        let maxQubit: Int = circuit.maxQubitUsed()
+        var state = QuantumCircuit.expandStateForAncilla(startState, maxQubit: maxQubit)
         currentState = state
 
         for (index, operation) in circuit.operations.enumerated() {
@@ -239,14 +212,18 @@ public actor QuantumSimulator {
     // MARK: - Batch Execution
 
     /// Execute multiple circuits in parallel
-    /// - Parameter circuits: Array of circuits to execute
+    /// - Parameters:
+    ///   - circuits: Array of circuits to execute
+    ///   - useMetalAcceleration: Whether to use Metal GPU acceleration
     /// - Returns: Array of final states
-    public func executeBatch(_ circuits: [QuantumCircuit]) async throws -> [QuantumState] {
-        let acceleration = useMetalAcceleration
-        return try await withThrowingTaskGroup(of: (Int, QuantumState).self) { group in
+    public static func executeBatch(
+        _ circuits: [QuantumCircuit],
+        useMetalAcceleration: Bool = true
+    ) async throws -> [QuantumState] {
+        try await withThrowingTaskGroup(of: (Int, QuantumState).self) { group in
             for (index, circuit) in circuits.enumerated() {
                 group.addTask {
-                    let simulator = QuantumSimulator(useMetalAcceleration: acceleration)
+                    let simulator = QuantumSimulator(useMetalAcceleration: useMetalAcceleration)
                     let result = try await simulator.execute(circuit)
                     return (index, result)
                 }

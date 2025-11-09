@@ -277,7 +277,7 @@ struct PartialMeasurementTests {
 
     @Test("Measure single qubit of separable state")
     func measureSingleQubitSeparable() {
-        var amplitudes = [Complex<Double>](repeating: .zero, count: 4)
+        var amplitudes = AmplitudeVector(repeating: .zero, count: 4)
         amplitudes[1] = .one
         let state = QuantumState(numQubits: 2, amplitudes: amplitudes)
         var measurement = Measurement()

@@ -70,13 +70,13 @@ public enum PauliCommutation {
             ops2[op.qubit] = op.basis
         }
 
-        let allQubits = Set(ops1.keys).union(ops2.keys)
+        let allQubits: Set<Int> = Set(ops1.keys).union(ops2.keys)
 
         var anticommutingCount = 0
 
         for qubit in allQubits {
-            let basis1 = ops1[qubit]
-            let basis2 = ops2[qubit]
+            let basis1: PauliBasis? = ops1[qubit]
+            let basis2: PauliBasis? = ops2[qubit]
 
             if !commute(basis1, basis2) { anticommutingCount += 1 }
         }
@@ -114,11 +114,11 @@ public enum PauliCommutation {
             ops2[op.qubit] = op.basis
         }
 
-        let allQubits = Set(ops1.keys).union(ops2.keys)
+        let allQubits: Set<Int> = Set(ops1.keys).union(ops2.keys)
 
         for qubit in allQubits {
-            let basis1 = ops1[qubit]
-            let basis2 = ops2[qubit]
+            let basis1: PauliBasis? = ops1[qubit]
+            let basis2: PauliBasis? = ops2[qubit]
 
             if basis1 == nil || basis2 == nil { continue }
             if basis1 == basis2 { continue }

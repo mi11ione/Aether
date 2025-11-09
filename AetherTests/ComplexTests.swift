@@ -211,10 +211,11 @@ struct ComplexMathematicalIdentitiesTests {
         #expect(abs(left.imaginary - right.imaginary) < 1e-10)
     }
 
-    @Test("Division inverse: z · (z / z) = z")
+    @Test("Division inverse: (z / w) · w = z")
     func divisionInverse() {
         let z = Complex(2.0, 3.0)
-        let result = z * (z / z)
+        let w = Complex(4.0, 5.0)
+        let result = (z / w) * w
         #expect(abs(result.real - z.real) < 1e-10)
         #expect(abs(result.imaginary - z.imaginary) < 1e-10)
     }
@@ -322,13 +323,11 @@ struct ComplexTypeSystemTests {
         #expect(abs(result.imaginary - 6.0) < 1e-10)
     }
 
-    @Test("Static constants are accessible")
+    @Test("Static constants have correct values")
     func staticConstantsAccessible() {
-        _ = Complex<Double>.zero
-        _ = Complex<Double>.one
-        _ = Complex<Double>.i
-        // Test passes if constants can be accessed without error
-        #expect(true)
+        #expect(Complex<Double>.zero == Complex(0.0, 0.0))
+        #expect(Complex<Double>.one == Complex(1.0, 0.0))
+        #expect(Complex<Double>.i == Complex(0.0, 1.0))
     }
 }
 
@@ -456,8 +455,8 @@ struct ComplexFloatCoverageTests {
         #expect(abs(reconstructed.imaginary - z.imaginary) < 1e-5)
     }
 
-    @Test("Float: Square root function")
-    func floatSquareRoot() {
+    @Test("Float: Magnitude calculation")
+    func floatMagnitude() {
         let z = Complex<Float>(9.0, 0.0)
         let mag = z.magnitude
 
@@ -527,5 +526,88 @@ struct ComplexFloatCoverageTests {
         let z: Complex<Double> = 2.71828
         #expect(abs(z.real - 2.71828) < 1e-10)
         #expect(abs(z.imaginary) < 1e-10)
+    }
+}
+
+/// Test suite for compound assignment operators (+=, -=, *=, /=).
+/// Verifies they produce identical results to their binary counterparts
+/// for complex–complex and complex–scalar operations across types.
+@Suite("Compound Assignment Operators")
+struct ComplexCompoundAssignmentOperatorTests {
+    @Test("+= matches + (Double)")
+    func plusEqualsMatchesPlusDouble() {
+        var a = Complex<Double>(3.0, 4.0)
+        let b = Complex<Double>(1.0, -2.0)
+        let expected = a + b
+        a += b
+        #expect(a == expected)
+    }
+
+    @Test("-= matches - (Double)")
+    func minusEqualsMatchesMinusDouble() {
+        var a = Complex<Double>(3.0, 4.0)
+        let b = Complex<Double>(1.0, -2.0)
+        let expected = a - b
+        a -= b
+        #expect(a == expected)
+    }
+
+    @Test("*= matches * (complex-complex, Double)")
+    func timesEqualsMatchesTimesComplexDouble() {
+        var a = Complex<Double>(2.0, 3.0)
+        let b = Complex<Double>(4.0, -1.0)
+        let expected = a * b
+        a *= b
+        #expect(a == expected)
+    }
+
+    @Test("/= matches / (complex-complex, Double)")
+    func divideEqualsMatchesDivideComplexDouble() {
+        var a = Complex<Double>(2.0, 3.0)
+        let b = Complex<Double>(4.0, -1.0)
+        let expected = a / b
+        a /= b
+        #expect(a == expected)
+    }
+
+    @Test("*= matches scalar multiply (Double)")
+    func timesEqualsMatchesScalarDouble() {
+        var a = Complex<Double>(-1.5, 2.0)
+        let s = 3.0
+        let expected = a * s
+        a *= s
+        #expect(a == expected)
+    }
+
+    @Test("/= matches scalar divide (Double)")
+    func divideEqualsMatchesScalarDouble() {
+        var a = Complex<Double>(-1.5, 2.0)
+        let s = 2.0
+        let expected = a / s
+        a /= s
+        #expect(a == expected)
+    }
+
+    @Test("Division by near-zero complex via /= yields NaNs (Double)")
+    func divideEqualsNearZeroComplexDouble() {
+        var a = Complex<Double>(1.0, 1.0)
+        let tiny = Complex<Double>(1e-20, -1e-20)
+        a /= tiny
+        #expect(a.real.isNaN)
+        #expect(a.imaginary.isNaN)
+    }
+
+    @Test("+= and *= scalar work for Float as well")
+    func plusEqualsAndTimesEqualsFloat() {
+        var a = Complex<Float>(2.0, 3.0)
+        let b = Complex<Float>(-1.0, 0.5)
+        let sumExpected = a + b
+        a += b
+        #expect(a == sumExpected)
+
+        let s: Float = 2.5
+        let mulExpected = a * s
+        a *= s
+        #expect(a == mulExpected)
     }
 }

@@ -108,7 +108,7 @@ public struct PauliMeasurementResult: Equatable, CustomStringConvertible {
 /// let xOn0 = PauliOperator(qubit: 0, basis: .x)  // X₀
 /// let zOn2 = PauliOperator(qubit: 2, basis: .z)  // Z₂
 /// ```
-public struct PauliOperator: Equatable, Sendable {
+public struct PauliOperator: Equatable, Hashable, Sendable {
     /// Target qubit index (0 to n-1)
     public let qubit: Int
 
@@ -145,7 +145,7 @@ public struct PauliOperator: Equatable, Sendable {
 /// // Single-qubit case: just Z₂
 /// let singlePauli = PauliString(operators: [(qubit: 2, basis: .z)])
 /// ```
-public struct PauliString: Equatable, CustomStringConvertible, Sendable {
+public struct PauliString: Equatable, Hashable, CustomStringConvertible, Sendable {
     /// Array of Pauli operators
     /// Identity operators on unspecified qubits
     public let operators: [PauliOperator]
@@ -456,7 +456,7 @@ public struct Measurement {
         let stateSpaceSize = 1 << numQubits
         precondition(outcome >= 0 && outcome < stateSpaceSize, "Outcome out of bounds")
 
-        var amplitudes = [Complex<Double>](repeating: .zero, count: stateSpaceSize)
+        var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
         amplitudes[outcome] = Complex(1.0, 0.0)
 
         return QuantumState(numQubits: numQubits, amplitudes: amplitudes)
@@ -639,7 +639,7 @@ public struct Measurement {
     /// ```
     public mutating func measureCustomBasis(
         qubit: Int,
-        basisState: [Complex<Double>],
+        basisState: AmplitudeVector,
         state: QuantumState
     ) -> (outcome: Int, collapsedState: QuantumState) {
         precondition(qubit >= 0 && qubit < state.numQubits, "Qubit index out of bounds")
@@ -922,22 +922,19 @@ public struct Measurement {
         // Renormalization factor: 1/√P(outcome)
         let normalizationFactor = 1.0 / sqrt(probability)
 
-        var newAmplitudes = [Complex<Double>](repeating: .zero, count: state.stateSpaceSize)
-
-        for i in 0 ..< state.stateSpaceSize {
-            // Check if this basis state is compatible with all measured outcomes
-            var compatible = true
-            for (qubit, outcome) in zip(qubits, outcomes) {
-                if state.getBit(index: i, qubit: qubit) != outcome {
-                    compatible = false
-                    break
+        let newAmplitudes = AmplitudeVector(unsafeUninitializedCapacity: state.stateSpaceSize) { buffer, count in
+            for i in 0 ..< state.stateSpaceSize {
+                var compatible = true
+                for (qubit, outcome) in zip(qubits, outcomes) {
+                    if state.getBit(index: i, qubit: qubit) != outcome {
+                        compatible = false
+                        break
+                    }
                 }
-            }
 
-            if compatible {
-                newAmplitudes[i] = state.amplitudes[i] * normalizationFactor
+                buffer[i] = compatible ? state.amplitudes[i] * normalizationFactor : .zero
             }
-            // else: incompatible, already zero
+            count = state.stateSpaceSize
         }
 
         return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
@@ -1052,13 +1049,13 @@ public struct Measurement {
         // Renormalization factor: 1/√P(outcome)
         let normalizationFactor = 1.0 / sqrt(probability)
 
-        var newAmplitudes = [Complex<Double>](repeating: .zero, count: state.stateSpaceSize)
-
-        for i in 0 ..< state.stateSpaceSize {
-            if state.getBit(index: i, qubit: qubit) == outcome {
-                newAmplitudes[i] = state.amplitudes[i] * normalizationFactor
+        let newAmplitudes = AmplitudeVector(unsafeUninitializedCapacity: state.stateSpaceSize) { buffer, count in
+            for i in 0 ..< state.stateSpaceSize {
+                buffer[i] = state.getBit(index: i, qubit: qubit) == outcome
+                    ? state.amplitudes[i] * normalizationFactor
+                    : .zero
             }
-            // else: incompatible, already zero
+            count = state.stateSpaceSize
         }
 
         return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)

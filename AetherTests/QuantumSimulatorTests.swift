@@ -166,8 +166,6 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator executes batch of circuits in parallel")
     func simulatorExecutesBatchCircuits() async throws {
-        let simulator = QuantumSimulator()
-
         var circuit1 = QuantumCircuit(numQubits: 2)
         circuit1.append(gate: .hadamard, toQubit: 0)
 
@@ -180,7 +178,7 @@ struct QuantumSimulatorTests {
 
         let circuits = [circuit1, circuit2, circuit3]
 
-        let results = try await simulator.executeBatch(circuits)
+        let results = try await QuantumSimulator.executeBatch(circuits)
 
         #expect(results.count == 3)
 

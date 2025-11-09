@@ -14,7 +14,7 @@ public struct UnitaryPartition: Sendable {
 
     /// Unitary transformation matrix (2^n × 2^n) that diagonalizes the terms
     /// After applying U†, all Pauli operators in the partition become (nearly) diagonal
-    public let unitaryMatrix: [[Complex<Double>]]
+    public let unitaryMatrix: GateMatrix
 
     /// Number of qubits
     public let numQubits: Int
@@ -106,19 +106,19 @@ public struct UnitaryPartitioner {
         terms: PauliTerms,
         numQubits: Int
     ) -> [UnitaryPartition] {
-        let qwcGroups = QWCGrouper.group(terms: terms)
+        let qwcGroups: [QWCGroup] = QWCGrouper.group(terms: terms)
         var partitions: [UnitaryPartition] = []
-        var remainingGroups = qwcGroups
+        var remainingGroups: [QWCGroup] = qwcGroups
 
         while !remainingGroups.isEmpty {
-            let seed = remainingGroups.removeFirst()
+            let seed: QWCGroup = remainingGroups.removeFirst()
             var currentTerms = seed.terms
-            var lastUnitary: [[Complex<Double>]]?
+            var lastUnitary: GateMatrix?
 
             var i = 0
             while i < remainingGroups.count {
-                let candidate = remainingGroups[i]
-                let mergedTerms = currentTerms + candidate.terms
+                let candidate: QWCGroup = remainingGroups[i]
+                let mergedTerms: PauliTerms = currentTerms + candidate.terms
 
                 if let unitary = findDiagonalizingUnitary(
                     terms: mergedTerms,
@@ -139,7 +139,7 @@ public struct UnitaryPartitioner {
                     numQubits: numQubits
                 ))
             } else {
-                let identity = identityMatrix(dimension: 1 << numQubits)
+                let identity: GateMatrix = identityMatrix(dimension: 1 << numQubits)
                 partitions.append(UnitaryPartition(
                     terms: currentTerms,
                     unitaryMatrix: identity,
@@ -162,7 +162,7 @@ public struct UnitaryPartitioner {
     private func findDiagonalizingUnitary(
         terms: PauliTerms,
         numQubits: Int
-    ) -> [[Complex<Double>]]? {
+    ) -> GateMatrix? {
         let dimension = 1 << numQubits
         var targetOperator = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
 
@@ -176,7 +176,7 @@ public struct UnitaryPartitioner {
         }
 
         if let (_, eigenvectors) = eigendecompose(targetOperator) {
-            let offDiagNorm = computeOffDiagonalNorm(
+            let offDiagNorm: Double = computeOffDiagonalNorm(
                 operator: targetOperator,
                 unitary: eigenvectors
             )
@@ -193,17 +193,17 @@ public struct UnitaryPartitioner {
     private func optimizeVariational(
         terms: PauliTerms,
         numQubits: Int
-    ) -> [[Complex<Double>]]? {
-        let pauliMatrices = terms.map { $0.pauliString.toMatrix(numQubits: numQubits) }
+    ) -> GateMatrix? {
+        let pauliMatrices: [GateMatrix] = terms.map { $0.pauliString.toMatrix(numQubits: numQubits) }
 
-        let numParams = variationalParameterCount(numQubits: numQubits, depth: config.ansatzDepth)
-        var parameters = Array(repeating: 0.0, count: numParams)
+        let numParams: Int = variationalParameterCount(numQubits: numQubits, depth: config.ansatzDepth)
+        var parameters: [Double] = Array(repeating: 0.0, count: numParams)
 
         for i in 0 ..< numParams {
             parameters[i] = Double.random(in: -Double.pi ... Double.pi)
         }
 
-        let result = lbfgsb(
+        let result: OptimizationResult = lbfgsb(
             initialParameters: parameters,
             costFunction: { params in
                 costFunctionCached(
@@ -225,7 +225,7 @@ public struct UnitaryPartitioner {
             tolerance: config.tolerance
         )
 
-        let unitary = buildVariationalUnitary(
+        let unitary: GateMatrix = buildVariationalUnitary(
             parameters: result.parameters,
             numQubits: numQubits,
             depth: config.ansatzDepth
@@ -243,7 +243,7 @@ public struct UnitaryPartitioner {
             }
         }
 
-        let offDiagNorm = computeOffDiagonalNorm(operator: targetOperator, unitary: unitary)
+        let offDiagNorm: Double = computeOffDiagonalNorm(operator: targetOperator, unitary: unitary)
 
         return offDiagNorm < config.maxOffDiagonalNorm ? unitary : nil
     }
@@ -253,7 +253,7 @@ public struct UnitaryPartitioner {
     private func costFunctionCached(
         parameters: [Double],
         terms: PauliTerms,
-        pauliMatrices: [[[Complex<Double>]]],
+        pauliMatrices: [GateMatrix],
         numQubits: Int
     ) -> Double {
         let unitary = buildVariationalUnitary(
@@ -282,7 +282,7 @@ public struct UnitaryPartitioner {
     private func gradientFunctionCached(
         parameters: [Double],
         terms: PauliTerms,
-        pauliMatrices: [[[Complex<Double>]]],
+        pauliMatrices: [GateMatrix],
         numQubits: Int
     ) -> [Double] {
         let epsilon = 1e-7
@@ -324,20 +324,20 @@ public struct UnitaryPartitioner {
         parameters: [Double],
         numQubits: Int,
         depth: Int
-    ) -> [[Complex<Double>]] {
+    ) -> GateMatrix {
         let dimension = 1 << numQubits
-        var unitary = identityMatrix(dimension: dimension)
+        var unitary: GateMatrix = identityMatrix(dimension: dimension)
 
         var paramIndex = 0
 
         for _ in 0 ..< depth {
             for qubit in 0 ..< numQubits {
-                let theta = parameters[paramIndex]
-                let phi = parameters[paramIndex + 1]
-                let lambda = parameters[paramIndex + 2]
+                let theta: Double = parameters[paramIndex]
+                let phi: Double = parameters[paramIndex + 1]
+                let lambda: Double = parameters[paramIndex + 2]
                 paramIndex += 3
 
-                let rotation = singleQubitRotation(
+                let rotation: GateMatrix = singleQubitRotation(
                     qubit: qubit,
                     theta: theta,
                     phi: phi,
@@ -349,7 +349,7 @@ public struct UnitaryPartitioner {
             }
 
             for qubit in 0 ..< (numQubits - 1) {
-                let cnot = cnotMatrix(control: qubit, target: qubit + 1, numQubits: numQubits)
+                let cnot: GateMatrix = cnotMatrix(control: qubit, target: qubit + 1, numQubits: numQubits)
                 unitary = matrixMultiply(cnot, unitary)
             }
         }
@@ -359,7 +359,7 @@ public struct UnitaryPartitioner {
 
     // MARK: - Matrix Utilities
 
-    private func identityMatrix(dimension: Int) -> [[Complex<Double>]] {
+    private func identityMatrix(dimension: Int) -> GateMatrix {
         var matrix = Array(
             repeating: Array(repeating: Complex<Double>.zero, count: dimension),
             count: dimension
@@ -371,17 +371,79 @@ public struct UnitaryPartitioner {
     }
 
     private func matrixMultiply(
-        _ a: [[Complex<Double>]],
-        _ b: [[Complex<Double>]]
-    ) -> [[Complex<Double>]] {
-        let n = a.count
-        var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
+        _ a: GateMatrix,
+        _ b: GateMatrix
+    ) -> GateMatrix {
+        let n: Int = a.count
 
-        for i in 0 ..< n {
-            for j in 0 ..< n {
-                for k in 0 ..< n {
-                    result[i][j] += a[i][k] * b[k][j]
+        // Fast path for small matrices
+        if n <= 4 {
+            var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
+            for i in 0 ..< n {
+                for j in 0 ..< n {
+                    for k in 0 ..< n {
+                        result[i][j] += a[i][k] * b[k][j]
+                    }
                 }
+            }
+            return result
+        }
+
+        // Use BLAS zgemm for larger matrices
+        // Convert to interleaved format for BLAS (column-major)
+        var aInterleaved = [Double](unsafeUninitializedCapacity: 2 * n * n) { buffer, count in
+            for col in 0 ..< n {
+                for row in 0 ..< n {
+                    buffer[(col * n + row) * 2] = a[row][col].real
+                    buffer[(col * n + row) * 2 + 1] = a[row][col].imaginary
+                }
+            }
+            count = n * n * 2
+        }
+
+        var bInterleaved = [Double](unsafeUninitializedCapacity: 2 * n * n) { buffer, count in
+            for col in 0 ..< n {
+                for row in 0 ..< n {
+                    buffer[(col * n + row) * 2] = b[row][col].real
+                    buffer[(col * n + row) * 2 + 1] = b[row][col].imaginary
+                }
+            }
+            count = n * n * 2
+        }
+
+        var cInterleaved = [Double](repeating: 0.0, count: 2 * n * n)
+
+        var alpha: [Double] = [1.0, 0.0]
+        var beta: [Double] = [0.0, 0.0]
+
+        aInterleaved.withUnsafeMutableBufferPointer { aPtr in
+            bInterleaved.withUnsafeMutableBufferPointer { bPtr in
+                cInterleaved.withUnsafeMutableBufferPointer { cPtr in
+                    alpha.withUnsafeMutableBufferPointer { alphaPtr in
+                        beta.withUnsafeMutableBufferPointer { betaPtr in
+                            cblas_zgemm(
+                                CblasColMajor,
+                                CblasNoTrans,
+                                CblasNoTrans,
+                                Int32(n), Int32(n), Int32(n),
+                                OpaquePointer(alphaPtr.baseAddress)!,
+                                OpaquePointer(aPtr.baseAddress), Int32(n),
+                                OpaquePointer(bPtr.baseAddress), Int32(n),
+                                OpaquePointer(betaPtr.baseAddress)!,
+                                OpaquePointer(cPtr.baseAddress), Int32(n)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Convert back to Complex<Double> matrix
+        var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
+        for col in 0 ..< n {
+            for row in 0 ..< n {
+                let idx = (col * n + row) * 2
+                result[row][col] = Complex(cInterleaved[idx], cInterleaved[idx + 1])
             }
         }
 
@@ -389,16 +451,16 @@ public struct UnitaryPartitioner {
     }
 
     private func conjugateByUnitary(
-        _ matrix: [[Complex<Double>]],
-        unitary: [[Complex<Double>]]
-    ) -> [[Complex<Double>]] {
-        let unitaryDagger = hermitianConjugate(unitary)
-        let temp = matrixMultiply(unitaryDagger, matrix)
+        _ matrix: GateMatrix,
+        unitary: GateMatrix
+    ) -> GateMatrix {
+        let unitaryDagger: GateMatrix = hermitianConjugate(unitary)
+        let temp: GateMatrix = matrixMultiply(unitaryDagger, matrix)
         return matrixMultiply(temp, unitary)
     }
 
-    private func hermitianConjugate(_ matrix: [[Complex<Double>]]) -> [[Complex<Double>]] {
-        let n = matrix.count
+    private func hermitianConjugate(_ matrix: GateMatrix) -> GateMatrix {
+        let n: Int = matrix.count
         var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
 
         for i in 0 ..< n {
@@ -411,11 +473,11 @@ public struct UnitaryPartitioner {
     }
 
     private func computeOffDiagonalNorm(
-        operator matrix: [[Complex<Double>]],
-        unitary: [[Complex<Double>]]
+        operator matrix: GateMatrix,
+        unitary: GateMatrix
     ) -> Double {
-        let conjugated = conjugateByUnitary(matrix, unitary: unitary)
-        let n = conjugated.count
+        let conjugated: GateMatrix = conjugateByUnitary(matrix, unitary: unitary)
+        let n: Int = conjugated.count
 
         var norm = 0.0
         for i in 0 ..< n {
@@ -433,11 +495,11 @@ public struct UnitaryPartitioner {
         phi: Double,
         lambda: Double,
         numQubits: Int
-    ) -> [[Complex<Double>]] {
-        let c = cos(theta / 2)
-        let s = sin(theta / 2)
+    ) -> GateMatrix {
+        let c: Double = cos(theta / 2)
+        let s: Double = sin(theta / 2)
 
-        let u3: [[Complex<Double>]] = [
+        let u3: GateMatrix = [
             [Complex(c), Complex(-cos(lambda) * s, -sin(lambda) * s)],
             [Complex(cos(phi) * s, sin(phi) * s), Complex(cos(phi + lambda) * c, sin(phi + lambda) * c)],
         ]
@@ -445,14 +507,14 @@ public struct UnitaryPartitioner {
         return embedSingleQubitGate(u3, qubit: qubit, numQubits: numQubits)
     }
 
-    private func cnotMatrix(control: Int, target: Int, numQubits: Int) -> [[Complex<Double>]] {
+    private func cnotMatrix(control: Int, target: Int, numQubits: Int) -> GateMatrix {
         let dimension = 1 << numQubits
-        var cnot = identityMatrix(dimension: dimension)
+        var cnot: GateMatrix = identityMatrix(dimension: dimension)
 
         for basis in 0 ..< dimension {
-            let controlBit = (basis >> control) & 1
+            let controlBit: Int = (basis >> control) & 1
             if controlBit == 1 {
-                let flippedBasis = basis ^ (1 << target)
+                let flippedBasis: Int = basis ^ (1 << target)
                 if flippedBasis != basis {
                     cnot[basis][basis] = .zero
                     cnot[basis][flippedBasis] = .one
@@ -464,20 +526,20 @@ public struct UnitaryPartitioner {
     }
 
     private func embedSingleQubitGate(
-        _ gate: [[Complex<Double>]],
+        _ gate: GateMatrix,
         qubit: Int,
         numQubits: Int
-    ) -> [[Complex<Double>]] {
+    ) -> GateMatrix {
         let dimension = 1 << numQubits
         var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
 
         for row in 0 ..< dimension {
             for col in 0 ..< dimension {
-                let rowBit = (row >> qubit) & 1
-                let colBit = (col >> qubit) & 1
+                let rowBit: Int = (row >> qubit) & 1
+                let colBit: Int = (col >> qubit) & 1
 
-                let rowRest = row & ~(1 << qubit)
-                let colRest = col & ~(1 << qubit)
+                let rowRest: Int = row & ~(1 << qubit)
+                let colRest: Int = col & ~(1 << qubit)
 
                 if rowRest == colRest {
                     result[row][col] = gate[rowBit][colBit]
@@ -494,10 +556,10 @@ public struct UnitaryPartitioner {
     ///
     /// - Parameter matrix: Hermitian matrix (n × n)
     /// - Returns: Eigenvalues (real, sorted) and eigenvectors (columns), or nil if decomposition fails
-    private func eigendecompose(_ matrix: [[Complex<Double>]]) -> (eigenvalues: [Double], eigenvectors: [[Complex<Double>]])? {
+    private func eigendecompose(_ matrix: GateMatrix) -> (eigenvalues: [Double], eigenvectors: GateMatrix)? {
         guard !matrix.isEmpty else { return nil }
 
-        let n = matrix.count
+        let n: Int = matrix.count
         guard matrix.allSatisfy({ $0.count == n }) else { return nil }
 
         var a = [Double]()
@@ -523,7 +585,7 @@ public struct UnitaryPartitioner {
 
         var workQuery = [Double](repeating: 0.0, count: 2)
 
-        let queryResult = a.withUnsafeMutableBytes { aPtr in
+        let queryResult: __LAPACK_int = a.withUnsafeMutableBytes { aPtr in
             workQuery.withUnsafeMutableBytes { workPtr in
                 w.withUnsafeMutableBufferPointer { wPtr in
                     rwork.withUnsafeMutableBufferPointer { rworkPtr in
@@ -551,7 +613,7 @@ public struct UnitaryPartitioner {
         lwork = __LAPACK_int(optimalWorkSize)
         var work = [Double](repeating: 0.0, count: 2 * optimalWorkSize)
 
-        let computeResult = a.withUnsafeMutableBytes { aPtr in
+        let computeResult: __LAPACK_int = a.withUnsafeMutableBytes { aPtr in
             work.withUnsafeMutableBytes { workPtr in
                 w.withUnsafeMutableBufferPointer { wPtr in
                     rwork.withUnsafeMutableBufferPointer { rworkPtr in
@@ -633,14 +695,14 @@ public struct UnitaryPartitioner {
         var converged = false
 
         while iteration < maxIterations {
-            let gradNorm = sqrt(gradient.reduce(0.0) { $0 + $1 * $1 })
+            let gradNorm: Double = sqrt(gradient.reduce(0.0) { $0 + $1 * $1 })
 
             if gradNorm < tolerance {
                 converged = true
                 break
             }
 
-            let direction = computeSearchDirection(
+            let direction: [Double] = computeSearchDirection(
                 gradient: gradient,
                 sHistory: sHistory,
                 yHistory: yHistory,
@@ -658,14 +720,14 @@ public struct UnitaryPartitioner {
                 c2: c2
             ) else { break }
 
-            let newParams = zip(params, direction).map { $0 + alpha * $1 }
-            let newGradient = gradientFunction(newParams)
-            let newCost = costFunction(newParams)
+            let newParams: [Double] = zip(params, direction).map { $0 + alpha * $1 }
+            let newGradient: [Double] = gradientFunction(newParams)
+            let newCost: Double = costFunction(newParams)
 
-            let s = zip(newParams, params).map { $0 - $1 }
-            let y = zip(newGradient, gradient).map { $0 - $1 }
+            let s: [Double] = zip(newParams, params).map { $0 - $1 }
+            let y: [Double] = zip(newGradient, gradient).map { $0 - $1 }
 
-            let ys = zip(y, s).reduce(0.0) { $0 + $1.0 * $1.1 }
+            let ys: Double = zip(y, s).reduce(0.0) { $0 + $1.0 * $1.1 }
 
             if ys > 1e-10 {
                 let rho = 1.0 / ys
@@ -704,26 +766,26 @@ public struct UnitaryPartitioner {
     ) -> [Double] {
         guard !sHistory.isEmpty else { return gradient.map { -$0 } }
 
-        let m = sHistory.count
+        let m: Int = sHistory.count
         var q = gradient
         var alpha = [Double](repeating: 0.0, count: m)
 
         for i in stride(from: m - 1, through: 0, by: -1) {
-            let a = rhoHistory[i] * zip(sHistory[i], q).reduce(0.0) { $0 + $1.0 * $1.1 }
+            let a: Double = rhoHistory[i] * zip(sHistory[i], q).reduce(0.0) { $0 + $1.0 * $1.1 }
             alpha[i] = a
             q = zip(q, yHistory[i]).map { $0 - a * $1 }
         }
 
-        let lastS = sHistory[m - 1]
-        let lastY = yHistory[m - 1]
-        let sy = zip(lastS, lastY).reduce(0.0) { $0 + $1.0 * $1.1 }
-        let yy = lastY.reduce(0.0) { $0 + $1 * $1 }
-        let gamma = sy / yy
+        let lastS: [Double] = sHistory[m - 1]
+        let lastY: [Double] = yHistory[m - 1]
+        let sy: Double = zip(lastS, lastY).reduce(0.0) { $0 + $1.0 * $1.1 }
+        let yy: Double = lastY.reduce(0.0) { $0 + $1 * $1 }
+        let gamma: Double = sy / yy
 
-        var r = q.map { gamma * $0 }
+        var r: [Double] = q.map { gamma * $0 }
 
         for i in 0 ..< m {
-            let beta = rhoHistory[i] * zip(yHistory[i], r).reduce(0.0) { $0 + $1.0 * $1.1 }
+            let beta: Double = rhoHistory[i] * zip(yHistory[i], r).reduce(0.0) { $0 + $1.0 * $1.1 }
             r = zip(r, sHistory[i]).map { $0 + (alpha[i] - beta) * $1 }
         }
 
@@ -745,17 +807,17 @@ public struct UnitaryPartitioner {
         let maxBacktrack = 20
         let rho = 0.5
 
-        let dirGrad = zip(direction, gradient).reduce(0.0) { $0 + $1.0 * $1.1 }
+        let dirGrad: Double = zip(direction, gradient).reduce(0.0) { $0 + $1.0 * $1.1 }
 
         guard dirGrad < 0 else { return nil }
 
         for _ in 0 ..< maxBacktrack {
-            let newParams = zip(params, direction).map { $0 + alpha * $1 }
-            let newCost = costFunction(newParams)
+            let newParams: [Double] = zip(params, direction).map { $0 + alpha * $1 }
+            let newCost: Double = costFunction(newParams)
 
             if newCost <= cost + c1 * alpha * dirGrad {
-                let newGradient = gradientFunction(newParams)
-                let newDirGrad = zip(direction, newGradient).reduce(0.0) { $0 + $1.0 * $1.1 }
+                let newGradient: [Double] = gradientFunction(newParams)
+                let newDirGrad: Double = zip(direction, newGradient).reduce(0.0) { $0 + $1.0 * $1.1 }
 
                 if abs(newDirGrad) <= -c2 * dirGrad { return alpha }
             }
@@ -771,7 +833,7 @@ public struct UnitaryPartitioner {
 
 public extension PauliString {
     /// Convert Pauli string to matrix representation.
-    func toMatrix(numQubits: Int) -> [[Complex<Double>]] {
+    func toMatrix(numQubits: Int) -> GateMatrix {
         let dimension = 1 << numQubits
         var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
 
@@ -781,11 +843,11 @@ public extension PauliString {
         }
 
         for row in 0 ..< dimension {
-            var col = row
+            var col: Int = row
             var phase = Complex<Double>.one
 
             for qubit in 0 ..< numQubits {
-                let rowBit = (row >> qubit) & 1
+                let rowBit: Int = (row >> qubit) & 1
 
                 if let basis = ops[qubit] {
                     switch basis {

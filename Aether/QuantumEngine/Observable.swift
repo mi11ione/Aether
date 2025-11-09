@@ -103,7 +103,7 @@ public struct Observable: CustomStringConvertible {
         var totalExpectation = 0.0
 
         for (coefficient, pauliString) in terms {
-            let pauliExpectation = computePauliExpectation(
+            let pauliExpectation = Self.computePauliExpectation(
                 pauliString: pauliString,
                 state: state
             )
@@ -122,7 +122,7 @@ public struct Observable: CustomStringConvertible {
     ///   - pauliString: Pauli string operator
     ///   - state: Normalized quantum state
     /// - Returns: Expectation value ⟨P⟩ ∈ [-1, +1]
-    private func computePauliExpectation(
+    static func computePauliExpectation(
         pauliString: PauliString,
         state: QuantumState
     ) -> Double {
@@ -307,17 +307,15 @@ public struct Observable: CustomStringConvertible {
     private func combineLikeTerms(
         _ terms: PauliTerms
     ) -> PauliTerms {
-        var combinedTerms: PauliTerms = []
+        var coefficientMap: [PauliString: Double] = [:]
 
         for (coefficient, pauliString) in terms {
-            if let index = combinedTerms.firstIndex(where: { $0.pauliString == pauliString }) {
-                combinedTerms[index].coefficient += coefficient
-            } else {
-                combinedTerms.append((coefficient, pauliString))
-            }
+            coefficientMap[pauliString, default: 0.0] += coefficient
         }
 
-        return combinedTerms.filter { abs($0.coefficient) > 1e-15 }
+        return coefficientMap
+            .filter { abs($0.value) > 1e-15 }
+            .map { (coefficient: $0.value, pauliString: $0.key) }
     }
 
     // MARK: - CustomStringConvertible

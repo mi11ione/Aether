@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
+import Accelerate
 import Foundation
 
 /// Quantum gates: unitary transformations for quantum circuits
@@ -141,7 +142,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// User-provided 2×2 complex matrix
     /// Validates unitarity: U†U = I
     /// Used for custom gates and research
-    case customSingleQubit(matrix: [[Complex<Double>]])
+    case customSingleQubit(matrix: GateMatrix)
 
     // MARK: - Two-Qubit Gates
 
@@ -200,7 +201,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// User-provided 4×4 complex matrix
     /// Validates unitarity: U†U = I
     /// Used for custom gates and research
-    case customTwoQubit(matrix: [[Complex<Double>]], control: Int, target: Int)
+    case customTwoQubit(matrix: GateMatrix, control: Int, target: Int)
 
     // MARK: - Multi-Qubit Gates
 
@@ -269,7 +270,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// let cnot = QuantumGate.cnot(control: 0, target: 1)
     /// let cnotMatrix = cnot.matrix()
     /// ```
-    public func matrix() -> [[Complex<Double>]] {
+    public func matrix() -> GateMatrix {
         switch self {
         case .identity: identityMatrix()
         case .pauliX: pauliXMatrix()
@@ -305,44 +306,44 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
 
     // MARK: - Single-Qubit Matrix Implementations
 
-    private func identityMatrix() -> [[Complex<Double>]] {
+    private func identityMatrix() -> GateMatrix {
         [
             [.one, .zero],
             [.zero, .one],
         ]
     }
 
-    private func pauliXMatrix() -> [[Complex<Double>]] {
+    private func pauliXMatrix() -> GateMatrix {
         [
             [.zero, .one],
             [.one, .zero],
         ]
     }
 
-    private func pauliYMatrix() -> [[Complex<Double>]] {
+    private func pauliYMatrix() -> GateMatrix {
         [
             [.zero, -Complex.i],
             [Complex.i, .zero],
         ]
     }
 
-    private func pauliZMatrix() -> [[Complex<Double>]] {
+    private func pauliZMatrix() -> GateMatrix {
         [
             [.one, .zero],
             [.zero, Complex(-1.0, 0.0)],
         ]
     }
 
-    private func hadamardMatrix() -> [[Complex<Double>]] {
+    private func hadamardMatrix() -> GateMatrix {
         let invSqrt2 = 1.0 / sqrt(2.0)
-        let c = Complex(invSqrt2, 0.0)
+        let c: Complex<Double> = Complex(invSqrt2, 0.0)
         return [
             [c, c],
             [c, -c],
         ]
     }
 
-    private func phaseMatrix(theta: Double) -> [[Complex<Double>]] {
+    private func phaseMatrix(theta: Double) -> GateMatrix {
         let phaseFactor = Complex<Double>.exp(theta)
         return [
             [.one, .zero],
@@ -350,28 +351,28 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func rotationXMatrix(theta: Double) -> [[Complex<Double>]] {
-        let halfTheta = theta / 2.0
-        let c = Complex(cos(halfTheta), 0.0)
-        let s = Complex(0.0, -sin(halfTheta))
+    private func rotationXMatrix(theta: Double) -> GateMatrix {
+        let halfTheta: Double = theta / 2.0
+        let c: Complex<Double> = Complex(cos(halfTheta), 0.0)
+        let s: Complex<Double> = Complex(0.0, -sin(halfTheta))
         return [
             [c, s],
             [s, c],
         ]
     }
 
-    private func rotationYMatrix(theta: Double) -> [[Complex<Double>]] {
-        let halfTheta = theta / 2.0
-        let c = Complex(cos(halfTheta), 0.0)
-        let s = Complex(sin(halfTheta), 0.0)
+    private func rotationYMatrix(theta: Double) -> GateMatrix {
+        let halfTheta: Double = theta / 2.0
+        let c: Complex<Double> = Complex(cos(halfTheta), 0.0)
+        let s: Complex<Double> = Complex(sin(halfTheta), 0.0)
         return [
             [c, -s],
             [s, c],
         ]
     }
 
-    private func rotationZMatrix(theta: Double) -> [[Complex<Double>]] {
-        let halfTheta = theta / 2.0
+    private func rotationZMatrix(theta: Double) -> GateMatrix {
+        let halfTheta: Double = theta / 2.0
         let negPhase = Complex<Double>.exp(-halfTheta)
         let posPhase = Complex<Double>.exp(halfTheta)
         return [
@@ -380,7 +381,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func u1Matrix(lambda: Double) -> [[Complex<Double>]] {
+    private func u1Matrix(lambda: Double) -> GateMatrix {
         // U1(λ) = diag(1, e^(iλ))
         let phaseFactor = Complex<Double>.exp(lambda)
         return [
@@ -389,7 +390,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func u2Matrix(phi: Double, lambda: Double) -> [[Complex<Double>]] {
+    private func u2Matrix(phi: Double, lambda: Double) -> GateMatrix {
         // U2(φ,λ) = (1/√2) * [[1, -e^(iλ)], [e^(iφ), e^(i(φ+λ))]]
         let invSqrt2 = 1.0 / sqrt(2.0)
         let expPhi = Complex<Double>.exp(phi)
@@ -402,11 +403,11 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func u3Matrix(theta: Double, phi: Double, lambda: Double) -> [[Complex<Double>]] {
+    private func u3Matrix(theta: Double, phi: Double, lambda: Double) -> GateMatrix {
         // U3(θ,φ,λ) = [[cos(θ/2), -e^(iλ)sin(θ/2)], [e^(iφ)sin(θ/2), e^(i(φ+λ))cos(θ/2)]]
-        let halfTheta = theta / 2.0
-        let cosHalfTheta = cos(halfTheta)
-        let sinHalfTheta = sin(halfTheta)
+        let halfTheta: Double = theta / 2.0
+        let cosHalfTheta: Double = cos(halfTheta)
+        let sinHalfTheta: Double = sin(halfTheta)
 
         let expPhi = Complex<Double>.exp(phi)
         let expLambda = Complex<Double>.exp(lambda)
@@ -418,20 +419,20 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func sxMatrix() -> [[Complex<Double>]] {
+    private func sxMatrix() -> GateMatrix {
         // SX = √X = (1/2) * [[1+i, 1-i], [1-i, 1+i]]
-        let a = Complex(0.5, 0.5)
-        let b = Complex(0.5, -0.5)
+        let a: Complex<Double> = Complex(0.5, 0.5)
+        let b: Complex<Double> = Complex(0.5, -0.5)
         return [
             [a, b],
             [b, a],
         ]
     }
 
-    private func syMatrix() -> [[Complex<Double>]] {
+    private func syMatrix() -> GateMatrix {
         // SY = √Y = (1/2) * [[1+i, -1-i], [1+i, 1+i]]
-        let a = Complex(0.5, 0.5)
-        let b = Complex(-0.5, -0.5)
+        let a: Complex<Double> = Complex(0.5, 0.5)
+        let b: Complex<Double> = Complex(-0.5, -0.5)
         return [
             [a, b],
             [a, a],
@@ -440,7 +441,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
 
     // MARK: - Two-Qubit Matrix Implementations
 
-    private func cnotMatrix() -> [[Complex<Double>]] {
+    private func cnotMatrix() -> GateMatrix {
         // Standard basis order: |00⟩, |01⟩, |10⟩, |11⟩
         // Identity on |00⟩ and |01⟩ (control=0)
         // Swap |10⟩↔|11⟩ (control=1, flip target)
@@ -452,7 +453,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func controlledPhaseMatrix(theta: Double) -> [[Complex<Double>]] {
+    private func controlledPhaseMatrix(theta: Double) -> GateMatrix {
         // Applies phase only when both qubits are |1⟩
         let phaseFactor = Complex<Double>.exp(theta)
         return [
@@ -463,7 +464,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func swapMatrix() -> [[Complex<Double>]] {
+    private func swapMatrix() -> GateMatrix {
         // Exchanges two qubits
         [
             [.one, .zero, .zero, .zero],
@@ -473,7 +474,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func czMatrix() -> [[Complex<Double>]] {
+    private func czMatrix() -> GateMatrix {
         // Controlled-Z: diag(1,1,1,-1)
         // Symmetric: CZ(a,b) = CZ(b,a)
         [
@@ -484,7 +485,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func cyMatrix() -> [[Complex<Double>]] {
+    private func cyMatrix() -> GateMatrix {
         // Controlled-Y: Identity on control=0, Y on control=1
         // Y = [[0, -i], [i, 0]]
         [
@@ -495,10 +496,10 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func chMatrix() -> [[Complex<Double>]] {
+    private func chMatrix() -> GateMatrix {
         // Controlled-Hadamard
         let invSqrt2 = 1.0 / sqrt(2.0)
-        let c = Complex(invSqrt2, 0.0)
+        let c: Complex<Double> = Complex(invSqrt2, 0.0)
         return [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
@@ -507,14 +508,14 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func sqrtSwapMatrix() -> [[Complex<Double>]] {
+    private func sqrtSwapMatrix() -> GateMatrix {
         // √SWAP matrix: (√SWAP)² = SWAP
         // Matrix: [[1, 0, 0, 0],
         //          [0, (1+i)/2, (1-i)/2, 0],
         //          [0, (1-i)/2, (1+i)/2, 0],
         //          [0, 0, 0, 1]]
-        let a = Complex(0.5, 0.5)
-        let b = Complex(0.5, -0.5)
+        let a: Complex<Double> = Complex(0.5, 0.5)
+        let b: Complex<Double> = Complex(0.5, -0.5)
         return [
             [.one, .zero, .zero, .zero],
             [.zero, a, b, .zero],
@@ -523,11 +524,11 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func controlledRotationXMatrix(theta: Double) -> [[Complex<Double>]] {
+    private func controlledRotationXMatrix(theta: Double) -> GateMatrix {
         // Controlled Rx: Identity on control=0, Rx(θ) on control=1
-        let halfTheta = theta / 2.0
-        let c = Complex(cos(halfTheta), 0.0)
-        let s = Complex(0.0, -sin(halfTheta))
+        let halfTheta: Double = theta / 2.0
+        let c: Complex<Double> = Complex(cos(halfTheta), 0.0)
+        let s: Complex<Double> = Complex(0.0, -sin(halfTheta))
         return [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
@@ -536,11 +537,11 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func controlledRotationYMatrix(theta: Double) -> [[Complex<Double>]] {
+    private func controlledRotationYMatrix(theta: Double) -> GateMatrix {
         // Controlled Ry: Identity on control=0, Ry(θ) on control=1
-        let halfTheta = theta / 2.0
-        let c = Complex(cos(halfTheta), 0.0)
-        let s = Complex(sin(halfTheta), 0.0)
+        let halfTheta: Double = theta / 2.0
+        let c: Complex<Double> = Complex(cos(halfTheta), 0.0)
+        let s: Complex<Double> = Complex(sin(halfTheta), 0.0)
         return [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
@@ -549,9 +550,9 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func controlledRotationZMatrix(theta: Double) -> [[Complex<Double>]] {
+    private func controlledRotationZMatrix(theta: Double) -> GateMatrix {
         // Controlled Rz: Identity on control=0, Rz(θ) on control=1
-        let halfTheta = theta / 2.0
+        let halfTheta: Double = theta / 2.0
         let negPhase = Complex<Double>.exp(-halfTheta)
         let posPhase = Complex<Double>.exp(halfTheta)
         return [
@@ -564,11 +565,11 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
 
     // MARK: - Multi-Qubit Matrix Implementations
 
-    private func toffoliMatrix() -> [[Complex<Double>]] {
+    private func toffoliMatrix() -> GateMatrix {
         // 8×8 matrix for 3 qubits
         // Flips target only if both controls are |1⟩
         // Identity on all states except |110⟩↔|111⟩
-        var matrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: 8), count: 8)
+        var matrix: GateMatrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: 8), count: 8)
 
         for i in 0 ..< 6 {
             matrix[i][i] = .one
@@ -632,7 +633,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
                 q2 >= 0 && q2 <= maxAllowedQubit
 
         case let .toffoli(c1, c2, target):
-            let indices = Set([c1, c2, target])
+            let indices: Set<Int> = Set([c1, c2, target])
             return indices.count == 3 &&
                 c1 >= 0 && c1 <= maxAllowedQubit &&
                 c2 >= 0 && c2 <= maxAllowedQubit &&
@@ -714,12 +715,12 @@ public extension QuantumGate {
     /// let identity = QuantumGate.identity.matrix()
     /// QuantumGate.isUnitary(identity)  // true
     /// ```
-    static func isUnitary(_ matrix: [[Complex<Double>]]) -> Bool {
-        let n = matrix.count
+    static func isUnitary(_ matrix: GateMatrix) -> Bool {
+        let n: Int = matrix.count
         guard matrix.allSatisfy({ $0.count == n }) else { return false }
 
         // Compute U†U
-        let product = matrixMultiply(conjugateTranspose(matrix), matrix)
+        let product: GateMatrix = matrixMultiply(conjugateTranspose(matrix), matrix)
 
         for i in 0 ..< n {
             for j in 0 ..< n {
@@ -738,9 +739,9 @@ public extension QuantumGate {
     /// Compute conjugate transpose of matrix (U†)
     /// - Parameter matrix: Input matrix
     /// - Returns: Conjugate transpose of the input matrix
-    static func conjugateTranspose(_ matrix: [[Complex<Double>]]) -> [[Complex<Double>]] {
-        let n = matrix.count
-        var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
+    static func conjugateTranspose(_ matrix: GateMatrix) -> GateMatrix {
+        let n: Int = matrix.count
+        var result: GateMatrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
 
         for i in 0 ..< n {
             for j in 0 ..< n {
@@ -751,22 +752,85 @@ public extension QuantumGate {
         return result
     }
 
-    /// Multiply two square matrices
+    /// Multiply two square matrices using Accelerate BLAS
     /// - Parameters:
     ///   - a: Left matrix
     ///   - b: Right matrix
     /// - Returns: Matrix product A × B
-    private static func matrixMultiply(_ a: [[Complex<Double>]], _ b: [[Complex<Double>]]) -> [[Complex<Double>]] {
-        let n = a.count
-        var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
+    private static func matrixMultiply(_ a: GateMatrix, _ b: GateMatrix) -> GateMatrix {
+        let n: Int = a.count
 
+        // For small matrices (n ≤ 4), naive implementation is faster due to call overhead
+        guard n > 4 else {
+            var result: GateMatrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
+            for i in 0 ..< n {
+                for j in 0 ..< n {
+                    var sum = Complex<Double>.zero
+                    for k in 0 ..< n {
+                        sum = sum + (a[i][k] * b[k][j])
+                    }
+                    result[i][j] = sum
+                }
+            }
+            return result
+        }
+
+        // Convert to interleaved format for BLAS: [real0, imag0, real1, imag1, ...]
+        var aInterleaved = [Double](unsafeUninitializedCapacity: n * n * 2) { buffer, count in
+            for i in 0 ..< n {
+                for j in 0 ..< n {
+                    buffer[(i * n + j) * 2] = a[i][j].real
+                    buffer[(i * n + j) * 2 + 1] = a[i][j].imaginary
+                }
+            }
+            count = n * n * 2
+        }
+
+        var bInterleaved = [Double](unsafeUninitializedCapacity: n * n * 2) { buffer, count in
+            for i in 0 ..< n {
+                for j in 0 ..< n {
+                    buffer[(i * n + j) * 2] = b[i][j].real
+                    buffer[(i * n + j) * 2 + 1] = b[i][j].imaginary
+                }
+            }
+            count = n * n * 2
+        }
+
+        var resultInterleaved = [Double](repeating: 0.0, count: n * n * 2)
+
+        // Use BLAS zgemm: C = alpha * A * B + beta * C
+        // alpha = 1 + 0i, beta = 0 + 0i (interleaved format)
+        var alpha: [Double] = [1.0, 0.0]
+        var beta: [Double] = [0.0, 0.0]
+
+        aInterleaved.withUnsafeMutableBufferPointer { aPtr in
+            bInterleaved.withUnsafeMutableBufferPointer { bPtr in
+                resultInterleaved.withUnsafeMutableBufferPointer { cPtr in
+                    alpha.withUnsafeMutableBufferPointer { alphaPtr in
+                        beta.withUnsafeMutableBufferPointer { betaPtr in
+                            cblas_zgemm(
+                                CblasRowMajor,
+                                CblasNoTrans,
+                                CblasNoTrans,
+                                Int32(n), Int32(n), Int32(n),
+                                OpaquePointer(alphaPtr.baseAddress)!,
+                                OpaquePointer(aPtr.baseAddress), Int32(n),
+                                OpaquePointer(bPtr.baseAddress), Int32(n),
+                                OpaquePointer(betaPtr.baseAddress)!,
+                                OpaquePointer(cPtr.baseAddress), Int32(n)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Convert back to Complex matrix
+        var result: GateMatrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
         for i in 0 ..< n {
             for j in 0 ..< n {
-                var sum = Complex<Double>.zero
-                for k in 0 ..< n {
-                    sum = sum + (a[i][k] * b[k][j])
-                }
-                result[i][j] = sum
+                let idx = (i * n + j) * 2
+                result[i][j] = Complex(resultInterleaved[idx], resultInterleaved[idx + 1])
             }
         }
 
@@ -818,7 +882,7 @@ public extension QuantumGate {
     ///     print(msg)  // "Matrix is not unitary (U†U ≠ I)"
     /// }
     /// ```
-    static func createCustomSingleQubit(matrix: [[Complex<Double>]]) throws -> QuantumGate {
+    static func createCustomSingleQubit(matrix: GateMatrix) throws -> QuantumGate {
         guard matrix.count == 2, matrix.allSatisfy({ $0.count == 2 }) else {
             throw QuantumGateError.invalidMatrixSize("Custom single-qubit gate requires 2×2 matrix")
         }
@@ -878,7 +942,7 @@ public extension QuantumGate {
     /// }
     /// ```
     static func createCustomTwoQubit(
-        matrix: [[Complex<Double>]],
+        matrix: GateMatrix,
         control: Int,
         target: Int
     ) throws -> QuantumGate {

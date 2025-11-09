@@ -82,7 +82,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
 
     /// Array of complex amplitudes representing quantum state
     /// Length = 2^numQubits
-    public private(set) var amplitudes: [Complex<Double>]
+    public private(set) var amplitudes: AmplitudeVector
 
     /// Number of qubits in this quantum system
     public let numQubits: Int
@@ -118,7 +118,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         self.numQubits = numQubits
         let size = 1 << numQubits
 
-        var amps = [Complex<Double>](repeating: .zero, count: size)
+        var amps = AmplitudeVector(repeating: .zero, count: size)
         amps[0] = .one
         amplitudes = amps
     }
@@ -167,7 +167,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     ///     Complex(1, 0)   // Will normalize to 1/√2
     /// ])
     /// ```
-    public init(numQubits: Int, amplitudes: [Complex<Double>]) {
+    public init(numQubits: Int, amplitudes: AmplitudeVector) {
         precondition(numQubits > 0, "Number of qubits must be positive")
         precondition(amplitudes.count == (1 << numQubits),
                      "Amplitude array size must equal 2^numQubits")
@@ -176,11 +176,11 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         self.amplitudes = amplitudes
 
         // Auto-normalize if needed (within reasonable tolerance)
-        let sumSquared = amplitudes.reduce(0.0) { $0 + $1.magnitudeSquared }
+        let sumSquared: Double = amplitudes.reduce(0.0) { $0 + $1.magnitudeSquared }
         if abs(sumSquared - 1.0) > 1e-10,
            sumSquared > 1e-15
         {
-            let norm = sqrt(sumSquared)
+            let norm: Double = sqrt(sumSquared)
             self.amplitudes = amplitudes.map { $0 / norm }
         }
     }
@@ -204,7 +204,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         precondition(state == 0 || state == 1, "Single qubit state must be 0 or 1")
 
         numQubits = 1
-        var amps = [Complex<Double>](repeating: .zero, count: 2)
+        var amps = AmplitudeVector(repeating: .zero, count: 2)
         amps[state] = .one
         amplitudes = amps
     }
@@ -215,7 +215,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     ///   - numQubits: Number of qubits
     ///   - amplitudes: Amplitudes array (can be wrong size)
     ///   - bypassValidation: Must be true to use this initializer
-    public init(numQubits: Int, amplitudes: [Complex<Double>], bypassValidation: Bool) {
+    public init(numQubits: Int, amplitudes: AmplitudeVector, bypassValidation: Bool) {
         precondition(bypassValidation, "This initializer is for testing only")
         self.numQubits = numQubits
         self.amplitudes = amplitudes
@@ -224,14 +224,17 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Private helper: Compute magnitude squared for all amplitudes using Accelerate
     /// - Returns: Array of amplitude values
     private func computeMagnitudesSquaredVectorized() -> [Double] {
-        var interleavedAmps = [Double]()
-        interleavedAmps.reserveCapacity(amplitudes.count * 2)
-        for amp in amplitudes {
-            interleavedAmps.append(amp.real)
-            interleavedAmps.append(amp.imaginary)
+        let interleavedAmps = [Double](unsafeUninitializedCapacity: amplitudes.count * 2) { buffer, count in
+            for i in amplitudes.indices {
+                buffer[i * 2] = amplitudes[i].real
+                buffer[i * 2 + 1] = amplitudes[i].imaginary
+            }
+            count = amplitudes.count * 2
         }
 
         var magnitudesSquared = [Double](repeating: 0.0, count: amplitudes.count)
+        var vectorizationSucceeded = false
+
         interleavedAmps.withUnsafeBufferPointer { interleavedPtr in
             magnitudesSquared.withUnsafeMutableBufferPointer { magPtr in
                 guard let interleavedBase = interleavedPtr.baseAddress,
@@ -243,7 +246,13 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
                 )
 
                 vDSP_zvmagsD(&splitComplex, 2, magBase, 1, vDSP_Length(amplitudes.count))
+                vectorizationSucceeded = true
             }
+        }
+
+        // Fallback to scalar if vectorization failed (empty array or pointer issues)
+        if !vectorizationSucceeded {
+            return amplitudes.map(\.magnitudeSquared)
         }
 
         return magnitudesSquared
@@ -403,7 +412,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         let sum: Double
 
         if amplitudes.count >= 64 {
-            let magnitudesSquared = computeMagnitudesSquaredVectorized()
+            let magnitudesSquared: [Double] = computeMagnitudesSquaredVectorized()
             sum = magnitudesSquared.reduce(0.0, +)
         } else {
             sum = amplitudes.reduce(0.0) { $0 + $1.magnitudeSquared }
@@ -445,7 +454,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         let sumSquared: Double
 
         if amplitudes.count >= 64 {
-            let magnitudesSquared = computeMagnitudesSquaredVectorized()
+            let magnitudesSquared: [Double] = computeMagnitudesSquaredVectorized()
             sumSquared = magnitudesSquared.reduce(0.0, +)
         } else {
             sumSquared = amplitudes.reduce(0.0) { $0 + $1.magnitudeSquared }
@@ -455,7 +464,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
             throw QuantumStateError.cannotNormalizeZeroState
         }
 
-        let norm = sqrt(sumSquared)
+        let norm: Double = sqrt(sumSquared)
         amplitudes = amplitudes.map { $0 / norm }
     }
 

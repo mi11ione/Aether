@@ -336,7 +336,7 @@ struct LargeStateVectorizedTests {
     @Test("Normalize large state uses vectorized path")
     func normalizeLargeState() throws {
         let numQubits = 7
-        let amplitudes = [Complex<Double>](repeating: Complex(1.0, 0.0), count: 128)
+        let amplitudes = AmplitudeVector(repeating: Complex(1.0, 0.0), count: 128)
         var state = QuantumState(numQubits: numQubits, amplitudes: amplitudes)
         #expect(state.isNormalized())
 
@@ -353,7 +353,7 @@ struct LargeStateVectorizedTests {
     func probabilitiesLargeState() {
         let numQubits = 7
         let invSqrtN = 1.0 / sqrt(128.0)
-        let amplitudes = [Complex<Double>](repeating: Complex(invSqrtN, 0.0), count: 128)
+        let amplitudes = AmplitudeVector(repeating: Complex(invSqrtN, 0.0), count: 128)
         let state = QuantumState(numQubits: numQubits, amplitudes: amplitudes)
 
         let probs = state.probabilities()
@@ -373,7 +373,7 @@ struct LargeStateVectorizedTests {
     @Test("Large state auto-normalizes on init")
     func largeStateAutoNormalizes() {
         let numQubits = 7
-        let amplitudes = [Complex<Double>](repeating: Complex(1.0, 0.0), count: 128)
+        let amplitudes = AmplitudeVector(repeating: Complex(1.0, 0.0), count: 128)
         let state = QuantumState(numQubits: numQubits, amplitudes: amplitudes)
 
         #expect(state.isNormalized())
