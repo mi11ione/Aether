@@ -67,7 +67,7 @@ import Foundation
 /// let bigCircuit = QuantumCircuit(numQubits: 12)  // Will use GPU
 /// let result = try await gpuSimulator.execute(bigCircuit)
 /// ```
-actor QuantumSimulator {
+public actor QuantumSimulator {
     /// Current quantum state
     private var currentState: QuantumState?
 
@@ -85,7 +85,7 @@ actor QuantumSimulator {
 
     /// Create a new quantum simulator
     /// - Parameter useMetalAcceleration: Whether to use Metal GPU acceleration for large states
-    init(useMetalAcceleration: Bool = true) async {
+    public init(useMetalAcceleration: Bool = true) {
         self.useMetalAcceleration = useMetalAcceleration
         if useMetalAcceleration {
             metalApplication = MetalGateApplication()
@@ -100,7 +100,7 @@ actor QuantumSimulator {
     ///   - initialState: Optional initial state (defaults to |00...0⟩)
     /// - Returns: Final quantum state
     /// - Throws: CancellationError if task is cancelled
-    func execute(_ circuit: QuantumCircuit, from initialState: QuantumState? = nil) async throws -> QuantumState {
+    public func execute(_ circuit: QuantumCircuit, from initialState: QuantumState? = nil) async throws -> QuantumState {
         guard !isExecuting else { throw SimulatorError.alreadyExecuting }
 
         isExecuting = true
@@ -159,10 +159,10 @@ actor QuantumSimulator {
     ///   - initialState: Optional initial state
     ///   - progressHandler: Called periodically with progress (0.0 to 1.0)
     /// - Returns: Final quantum state
-    func executeWithProgress(
+    public func executeWithProgress(
         _ circuit: QuantumCircuit,
         from initialState: QuantumState? = nil,
-        progressHandler: @Sendable @escaping (Double) async -> Void
+        progressHandler: @isolated(any) @Sendable @escaping (Double) async -> Void
     ) async throws -> QuantumState {
         guard !isExecuting else {
             throw SimulatorError.alreadyExecuting
@@ -225,27 +225,28 @@ actor QuantumSimulator {
 
     /// Get current execution progress
     /// - Returns: Tuple of (executed gates, total gates, percentage)
-    func getProgress() -> (executed: Int, total: Int, percentage: Double) {
+    public func getProgress() -> (executed: Int, total: Int, percentage: Double) {
         let percentage = totalGates > 0 ? Double(executedGates) / Double(totalGates) : 0.0
         return (executedGates, totalGates, percentage)
     }
 
     /// Get current quantum state (if available)
-    func getCurrentState() -> QuantumState? { currentState }
+    public func getCurrentState() -> QuantumState? { currentState }
 
     /// Check if simulator is currently executing
-    func isCurrentlyExecuting() -> Bool { isExecuting }
+    public func isCurrentlyExecuting() -> Bool { isExecuting }
 
     // MARK: - Batch Execution
 
     /// Execute multiple circuits in parallel
     /// - Parameter circuits: Array of circuits to execute
     /// - Returns: Array of final states
-    func executeBatch(_ circuits: [QuantumCircuit]) async throws -> [QuantumState] {
-        try await withThrowingTaskGroup(of: (Int, QuantumState).self) { group in
+    public func executeBatch(_ circuits: [QuantumCircuit]) async throws -> [QuantumState] {
+        let acceleration = useMetalAcceleration
+        return try await withThrowingTaskGroup(of: (Int, QuantumState).self) { group in
             for (index, circuit) in circuits.enumerated() {
                 group.addTask {
-                    let simulator = await QuantumSimulator(useMetalAcceleration: self.useMetalAcceleration)
+                    let simulator = QuantumSimulator(useMetalAcceleration: acceleration)
                     let result = try await simulator.execute(circuit)
                     return (index, result)
                 }
@@ -263,12 +264,12 @@ actor QuantumSimulator {
 
 // MARK: - Simulator Error
 
-enum SimulatorError: Error, LocalizedError {
+public enum SimulatorError: Error, LocalizedError {
     case alreadyExecuting
     case invalidCircuit
     case metalNotAvailable
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .alreadyExecuting:
             "Simulator is already executing a circuit"
@@ -282,11 +283,11 @@ enum SimulatorError: Error, LocalizedError {
 
 // MARK: - Convenience Extensions
 
-extension QuantumCircuit {
+public extension QuantumCircuit {
     /// Execute circuit asynchronously
     /// - Returns: Final quantum state
     func executeAsync() async throws -> QuantumState {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
         return try await simulator.execute(self)
     }
 
@@ -294,9 +295,9 @@ extension QuantumCircuit {
     /// - Parameter progressHandler: Called with progress updates
     /// - Returns: Final quantum state
     func executeAsync(
-        progressHandler: @Sendable @escaping (Double) async -> Void
+        progressHandler: @isolated(any) @Sendable @escaping (Double) async -> Void
     ) async throws -> QuantumState {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
         return try await simulator.executeWithProgress(self, progressHandler: progressHandler)
     }
 }

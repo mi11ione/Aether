@@ -107,7 +107,7 @@ private enum MetalResources {
 /// let result1 = GateApplication.applyHybrid(gate: .hadamard, to: [0], state: anyState)
 /// let result2 = GateApplication.applyHybrid(gate: .hadamard, to: [0], state: bigState)
 /// ```
-final class MetalGateApplication {
+public final class MetalGateApplication {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
 
@@ -118,9 +118,9 @@ final class MetalGateApplication {
     private let toffoliPipeline: MTLComputePipelineState
 
     /// Threshold: use GPU for states with >= this many qubits
-    static let gpuThreshold = 10
+    public static let gpuThreshold = 10
 
-    init?() {
+    public init?() {
         guard let device = MetalResources.device,
               let commandQueue = MetalResources.commandQueue,
               let singleQubitPipeline = MetalResources.singleQubitPipeline,
@@ -148,7 +148,7 @@ final class MetalGateApplication {
     ///   - qubits: Target qubit indices
     ///   - state: Current quantum state
     /// - Returns: Transformed state
-    func apply(gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {
+    public func apply(gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {
         switch gate {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
              .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
@@ -403,7 +403,7 @@ final class MetalGateApplication {
 
 // MARK: - Hybrid CPU/GPU Gate Application
 
-extension GateApplication {
+public extension GateApplication {
     /// Apply gate with automatic CPU/GPU selection
     /// Uses GPU for states with >= 10 qubits
     static func applyHybrid(gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {

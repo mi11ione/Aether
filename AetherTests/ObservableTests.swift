@@ -175,10 +175,10 @@ struct ObservableHermitianTests {
     @Test("Hydrogen molecule Hamiltonian example")
     func hydrogenHamiltonian() {
         let hamiltonian = Observable(terms: [
-            (-1.05, PauliString(operators: [])),
-            (0.39, PauliString(operators: [(0, .z)])),
-            (-0.39, PauliString(operators: [(1, .z)])),
-            (-0.01, PauliString(operators: [(0, .z), (1, .z)])),
+            (coefficient: -1.05, pauliString: PauliString(operators: [])),
+            (coefficient: 0.39, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: -0.39, pauliString: PauliString(operators: [(1, .z)])),
+            (coefficient: -0.01, pauliString: PauliString(operators: [(0, .z), (1, .z)])),
         ])
 
         let state = QuantumState(numQubits: 2)
@@ -191,8 +191,8 @@ struct ObservableHermitianTests {
     @Test("Observable description is formatted correctly")
     func observableDescription() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .x)])),
-            (-0.5, PauliString(operators: [(1, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
+            (coefficient: -0.5, pauliString: PauliString(operators: [(1, .z)])),
         ])
 
         let description = observable.description
@@ -248,8 +248,8 @@ struct ObservableVarianceTests {
     @Test("Variance is always non-negative")
     func varianceNonNegative() {
         let observable = Observable(terms: [
-            (2.0, PauliString(operators: [(0, .x)])),
-            (1.0, PauliString(operators: [(1, .z)])),
+            (coefficient: 2.0, pauliString: PauliString(operators: [(0, .x)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(1, .z)])),
         ])
 
         var circuit = QuantumCircuit(numQubits: 2)
@@ -282,8 +282,8 @@ struct ObservableVarianceTests {
     @Test("Multi-term variance computation")
     func multiTermVariance() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .z)])),
-            (1.0, PauliString(operators: [(1, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(1, .z)])),
         ])
 
         var circuit = QuantumCircuit(numQubits: 2)
@@ -354,8 +354,8 @@ struct ObservablePauliMultiplicationTests {
     @Test("X·Y multiplication produces Z with phase")
     func xyMultiplication() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .x)])),
-            (1.0, PauliString(operators: [(0, .y)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .y)])),
         ])
 
         var circuit = QuantumCircuit(numQubits: 1)
@@ -369,8 +369,8 @@ struct ObservablePauliMultiplicationTests {
     @Test("Y·Z multiplication produces X with phase")
     func yzMultiplication() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .y)])),
-            (1.0, PauliString(operators: [(0, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .y)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
         ])
 
         let state = QuantumState(numQubits: 1)
@@ -381,8 +381,8 @@ struct ObservablePauliMultiplicationTests {
     @Test("Z·X multiplication produces Y with phase")
     func zxMultiplication() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .z)])),
-            (1.0, PauliString(operators: [(0, .x)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
         ])
 
         var circuit = QuantumCircuit(numQubits: 1)
@@ -397,7 +397,7 @@ struct ObservablePauliMultiplicationTests {
 /// Test suite for observable edge cases.
 /// Covers extreme coefficient magnitudes, many-term constructions, and
 /// canceling terms to validate numerical stability and correctness.
-@Suite("Observable - Edge Cases")
+@Suite("Observable Edge Cases")
 struct ObservableEdgeCasesTests {
     @Test("Large coefficient magnitudes")
     func largeCoefficients() {
@@ -442,9 +442,9 @@ struct ObservableEdgeCasesTests {
 
     @Test("Observable with many terms")
     func manyTerms() {
-        var terms: [(Double, PauliString)] = []
+        var terms: PauliTerms = []
         for i in 0 ..< 5 {
-            terms.append((1.0, PauliString(operators: [(i, .z)])))
+            terms.append((coefficient: 1.0, pauliString: PauliString(operators: [(i, .z)])))
         }
         let observable = Observable(terms: terms)
         let state = QuantumState(numQubits: 5)
@@ -456,8 +456,8 @@ struct ObservableEdgeCasesTests {
     @Test("Canceling terms")
     func cancelingTerms() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .z)])),
-            (-1.0, PauliString(operators: [(0, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: -1.0, pauliString: PauliString(operators: [(0, .z)])),
         ])
 
         let state = QuantumState(numQubits: 1)

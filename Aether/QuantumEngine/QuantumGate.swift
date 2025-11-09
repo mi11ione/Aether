@@ -63,7 +63,7 @@ import Foundation
 /// print(rz.isParameterized)   // true
 /// print(h.isHermitian)        // true
 /// ```
-enum QuantumGate: Equatable, Hashable, CustomStringConvertible {
+public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable {
     // MARK: - Single-Qubit Gates
 
     /// Identity gate - no operation
@@ -212,7 +212,7 @@ enum QuantumGate: Equatable, Hashable, CustomStringConvertible {
     // MARK: - Gate Properties
 
     /// Number of qubits this gate operates on
-    var qubitsRequired: Int {
+    public var qubitsRequired: Int {
         switch self {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
              .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
@@ -225,7 +225,7 @@ enum QuantumGate: Equatable, Hashable, CustomStringConvertible {
     }
 
     /// Whether gate has parameter(s)
-    var isParameterized: Bool {
+    public var isParameterized: Bool {
         switch self {
         case .phase, .rotationX, .rotationY, .rotationZ, .u1, .u2, .u3,
              .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ: true
@@ -234,7 +234,7 @@ enum QuantumGate: Equatable, Hashable, CustomStringConvertible {
     }
 
     /// Whether gate is Hermitian (self-adjoint)
-    var isHermitian: Bool {
+    public var isHermitian: Bool {
         switch self {
         case .pauliX, .pauliY, .pauliZ, .hadamard, .swap: true
         default: false
@@ -269,7 +269,7 @@ enum QuantumGate: Equatable, Hashable, CustomStringConvertible {
     /// let cnot = QuantumGate.cnot(control: 0, target: 1)
     /// let cnotMatrix = cnot.matrix()
     /// ```
-    func matrix() -> [[Complex<Double>]] {
+    public func matrix() -> [[Complex<Double>]] {
         switch self {
         case .identity: identityMatrix()
         case .pauliX: pauliXMatrix()
@@ -603,7 +603,7 @@ enum QuantumGate: Equatable, Hashable, CustomStringConvertible {
     /// let toffoli = QuantumGate.toffoli(control1: 0, control2: 1, target: 2)
     /// toffoli.validateQubitIndices(maxAllowedQubit: 3)  // true
     /// ```
-    func validateQubitIndices(maxAllowedQubit: Int) -> Bool {
+    public func validateQubitIndices(maxAllowedQubit: Int) -> Bool {
         switch self {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
              .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
@@ -643,7 +643,7 @@ enum QuantumGate: Equatable, Hashable, CustomStringConvertible {
     // MARK: - CustomStringConvertible
 
     /// String representation of the gate
-    var description: String {
+    public var description: String {
         switch self {
         case .identity: "I"
         case .pauliX: "X"
@@ -685,7 +685,7 @@ enum QuantumGate: Equatable, Hashable, CustomStringConvertible {
 
 // MARK: - Matrix Utilities
 
-extension QuantumGate {
+public extension QuantumGate {
     /// Verify matrix unitarity: U†U = I
     ///
     /// Checks if matrix preserves quantum state normalization through unitary condition.
@@ -895,11 +895,11 @@ extension QuantumGate {
 }
 
 /// Errors that can occur when creating or validating quantum gates
-enum QuantumGateError: Error, LocalizedError {
+public enum QuantumGateError: Error, LocalizedError {
     case invalidMatrixSize(String)
     case notUnitary(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case let .invalidMatrixSize(message): message
         case let .notUnitary(message): message

@@ -5,11 +5,11 @@ import Accelerate
 import Foundation
 
 /// Errors that can occur during quantum state operations
-enum QuantumStateError: Error, LocalizedError {
+public enum QuantumStateError: Error, LocalizedError {
     case cannotNormalizeZeroState
     case invalidAmplitudes
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .cannotNormalizeZeroState:
             "Cannot normalize quantum state with near-zero norm"
@@ -77,18 +77,18 @@ enum QuantumStateError: Error, LocalizedError {
 /// // Full probability distribution
 /// let allProbs = bellState.probabilities()  // [0.5, 0, 0, 0.5]
 /// ```
-struct QuantumState: Equatable, CustomStringConvertible, Sendable {
+public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     // MARK: - Properties
 
     /// Array of complex amplitudes representing quantum state
     /// Length = 2^numQubits
-    private(set) var amplitudes: [Complex<Double>]
+    public private(set) var amplitudes: [Complex<Double>]
 
     /// Number of qubits in this quantum system
-    let numQubits: Int
+    public let numQubits: Int
 
     /// Size of state space (2^numQubits)
-    var stateSpaceSize: Int { 1 << numQubits }
+    public var stateSpaceSize: Int { 1 << numQubits }
 
     // MARK: - Initialization
 
@@ -111,7 +111,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let state3 = QuantumState(numQubits: 3)
     /// // |000⟩: amplitudes = [1, 0, 0, 0, 0, 0, 0, 0]
     /// ```
-    init(numQubits: Int) {
+    public init(numQubits: Int) {
         precondition(numQubits > 0, "Number of qubits must be positive")
         precondition(numQubits < 30, "Number of qubits too large (would exceed memory)")
 
@@ -167,7 +167,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     ///     Complex(1, 0)   // Will normalize to 1/√2
     /// ])
     /// ```
-    init(numQubits: Int, amplitudes: [Complex<Double>]) {
+    public init(numQubits: Int, amplitudes: [Complex<Double>]) {
         precondition(numQubits > 0, "Number of qubits must be positive")
         precondition(amplitudes.count == (1 << numQubits),
                      "Amplitude array size must equal 2^numQubits")
@@ -200,7 +200,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let one = QuantumState(singleQubit: 1)
     /// // |1⟩: amplitudes = [0, 1]
     /// ```
-    init(singleQubit state: Int) {
+    public init(singleQubit state: Int) {
         precondition(state == 0 || state == 1, "Single qubit state must be 0 or 1")
 
         numQubits = 1
@@ -215,7 +215,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     ///   - numQubits: Number of qubits
     ///   - amplitudes: Amplitudes array (can be wrong size)
     ///   - bypassValidation: Must be true to use this initializer
-    init(numQubits: Int, amplitudes: [Complex<Double>], bypassValidation: Bool) {
+    public init(numQubits: Int, amplitudes: [Complex<Double>], bypassValidation: Bool) {
         precondition(bypassValidation, "This initializer is for testing only")
         self.numQubits = numQubits
         self.amplitudes = amplitudes
@@ -275,7 +275,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let p10 = bell.probability(ofState: 0b10)  // 0.0
     /// let p11 = bell.probability(ofState: 0b11)  // 0.5
     /// ```
-    func probability(ofState stateIndex: Int) -> Double {
+    public func probability(ofState stateIndex: Int) -> Double {
         precondition(stateIndex >= 0 && stateIndex < stateSpaceSize,
                      "State index out of bounds")
         return amplitudes[stateIndex].magnitudeSquared
@@ -315,7 +315,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let ghzProbs = ghz.probabilities()
     /// // [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5]
     /// ```
-    func probabilities() -> [Double] {
+    public func probabilities() -> [Double] {
         if amplitudes.count >= 64 {
             computeMagnitudesSquaredVectorized()
         } else {
@@ -360,7 +360,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let (p0, p1) = product.singleQubitProbabilities(qubit: 0)
     /// // p0 = 0.0, p1 = 1.0
     /// ```
-    func singleQubitProbabilities(qubit: Int) -> (p0: Double, p1: Double) {
+    public func singleQubitProbabilities(qubit: Int) -> (p0: Double, p1: Double) {
         precondition(qubit >= 0 && qubit < numQubits, "Qubit index out of bounds")
 
         var p0 = 0.0
@@ -399,7 +399,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// ])
     /// custom.isNormalized()  // true (auto-normalized in init)
     /// ```
-    func isNormalized() -> Bool {
+    public func isNormalized() -> Bool {
         let sum: Double
 
         if amplitudes.count >= 64 {
@@ -441,7 +441,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// try unnormalized.normalize()
     /// // Now: [3/5, 4/5] since √(3² + 4²) = 5
     /// ```
-    mutating func normalize() throws {
+    public mutating func normalize() throws {
         let sumSquared: Double
 
         if amplitudes.count >= 64 {
@@ -481,7 +481,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let amp0 = plus.getAmplitude(ofState: 0)  // (1/√2, 0)
     /// let amp1 = plus.getAmplitude(ofState: 1)  // (1/√2, 0)
     /// ```
-    func getAmplitude(ofState stateIndex: Int) -> Complex<Double> {
+    public func getAmplitude(ofState stateIndex: Int) -> Complex<Double> {
         precondition(stateIndex >= 0 && stateIndex < stateSpaceSize,
                      "State index out of bounds")
         return amplitudes[stateIndex]
@@ -504,7 +504,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// state.setAmplitude(ofState: 1, amplitude: Complex(1/sqrt(2), 0))
     /// // Now state is |+⟩ = (|0⟩ + |1⟩)/√2
     /// ```
-    mutating func setAmplitude(ofState stateIndex: Int, amplitude: Complex<Double>) {
+    public mutating func setAmplitude(ofState stateIndex: Int, amplitude: Complex<Double>) {
         precondition(stateIndex >= 0 && stateIndex < stateSpaceSize,
                      "State index out of bounds")
         amplitudes[stateIndex] = amplitude
@@ -534,7 +534,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let bit1 = state.getBit(index: 0b101, qubit: 1) // 0
     /// let bit2 = state.getBit(index: 0b101, qubit: 2) // 1 (MSB)
     /// ```
-    func getBit(index: Int, qubit: Int) -> Int {
+    public func getBit(index: Int, qubit: Int) -> Int {
         (index >> qubit) & 1
     }
 
@@ -544,7 +544,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     ///   - qubit: Qubit position
     ///   - value: New bit value (0 or 1)
     /// - Returns: Modified state index
-    func setBit(index: Int, qubit: Int, value: Int) -> Int {
+    public func setBit(index: Int, qubit: Int, value: Int) -> Int {
         if value == 0 {
             index & ~(1 << qubit) // Clear bit
         } else {
@@ -557,7 +557,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     ///   - index: Original state index
     ///   - qubit: Qubit position
     /// - Returns: Modified state index with flipped bit
-    func flipBit(index: Int, qubit: Int) -> Int {
+    public func flipBit(index: Int, qubit: Int) -> Int {
         index ^ (1 << qubit)
     }
 
@@ -565,7 +565,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
 
     /// Validate all state invariants
     /// - Returns: True if state is valid
-    func validate() -> Bool {
+    public func validate() -> Bool {
         // Check for NaN/Inf
         guard amplitudes.allSatisfy(\.isFinite) else { return false }
         guard isNormalized() else { return false }
@@ -576,7 +576,7 @@ struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     // MARK: - CustomStringConvertible
 
     /// String representation showing significant amplitudes
-    var description: String {
+    public var description: String {
         // Show only non-negligible amplitudes
         let threshold = 1e-6
         var terms: [String] = []

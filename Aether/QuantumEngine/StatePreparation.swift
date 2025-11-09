@@ -45,7 +45,7 @@ import Foundation
 /// let dicke = QuantumCircuit.dickeState(numQubits: 4, numOnes: 2)
 /// // (|0011⟩ + |0101⟩ + |0110⟩ + |1001⟩ + |1010⟩ + |1100⟩)/√6
 /// ```
-extension QuantumState {
+public extension QuantumState {
     // MARK: - Basis State Preparation
 
     /// Create computational basis state |i⟩ via direct construction
@@ -98,7 +98,7 @@ extension QuantumState {
     }
 }
 
-extension QuantumCircuit {
+public extension QuantumCircuit {
     // MARK: - Bell State Variants
 
     /// Create circuit for Bell state |Φ⁺⟩ = (|00⟩ + |11⟩)/√2

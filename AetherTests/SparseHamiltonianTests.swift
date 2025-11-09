@@ -114,9 +114,9 @@ struct SparseHamiltonianCorrectnessTests {
     @Test("Multi-term Hamiltonian matches Observable")
     func multiTermHamiltonian() {
         let observable = Observable(terms: [
-            (2.0, PauliString(operators: [(0, .z)])),
-            (3.0, PauliString(operators: [(1, .z)])),
-            (-1.0, PauliString(operators: [(0, .x)])),
+            (coefficient: 2.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: 3.0, pauliString: PauliString(operators: [(1, .z)])),
+            (coefficient: -1.0, pauliString: PauliString(operators: [(0, .x)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -134,11 +134,11 @@ struct SparseHamiltonianCorrectnessTests {
     @Test("Hydrogen molecule Hamiltonian matches Observable")
     func hydrogenHamiltonian() {
         let observable = Observable(terms: [
-            (-1.05, PauliString(operators: [])),
-            (0.39, PauliString(operators: [(0, .z)])),
-            (-0.39, PauliString(operators: [(1, .z)])),
-            (-0.01, PauliString(operators: [(0, .z), (1, .z)])),
-            (0.18, PauliString(operators: [(0, .x), (1, .x)])),
+            (coefficient: -1.05, pauliString: PauliString(operators: [])),
+            (coefficient: 0.39, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: -0.39, pauliString: PauliString(operators: [(1, .z)])),
+            (coefficient: -0.01, pauliString: PauliString(operators: [(0, .z), (1, .z)])),
+            (coefficient: 0.18, pauliString: PauliString(operators: [(0, .x), (1, .x)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -169,8 +169,8 @@ struct SparseHamiltonianCorrectnessTests {
     @Test("Superposition state matches Observable")
     func superpositionState() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .z)])),
-            (1.0, PauliString(operators: [(1, .x)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(1, .x)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -208,8 +208,8 @@ struct SparseHamiltonianBackendTests {
     @Test("Large system (≥ 8 qubits) attempts Metal GPU")
     func largeSystemBackend() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .z)])),
-            (1.0, PauliString(operators: [(7, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(7, .z)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -260,10 +260,10 @@ struct SparseHamiltonianSparsityTests {
     @Test("Multi-term Hamiltonian has low sparsity")
     func multiTermSparsity() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [])),
-            (1.0, PauliString(operators: [(0, .z)])),
-            (1.0, PauliString(operators: [(1, .z)])),
-            (1.0, PauliString(operators: [(0, .z), (1, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(1, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z), (1, .z)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -274,8 +274,8 @@ struct SparseHamiltonianSparsityTests {
     @Test("Sparsity ratio is between 0 and 1")
     func sparsityRatioRange() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .x)])),
-            (1.0, PauliString(operators: [(1, .y)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(1, .y)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -284,15 +284,16 @@ struct SparseHamiltonianSparsityTests {
     }
 }
 
-/// Test suite for sparse Hamiltonian statistics and diagnostics.
-/// Verifies memory estimates, compression ratios, and descriptive output.
+/// Tests reporting and formatting of SparseHamiltonian statistics.
+/// Verifies fields like qubit count, dimension, non-zero entries, sparsity,
+/// backend description text, and estimated memory usage.
 @Suite("SparseHamiltonian Statistics")
 struct SparseHamiltonianStatisticsTests {
     @Test("Statistics contain expected fields")
     func statisticsFields() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .z)])),
-            (1.0, PauliString(operators: [(1, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(1, .z)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -321,8 +322,8 @@ struct SparseHamiltonianStatisticsTests {
     @Test("Statistics description formats correctly")
     func statisticsDescription() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .z)])),
-            (1.0, PauliString(operators: [(1, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(1, .z)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -351,8 +352,9 @@ struct SparseHamiltonianStatisticsTests {
     }
 }
 
-/// Test suite for sparse Hamiltonian edge cases.
-/// Covers extreme coefficients, many-term Hamiltonians, and canceling terms.
+/// Exercises numerical and structural edge cases for SparseHamiltonian.
+/// Covers extreme coefficients, many/canceling terms, large qubit counts,
+/// construction performance, and thread-safety of expectation evaluation.
 @Suite("SparseHamiltonian Edge Cases")
 struct SparseHamiltonianEdgeCasesTests {
     @Test("Large coefficients match Observable")
@@ -391,7 +393,7 @@ struct SparseHamiltonianEdgeCasesTests {
     func manyTerms() {
         var terms: [(Double, PauliString)] = []
         for i in 0 ..< 5 {
-            terms.append((1.0, PauliString(operators: [(i, .z)])))
+            terms.append((coefficient: 1.0, pauliString: PauliString(operators: [(i, .z)])))
         }
         let observable = Observable(terms: terms)
         let sparseH = SparseHamiltonian(observable: observable)
@@ -407,8 +409,8 @@ struct SparseHamiltonianEdgeCasesTests {
     @Test("Canceling terms produce zero expectation")
     func cancelingTerms() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .z)])),
-            (-1.0, PauliString(operators: [(0, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: -1.0, pauliString: PauliString(operators: [(0, .z)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -421,9 +423,9 @@ struct SparseHamiltonianEdgeCasesTests {
     @Test("Complex state with many gates matches Observable")
     func complexState() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .x)])),
-            (0.5, PauliString(operators: [(1, .y)])),
-            (-0.3, PauliString(operators: [(2, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
+            (coefficient: 0.5, pauliString: PauliString(operators: [(1, .y)])),
+            (coefficient: -0.3, pauliString: PauliString(operators: [(2, .z)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -444,9 +446,9 @@ struct SparseHamiltonianEdgeCasesTests {
     @Test("8-qubit system for GPU backend testing")
     func eightQubitSystem() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .z)])),
-            (1.0, PauliString(operators: [(7, .z)])),
-            (0.5, PauliString(operators: [(0, .z), (7, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(7, .z)])),
+            (coefficient: 0.5, pauliString: PauliString(operators: [(0, .z), (7, .z)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -464,10 +466,10 @@ struct SparseHamiltonianEdgeCasesTests {
     @Test("10-qubit system matches Observable")
     func tenQubitSystem() {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .x)])),
-            (0.5, PauliString(operators: [(5, .y)])),
-            (-0.3, PauliString(operators: [(9, .z)])),
-            (0.2, PauliString(operators: [(0, .z), (9, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
+            (coefficient: 0.5, pauliString: PauliString(operators: [(5, .y)])),
+            (coefficient: -0.3, pauliString: PauliString(operators: [(9, .z)])),
+            (coefficient: 0.2, pauliString: PauliString(operators: [(0, .z), (9, .z)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -490,7 +492,7 @@ struct SparseHamiltonianEdgeCasesTests {
             let coeff = Double(i % 10) / 10.0
             let qubit = i % 8
             let basis: PauliBasis = [.x, .y, .z][i % 3]
-            terms.append((coeff, PauliString(operators: [(qubit, basis)])))
+            terms.append((coefficient: coeff, pauliString: PauliString(operators: [(qubit, basis)])))
         }
         let observable = Observable(terms: terms)
         let sparseH = SparseHamiltonian(observable: observable)
@@ -513,7 +515,7 @@ struct SparseHamiltonianEdgeCasesTests {
             let coeff = Double(i) / 100.0
             let q1 = i % 10
             let q2 = (i + 1) % 10
-            terms.append((coeff, PauliString(operators: [(q1, .z), (q2, .x)])))
+            terms.append((coefficient: coeff, pauliString: PauliString(operators: [(q1, .z), (q2, .x)])))
         }
         let observable = Observable(terms: terms)
 
@@ -528,8 +530,8 @@ struct SparseHamiltonianEdgeCasesTests {
     @Test("Thread safety: concurrent expectation value calls")
     func threadSafety() async {
         let observable = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .z)])),
-            (0.5, PauliString(operators: [(1, .x)])),
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: 0.5, pauliString: PauliString(operators: [(1, .x)])),
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 

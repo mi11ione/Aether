@@ -11,7 +11,7 @@ import Testing
 struct QuantumSimulatorTests {
     @Test("Simulator executes simple circuit asynchronously")
     func simulatorExecutesSimpleCircuit() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
@@ -30,7 +30,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator executes from custom initial state")
     func simulatorExecutesFromCustomState() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 1)
         circuit.append(gate: .pauliX, toQubit: 0)
@@ -43,7 +43,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator reports progress during execution")
     func simulatorReportsProgress() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 2)
         for _ in 0 ..< 20 {
@@ -76,7 +76,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator tracks execution progress")
     func simulatorTracksProgress() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 1)
         for _ in 0 ..< 10 {
@@ -106,7 +106,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator provides current state during execution")
     func simulatorProvidesCurrentState() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 2)
         for _ in 0 ..< 50 {
@@ -135,7 +135,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator tracks execution status")
     func simulatorTracksExecutionStatus() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 1)
         for _ in 0 ..< 100 {
@@ -166,7 +166,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator executes batch of circuits in parallel")
     func simulatorExecutesBatchCircuits() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuit1 = QuantumCircuit(numQubits: 2)
         circuit1.append(gate: .hadamard, toQubit: 0)
@@ -227,7 +227,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator handles empty circuit")
     func simulatorHandlesEmptyCircuit() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
         let circuit = QuantumCircuit(numQubits: 2)
         let finalState = try await simulator.execute(circuit)
 
@@ -236,7 +236,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator supports task cancellation")
     func simulatorSupportsCancellation() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 1)
         for _ in 0 ..< 1000 {
@@ -258,7 +258,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator handles pre-built Bell state circuit")
     func simulatorHandlesBellStateCircuit() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
         let circuit = QuantumCircuit.bellState()
         let finalState = try await simulator.execute(circuit)
 
@@ -269,7 +269,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator handles QFT circuit")
     func simulatorHandlesQFTCircuit() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
         let circuit = QuantumCircuit.qft(numQubits: 3)
         let finalState = try await simulator.execute(circuit)
 
@@ -279,7 +279,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator handles Grover circuit")
     func simulatorHandlesGroverCircuit() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
         let circuit = QuantumCircuit.grover(numQubits: 2, target: 3)
         let finalState = try await simulator.execute(circuit)
 
@@ -305,7 +305,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator throws alreadyExecuting when concurrent execution attempted")
     func simulatorThrowsAlreadyExecuting() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuitBuilder = QuantumCircuit(numQubits: 1)
         for _ in 0 ..< 100 {
@@ -337,7 +337,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator throws alreadyExecuting for executeWithProgress during concurrent execution")
     func simulatorThrowsAlreadyExecutingWithProgress() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuitBuilder = QuantumCircuit(numQubits: 1)
         for _ in 0 ..< 100 {
@@ -369,7 +369,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator with Metal disabled works correctly")
     func simulatorWithoutMetalWorks() async throws {
-        let simulator = await QuantumSimulator(useMetalAcceleration: false)
+        let simulator = QuantumSimulator(useMetalAcceleration: false)
 
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
@@ -383,7 +383,7 @@ struct QuantumSimulatorTests {
 
     @Test("Progress handler receives final progress value")
     func progressHandlerReceivesFinalProgress() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 1)
         for _ in 0 ..< 10 {
@@ -407,7 +407,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator uses Metal acceleration for large circuits")
     func simulatorUsesMetalAcceleration() async throws {
-        let simulator = await QuantumSimulator(useMetalAcceleration: true)
+        let simulator = QuantumSimulator(useMetalAcceleration: true)
 
         var circuit = QuantumCircuit(numQubits: 12)
         circuit.append(gate: .hadamard, toQubit: 0)
@@ -422,7 +422,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator uses Metal acceleration with progress reporting")
     func simulatorUsesMetalWithProgress() async throws {
-        let simulator = await QuantumSimulator(useMetalAcceleration: true)
+        let simulator = QuantumSimulator(useMetalAcceleration: true)
 
         var circuit = QuantumCircuit(numQubits: 12)
         for _ in 0 ..< 8 {
@@ -453,7 +453,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator executes with progress from custom initial state")
     func simulatorExecutesWithProgressFromCustomState() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
@@ -481,7 +481,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator handles state expansion with ancilla qubits")
     func simulatorHandlesStateExpansionWithAncilla() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
         var circuit = QuantumCircuit(numQubits: 4)
 
         circuit.append(gate: .pauliX, toQubit: 0)
@@ -497,7 +497,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator state expansion preserves amplitudes")
     func simulatorStateExpansionPreservesAmplitudes() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var initialCircuit = QuantumCircuit(numQubits: 4)
         initialCircuit.append(gate: .pauliX, toQubit: 0)
@@ -518,7 +518,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator executeWithProgress handles ancilla expansion")
     func simulatorExecuteWithProgressHandlesAncilla() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
         var circuit = QuantumCircuit(numQubits: 5)
 
         circuit.append(gate: .pauliX, toQubit: 0)
@@ -546,7 +546,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator handles multiple ancilla qubits correctly")
     func simulatorHandlesMultipleAncilla() async throws {
-        let simulator = await QuantumSimulator()
+        let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 6)
 

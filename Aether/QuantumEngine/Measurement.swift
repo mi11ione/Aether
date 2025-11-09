@@ -17,14 +17,14 @@ import GameplayKit
 /// // result.outcome: 0 or 3 (50% each for Bell state)
 /// // result.collapsedState: |00⟩ or |11⟩ (deterministic after collapse)
 /// ```
-struct MeasurementResult: Equatable, CustomStringConvertible {
+public struct MeasurementResult: Equatable, CustomStringConvertible {
     /// Classical outcome (basis state index i ∈ [0, 2^n-1])
-    let outcome: Int
+    public let outcome: Int
 
     /// Post-measurement state |i⟩ (collapsed to measured outcome)
-    let collapsedState: QuantumState
+    public let collapsedState: QuantumState
 
-    var description: String {
+    public var description: String {
         "Measurement: outcome=\(outcome), state=\(collapsedState)"
     }
 }
@@ -55,7 +55,7 @@ struct MeasurementResult: Equatable, CustomStringConvertible {
 /// let result2 = measurement.measurePauli(qubit: 0, basis: .z, state: plus)
 /// // result2.eigenvalue: ±1 (50% each, superposition in Z basis)
 /// ```
-enum PauliBasis: String, CaseIterable, Sendable {
+public enum PauliBasis: String, CaseIterable, Sendable {
     /// X (bit-flip) basis: |+⟩, |-⟩
     case x
 
@@ -86,14 +86,14 @@ enum PauliBasis: String, CaseIterable, Sendable {
 /// let zResult = measurement.measurePauli(qubit: 0, basis: .z, state: zero)
 /// // zResult.eigenvalue: +1 (deterministic, |0⟩ is Z eigenstate with λ=+1)
 /// ```
-struct PauliMeasurementResult: Equatable, CustomStringConvertible {
+public struct PauliMeasurementResult: Equatable, CustomStringConvertible {
     /// Eigenvalue: +1 or -1
-    let eigenvalue: Int
+    public let eigenvalue: Int
 
     /// Post-measurement collapsed state
-    let collapsedState: QuantumState
+    public let collapsedState: QuantumState
 
-    var description: String {
+    public var description: String {
         "PauliMeasurement: eigenvalue=\(eigenvalue > 0 ? "+1" : "-1"), state=\(collapsedState)"
     }
 }
@@ -108,12 +108,12 @@ struct PauliMeasurementResult: Equatable, CustomStringConvertible {
 /// let xOn0 = PauliOperator(qubit: 0, basis: .x)  // X₀
 /// let zOn2 = PauliOperator(qubit: 2, basis: .z)  // Z₂
 /// ```
-struct PauliOperator: Equatable, Sendable {
+public struct PauliOperator: Equatable, Sendable {
     /// Target qubit index (0 to n-1)
-    let qubit: Int
+    public let qubit: Int
 
     /// Pauli basis (X, Y, or Z)
-    let basis: PauliBasis
+    public let basis: PauliBasis
 }
 
 /// Pauli string operator for multi-qubit measurements
@@ -145,18 +145,18 @@ struct PauliOperator: Equatable, Sendable {
 /// // Single-qubit case: just Z₂
 /// let singlePauli = PauliString(operators: [(qubit: 2, basis: .z)])
 /// ```
-struct PauliString: Equatable, CustomStringConvertible, Sendable {
+public struct PauliString: Equatable, CustomStringConvertible, Sendable {
     /// Array of Pauli operators
     /// Identity operators on unspecified qubits
-    let operators: [PauliOperator]
+    public let operators: [PauliOperator]
 
     /// Create Pauli string from operator list
     /// - Parameter operators: List of (qubit, basis) pairs
-    init(operators: [(qubit: Int, basis: PauliBasis)]) {
+    public init(operators: [(qubit: Int, basis: PauliBasis)]) {
         self.operators = operators.map { PauliOperator(qubit: $0.qubit, basis: $0.basis) }
     }
 
-    var description: String {
+    public var description: String {
         if operators.isEmpty {
             return "I (identity)"
         }
@@ -175,12 +175,12 @@ struct PauliString: Equatable, CustomStringConvertible, Sendable {
 /// ```swift
 /// let outcome = MeasurementOutcome(qubit: 0, outcome: 1)  // Qubit 0 measured as |1⟩
 /// ```
-struct MeasurementOutcome: Equatable {
+public struct MeasurementOutcome: Equatable {
     /// Qubit index that was measured
-    let qubit: Int
+    public let qubit: Int
 
     /// Measurement result: 0 or 1 (computational basis)
-    let outcome: Int
+    public let outcome: Int
 }
 
 /// Multi-qubit Pauli measurement result
@@ -207,17 +207,17 @@ struct MeasurementOutcome: Equatable {
 /// // result.eigenvalue: +1 (deterministic!)
 /// // result.individualOutcomes: [(0, 0), (1, 0)] or [(0, 1), (1, 1)]
 /// ```
-struct PauliStringMeasurementResult: Equatable, CustomStringConvertible {
+public struct PauliStringMeasurementResult: Equatable, CustomStringConvertible {
     /// Overall eigenvalue: product of individual eigenvalues (±1)
-    let eigenvalue: Int
+    public let eigenvalue: Int
 
     /// Post-measurement collapsed state
-    let collapsedState: QuantumState
+    public let collapsedState: QuantumState
 
     /// Individual measurement outcomes for each qubit
-    let individualOutcomes: [MeasurementOutcome]
+    public let individualOutcomes: [MeasurementOutcome]
 
-    var description: String {
+    public var description: String {
         let outcomeStr = individualOutcomes.map { "q\($0.qubit)=\($0.outcome)" }.joined(separator: ", ")
         return "PauliStringMeasurement: eigenvalue=\(eigenvalue > 0 ? "+1" : "-1"), outcomes=[\(outcomeStr)]"
     }
@@ -259,17 +259,17 @@ struct PauliStringMeasurementResult: Equatable, CustomStringConvertible {
 ///     + snapshot2.state.probability(ofState: 3)
 /// // zExpectation ≈ 1.0 for Bell state
 /// ```
-struct StateSnapshot: Equatable, CustomStringConvertible, Sendable {
+public struct StateSnapshot: Equatable, CustomStringConvertible, Sendable {
     /// Captured quantum state (full statevector)
-    let state: QuantumState
+    public let state: QuantumState
 
     /// Optional descriptive label
-    let label: String?
+    public let label: String?
 
     /// Timestamp when snapshot was captured
-    let timestamp: Date
+    public let timestamp: Date
 
-    var description: String {
+    public var description: String {
         if let label {
             return "Snapshot[\(label)]: \(state)"
         }
@@ -322,21 +322,21 @@ struct StateSnapshot: Equatable, CustomStringConvertible, Sendable {
 /// let snapshot = Measurement.captureSnapshot(state: state, label: "Bell state")
 /// // snapshot.state preserves superposition (no collapse)
 /// ```
-struct Measurement {
+public struct Measurement {
     /// Random number generator for measurement sampling
     private var rng: any RandomNumberGenerator
 
     /// Whether it uses a seeded RNG (for reproducibility)
-    let isSeeded: Bool
+    public let isSeeded: Bool
 
     /// Initialize with system random number generator (non-reproducible)
-    init() {
+    public init() {
         rng = SystemRandomNumberGenerator()
         isSeeded = false
     }
 
     /// Initialize with seeded random number generator (reproducible)
-    init(seed: UInt64) {
+    public init(seed: UInt64) {
         let source = GKMersenneTwisterRandomSource(seed: seed)
         rng = RandomNumberGeneratorWrapper(source: source)
         isSeeded = true
@@ -358,7 +358,7 @@ struct Measurement {
     /// Calculate probability distribution for all basis states.
     /// - Parameter state: Quantum state to measure
     /// - Returns: Array of probabilities [P(0), P(1), ..., P(2^n-1)]
-    static func probabilityDistribution(state: QuantumState) -> [Double] {
+    public static func probabilityDistribution(state: QuantumState) -> [Double] {
         precondition(state.isNormalized(), "State must be normalized before measurement")
         return state.probabilities()
     }
@@ -430,7 +430,7 @@ struct Measurement {
     /// let r2 = seeded2.measure(state: plus)
     /// // r1.outcome == r2.outcome (same seed → same result)
     /// ```
-    mutating func measure(state: QuantumState) -> MeasurementResult {
+    public mutating func measure(state: QuantumState) -> MeasurementResult {
         precondition(state.isNormalized(), "State must be normalized before measurement")
 
         // Calculate probability distribution
@@ -452,7 +452,7 @@ struct Measurement {
     ///   - outcome: Measured basis state index
     ///   - numQubits: Number of qubits
     /// - Returns: Collapsed quantum state
-    static func collapseToOutcome(_ outcome: Int, numQubits: Int) -> QuantumState {
+    public static func collapseToOutcome(_ outcome: Int, numQubits: Int) -> QuantumState {
         let stateSpaceSize = 1 << numQubits
         precondition(outcome >= 0 && outcome < stateSpaceSize, "Outcome out of bounds")
 
@@ -506,7 +506,7 @@ struct Measurement {
     /// let zResult = measurement.measurePauli(qubit: 0, basis: .z, state: zero)
     /// // zResult.eigenvalue: +1 (deterministic, |0⟩ is +1 eigenstate of Z)
     /// ```
-    mutating func measurePauli(qubit: Int, basis: PauliBasis, state: QuantumState) -> PauliMeasurementResult {
+    public mutating func measurePauli(qubit: Int, basis: PauliBasis, state: QuantumState) -> PauliMeasurementResult {
         precondition(qubit >= 0 && qubit < state.numQubits, "Qubit index out of bounds")
         precondition(state.isNormalized(), "State must be normalized before measurement")
 
@@ -537,7 +537,7 @@ struct Measurement {
     ///   - basis: Pauli basis to rotate to
     ///   - state: Input quantum state
     /// - Returns: Rotated state where Pauli operator is diagonal
-    static func rotateToPauliBasis(qubit: Int, basis: PauliBasis, state: QuantumState) -> QuantumState {
+    public static func rotateToPauliBasis(qubit: Int, basis: PauliBasis, state: QuantumState) -> QuantumState {
         switch basis {
         case .x:
             // X basis: Apply H to rotate |+⟩→|0⟩, |-⟩→|1⟩
@@ -637,7 +637,7 @@ struct Measurement {
     ///     state: plus
     /// )
     /// ```
-    mutating func measureCustomBasis(
+    public mutating func measureCustomBasis(
         qubit: Int,
         basisState: [Complex<Double>],
         state: QuantumState
@@ -662,18 +662,16 @@ struct Measurement {
             [-c1, c0],
         ]
 
-        // Create custom gate from rotation matrix
         let rotationGate = try! QuantumGate.createCustomSingleQubit(matrix: rotationMatrix)
 
-        // Apply rotation to align basis state with |0⟩
         let rotatedState = GateApplication.apply(gate: rotationGate, to: [qubit], state: state)
 
-        // Measure in computational basis
         let (outcome, collapsedRotated) = measureQubit(qubit, state: rotatedState)
 
-        // Apply inverse rotation (U†) to get back to original basis
         let adjointMatrix = QuantumGate.conjugateTranspose(rotationMatrix)
+
         let inverseGate = try! QuantumGate.createCustomSingleQubit(matrix: adjointMatrix)
+
         let finalState = GateApplication.apply(gate: inverseGate, to: [qubit], state: collapsedRotated)
 
         return (outcome: outcome, collapsedState: finalState)
@@ -732,7 +730,7 @@ struct Measurement {
     /// let singleResult = measurement.measurePauliString(singlePauli, state: zero)
     /// // singleResult.eigenvalue: +1 (|0⟩ is +1 eigenstate of Z)
     /// ```
-    mutating func measurePauliString(
+    public mutating func measurePauliString(
         _ pauliString: PauliString,
         state: QuantumState
     ) -> PauliStringMeasurementResult {
@@ -850,7 +848,7 @@ struct Measurement {
     /// let (outcomes3, collapsed3) = measurement.measureQubits([0], state: ghz)
     /// // outcomes3: [0] or [1]
     /// ```
-    mutating func measureQubits(
+    public mutating func measureQubits(
         _ qubits: [Int],
         state: QuantumState
     ) -> (outcomes: [Int], collapsedState: QuantumState) {
@@ -991,7 +989,7 @@ struct Measurement {
     /// // outcome2: 0 or 1 (50% each)
     /// // collapsed2: |00⟩ or |10⟩ (qubit 1 unaffected, still |0⟩)
     /// ```
-    mutating func measureQubit(_ qubit: Int, state: QuantumState) -> (outcome: Int, collapsedState: QuantumState) {
+    public mutating func measureQubit(_ qubit: Int, state: QuantumState) -> (outcome: Int, collapsedState: QuantumState) {
         precondition(qubit >= 0 && qubit < state.numQubits, "Qubit index out of bounds")
         precondition(state.isNormalized(), "State must be normalized before measurement")
 
@@ -1018,7 +1016,7 @@ struct Measurement {
     ///   - qubit: Qubit to measure
     ///   - state: Quantum state
     /// - Returns: (P(qubit=0), P(qubit=1))
-    static func marginalProbabilities(qubit: Int, state: QuantumState) -> (Double, Double) {
+    public static func marginalProbabilities(qubit: Int, state: QuantumState) -> (Double, Double) {
         var prob0 = 0.0
         var prob1 = 0.0
 
@@ -1042,7 +1040,7 @@ struct Measurement {
     ///   - state: Original quantum state
     ///   - probability: Probability of this outcome (for renormalization)
     /// - Returns: Collapsed state with unmeasured qubits still in superposition
-    static func partialCollapse(
+    public static func partialCollapse(
         qubit: Int,
         outcome: Int,
         state: QuantumState,
@@ -1119,7 +1117,7 @@ struct Measurement {
     /// print("Evolution from \(initial.label ?? "unknown") to \(final.label ?? "unknown")")
     /// print("Time elapsed: \(final.timestamp.timeIntervalSince(initial.timestamp))s")
     /// ```
-    static func captureSnapshot(state: QuantumState, label: String? = nil) -> StateSnapshot {
+    public static func captureSnapshot(state: QuantumState, label: String? = nil) -> StateSnapshot {
         StateSnapshot(
             state: state,
             label: label,
@@ -1175,7 +1173,7 @@ struct Measurement {
     /// )
     /// // chiSq.chiSquared < critical value → good fit
     /// ```
-    mutating func runMultiple(circuit: QuantumCircuit, numRuns: Int) -> [Int] {
+    public mutating func runMultiple(circuit: QuantumCircuit, numRuns: Int) -> [Int] {
         precondition(numRuns > 0, "Number of runs must be positive")
 
         var outcomes: [Int] = []
@@ -1195,7 +1193,7 @@ struct Measurement {
     ///   - outcomes: Array of measurement outcomes
     ///   - numQubits: Number of qubits (determines state space size)
     /// - Returns: Array of counts [count(0), count(1), ..., count(2^n-1)]
-    static func histogram(outcomes: [Int], numQubits: Int) -> [Int] {
+    public static func histogram(outcomes: [Int], numQubits: Int) -> [Int] {
         let stateSpaceSize = 1 << numQubits
         var counts = [Int](repeating: 0, count: stateSpaceSize)
 
@@ -1214,7 +1212,7 @@ struct Measurement {
     ///   - expected: Expected probabilities
     ///   - totalRuns: Total number of measurements
     /// - Returns: Maximum relative error across all outcomes
-    static func compareDistributions(
+    public static func compareDistributions(
         observed: [Int],
         expected: [Double],
         totalRuns: Int
@@ -1242,18 +1240,18 @@ struct Measurement {
     }
 
     /// Chi-squared goodness-of-fit test result
-    struct ChiSquaredResult {
+    public struct ChiSquaredResult {
         /// Chi-squared statistic (lower is better fit)
-        let chiSquared: Double
+        public let chiSquared: Double
 
         /// Degrees of freedom (bins tested - 1)
-        let degreesOfFreedom: Int
+        public let degreesOfFreedom: Int
 
         /// Number of bins that were tested (expectedCount >= 5)
-        let testedBins: Int
+        public let testedBins: Int
 
         /// Number of bins that were skipped (expectedCount < 5)
-        let skippedBins: Int
+        public let skippedBins: Int
     }
 
     /// Chi-squared goodness-of-fit test.
@@ -1264,7 +1262,7 @@ struct Measurement {
     ///   - expected: Expected probabilities
     ///   - totalRuns: Total number of measurements
     /// - Returns: Chi-squared result with statistic and degrees of freedom
-    static func chiSquared(
+    public static func chiSquared(
         observed: [Int],
         expected: [Double],
         totalRuns: Int
@@ -1303,7 +1301,7 @@ struct Measurement {
 
 // MARK: - Static Helper Functions
 
-extension Measurement {
+public extension Measurement {
     /// Measure state with a fresh RNG (convenience function).
     /// - Parameter state: Quantum state to measure
     /// - Returns: Measurement result

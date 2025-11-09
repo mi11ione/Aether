@@ -3,6 +3,12 @@
 
 import Foundation
 
+/// Array of Pauli terms with coefficients.
+///
+/// Represents weighted Pauli strings used in Hamiltonians and observables.
+/// Each term is a (coefficient, PauliString) pair where the coefficient is real.
+public typealias PauliTerms = [(coefficient: Double, pauliString: PauliString)]
+
 /// Quantum observable (Hermitian operator) for expectation value measurements
 ///
 /// Represents a Hermitian operator as a weighted sum of Pauli strings:
@@ -47,14 +53,14 @@ import Foundation
 /// let expectation = observable.expectationValue(state: state)
 /// // expectation = +1.0 (|0⟩ is +1 eigenstate of Z)
 /// ```
-struct Observable: CustomStringConvertible {
+public struct Observable: CustomStringConvertible {
     /// Terms in the observable: weighted Pauli strings (cᵢ, Pᵢ)
     /// Coefficients are real (required for Hermiticity)
-    let terms: [(coefficient: Double, pauliString: PauliString)]
+    public let terms: PauliTerms
 
     /// Create observable from weighted Pauli string terms
     /// - Parameter terms: Array of (coefficient, Pauli string) pairs
-    init(terms: [(coefficient: Double, pauliString: PauliString)]) {
+    public init(terms: PauliTerms) {
         self.terms = terms
     }
 
@@ -62,7 +68,7 @@ struct Observable: CustomStringConvertible {
     /// - Parameters:
     ///   - coefficient: Real coefficient
     ///   - pauliString: Pauli string operator
-    init(coefficient: Double, pauliString: PauliString) {
+    public init(coefficient: Double, pauliString: PauliString) {
         terms = [(coefficient, pauliString)]
     }
 
@@ -91,7 +97,7 @@ struct Observable: CustomStringConvertible {
     /// let trialState = prepareAnsatz(parameters: theta)
     /// let energy = hamiltonian.expectationValue(state: trialState)
     /// ```
-    func expectationValue(state: QuantumState) -> Double {
+    public func expectationValue(state: QuantumState) -> Double {
         precondition(state.isNormalized(), "State must be normalized")
 
         var totalExpectation = 0.0
@@ -177,7 +183,7 @@ struct Observable: CustomStringConvertible {
     /// let uncertainty = sqrt(variance)
     /// // Number of shots needed: O(variance / ε²) for accuracy ε
     /// ```
-    func variance(state: QuantumState) -> Double {
+    public func variance(state: QuantumState) -> Double {
         let mean = expectationValue(state: state)
         let meanSquared = squared().expectationValue(state: state)
         return meanSquared - mean * mean
@@ -190,7 +196,7 @@ struct Observable: CustomStringConvertible {
     ///
     /// - Returns: Observable representing O²
     private func squared() -> Observable {
-        var squaredTerms: [(coefficient: Double, pauliString: PauliString)] = []
+        var squaredTerms: PauliTerms = []
 
         // Expand (Σᵢ cᵢ Pᵢ)²
         for (ci, Pi) in terms {
@@ -225,12 +231,12 @@ struct Observable: CustomStringConvertible {
         _ lhs: PauliString,
         _ rhs: PauliString
     ) -> (phase: Complex<Double>, result: PauliString) {
-        var lhsMap: [Int: PauliBasis] = [:]
+        var lhsMap: MeasurementBasis = [:]
         for op in lhs.operators {
             lhsMap[op.qubit] = op.basis
         }
 
-        var rhsMap: [Int: PauliBasis] = [:]
+        var rhsMap: MeasurementBasis = [:]
         for op in rhs.operators {
             rhsMap[op.qubit] = op.basis
         }
@@ -299,9 +305,9 @@ struct Observable: CustomStringConvertible {
     /// - Parameter terms: Unsimplified terms
     /// - Returns: Simplified terms with combined coefficients
     private func combineLikeTerms(
-        _ terms: [(coefficient: Double, pauliString: PauliString)]
-    ) -> [(coefficient: Double, pauliString: PauliString)] {
-        var combinedTerms: [(coefficient: Double, pauliString: PauliString)] = []
+        _ terms: PauliTerms
+    ) -> PauliTerms {
+        var combinedTerms: PauliTerms = []
 
         for (coefficient, pauliString) in terms {
             if let index = combinedTerms.firstIndex(where: { $0.pauliString == pauliString }) {
@@ -316,7 +322,7 @@ struct Observable: CustomStringConvertible {
 
     // MARK: - CustomStringConvertible
 
-    var description: String {
+    public var description: String {
         if terms.isEmpty { return "Observable: 0" }
 
         let termStrings = terms.map { coeff, pauli in

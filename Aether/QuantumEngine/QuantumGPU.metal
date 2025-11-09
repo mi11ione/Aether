@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Roman Zhuzhgov
+// Licensed under the Apache License, Version 2.0
+
 /// Quantum GPU compute shaders: Metal kernels for quantum gate application
 ///
 /// Implements massively parallel quantum gate operations on Apple GPUs using Metal.

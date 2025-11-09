@@ -12,7 +12,7 @@ import Foundation
 ///
 /// All algorithms use oracle-based computation where the oracle implements
 /// a black-box function as a quantum circuit.
-extension QuantumCircuit {
+public extension QuantumCircuit {
     // MARK: - Oracle Types
 
     /// Oracle function type: Maps input qubits and output qubit to circuit operations
@@ -321,7 +321,7 @@ extension QuantumCircuit {
 
 // MARK: - Measurement Helpers
 
-extension QuantumState {
+public extension QuantumState {
     /// Measure specified qubits and return classical bit string
     /// - Parameter qubits: Indices of qubits to measure
     /// - Returns: Array of measurement results (0 or 1 for each qubit)

@@ -51,7 +51,7 @@ import Foundation
 /// // Convenience method
 /// let result = initial.applying(gate: .hadamard, toQubit: 0)
 /// ```
-enum GateApplication {
+public enum GateApplication {
     // MARK: - Main Application Function
 
     /// Apply quantum gate to state at specified qubit(s)
@@ -60,7 +60,7 @@ enum GateApplication {
     ///   - qubits: Target qubit indices (for single-qubit gates)
     ///   - state: Current quantum state
     /// - Returns: New transformed quantum state
-    static func apply(gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {
+    public static func apply(gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {
         precondition(qubits.allSatisfy { $0 >= 0 && $0 < state.numQubits },
                      "Qubit indices out of bounds")
 
@@ -277,7 +277,7 @@ enum GateApplication {
 
 // MARK: - Convenience Extension
 
-extension QuantumState {
+public extension QuantumState {
     /// Apply gate to this state (convenience method)
     /// - Parameters:
     ///   - gate: Gate to apply

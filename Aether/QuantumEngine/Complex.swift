@@ -28,11 +28,11 @@ import Foundation
 /// let phase = z1.phase                    // atan2(4, 3)
 /// let conj = z1.conjugate                 // 3 - 4i
 /// ```
-struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomStringConvertible, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral, AdditiveArithmetic, Sendable {
+public struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomStringConvertible, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral, AdditiveArithmetic, Sendable {
     // MARK: - Properties
 
-    let real: T
-    let imaginary: T
+    public let real: T
+    public let imaginary: T
 
     // MARK: - Initialization
 
@@ -46,7 +46,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
     /// ```swift
     /// let z = Complex(3.0, 4.0)  // 3 + 4i
     /// ```
-    init(_ real: T, _ imaginary: T) {
+    public init(_ real: T, _ imaginary: T) {
         self.real = real
         self.imaginary = imaginary
     }
@@ -59,7 +59,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
     /// ```swift
     /// let z = Complex(5.0)  // 5 + 0i
     /// ```
-    init(_ real: T) {
+    public init(_ real: T) {
         self.real = real
         if T.self == Double.self {
             imaginary = 0.0 as! T
@@ -68,7 +68,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
         }
     }
 
-    init(integerLiteral value: Int) {
+    public init(integerLiteral value: Int) {
         if T.self == Double.self {
             real = Double(value) as! T
             imaginary = 0.0 as! T
@@ -80,7 +80,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
         }
     }
 
-    init(floatLiteral value: Double) {
+    public init(floatLiteral value: Double) {
         if T.self == Double.self {
             real = value as! T
             imaginary = 0.0 as! T
@@ -94,7 +94,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
 
     // MARK: - Static Constants
 
-    static var zero: Complex<T> {
+    public static var zero: Complex<T> {
         let z: T = if T.self == Double.self {
             0.0 as! T
         } else {
@@ -103,7 +103,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
         return Complex(z, z)
     }
 
-    static var one: Complex<T> {
+    public static var one: Complex<T> {
         let o: T = if T.self == Double.self {
             1.0 as! T
         } else {
@@ -125,7 +125,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
     /// let iPower2 = i * i                 // -1 + 0i
     /// let iPower4 = i * i * i * i         // 1 + 0i
     /// ```
-    static var i: Complex<T> {
+    public static var i: Complex<T> {
         let o: T = if T.self == Double.self {
             1.0 as! T
         } else {
@@ -151,7 +151,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
     /// let conj = z.conjugate              // 3 - 4i
     /// let prob = (z * z.conjugate).real   // |z|² = 25
     /// ```
-    var conjugate: Complex<T> {
+    public var conjugate: Complex<T> {
         Complex(real, -imaginary)
     }
 
@@ -165,7 +165,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
     /// let amplitude = Complex(0.6, 0.8)
     /// let probability = amplitude.magnitudeSquared  // 1.0
     /// ```
-    var magnitudeSquared: T {
+    public var magnitudeSquared: T {
         real * real + imaginary * imaginary
     }
 
@@ -176,7 +176,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
     /// let z = Complex(3.0, 4.0)
     /// let r = z.magnitude                 // 5.0
     /// ```
-    var magnitude: T {
+    public var magnitude: T {
         sqrt(magnitudeSquared)
     }
 
@@ -189,11 +189,11 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
     /// let z = Complex(1.0, 1.0)
     /// let theta = z.phase                 // π/4 radians
     /// ```
-    var phase: T {
+    public var phase: T {
         atan2(imaginary, real)
     }
 
-    var isFinite: Bool {
+    public var isFinite: Bool {
         real.isFinite && imaginary.isFinite
     }
 
@@ -213,7 +213,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
     /// let z = Complex<Double>.fromPolar(r: 2.0, theta: .pi/3)
     /// // Creates: 2·e^(iπ/3) = 1 + √3i
     /// ```
-    static func fromPolar(r: T, theta: T) -> Complex<T> {
+    public static func fromPolar(r: T, theta: T) -> Complex<T> {
         Complex(r * cos(theta), r * sin(theta))
     }
 
@@ -227,7 +227,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
     /// let (r, theta) = z.toPolar()
     /// // r = 5.0, theta = atan2(4, 3) ≈ 0.927 radians
     /// ```
-    func toPolar() -> (magnitude: T, phase: T) {
+    public func toPolar() -> (magnitude: T, phase: T) {
         (magnitude, phase)
     }
 
@@ -246,13 +246,13 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
     /// let i = Complex<Double>.exp(.pi/2)      // e^(iπ/2) = i
     /// let minusOne = Complex<Double>.exp(.pi) // e^(iπ) = -1
     /// ```
-    static func exp(_ theta: T) -> Complex<T> {
+    public static func exp(_ theta: T) -> Complex<T> {
         Complex(cos(theta), sin(theta))
     }
 
     // MARK: - CustomStringConvertible
 
-    var description: String {
+    public var description: String {
         let epsilon: T = if T.self == Double.self {
             1e-10 as! T
         } else {
@@ -274,7 +274,7 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
 
     // MARK: - Equatable
 
-    static func == (lhs: Complex<T>, rhs: Complex<T>) -> Bool {
+    public static func == (lhs: Complex<T>, rhs: Complex<T>) -> Bool {
         let epsilon: T = if T.self == Double.self {
             1e-10 as! T
         } else {
@@ -287,21 +287,21 @@ struct Complex<T: BinaryFloatingPoint & Sendable>: Equatable, Hashable, CustomSt
 
 // MARK: - Arithmetic Operators
 
-func + <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
+public func + <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
     Complex(lhs.real + rhs.real, lhs.imaginary + rhs.imaginary)
 }
 
-func - <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
+public func - <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
     Complex(lhs.real - rhs.real, lhs.imaginary - rhs.imaginary)
 }
 
-func * <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
+public func * <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
     let real = lhs.real * rhs.real - lhs.imaginary * rhs.imaginary
     let imag = lhs.real * rhs.imaginary + lhs.imaginary * rhs.real
     return Complex(real, imag)
 }
 
-func / <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
+public func / <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
     let denominator = rhs.magnitudeSquared
     let minThreshold: T = if T.self == Double.self {
         1e-15 as! T
@@ -322,22 +322,48 @@ func / <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
     return Complex(real, imag)
 }
 
-prefix func - <T>(z: Complex<T>) -> Complex<T> {
+public prefix func - <T>(z: Complex<T>) -> Complex<T> {
     Complex(-z.real, -z.imaginary)
 }
 
 // MARK: - Scalar Operations
 
-func * <T>(scalar: T, z: Complex<T>) -> Complex<T> {
+public func * <T>(scalar: T, z: Complex<T>) -> Complex<T> {
     Complex(scalar * z.real, scalar * z.imaginary)
 }
 
-func * <T>(z: Complex<T>, scalar: T) -> Complex<T> {
+public func * <T>(z: Complex<T>, scalar: T) -> Complex<T> {
     Complex(z.real * scalar, z.imaginary * scalar)
 }
 
-func / <T>(z: Complex<T>, scalar: T) -> Complex<T> {
+public func / <T>(z: Complex<T>, scalar: T) -> Complex<T> {
     Complex(z.real / scalar, z.imaginary / scalar)
+}
+
+// MARK: - Compound Assignment Operators
+
+public func += <T>(lhs: inout Complex<T>, rhs: Complex<T>) {
+    lhs = lhs + rhs
+}
+
+public func -= <T>(lhs: inout Complex<T>, rhs: Complex<T>) {
+    lhs = lhs - rhs
+}
+
+public func *= <T>(lhs: inout Complex<T>, rhs: Complex<T>) {
+    lhs = lhs * rhs
+}
+
+public func /= <T>(lhs: inout Complex<T>, rhs: Complex<T>) {
+    lhs = lhs / rhs
+}
+
+public func *= <T>(lhs: inout Complex<T>, scalar: T) {
+    lhs = lhs * scalar
+}
+
+public func /= <T>(lhs: inout Complex<T>, scalar: T) {
+    lhs = lhs / scalar
 }
 
 // MARK: - Helper Functions
@@ -381,8 +407,3 @@ private func atan2<T: FloatingPoint>(_ y: T, _ x: T) -> T {
     }
     preconditionFailure("Unsupported FloatingPoint type for atan2")
 }
-
-// MARK: - Type Aliases
-
-typealias ComplexDouble = Complex<Double>
-typealias ComplexFloat = Complex<Float>
