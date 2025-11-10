@@ -123,7 +123,7 @@ public actor QuantumSimulator {
             try Task.checkCancellation()
 
             if useMetalAcceleration, let metal = metalApplication, state.numQubits >= MetalGateApplication.gpuThreshold {
-                state = metal.apply(gate: operation.gate, to: operation.qubits, state: state)
+                state = await metal.apply(gate: operation.gate, to: operation.qubits, state: state)
             } else {
                 state = GateApplication.apply(gate: operation.gate, to: operation.qubits, state: state)
             }
@@ -177,7 +177,7 @@ public actor QuantumSimulator {
             try Task.checkCancellation()
 
             if useMetalAcceleration, let metal = metalApplication, state.numQubits >= MetalGateApplication.gpuThreshold {
-                state = metal.apply(gate: operation.gate, to: operation.qubits, state: state)
+                state = await metal.apply(gate: operation.gate, to: operation.qubits, state: state)
             } else {
                 state = GateApplication.apply(gate: operation.gate, to: operation.qubits, state: state)
             }

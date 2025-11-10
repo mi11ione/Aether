@@ -59,12 +59,7 @@ import Metal
 ///     params = updateParameters(params, gradient)
 /// }
 /// ```
-///
-/// **Thread Safety:**
-/// - Sparse matrix construction: Not thread-safe (call from single thread)
-/// - Expectation value computation: Thread-safe (read-only operations)
-/// - VQE usage: Build once, compute from multiple threads safely
-public final class SparseHamiltonian {
+public actor SparseHamiltonian {
     /// Performance backend for expectation value computation
     private enum Backend {
         /// Metal GPU backend: Custom CSR sparse kernel with native complex support
@@ -100,16 +95,16 @@ public final class SparseHamiltonian {
     // MARK: - Properties
 
     /// Number of qubits in the Hamiltonian
-    public let numQubits: Int
+    public nonisolated let numQubits: Int
 
     /// Dimension of the Hilbert space (2^numQubits)
-    public let dimension: Int
+    public nonisolated let dimension: Int
 
     /// Number of non-zero elements in sparse representation
-    public private(set) var nnz: Int = 0
+    public nonisolated let nnz: Int
 
     /// Sparsity ratio (non-zeros / total elements)
-    public var sparsity: Double {
+    public nonisolated var sparsity: Double {
         Double(nnz) / Double(dimension * dimension)
     }
 
@@ -832,7 +827,7 @@ private struct MatrixIndex: Hashable {
 }
 
 /// Statistics about sparse Hamiltonian
-public struct SparseMatrixStatistics: CustomStringConvertible {
+public struct SparseMatrixStatistics: CustomStringConvertible, Sendable {
     public let numQubits: Int
     public let dimension: Int
     public let nonZeros: Int

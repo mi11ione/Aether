@@ -997,10 +997,14 @@ struct MeasurementOptimizationIntegrationTests {
     func clearGroupingCaches() async {
         let ps = PauliString(operators: [(qubit: 0, basis: .x)])
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        _ = observable.qwcGroups
+
+        let groups1 = observable.qwcGroups
         await Observable.clearGroupingCaches()
-        _ = observable.qwcGroups
-        #expect(true)
+        let groups2 = observable.qwcGroups
+        let countsMatch = await groups1().count == groups2().count
+
+        #expect(countsMatch, "Groups should have same count after cache clear")
+        await #expect(groups1().count == 1, "Single X operator should form 1 QWC group")
     }
 
     @Test("Measurement circuits for term-by-term strategy")

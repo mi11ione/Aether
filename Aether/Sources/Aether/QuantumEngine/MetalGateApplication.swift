@@ -110,7 +110,7 @@ private enum MetalResources {
 /// let result1 = GateApplication.applyHybrid(gate: .hadamard, to: [0], state: anyState)
 /// let result2 = GateApplication.applyHybrid(gate: .hadamard, to: [0], state: bigState)
 /// ```
-public final class MetalGateApplication {
+public actor MetalGateApplication {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
 
@@ -409,10 +409,10 @@ public final class MetalGateApplication {
 public extension GateApplication {
     /// Apply gate with automatic CPU/GPU selection
     /// Uses GPU for states with >= 10 qubits
-    static func applyHybrid(gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {
+    static func applyHybrid(gate: QuantumGate, to qubits: [Int], state: QuantumState) async -> QuantumState {
         if state.numQubits >= MetalGateApplication.gpuThreshold {
             if let metalApp = MetalGateApplication() {
-                return metalApp.apply(gate: gate, to: qubits, state: state)
+                return await metalApp.apply(gate: gate, to: qubits, state: state)
             }
         }
 

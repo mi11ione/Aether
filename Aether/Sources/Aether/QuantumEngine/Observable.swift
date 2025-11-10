@@ -53,7 +53,7 @@ public typealias PauliTerms = [(coefficient: Double, pauliString: PauliString)]
 /// let expectation = observable.expectationValue(state: state)
 /// // expectation = +1.0 (|0⟩ is +1 eigenstate of Z)
 /// ```
-public struct Observable: CustomStringConvertible {
+public struct Observable: CustomStringConvertible, Sendable {
     /// Terms in the observable: weighted Pauli strings (cᵢ, Pᵢ)
     /// Coefficients are real (required for Hermiticity)
     public let terms: PauliTerms

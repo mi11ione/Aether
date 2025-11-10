@@ -11,11 +11,11 @@ import Testing
 @Suite("Metal Gate Application")
 struct MetalGateApplicationTests {
     @Test("Metal applies Hadamard gate correctly")
-    func metalAppliesHadamard() {
+    func metalAppliesHadamard() async {
         guard let metal = MetalGateApplication() else { return }
 
         let state = QuantumState(numQubits: 4)
-        let newState = metal.apply(gate: .hadamard, to: [0], state: state)
+        let newState = await metal.apply(gate: .hadamard, to: [0], state: state)
 
         #expect(newState.isNormalized())
         #expect(abs(newState.getAmplitude(ofState: 0).magnitude - 1.0 / sqrt(2.0)) < 1e-5)
@@ -23,51 +23,51 @@ struct MetalGateApplicationTests {
     }
 
     @Test("Metal applies Pauli-X gate correctly")
-    func metalAppliesPauliX() {
+    func metalAppliesPauliX() async {
         guard let metal = MetalGateApplication() else { return }
 
         let state = QuantumState(numQubits: 4)
-        let newState = metal.apply(gate: .pauliX, to: [0], state: state)
+        let newState = await metal.apply(gate: .pauliX, to: [0], state: state)
 
         #expect(newState.isNormalized())
         #expect(abs(newState.getAmplitude(ofState: 1).real - 1.0) < 1e-5)
     }
 
     @Test("Metal applies Phase gate correctly")
-    func metalAppliesPhase() {
+    func metalAppliesPhase() async {
         guard let metal = MetalGateApplication() else { return }
 
         var circuit = QuantumCircuit(numQubits: 4)
         circuit.append(gate: .hadamard, toQubit: 0)
         let superposition = circuit.execute()
 
-        let newState = metal.apply(gate: .phase(theta: .pi / 2), to: [0], state: superposition)
+        let newState = await metal.apply(gate: .phase(theta: .pi / 2), to: [0], state: superposition)
 
         #expect(newState.isNormalized())
     }
 
     @Test("Metal applies CNOT gate correctly")
-    func metalAppliesCNOT() {
+    func metalAppliesCNOT() async {
         guard let metal = MetalGateApplication() else { return }
 
         var amplitudes = AmplitudeVector(repeating: .zero, count: 16)
         amplitudes[2] = .one
         let state = QuantumState(numQubits: 4, amplitudes: amplitudes)
 
-        let newState = metal.apply(gate: .cnot(control: 0, target: 1), to: [], state: state)
+        let newState = await metal.apply(gate: .cnot(control: 0, target: 1), to: [], state: state)
 
         #expect(newState.isNormalized())
         #expect(abs(newState.getAmplitude(ofState: 2).real - 1.0) < 1e-5)
     }
 
     @Test("Metal creates Bell state")
-    func metalCreatesBellState() {
+    func metalCreatesBellState() async {
         guard let metal = MetalGateApplication() else { return }
 
         var state = QuantumState(numQubits: 4)
 
-        state = metal.apply(gate: .hadamard, to: [0], state: state)
-        state = metal.apply(gate: .cnot(control: 0, target: 1), to: [], state: state)
+        state = await metal.apply(gate: .hadamard, to: [0], state: state)
+        state = await metal.apply(gate: .cnot(control: 0, target: 1), to: [], state: state)
 
         #expect(state.isNormalized())
 
@@ -79,26 +79,26 @@ struct MetalGateApplicationTests {
     }
 
     @Test("Metal applies Toffoli gate")
-    func metalAppliesToffoli() {
+    func metalAppliesToffoli() async {
         guard let metal = MetalGateApplication() else { return }
 
         var amplitudes = AmplitudeVector(repeating: .zero, count: 16)
         amplitudes[3] = .one
         let state = QuantumState(numQubits: 4, amplitudes: amplitudes)
 
-        let newState = metal.apply(gate: .toffoli(control1: 0, control2: 1, target: 2), to: [], state: state)
+        let newState = await metal.apply(gate: .toffoli(control1: 0, control2: 1, target: 2), to: [], state: state)
 
         #expect(newState.isNormalized())
         #expect(abs(newState.getAmplitude(ofState: 7).real - 1.0) < 1e-5)
     }
 
     @Test("Metal results match CPU for single-qubit gate")
-    func metalMatchesCPUForSingleQubit() {
+    func metalMatchesCPUForSingleQubit() async {
         guard let metal = MetalGateApplication() else { return }
 
         let state = QuantumState(numQubits: 4)
         let cpuState = GateApplication.apply(gate: .hadamard, to: [0], state: state)
-        let gpuState = metal.apply(gate: .hadamard, to: [0], state: state)
+        let gpuState = await metal.apply(gate: .hadamard, to: [0], state: state)
 
         for i in 0 ..< cpuState.stateSpaceSize {
             let cpuAmp = cpuState.getAmplitude(ofState: i)
@@ -110,7 +110,7 @@ struct MetalGateApplicationTests {
     }
 
     @Test("Metal results match CPU for CNOT")
-    func metalMatchesCPUForCNOT() {
+    func metalMatchesCPUForCNOT() async {
         guard let metal = MetalGateApplication() else { return }
 
         var circuit = QuantumCircuit(numQubits: 4)
@@ -119,7 +119,7 @@ struct MetalGateApplicationTests {
         let state = circuit.execute()
 
         let cpuState = GateApplication.apply(gate: .cnot(control: 0, target: 1), to: [], state: state)
-        let gpuState = metal.apply(gate: .cnot(control: 0, target: 1), to: [], state: state)
+        let gpuState = await metal.apply(gate: .cnot(control: 0, target: 1), to: [], state: state)
 
         for i in 0 ..< cpuState.stateSpaceSize {
             let cpuAmp = cpuState.getAmplitude(ofState: i)
@@ -131,7 +131,7 @@ struct MetalGateApplicationTests {
     }
 
     @Test("Metal preserves normalization")
-    func metalPreservesNormalization() {
+    func metalPreservesNormalization() async {
         guard let metal = MetalGateApplication() else { return }
 
         let gates: [QuantumGate] = [
@@ -146,20 +146,20 @@ struct MetalGateApplicationTests {
 
         for gate in gates {
             let state = QuantumState(numQubits: 4)
-            let newState = metal.apply(gate: gate, to: [0], state: state)
+            let newState = await metal.apply(gate: gate, to: [0], state: state)
 
             #expect(newState.isNormalized(), "Gate \(gate) should preserve normalization")
         }
     }
 
     @Test("Metal handles multiple sequential gates")
-    func metalHandlesSequentialGates() {
+    func metalHandlesSequentialGates() async {
         guard let metal = MetalGateApplication() else { return }
 
         var state = QuantumState(numQubits: 4)
 
         for _ in 0 ..< 10 {
-            state = metal.apply(gate: .hadamard, to: [0], state: state)
+            state = await metal.apply(gate: .hadamard, to: [0], state: state)
         }
 
         #expect(state.isNormalized())
@@ -167,42 +167,42 @@ struct MetalGateApplicationTests {
     }
 
     @Test("applyHybrid uses CPU for small states")
-    func hybridUsesCPUForSmallStates() {
+    func hybridUsesCPUForSmallStates() async {
         let state = QuantumState(numQubits: 5)
 
-        let newState = GateApplication.applyHybrid(gate: .hadamard, to: [0], state: state)
+        let newState = await GateApplication.applyHybrid(gate: .hadamard, to: [0], state: state)
 
         #expect(newState.isNormalized())
         #expect(abs(newState.getAmplitude(ofState: 0).magnitude - 1.0 / sqrt(2.0)) < 1e-10)
     }
 
     @Test("applyHybrid attempts GPU for large states")
-    func hybridAttemptsGPUForLargeStates() {
+    func hybridAttemptsGPUForLargeStates() async {
         let state = QuantumState(numQubits: 10)
-        let newState = GateApplication.applyHybrid(gate: .hadamard, to: [0], state: state)
+        let newState = await GateApplication.applyHybrid(gate: .hadamard, to: [0], state: state)
 
         #expect(newState.isNormalized())
     }
 
     @Test("Metal handles identity gate")
-    func metalHandlesIdentity() {
+    func metalHandlesIdentity() async {
         guard let metal = MetalGateApplication() else { return }
 
         let state = QuantumState(numQubits: 4)
-        let newState = metal.apply(gate: .identity, to: [0], state: state)
+        let newState = await metal.apply(gate: .identity, to: [0], state: state)
 
         #expect(abs(newState.getAmplitude(ofState: 0).real - 1.0) < 1e-10)
     }
 
     @Test("Metal handles rotation gates")
-    func metalHandlesRotations() {
+    func metalHandlesRotations() async {
         guard let metal = MetalGateApplication() else { return }
 
         let state = QuantumState(numQubits: 4)
 
-        let rx = metal.apply(gate: .rotationX(theta: .pi / 4), to: [0], state: state)
-        let ry = metal.apply(gate: .rotationY(theta: .pi / 4), to: [0], state: state)
-        let rz = metal.apply(gate: .rotationZ(theta: .pi / 4), to: [0], state: state)
+        let rx = await metal.apply(gate: .rotationX(theta: .pi / 4), to: [0], state: state)
+        let ry = await metal.apply(gate: .rotationY(theta: .pi / 4), to: [0], state: state)
+        let rz = await metal.apply(gate: .rotationZ(theta: .pi / 4), to: [0], state: state)
 
         #expect(rx.isNormalized())
         #expect(ry.isNormalized())
@@ -210,7 +210,7 @@ struct MetalGateApplicationTests {
     }
 
     @Test("Metal applies controlled-phase gate")
-    func metalAppliesControlledPhase() {
+    func metalAppliesControlledPhase() async {
         guard let metal = MetalGateApplication() else { return }
 
         var circuit = QuantumCircuit(numQubits: 4)
@@ -218,26 +218,26 @@ struct MetalGateApplicationTests {
         circuit.append(gate: .hadamard, toQubit: 1)
         let state = circuit.execute()
 
-        let newState = metal.apply(gate: .controlledPhase(theta: .pi / 2, control: 0, target: 1), to: [0, 1], state: state)
+        let newState = await metal.apply(gate: .controlledPhase(theta: .pi / 2, control: 0, target: 1), to: [0, 1], state: state)
 
         #expect(newState.isNormalized(), "Controlled-phase gate should preserve normalization")
     }
 
     @Test("Metal applies SWAP gate")
-    func metalAppliesSwap() {
+    func metalAppliesSwap() async {
         guard let metal = MetalGateApplication() else { return }
 
         var amplitudes = AmplitudeVector(repeating: .zero, count: 16)
         amplitudes[1] = .one
         let state = QuantumState(numQubits: 4, amplitudes: amplitudes)
-        let newState = metal.apply(gate: .swap(qubit1: 0, qubit2: 1), to: [0, 1], state: state)
+        let newState = await metal.apply(gate: .swap(qubit1: 0, qubit2: 1), to: [0, 1], state: state)
 
         #expect(newState.isNormalized(), "SWAP gate should preserve normalization")
         #expect(abs(newState.getAmplitude(ofState: 2).real - 1.0) < 1e-5)
     }
 
     @Test("Metal two-qubit gates match CPU results")
-    func metalTwoQubitMatchesCPU() {
+    func metalTwoQubitMatchesCPU() async {
         guard let metal = MetalGateApplication() else { return }
 
         var circuit = QuantumCircuit(numQubits: 4)
@@ -246,7 +246,7 @@ struct MetalGateApplicationTests {
         let state = circuit.execute()
 
         let cpuState = GateApplication.apply(gate: .controlledPhase(theta: .pi / 4, control: 0, target: 1), to: [0, 1], state: state)
-        let gpuState = metal.apply(gate: .controlledPhase(theta: .pi / 4, control: 0, target: 1), to: [0, 1], state: state)
+        let gpuState = await metal.apply(gate: .controlledPhase(theta: .pi / 4, control: 0, target: 1), to: [0, 1], state: state)
 
         for i in 0 ..< cpuState.stateSpaceSize {
             let cpuAmp = cpuState.getAmplitude(ofState: i)

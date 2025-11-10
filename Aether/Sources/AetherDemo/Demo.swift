@@ -31,7 +31,7 @@ func demoBellState() {
     print("\n⏱️  \(String(format: "%.4f", elapsed))s  (~\(String(format: "%.0f", speedup))x faster)\n")
 }
 
-func demoLargeHamiltonian() {
+func demoLargeHamiltonian() async {
     print("═══════════════════════════════════════════════")
     print("Demo 2: VQE Molecular Hamiltonian (200 terms)")
     print("═══════════════════════════════════════════════")
@@ -95,7 +95,7 @@ func demoLargeHamiltonian() {
     }
 
     let state = circuit.execute()
-    let energy = sparseH.expectationValue(state: state)
+    let energy = await sparseH.expectationValue(state: state)
     let elapsed = Date().timeIntervalSince(start)
 
     print("Ground state energy: \(String(format: "%.6f", energy)) Ha")
@@ -152,7 +152,7 @@ func demoPerformanceScaling() {
 
 @main
 struct AetherDemo {
-    static func main() {
+    static func main() async {
         print("\n╔═══════════════════════════════════════════════════════╗")
         print("║               AETHER - Quantum in Swift               ║")
         print("╚═══════════════════════════════════════════════════════╝\n")
@@ -162,7 +162,7 @@ struct AetherDemo {
         print("Continue...")
         _ = readLine()
 
-        demoLargeHamiltonian()
+        await demoLargeHamiltonian()
 
         print("Continue...")
         _ = readLine()
