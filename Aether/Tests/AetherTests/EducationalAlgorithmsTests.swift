@@ -452,4 +452,14 @@ struct AlgorithmsEdgeCasesTests {
         #expect(state.isNormalized(),
                 "Simon algorithm should preserve state normalization")
     }
+
+    @Test("Balanced first-bit oracle handles empty input qubits")
+    func testBalancedFirstBitOracleEmptyInput() throws {
+        let oracle = QuantumCircuit.balancedFirstBitOracle()
+        var circuit = QuantumCircuit(numQubits: 1)
+
+        oracle([], 0, &circuit)
+
+        #expect(circuit.gateCount == 0, "Oracle should not add gates when inputQubits is empty")
+    }
 }

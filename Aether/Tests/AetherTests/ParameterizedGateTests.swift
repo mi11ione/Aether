@@ -426,6 +426,27 @@ struct ParameterizedGateDescriptionTests {
         #expect(crx.description.contains("t:1"))
     }
 
+    @Test("Controlled phase gate description")
+    func controlledPhaseDescription() {
+        let expr = ParameterExpression.value(0.75)
+        let cp = ParameterizedGate.controlledPhase(theta: expr, control: 2, target: 3)
+
+        #expect(cp.description.contains("CP"))
+        #expect(cp.description.contains("c:2"))
+        #expect(cp.description.contains("t:3"))
+    }
+
+    @Test("Controlled rotation Y gate description")
+    func controlledRotationYDescription() {
+        let param = Parameter(name: "phi")
+        let expr = ParameterExpression.parameter(param)
+        let cry = ParameterizedGate.controlledRotationY(theta: expr, control: 1, target: 4)
+
+        #expect(cry.description.contains("CRy"))
+        #expect(cry.description.contains("c:1"))
+        #expect(cry.description.contains("t:4"))
+    }
+
     @Test("Concrete gate description delegates")
     func concreteGateDescriptionDelegates() {
         let gate = ParameterizedGate.concrete(.hadamard)

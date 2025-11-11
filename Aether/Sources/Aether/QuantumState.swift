@@ -233,26 +233,16 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         }
 
         var magnitudesSquared = [Double](repeating: 0.0, count: amplitudes.count)
-        var vectorizationSucceeded = false
 
         interleavedAmps.withUnsafeBufferPointer { interleavedPtr in
             magnitudesSquared.withUnsafeMutableBufferPointer { magPtr in
-                guard let interleavedBase = interleavedPtr.baseAddress,
-                      let magBase = magPtr.baseAddress else { return }
-
                 var splitComplex = DSPDoubleSplitComplex(
-                    realp: UnsafeMutablePointer(mutating: interleavedBase),
-                    imagp: UnsafeMutablePointer(mutating: interleavedBase + 1)
+                    realp: UnsafeMutablePointer(mutating: interleavedPtr.baseAddress!),
+                    imagp: UnsafeMutablePointer(mutating: interleavedPtr.baseAddress! + 1)
                 )
 
-                vDSP_zvmagsD(&splitComplex, 2, magBase, 1, vDSP_Length(amplitudes.count))
-                vectorizationSucceeded = true
+                vDSP_zvmagsD(&splitComplex, 2, magPtr.baseAddress!, 1, vDSP_Length(amplitudes.count))
             }
-        }
-
-        // Fallback to scalar if vectorization failed (empty array or pointer issues)
-        if !vectorizationSucceeded {
-            return amplitudes.map(\.magnitudeSquared)
         }
 
         return magnitudesSquared

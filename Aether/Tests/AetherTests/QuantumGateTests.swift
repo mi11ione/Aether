@@ -306,6 +306,47 @@ struct GateValidationTests {
         let gate = QuantumGate.toffoli(control1: 0, control2: 0, target: 2)
         #expect(!gate.validateQubitIndices(maxAllowedQubit: 2))
     }
+
+    @Test("Custom two-qubit gate rejects invalid matrix size")
+    func customTwoQubitInvalidSize() throws {
+        let wrongSizeMatrix = [
+            [Complex<Double>.one, .zero],
+            [.zero, .one],
+        ]
+
+        do {
+            _ = try QuantumGate.createCustomTwoQubit(matrix: wrongSizeMatrix, control: 0, target: 1)
+            #expect(Bool(false), "Should throw invalidMatrixSize error")
+        } catch let QuantumGateError.invalidMatrixSize(message) {
+            #expect(message.contains("4×4"))
+        } catch {
+            #expect(Bool(false), "Wrong error type thrown")
+        }
+    }
+
+    @Test("Custom two-qubit gate validates successfully with correct matrix")
+    func customTwoQubitValidMatrix() throws {
+        let swapMatrix = [
+            [Complex<Double>.one, .zero, .zero, .zero],
+            [.zero, .zero, .one, .zero],
+            [.zero, .one, .zero, .zero],
+            [.zero, .zero, .zero, .one],
+        ]
+
+        let gate = try QuantumGate.createCustomTwoQubit(matrix: swapMatrix, control: 0, target: 1)
+        let matrix = gate.matrix()
+        #expect(matrix.count == 4)
+        #expect(matrix[0].count == 4)
+    }
+
+    @Test("QuantumGateError descriptions are non-empty")
+    func quantumGateErrorDescriptions() {
+        let sizeError = QuantumGateError.invalidMatrixSize("Test size error")
+        let unitaryError = QuantumGateError.notUnitary("Test unitary error")
+
+        #expect(sizeError.errorDescription == "Test size error")
+        #expect(unitaryError.errorDescription == "Test unitary error")
+    }
 }
 
 /// Test suite for quantum gate string representations.

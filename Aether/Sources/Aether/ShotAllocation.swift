@@ -283,8 +283,7 @@ public struct ShotAllocator {
 
         for index in sortedIndices {
             if shotsToDistribute <= 0 { break }
-            guard let currentShots = newAllocation[index] else { continue }
-            newAllocation[index] = currentShots + 1
+            newAllocation[index]! += 1
             shotsToDistribute -= 1
         }
 
@@ -307,7 +306,7 @@ public struct ShotAllocator {
         for index in sortedIndices {
             if shotsToRemove <= 0 { break }
 
-            guard let currentShots = newAllocation[index] else { continue }
+            let currentShots = newAllocation[index]!
             let removable: Int = max(0, currentShots - minShots)
             let toRemove: Int = min(removable, shotsToRemove)
 
@@ -384,7 +383,8 @@ public struct ShotAllocator {
         state: QuantumState? = nil
     ) -> Double {
         let optimalVariance: Double = terms.enumerated().map { index, term in
-            let shots = Double(allocation[index] ?? 1)
+            precondition(allocation[index] != nil, "Allocation must contain entry for term index \(index)")
+            let shots = Double(allocation[index]!)
             let variance = estimateVariance(pauliString: term.pauliString, coefficient: term.coefficient, state: state)
             return term.coefficient * term.coefficient * variance / shots
         }.reduce(0.0, +)

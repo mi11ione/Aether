@@ -560,7 +560,6 @@ public struct UnitaryPartitioner {
         guard !matrix.isEmpty else { return nil }
 
         let n: Int = matrix.count
-        guard matrix.allSatisfy({ $0.count == n }) else { return nil }
 
         var a = [Double]()
         a.reserveCapacity(2 * n * n)

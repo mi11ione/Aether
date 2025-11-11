@@ -610,4 +610,63 @@ struct ComplexCompoundAssignmentOperatorTests {
         a *= s
         #expect(a == mulExpected)
     }
+
+    @Test("-= matches - (Float)")
+    func minusEqualsMatchesMinusFloat() {
+        var a = Complex<Float>(5.0, 7.0)
+        let b = Complex<Float>(2.0, 3.0)
+        let expected = a - b
+        a -= b
+        #expect(a == expected)
+    }
+
+    @Test("/= matches / (complex-complex, Float)")
+    func divideEqualsMatchesDivideComplexFloat() {
+        var a = Complex<Float>(6.0, 8.0)
+        let b = Complex<Float>(3.0, -4.0)
+        let expected = a / b
+        a /= b
+        #expect(abs(a.real - expected.real) < 1e-5)
+        #expect(abs(a.imaginary - expected.imaginary) < 1e-5)
+    }
+
+    @Test("/= matches scalar divide (Float)")
+    func divideEqualsMatchesScalarFloat() {
+        var a = Complex<Float>(10.0, 15.0)
+        let s: Float = 5.0
+        let expected = a / s
+        a /= s
+        #expect(abs(a.real - expected.real) < 1e-5)
+        #expect(abs(a.imaginary - expected.imaginary) < 1e-5)
+    }
+
+    @Test("Real-only init works for Float")
+    func realOnlyInitFloat() {
+        let z = Complex<Float>(5.0)
+        #expect(abs(z.real - 5.0) < 1e-5)
+        #expect(abs(z.imaginary - 0.0) < 1e-5)
+    }
+
+    @Test("Imaginary unit i works for Float")
+    func imaginaryUnitFloat() {
+        let i = Complex<Float>.i
+        #expect(abs(i.real - 0.0) < 1e-5)
+        #expect(abs(i.imaginary - 1.0) < 1e-5)
+
+        let iPower2 = i * i
+        #expect(abs(iPower2.real - -1.0) < 1e-5)
+        #expect(abs(iPower2.imaginary - 0.0) < 1e-5)
+    }
+
+    @Test("Phase computation works for Float")
+    func phaseComputationFloat() {
+        let z = Complex<Float>(1.0, 1.0)
+        let theta = z.phase
+        let expectedPhase = Float.pi / 4.0
+        #expect(abs(theta - expectedPhase) < 1e-5)
+
+        let zNegative = Complex<Float>(-1.0, 0.0)
+        let phaseNeg = zNegative.phase
+        #expect(abs(abs(phaseNeg) - Float.pi) < 1e-5)
+    }
 }

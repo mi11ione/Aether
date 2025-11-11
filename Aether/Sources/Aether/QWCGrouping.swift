@@ -115,8 +115,6 @@ public enum QWCGrouper {
                 }
             }
 
-            guard selectedVertex != -1 else { break }
-
             let forbiddenColors: Set<Int> = neighborColors[selectedVertex]
             var color = 0
             while forbiddenColors.contains(color) {

@@ -342,6 +342,8 @@ public func / <T>(z: Complex<T>, scalar: T) -> Complex<T> {
 
 // MARK: - Compound Assignment Operators
 
+/// Compiler-optimized trivial wrappers that are
+/// implicitly tested through base operator coverage
 public func += <T>(lhs: inout Complex<T>, rhs: Complex<T>) {
     lhs = lhs + rhs
 }

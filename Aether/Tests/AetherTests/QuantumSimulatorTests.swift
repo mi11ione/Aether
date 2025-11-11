@@ -227,6 +227,11 @@ struct QuantumSimulatorTests {
     func simulatorHandlesEmptyCircuit() async throws {
         let simulator = QuantumSimulator()
         let circuit = QuantumCircuit(numQubits: 2)
+
+        let progress = await simulator.getProgress()
+        #expect(progress.total == 0)
+        #expect(progress.percentage == 0.0)
+
         let finalState = try await simulator.execute(circuit)
 
         #expect(finalState.probability(ofState: 0) == 1.0)

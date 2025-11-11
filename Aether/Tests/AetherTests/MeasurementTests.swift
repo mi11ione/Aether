@@ -1355,4 +1355,33 @@ struct MeasurementInfrastructureEdgeCasesTests {
             #expect(result.collapsedState.isNormalized())
         }
     }
+
+    @Test("PauliMeasurement description shows negative eigenvalue correctly")
+    func pauliMeasurementDescriptionNegative() {
+        var circuit = QuantumCircuit(numQubits: 1)
+        circuit.append(gate: .pauliX, toQubit: 0)
+        let state = circuit.execute()
+
+        var measurement = Measurement()
+        let result = measurement.measurePauli(qubit: 0, basis: .z, state: state)
+
+        #expect(result.eigenvalue == -1)
+        let description = result.description
+        #expect(description.contains("-1"))
+    }
+
+    @Test("PauliStringMeasurement description shows negative eigenvalue correctly")
+    func pauliStringMeasurementDescriptionNegative() {
+        var circuit = QuantumCircuit(numQubits: 2)
+        circuit.append(gate: .pauliX, toQubit: 0)
+        let state = circuit.execute()
+
+        let pauliString = PauliString(operators: [(0, .z), (1, .z)])
+        var measurement = Measurement()
+        let result = measurement.measurePauliString(pauliString, state: state)
+
+        #expect(result.eigenvalue == -1)
+        let description = result.description
+        #expect(description.contains("-1"))
+    }
 }

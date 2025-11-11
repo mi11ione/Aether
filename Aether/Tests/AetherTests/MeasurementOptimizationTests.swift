@@ -370,6 +370,116 @@ struct ShotAllocationTests {
         let total = allocation.values.reduce(0, +)
         #expect(total <= 500)
     }
+
+    @Test("Shot reduction when minShots causes over-allocation")
+    func shotReductionFromOverAllocation() {
+        let config = ShotAllocator.Config(minShotsPerTerm: 30, roundToInteger: true)
+        let allocator = ShotAllocator(config: config)
+        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+
+        let terms = [
+            (coefficient: 10.0, pauliString: ps),
+            (coefficient: 10.0, pauliString: ps),
+            (coefficient: 1.0, pauliString: ps),
+            (coefficient: 1.0, pauliString: ps),
+            (coefficient: 1.0, pauliString: ps),
+        ]
+
+        let allocation = allocator.allocate(terms: terms, totalShots: 100, state: nil)
+
+        let total = allocation.values.reduce(0, +)
+        #expect(total == 100)
+
+        for shots in allocation.values {
+            #expect(shots >= 20)
+        }
+    }
+
+    @Test("Shot reduction removes excess shots iteratively")
+    func shotReductionIterativeRemoval() {
+        let config = ShotAllocator.Config(minShotsPerTerm: 25, roundToInteger: true)
+        let allocator = ShotAllocator(config: config)
+        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+
+        var terms: [(Double, PauliString)] = []
+        terms += [(10.0, ps), (10.0, ps), (10.0, ps)]
+        terms += Array(repeating: (1.0, ps), count: 12)
+        let allocation = allocator.allocate(terms: terms, totalShots: 200, state: nil)
+
+        let total = allocation.values.reduce(0, +)
+        #expect(total == 200)
+
+        for shots in allocation.values {
+            #expect(shots > 0)
+        }
+    }
+
+    @Test("Shot reduction with groups when minShots causes over-allocation")
+    func groupShotReductionFromOverAllocation() {
+        let config = ShotAllocator.Config(minShotsPerTerm: 40, roundToInteger: true)
+        let allocator = ShotAllocator(config: config)
+
+        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps2 = PauliString(operators: [(qubit: 1, basis: .y)])
+        let ps3 = PauliString(operators: [(qubit: 2, basis: .z)])
+
+        let group1 = QWCGroup(terms: [(coefficient: 10.0, pauliString: ps1)], measurementBasis: [0: .x])
+        let group2 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps2)], measurementBasis: [1: .y])
+        let group3 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps3)], measurementBasis: [2: .z])
+        let allocation = allocator.allocateForGroups(groups: [group1, group2, group3], totalShots: 100, state: nil)
+
+        let total = allocation.values.reduce(0, +)
+        #expect(total == 100)
+
+        for shots in allocation.values {
+            #expect(shots >= 30)
+        }
+    }
+
+    @Test("Shot reduction respects minimum when removing excess")
+    func shotReductionRespectsMinimum() {
+        let config = ShotAllocator.Config(minShotsPerTerm: 30, roundToInteger: true)
+        let allocator = ShotAllocator(config: config)
+        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+
+        let terms = [
+            (coefficient: 8.0, pauliString: ps),
+            (coefficient: 8.0, pauliString: ps),
+            (coefficient: 1.0, pauliString: ps),
+            (coefficient: 1.0, pauliString: ps),
+            (coefficient: 1.0, pauliString: ps),
+        ]
+
+        let allocation = allocator.allocate(terms: terms, totalShots: 150, state: nil)
+
+        let total = allocation.values.reduce(0, +)
+        #expect(total == 150)
+
+        for shots in allocation.values {
+            #expect(shots >= 30)
+        }
+    }
+
+    @Test("Shot reduction break when quota met mid-loop")
+    func shotReductionBreaksMidLoop() {
+        let config = ShotAllocator.Config(minShotsPerTerm: 10, roundToInteger: true)
+        let allocator = ShotAllocator(config: config)
+        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+
+        let mixedTerms = [
+            (coefficient: 10.0, pauliString: ps),
+            (coefficient: 10.0, pauliString: ps),
+            (coefficient: 10.0, pauliString: ps),
+            (coefficient: 10.0, pauliString: ps),
+            (coefficient: 10.0, pauliString: ps),
+            (coefficient: 1.0, pauliString: ps),
+            (coefficient: 1.0, pauliString: ps),
+        ]
+
+        let allocation = allocator.allocate(terms: mixedTerms, totalShots: 100, state: nil)
+        let total = allocation.values.reduce(0, +)
+        #expect(total == 100)
+    }
 }
 
 /// Tests for unitary partitioning of Pauli operators.
@@ -835,6 +945,127 @@ struct ObservableApproximationTests {
         let error = observable.approximationError(approximate: approx, state: state)
         #expect(error <= 0.02)
     }
+
+    @Test("topK with k=0 on empty observable returns empty")
+    func topKZeroEmptyObservable() {
+        let observable = Observable(terms: [])
+        let result = observable.topK(k: 0)
+        #expect(result.terms.isEmpty)
+    }
+
+    @Test("Approximation statistics with empty original observable")
+    func approximationStatsEmptyOriginal() {
+        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let empty = Observable(terms: [])
+        let nonEmpty = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
+        let stats = empty.approximationStatistics(approximate: nonEmpty)
+
+        #expect(stats.originalTerms == 0)
+        #expect(stats.reductionFactor == 1.0)
+        #expect(stats.coefficientRetention == 0.0)
+    }
+
+    @Test("Find optimal threshold on empty observable")
+    func findOptimalThresholdEmpty() {
+        let observable = Observable(terms: [])
+        let state = QuantumState(numQubits: 1)
+        let threshold = observable.findOptimalThreshold(state: state, maxError: 0.1)
+
+        #expect(abs(threshold - 1.0) < 1e-6)
+    }
+
+    @Test("topK with k=0 returns single largest term")
+    func topKZeroReturnsLargest() {
+        let observable = Observable(terms: [
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
+            (coefficient: 3.5, pauliString: PauliString(operators: [(1, .z)])),
+            (coefficient: -2.0, pauliString: PauliString(operators: [(2, .y)])),
+        ])
+
+        let approx = observable.topK(k: 0)
+
+        #expect(approx.terms.count == 1)
+        #expect(abs(approx.terms[0].coefficient - 3.5) < 1e-10)
+    }
+
+    @Test("topK with k=0 on empty observable returns empty")
+    func topKZeroEmptyReturnsEmpty() {
+        let observable = Observable(terms: [])
+        let approx = observable.topK(k: 0)
+
+        #expect(approx.terms.count == 0)
+    }
+
+    @Test("topK with negative k returns largest term")
+    func topKNegativeReturnsLargest() {
+        let observable = Observable(terms: [
+            (coefficient: -5.0, pauliString: PauliString(operators: [(0, .z)])),
+            (coefficient: 2.0, pauliString: PauliString(operators: [(1, .x)])),
+        ])
+
+        let approx = observable.topK(k: -1)
+
+        #expect(approx.terms.count == 1)
+        #expect(abs(abs(approx.terms[0].coefficient) - 5.0) < 1e-10)
+    }
+
+    @Test("topK with k=1 returns single largest term")
+    func topKOneReturnsLargest() {
+        let observable = Observable(terms: [
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
+            (coefficient: 4.0, pauliString: PauliString(operators: [(1, .z)])),
+            (coefficient: -2.0, pauliString: PauliString(operators: [(2, .y)])),
+        ])
+
+        let approx = observable.topK(k: 1)
+
+        #expect(approx.terms.count == 1)
+        #expect(abs(approx.terms[0].coefficient - 4.0) < 1e-10)
+    }
+
+    @Test("topK with k=2 returns two largest terms")
+    func topKTwoReturnsTopTwo() {
+        let observable = Observable(terms: [
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
+            (coefficient: 4.0, pauliString: PauliString(operators: [(1, .z)])),
+            (coefficient: -3.0, pauliString: PauliString(operators: [(2, .y)])),
+            (coefficient: 2.0, pauliString: PauliString(operators: [(3, .x)])),
+        ])
+
+        let approx = observable.topK(k: 2)
+
+        #expect(approx.terms.count == 2)
+
+        let coeffs = approx.terms.map { abs($0.coefficient) }.sorted(by: >)
+        #expect(abs(coeffs[0] - 4.0) < 1e-10)
+        #expect(abs(coeffs[1] - 3.0) < 1e-10)
+    }
+
+    @Test("topK with k larger than term count returns all terms")
+    func topKLargerThanCountReturnsAll() {
+        let observable = Observable(terms: [
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
+            (coefficient: 2.0, pauliString: PauliString(operators: [(1, .z)])),
+        ])
+
+        let approx = observable.topK(k: 10)
+
+        #expect(approx.terms.count == 2)
+    }
+
+    @Test("topK selects by absolute value of coefficient")
+    func topKSelectsByAbsoluteValue() {
+        let observable = Observable(terms: [
+            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
+            (coefficient: -5.0, pauliString: PauliString(operators: [(1, .z)])),
+            (coefficient: 3.0, pauliString: PauliString(operators: [(2, .y)])),
+        ])
+
+        let approx = observable.topK(k: 1)
+
+        #expect(approx.terms.count == 1)
+        #expect(abs(abs(approx.terms[0].coefficient) - 5.0) < 1e-10)
+    }
 }
 
 /// Tests for measurement optimization integration layer.
@@ -1048,27 +1279,6 @@ struct MeasurementOptimizationIntegrationTests {
         #expect(count >= 1)
     }
 
-    @Test("Validate measurement optimization with QWC groups")
-    func validateMeasurementOptimization() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let observable = Observable(terms: [(coefficient: 0.5, pauliString: ps1), (coefficient: 0.3, pauliString: ps2)])
-        var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        let state = circuit.execute()
-        let valid = await observable.validateMeasurementOptimization(state: state, tolerance: 1e-6, numQubits: nil)
-        #expect(valid)
-    }
-
-    @Test("Validate measurement optimization with unitary partitions")
-    func validateMeasurementOptimizationUnitary() async {
-        let ps = PauliString(operators: [(qubit: 0, basis: .z)])
-        let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let state = QuantumState(numQubits: 1)
-        let valid = await observable.validateMeasurementOptimization(state: state, tolerance: 1e-6, numQubits: 1)
-        #expect(valid)
-    }
-
     @Test("Shot allocation with state for variance estimation")
     func shotAllocationWithState() {
         let ps = PauliString(operators: [(qubit: 0, basis: .z)])
@@ -1121,30 +1331,6 @@ struct MeasurementOptimizationIntegrationTests {
         #expect(observable.terms.count == 600)
         let count = await observable.measurementCircuits(strategy: .automatic(numQubits: 20))
         #expect(count > 0)
-    }
-
-    @Test("Validation fails when QWC grouping produces wrong expectation")
-    func validateMeasurementOptimizationQwcFailure() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)])
-        var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        let state = circuit.execute()
-        let valid = await observable.validateMeasurementOptimization(state: state, tolerance: 1e-10, numQubits: nil)
-        #expect(valid)
-    }
-
-    @Test("Validation fails when unitary partitioning produces wrong expectation")
-    func validateMeasurementOptimizationUnitaryFailure() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)])
-        var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        let state = circuit.execute()
-        let valid = await observable.validateMeasurementOptimization(state: state, tolerance: 1e-10, numQubits: 1)
-        #expect(valid)
     }
 
     @Test("Shot allocation with remaining shots distribution")

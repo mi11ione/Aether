@@ -600,7 +600,8 @@ public extension QuantumCircuit {
         } else {
             // Allocate ancilla qubits: use high-numbered qubits beyond existing circuit qubits
             // Note: Circuit size remains at logical qubit count; ancilla handled during execution
-            let maxUsedQubit = max(controls.max() ?? 0, target)
+            // Force-unwrap: unreachable nil-coalescing
+            let maxUsedQubit = max(controls.max()!, target)
             let firstAncilla = maxUsedQubit + 1
             let numAncilla = n - 2
             let ancillaQubits = (0 ..< numAncilla).map { firstAncilla + $0 }

@@ -350,6 +350,25 @@ struct SparseHamiltonianStatisticsTests {
         let denseBytes = sparseH.dimension * sparseH.dimension * 16
         #expect(stats.memoryBytes < denseBytes)
     }
+
+    @Test("Memory statistics formatting for large Hamiltonian")
+    func memoryStatisticsFormattingLarge() async {
+        let terms: PauliTerms = (0 ..< 12).map { i in
+            let ps1 = PauliString(operators: [(qubit: i, basis: .z)])
+            let ps2 = PauliString(operators: [(qubit: i, basis: .x)])
+            return [
+                (coefficient: 1.0, pauliString: ps1),
+                (coefficient: 1.0, pauliString: ps2),
+            ]
+        }.flatMap(\.self)
+
+        let observable = Observable(terms: terms)
+        let sparseH = SparseHamiltonian(observable: observable)
+
+        let description = await sparseH.getStatistics().description
+        #expect(description.contains("Qubits: 12"))
+        #expect(description.contains("Non-zeros:"))
+    }
 }
 
 /// Exercises numerical and structural edge cases for SparseHamiltonian.

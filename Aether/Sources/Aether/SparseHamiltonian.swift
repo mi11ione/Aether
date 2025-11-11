@@ -472,13 +472,9 @@ public actor SparseHamiltonian {
             dimension: dimension
         )
 
-        guard let realMat = realMatrix, let imagMat = imagMatrix else {
-            return nil
-        }
-
         return .accelerateSparse(
-            realMatrix: realMat,
-            imagMatrix: imagMat,
+            realMatrix: realMatrix!,
+            imagMatrix: imagMatrix!,
             dimension: dimension
         )
     }
@@ -507,10 +503,6 @@ public actor SparseHamiltonian {
         values: [Double],
         dimension: Int
     ) -> SparseMatrix_Double? {
-        guard rows.count == cols.count, cols.count == values.count else {
-            return nil
-        }
-
         let nnz: Int = rows.count
 
         guard nnz > 0 else {

@@ -280,7 +280,6 @@ public extension QuantumCircuit {
     /// Compute binomial coefficient C(n, k) = n! / (k! * (n-k)!)
     /// Uses multiplicative formula to avoid overflow: C(n,k) = ∏(i=1 to k) (n-k+i)/i
     private static func binomialCoefficient(_ n: Int, _ k: Int) -> Int {
-        guard k >= 0, k <= n else { return 0 }
         guard k > 0, k < n else { return 1 }
 
         // Use symmetry: C(n,k) = C(n,n-k), choose smaller k

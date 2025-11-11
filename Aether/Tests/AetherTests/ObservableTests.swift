@@ -465,4 +465,22 @@ struct ObservableEdgeCasesTests {
 
         #expect(abs(expectation) < 1e-10)
     }
+
+    @Test("Empty observable description")
+    func emptyObservableDescription() {
+        let observable = Observable(terms: [])
+        let description = observable.description
+        #expect(description == "Observable: 0")
+    }
+
+    @Test("Identity term shows as I in description")
+    func identityTermDescription() {
+        let observable = Observable(
+            coefficient: 2.5,
+            pauliString: PauliString(operators: [])
+        )
+        let description = observable.description
+        #expect(description.contains("I"))
+        #expect(description.contains("2.5"))
+    }
 }

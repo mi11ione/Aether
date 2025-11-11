@@ -1223,15 +1223,6 @@ struct CircuitCoverageTests {
         #expect(circuit.maxQubitUsed() == 2)
     }
 
-    @Test("appendMultiControlledX with empty controls array")
-    func multiControlledXEmptyControls() {
-        var circuit = QuantumCircuit(numQubits: 2)
-        QuantumCircuit.appendMultiControlledX(to: &circuit, controls: [], target: 1)
-
-        let finalState = circuit.execute()
-        #expect(finalState.probability(ofState: 0b10) > 0.99)
-    }
-
     @Test("Grover finds target with high probability (5-qubit)")
     func groverFindsTarget5Qubit() {
         let target = 13
@@ -1294,5 +1285,33 @@ struct CircuitCoverageTests {
         let desc = circuit.description
         #expect(desc.contains("..."), "Description should contain '...' for circuits with >5 gates")
         #expect(desc.contains("7 gates"))
+    }
+
+    @Test("maxQubitUsed with single-qubit gate having empty qubits array")
+    func maxQubitUsedEmptyQubitArray() {
+        var circuit = QuantumCircuit(numQubits: 3)
+        let ops = [GateOperation(gate: .hadamard, qubits: [])]
+        circuit = QuantumCircuit(numQubits: 3, operations: ops)
+
+        #expect(circuit.maxQubitUsed() == 2)
+    }
+
+    @Test("Multi-controlled X with empty controls array")
+    func multiControlledXEmptyControlsArray() {
+        var circuit = QuantumCircuit(numQubits: 2)
+        QuantumCircuit.appendMultiControlledX(to: &circuit, controls: [], target: 0)
+
+        #expect(circuit.gateCount == 1)
+        let state = circuit.execute()
+        #expect(state.probability(ofState: 0b01) > 0.99, "Target qubit should be flipped")
+    }
+
+    @Test("appendMultiControlledX with empty controls array")
+    func multiControlledXEmptyControls() {
+        var circuit = QuantumCircuit(numQubits: 2)
+        QuantumCircuit.appendMultiControlledX(to: &circuit, controls: [], target: 1)
+
+        let finalState = circuit.execute()
+        #expect(finalState.probability(ofState: 0b10) > 0.99)
     }
 }

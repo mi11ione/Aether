@@ -1224,4 +1224,14 @@ struct ParameterizedCircuitMaxQubitCoverageTests {
 
         #expect(circuit.maxQubitUsed() == 9)
     }
+
+    @Test("maxQubitUsed with parameterized gate having empty qubits array")
+    func maxQubitUsedWithEmptyQubitsArray() {
+        var circuit = ParameterizedQuantumCircuit(numQubits: 5)
+        let theta = Parameter(name: "theta")
+
+        circuit.append(gate: .rotationY(theta: .parameter(theta)), qubits: [])
+
+        #expect(circuit.maxQubitUsed() == 4)
+    }
 }
