@@ -14,7 +14,18 @@ public typealias GPUComplex = (Float, Float)
 private enum MetalResources {
     fileprivate static let device: MTLDevice? = MTLCreateSystemDefaultDevice()
     fileprivate static let commandQueue: MTLCommandQueue? = device?.makeCommandQueue()
-    fileprivate static let library: MTLLibrary? = device?.makeDefaultLibrary()
+    fileprivate static let library: MTLLibrary? = {
+        guard let device else { return nil }
+
+        if let defaultLibrary = device.makeDefaultLibrary() { return defaultLibrary }
+
+        guard let resourceURL = Bundle.module.url(forResource: "QuantumGPU", withExtension: "metal"),
+              let source = try? String(contentsOf: resourceURL, encoding: .utf8),
+              let library = try? device.makeLibrary(source: source, options: nil)
+        else { return nil }
+
+        return library
+    }()
 
     // Lazily compiled pipeline states (shared across all instances)
     fileprivate static let singleQubitPipeline: MTLComputePipelineState? = {

@@ -26,7 +26,7 @@ let package = Package(
             name: "Aether",
             path: "Sources/Aether",
             resources: [
-                .process("Resources/QuantumGPU.metal"),
+                .process("QuantumEngine/QuantumGPU.metal"),
             ],
             cSettings: [
                 .define("ACCELERATE_NEW_LAPACK", to: "1"),

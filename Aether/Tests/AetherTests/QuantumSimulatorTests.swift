@@ -405,6 +405,8 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator uses Metal acceleration for large circuits")
     func simulatorUsesMetalAcceleration() async throws {
+        _ = try #require(MetalGateApplication(), "Metal not available on this device")
+
         let simulator = QuantumSimulator(useMetalAcceleration: true)
 
         var circuit = QuantumCircuit(numQubits: 12)
@@ -420,6 +422,8 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator uses Metal acceleration with progress reporting")
     func simulatorUsesMetalWithProgress() async throws {
+        _ = try #require(MetalGateApplication(), "Metal not available on this device")
+
         let simulator = QuantumSimulator(useMetalAcceleration: true)
 
         var circuit = QuantumCircuit(numQubits: 12)
