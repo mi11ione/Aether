@@ -226,6 +226,18 @@ struct SparseHamiltonianBackendTests {
 
         #expect(abs(value) < 1e-10)
     }
+
+    @Test("Empty observable uses Observable fallback")
+    func emptyObservableFallback() async {
+        let observable = Observable(terms: [])
+        let sparseH = SparseHamiltonian(observable: observable)
+        let backendDesc = await sparseH.backendDescription
+        #expect(backendDesc.contains("non-zero"))
+
+        let state = QuantumState(numQubits: 1)
+        let value = await sparseH.expectationValue(state: state)
+        #expect(abs(value) < 1e-10)
+    }
 }
 
 /// Test suite for sparse Hamiltonian sparsity characteristics.

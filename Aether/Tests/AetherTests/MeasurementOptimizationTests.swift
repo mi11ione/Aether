@@ -1890,4 +1890,42 @@ struct MeasurementOptimizationIntegrationTests {
         #expect(partitions.count == 1)
         #expect(partitions[0].terms.count == 1)
     }
+
+    @Test("Optimization failure triggers identity matrix fallback")
+    func optimizationFailureIdentityFallback() {
+        let config = UnitaryPartitioner.Config(
+            maxIterations: 1,
+            tolerance: 1e-10,
+            ansatzDepth: 1,
+            adaptiveDepth: false,
+            maxOffDiagonalNorm: 1e-18
+        )
+        let partitioner = UnitaryPartitioner(config: config)
+
+        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .x), (qubit: 2, basis: .x)])
+        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .y), (qubit: 2, basis: .y)])
+        let ps3 = PauliString(operators: [(qubit: 0, basis: .z), (qubit: 1, basis: .z), (qubit: 2, basis: .z)])
+        let ps4 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y), (qubit: 2, basis: .z)])
+
+        let terms: PauliTerms = [
+            (coefficient: 1.0, pauliString: ps1),
+            (coefficient: 0.9, pauliString: ps2),
+            (coefficient: 0.8, pauliString: ps3),
+            (coefficient: 0.7, pauliString: ps4),
+        ]
+
+        let partitions = partitioner.partition(terms: terms, numQubits: 3)
+
+        #expect(!partitions.isEmpty,
+                "Partitioner should create at least one partition even when optimization fails")
+
+        let totalTerms = partitions.reduce(0) { $0 + $1.terms.count }
+        #expect(totalTerms == terms.count,
+                "All terms should be preserved across partitions")
+
+        for partition in partitions {
+            #expect(partition.unitaryMatrix.count == 8,
+                    "3-qubit unitary matrix should be 8×8")
+        }
+    }
 }

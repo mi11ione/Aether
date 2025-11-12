@@ -284,6 +284,24 @@ struct ParameterizedCircuitValidationTests {
 
         #expect(circuit.validate())
     }
+
+    @Test("Circuit validation fails with invalid gate indices")
+    func validationFailsInvalidGate() {
+        var circuit = ParameterizedQuantumCircuit(numQubits: 2)
+        circuit.append(gate: .concrete(.cnot(control: 0, target: 0)), qubits: [])
+
+        #expect(!circuit.validate())
+    }
+
+    @Test("Circuit validation with out-of-bounds qubit in operations")
+    func validationOutOfBoundsQubitInArray() {
+        let ops = [
+            ParameterizedGateOperation(gate: .concrete(.hadamard), qubits: [5]),
+        ]
+        let invalidCircuit = ParameterizedQuantumCircuit(numQubits: 2, operations: ops, parameters: [])
+
+        #expect(!invalidCircuit.validate(), "Should detect out-of-bounds qubit")
+    }
 }
 
 /// Test suite for parameter binding with dictionary interface.

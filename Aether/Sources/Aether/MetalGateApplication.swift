@@ -17,6 +17,9 @@ private enum MetalResources {
     fileprivate static let library: MTLLibrary? = {
         guard let device else { return nil }
 
+        if let metallibURL = Bundle.module.url(forResource: "default", withExtension: "metallib"),
+           let library = try? device.makeLibrary(URL: metallibURL) { return library }
+
         if let defaultLibrary = device.makeDefaultLibrary() { return defaultLibrary }
 
         guard let resourceURL = Bundle.module.url(forResource: "QuantumGPU", withExtension: "metal"),
@@ -31,9 +34,7 @@ private enum MetalResources {
     fileprivate static let singleQubitPipeline: MTLComputePipelineState? = {
         guard let device, let library,
               let function = library.makeFunction(name: "applySingleQubitGate")
-        else {
-            return nil
-        }
+        else { return nil }
         return try? device.makeComputePipelineState(function: function)
     }()
 
@@ -333,7 +334,6 @@ public actor MetalGateApplication {
               let commandBuffer = commandQueue.makeCommandBuffer(),
               let encoder = commandBuffer.makeComputeCommandEncoder()
         else {
-            // If Metal fails, fall back to CPU (device limitation, not implementation)
             print("Metal buffer allocation failed for two-qubit gate - falling back to CPU")
             return GateApplication.apply(gate: gate, to: [control, target], state: state)
         }

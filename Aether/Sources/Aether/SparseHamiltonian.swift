@@ -313,7 +313,20 @@ public actor SparseHamiltonian {
         guard !cooMatrix.isEmpty else { return nil }
         guard let device = MTLCreateSystemDefaultDevice() else { return nil }
         guard let commandQueue = device.makeCommandQueue() else { return nil }
-        guard let library = device.makeDefaultLibrary() else { return nil }
+        let library: MTLLibrary? = {
+            if let metallibURL = Bundle.module.url(forResource: "default", withExtension: "metallib"),
+               let lib = try? device.makeLibrary(URL: metallibURL) { return lib }
+
+            if let defaultLibrary = device.makeDefaultLibrary() { return defaultLibrary }
+
+            guard let resourceURL = Bundle.module.url(forResource: "QuantumGPU", withExtension: "metal"),
+                  let source = try? String(contentsOf: resourceURL, encoding: .utf8),
+                  let lib = try? device.makeLibrary(source: source, options: nil)
+            else { return nil }
+
+            return lib
+        }()
+        guard let library else { return nil }
         guard let kernelFunction = library.makeFunction(name: "csrSparseMatVec") else { return nil }
         guard let pipelineState = try? device.makeComputePipelineState(function: kernelFunction) else { return nil }
 

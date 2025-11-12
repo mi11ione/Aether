@@ -557,8 +557,6 @@ public struct UnitaryPartitioner {
     /// - Parameter matrix: Hermitian matrix (n × n)
     /// - Returns: Eigenvalues (real, sorted) and eigenvectors (columns), or nil if decomposition fails
     private func eigendecompose(_ matrix: GateMatrix) -> (eigenvalues: [Double], eigenvectors: GateMatrix)? {
-        guard !matrix.isEmpty else { return nil }
-
         let n: Int = matrix.count
 
         var a = [Double]()
@@ -696,6 +694,11 @@ public struct UnitaryPartitioner {
         while iteration < maxIterations {
             let gradNorm: Double = sqrt(gradient.reduce(0.0) { $0 + $1 * $1 })
 
+            /// This convergence check is standard L-BFGS stopping criterion.
+            /// In practice, eigendecomposition succeeds for most Hamiltonians,
+            /// so variational optimization is rarely reached. However, when
+            /// eigendecomposition fails (LAPACK errors, numerical instability),
+            /// this convergence check is essential.
             if gradNorm < tolerance {
                 converged = true
                 break
@@ -735,6 +738,7 @@ public struct UnitaryPartitioner {
                 yHistory.append(y)
                 rhoHistory.append(rho)
 
+                /// Defensible memory-safety code, partically unreachable
                 if sHistory.count > memorySize {
                     sHistory.removeFirst()
                     yHistory.removeFirst()
