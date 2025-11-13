@@ -16,18 +16,7 @@ private enum MetalResources {
     fileprivate static let commandQueue: MTLCommandQueue? = device?.makeCommandQueue()
     fileprivate static let library: MTLLibrary? = {
         guard let device else { return nil }
-
-        if let metallibURL = Bundle.module.url(forResource: "default", withExtension: "metallib"),
-           let library = try? device.makeLibrary(URL: metallibURL) { return library }
-
-        if let defaultLibrary = device.makeDefaultLibrary() { return defaultLibrary }
-
-        guard let resourceURL = Bundle.module.url(forResource: "QuantumGPU", withExtension: "metal"),
-              let source = try? String(contentsOf: resourceURL, encoding: .utf8),
-              let library = try? device.makeLibrary(source: source, options: nil)
-        else { return nil }
-
-        return library
+        return MetalUtilities.loadLibrary(device: device)
     }()
 
     // Lazily compiled pipeline states (shared across all instances)
@@ -41,27 +30,21 @@ private enum MetalResources {
     fileprivate static let cnotPipeline: MTLComputePipelineState? = {
         guard let device, let library,
               let function = library.makeFunction(name: "applyCNOT")
-        else {
-            return nil
-        }
+        else { return nil }
         return try? device.makeComputePipelineState(function: function)
     }()
 
     fileprivate static let twoQubitPipeline: MTLComputePipelineState? = {
         guard let device, let library,
               let function = library.makeFunction(name: "applyTwoQubitGate")
-        else {
-            return nil
-        }
+        else { return nil }
         return try? device.makeComputePipelineState(function: function)
     }()
 
     fileprivate static let toffoliPipeline: MTLComputePipelineState? = {
         guard let device, let library,
               let function = library.makeFunction(name: "applyToffoli")
-        else {
-            return nil
-        }
+        else { return nil }
         return try? device.makeComputePipelineState(function: function)
     }()
 }
@@ -163,6 +146,7 @@ public actor MetalGateApplication {
     ///   - qubits: Target qubit indices
     ///   - state: Current quantum state
     /// - Returns: Transformed state
+    @_eagerMove
     public func apply(gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {
         switch gate {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
@@ -192,6 +176,8 @@ public actor MetalGateApplication {
 
     // MARK: - Private Metal Implementations
 
+    @_optimize(speed)
+    @_eagerMove
     private func applySingleQubitGate(gate: QuantumGate, qubit: Int, state: QuantumState) -> QuantumState {
         // Convert amplitudes to Float for GPU
         var floatAmplitudes: [GPUComplex] = state.amplitudes.map { amp in
@@ -227,9 +213,7 @@ public actor MetalGateApplication {
         var qubitValue = UInt32(qubit)
         var numQubitsValue = UInt32(state.numQubits)
 
-        guard let commandBuffer = commandQueue.makeCommandBuffer(),
-              let encoder = commandBuffer.makeComputeCommandEncoder()
-        else {
+        guard let (commandBuffer, encoder) = MetalUtilities.createCommandEncoder(queue: commandQueue) else {
             print("Metal command buffer/encoder creation failed - falling back to CPU")
             return GateApplication.apply(gate: gate, to: [qubit], state: state)
         }
@@ -271,17 +255,22 @@ public actor MetalGateApplication {
         return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
     }
 
+    @_optimize(speed)
+    @_eagerMove
     private func applyCNOT(control: Int, target: Int, state: QuantumState) -> QuantumState {
         var floatAmplitudes: [GPUComplex] = state.amplitudes.map { (Float($0.real), Float($0.imaginary)) }
         let stateSize: Int = state.stateSpaceSize
         let bufferSize: Int = stateSize * MemoryLayout<GPUComplex>.stride
 
         guard let inputBuffer = device.makeBuffer(bytes: &floatAmplitudes, length: bufferSize, options: .storageModeShared),
-              let outputBuffer = device.makeBuffer(length: bufferSize, options: .storageModeShared),
-              let commandBuffer = commandQueue.makeCommandBuffer(),
-              let encoder = commandBuffer.makeComputeCommandEncoder()
+              let outputBuffer = device.makeBuffer(length: bufferSize, options: .storageModeShared)
         else {
             print("Metal buffer allocation failed for CNOT - falling back to CPU")
+            return GateApplication.apply(gate: .cnot(control: control, target: target), to: [], state: state)
+        }
+
+        guard let (commandBuffer, encoder) = MetalUtilities.createCommandEncoder(queue: commandQueue) else {
+            print("Metal command buffer/encoder creation failed for CNOT - falling back to CPU")
             return GateApplication.apply(gate: .cnot(control: control, target: target), to: [], state: state)
         }
 
@@ -315,6 +304,8 @@ public actor MetalGateApplication {
         return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
     }
 
+    @_optimize(speed)
+    @_eagerMove
     private func applyTwoQubitGate(gate: QuantumGate, control: Int, target: Int, state: QuantumState) -> QuantumState {
         var floatAmplitudes: [GPUComplex] = state.amplitudes.map { (Float($0.real), Float($0.imaginary)) }
         let stateSize: Int = state.stateSpaceSize
@@ -330,11 +321,14 @@ public actor MetalGateApplication {
         let matrixSize = 16 * MemoryLayout<GPUComplex>.stride
 
         guard let inputBuffer = device.makeBuffer(bytes: &floatAmplitudes, length: bufferSize, options: .storageModeShared),
-              let matrixBuffer = device.makeBuffer(bytes: &floatMatrix, length: matrixSize, options: .storageModeShared),
-              let commandBuffer = commandQueue.makeCommandBuffer(),
-              let encoder = commandBuffer.makeComputeCommandEncoder()
+              let matrixBuffer = device.makeBuffer(bytes: &floatMatrix, length: matrixSize, options: .storageModeShared)
         else {
             print("Metal buffer allocation failed for two-qubit gate - falling back to CPU")
+            return GateApplication.apply(gate: gate, to: [control, target], state: state)
+        }
+
+        guard let (commandBuffer, encoder) = MetalUtilities.createCommandEncoder(queue: commandQueue) else {
+            print("Metal command buffer/encoder creation failed for two-qubit gate - falling back to CPU")
             return GateApplication.apply(gate: gate, to: [control, target], state: state)
         }
 
@@ -368,17 +362,22 @@ public actor MetalGateApplication {
         return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
     }
 
+    @_optimize(speed)
+    @_eagerMove
     private func applyToffoli(control1: Int, control2: Int, target: Int, state: QuantumState) -> QuantumState {
         var floatAmplitudes: [GPUComplex] = state.amplitudes.map { (Float($0.real), Float($0.imaginary)) }
         let stateSize: Int = state.stateSpaceSize
         let bufferSize: Int = stateSize * MemoryLayout<GPUComplex>.stride
 
         guard let inputBuffer = device.makeBuffer(bytes: &floatAmplitudes, length: bufferSize, options: .storageModeShared),
-              let outputBuffer = device.makeBuffer(length: bufferSize, options: .storageModeShared),
-              let commandBuffer = commandQueue.makeCommandBuffer(),
-              let encoder = commandBuffer.makeComputeCommandEncoder()
+              let outputBuffer = device.makeBuffer(length: bufferSize, options: .storageModeShared)
         else {
             print("Metal buffer allocation failed for Toffoli - falling back to CPU")
+            return GateApplication.apply(gate: .toffoli(control1: control1, control2: control2, target: target), to: [], state: state)
+        }
+
+        guard let (commandBuffer, encoder) = MetalUtilities.createCommandEncoder(queue: commandQueue) else {
+            print("Metal command buffer/encoder creation failed for Toffoli - falling back to CPU")
             return GateApplication.apply(gate: .toffoli(control1: control1, control2: control2, target: target), to: [], state: state)
         }
 
@@ -420,6 +419,8 @@ public actor MetalGateApplication {
 public extension GateApplication {
     /// Apply gate with automatic CPU/GPU selection
     /// Uses GPU for states with >= 10 qubits
+    @inlinable
+    @_eagerMove
     static func applyHybrid(gate: QuantumGate, to qubits: [Int], state: QuantumState) async -> QuantumState {
         if state.numQubits >= MetalGateApplication.gpuThreshold {
             if let metalApp = MetalGateApplication() {

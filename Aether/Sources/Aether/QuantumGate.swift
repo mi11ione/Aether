@@ -64,6 +64,7 @@ import Foundation
 /// print(rz.isParameterized)   // true
 /// print(h.isHermitian)        // true
 /// ```
+@frozen
 public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable {
     // MARK: - Single-Qubit Gates
 
@@ -213,6 +214,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     // MARK: - Gate Properties
 
     /// Number of qubits this gate operates on
+    @inlinable
     public var qubitsRequired: Int {
         switch self {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
@@ -226,6 +228,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     }
 
     /// Whether gate has parameter(s)
+    @inlinable
     public var isParameterized: Bool {
         switch self {
         case .phase, .rotationX, .rotationY, .rotationZ, .u1, .u2, .u3,
@@ -235,6 +238,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     }
 
     /// Whether gate is Hermitian (self-adjoint)
+    @inlinable
     public var isHermitian: Bool {
         switch self {
         case .pauliX, .pauliY, .pauliZ, .hadamard, .swap: true
@@ -270,6 +274,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// let cnot = QuantumGate.cnot(control: 0, target: 1)
     /// let cnotMatrix = cnot.matrix()
     /// ```
+    @_optimize(speed)
+    @_eagerMove
     public func matrix() -> GateMatrix {
         switch self {
         case .identity: identityMatrix()
@@ -604,6 +610,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// let toffoli = QuantumGate.toffoli(control1: 0, control2: 1, target: 2)
     /// toffoli.validateQubitIndices(maxAllowedQubit: 3)  // true
     /// ```
+    @_optimize(speed)
+    @_effects(readonly)
     public func validateQubitIndices(maxAllowedQubit: Int) -> Bool {
         switch self {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
@@ -715,12 +723,14 @@ public extension QuantumGate {
     /// let identity = QuantumGate.identity.matrix()
     /// QuantumGate.isUnitary(identity)  // true
     /// ```
+    @_optimize(speed)
+    @_effects(readonly)
     static func isUnitary(_ matrix: GateMatrix) -> Bool {
         let n: Int = matrix.count
         guard matrix.allSatisfy({ $0.count == n }) else { return false }
 
         // Compute U†U
-        let product: GateMatrix = matrixMultiply(conjugateTranspose(matrix), matrix)
+        let product: GateMatrix = matrixMultiply(MatrixUtilities.hermitianConjugate(matrix), matrix)
 
         for i in 0 ..< n {
             for j in 0 ..< n {
@@ -736,28 +746,14 @@ public extension QuantumGate {
         return true
     }
 
-    /// Compute conjugate transpose of matrix (U†)
-    /// - Parameter matrix: Input matrix
-    /// - Returns: Conjugate transpose of the input matrix
-    static func conjugateTranspose(_ matrix: GateMatrix) -> GateMatrix {
-        let n: Int = matrix.count
-        var result: GateMatrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
-
-        for i in 0 ..< n {
-            for j in 0 ..< n {
-                result[j][i] = matrix[i][j].conjugate
-            }
-        }
-
-        return result
-    }
-
     /// Multiply two square matrices using Accelerate BLAS
     /// - Parameters:
     ///   - a: Left matrix
     ///   - b: Right matrix
     /// - Returns: Matrix product A × B
-    private static func matrixMultiply(_ a: GateMatrix, _ b: GateMatrix) -> GateMatrix {
+    @_eagerMove
+    @_effects(readonly)
+    static func matrixMultiply(_ a: GateMatrix, _ b: GateMatrix) -> GateMatrix {
         let n: Int = a.count
 
         // For small matrices (n ≤ 4), naive implementation is faster due to call overhead
@@ -775,66 +771,107 @@ public extension QuantumGate {
             return result
         }
 
-        // Convert to interleaved format for BLAS: [real0, imag0, real1, imag1, ...]
-        var aInterleaved = [Double](unsafeUninitializedCapacity: n * n * 2) { buffer, count in
-            for i in 0 ..< n {
-                for j in 0 ..< n {
-                    buffer[(i * n + j) * 2] = a[i][j].real
-                    buffer[(i * n + j) * 2 + 1] = a[i][j].imaginary
-                }
-            }
-            count = n * n * 2
-        }
+        // Delegate to shared MatrixUtilities for larger matrices
+        return MatrixUtilities.matrixMultiply(a, b)
+    }
 
-        var bInterleaved = [Double](unsafeUninitializedCapacity: n * n * 2) { buffer, count in
-            for i in 0 ..< n {
-                for j in 0 ..< n {
-                    buffer[(i * n + j) * 2] = b[i][j].real
-                    buffer[(i * n + j) * 2 + 1] = b[i][j].imaginary
-                }
-            }
-            count = n * n * 2
-        }
+    /// Compare two matrices for equality within numerical tolerance
+    ///
+    /// Validates that two complex matrices have identical dimensions and that
+    /// corresponding elements are equal within tolerance. Essential for testing
+    /// gate equivalence and verifying circuit transformations.
+    ///
+    /// - Parameters:
+    ///   - a: First matrix
+    ///   - b: Second matrix
+    ///   - tolerance: Maximum allowed difference (default: 1e-10)
+    /// - Returns: True if matrices are equal within tolerance
+    ///
+    /// Example:
+    /// ```swift
+    /// let phase = QuantumGate.phase(theta: .pi).matrix()
+    /// let z = QuantumGate.pauliZ.matrix()
+    /// QuantumGate.matricesEqual(phase, z)  // true
+    ///
+    /// let s = QuantumGate.sGate.matrix()
+    /// let phaseHalfPi = QuantumGate.phase(theta: .pi / 2).matrix()
+    /// QuantumGate.matricesEqual(s, phaseHalfPi)  // true
+    /// ```
+    @_optimize(speed)
+    @_effects(readonly)
+    static func matricesEqual(
+        _ a: GateMatrix,
+        _ b: GateMatrix,
+        tolerance: Double = 1e-10
+    ) -> Bool {
+        guard a.count == b.count else { return false }
 
-        var resultInterleaved = [Double](repeating: 0.0, count: n * n * 2)
+        for i in 0 ..< a.count {
+            guard a[i].count == b[i].count else { return false }
+            for j in 0 ..< a[i].count {
+                let diffReal = abs(a[i][j].real - b[i][j].real)
+                let diffImag = abs(a[i][j].imaginary - b[i][j].imaginary)
 
-        // Use BLAS zgemm: C = alpha * A * B + beta * C
-        // alpha = 1 + 0i, beta = 0 + 0i (interleaved format)
-        var alpha: [Double] = [1.0, 0.0]
-        var beta: [Double] = [0.0, 0.0]
-
-        aInterleaved.withUnsafeMutableBufferPointer { aPtr in
-            bInterleaved.withUnsafeMutableBufferPointer { bPtr in
-                resultInterleaved.withUnsafeMutableBufferPointer { cPtr in
-                    alpha.withUnsafeMutableBufferPointer { alphaPtr in
-                        beta.withUnsafeMutableBufferPointer { betaPtr in
-                            cblas_zgemm(
-                                CblasRowMajor,
-                                CblasNoTrans,
-                                CblasNoTrans,
-                                Int32(n), Int32(n), Int32(n),
-                                OpaquePointer(alphaPtr.baseAddress)!,
-                                OpaquePointer(aPtr.baseAddress), Int32(n),
-                                OpaquePointer(bPtr.baseAddress), Int32(n),
-                                OpaquePointer(betaPtr.baseAddress)!,
-                                OpaquePointer(cPtr.baseAddress), Int32(n)
-                            )
-                        }
-                    }
-                }
+                if diffReal > tolerance || diffImag > tolerance { return false }
             }
         }
 
-        // Convert back to Complex matrix
-        var result: GateMatrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
+        return true
+    }
+
+    /// Check if matrix is the identity matrix within tolerance
+    ///
+    /// Validates that matrix is diagonal with 1s on diagonal and 0s elsewhere.
+    /// Used for testing self-inverse gates (H² = I, X² = I) and verifying
+    /// gate decompositions.
+    ///
+    /// - Parameters:
+    ///   - matrix: Matrix to check
+    ///   - tolerance: Maximum allowed difference from identity (default: 1e-10)
+    /// - Returns: True if matrix is identity within tolerance
+    ///
+    /// Example:
+    /// ```swift
+    /// // H · H = I
+    /// let h = QuantumGate.hadamard.matrix()
+    /// let hh = QuantumGate.matrixMultiply(h, h)
+    /// QuantumGate.isIdentityMatrix(hh)  // true
+    ///
+    /// // X · X = I
+    /// let x = QuantumGate.pauliX.matrix()
+    /// let xx = QuantumGate.matrixMultiply(x, x)
+    /// QuantumGate.isIdentityMatrix(xx)  // true
+    ///
+    /// // CNOT · CNOT = I
+    /// let cnot = QuantumGate.cnot(control: 0, target: 1).matrix()
+    /// let cnotSquared = QuantumGate.matrixMultiply(cnot, cnot)
+    /// QuantumGate.isIdentityMatrix(cnotSquared)  // true
+    /// ```
+    @_optimize(speed)
+    @_effects(readonly)
+    static func isIdentityMatrix(
+        _ matrix: GateMatrix,
+        tolerance: Double = 1e-10
+    ) -> Bool {
+        guard !matrix.isEmpty else { return false }
+
+        let n: Int = matrix.count
+
+        guard matrix.allSatisfy({ $0.count == n }) else { return false }
+
         for i in 0 ..< n {
             for j in 0 ..< n {
-                let idx = (i * n + j) * 2
-                result[i][j] = Complex(resultInterleaved[idx], resultInterleaved[idx + 1])
+                let expected: Complex<Double> = (i == j) ? .one : .zero
+                let actual: Complex<Double> = matrix[i][j]
+
+                let diffReal = abs(actual.real - expected.real)
+                let diffImag = abs(actual.imaginary - expected.imaginary)
+
+                if diffReal > tolerance || diffImag > tolerance { return false }
             }
         }
 
-        return result
+        return true
     }
 
     // MARK: - Custom Gate Factory Methods
@@ -882,6 +919,7 @@ public extension QuantumGate {
     ///     print(msg)  // "Matrix is not unitary (U†U ≠ I)"
     /// }
     /// ```
+    @_eagerMove
     static func createCustomSingleQubit(matrix: GateMatrix) throws -> QuantumGate {
         guard matrix.count == 2, matrix.allSatisfy({ $0.count == 2 }) else {
             throw QuantumGateError.invalidMatrixSize("Custom single-qubit gate requires 2×2 matrix")
@@ -941,6 +979,7 @@ public extension QuantumGate {
     ///     print(msg)  // "Custom two-qubit gate requires 4×4 matrix"
     /// }
     /// ```
+    @_eagerMove
     static func createCustomTwoQubit(
         matrix: GateMatrix,
         control: Int,
@@ -959,6 +998,7 @@ public extension QuantumGate {
 }
 
 /// Errors that can occur when creating or validating quantum gates
+@frozen
 public enum QuantumGateError: Error, LocalizedError {
     case invalidMatrixSize(String)
     case notUnitary(String)

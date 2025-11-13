@@ -69,7 +69,7 @@ struct StatePreparationTests {
         let circuit = QuantumCircuit.basisStateCircuit(numQubits: 4, basisStateIndex: 11)
         let finalState = circuit.execute()
 
-        #expect(finalState.getAmplitude(ofState: 11).magnitude > 0.99)
+        #expect(finalState.getAmplitude(ofState: 11).magnitude() > 0.99)
         #expect(finalState.isNormalized())
 
         let prob = finalState.probability(ofState: 11)
@@ -340,7 +340,7 @@ struct DickeStateTests {
 
         for i in 0 ..< 32 {
             if i.nonzeroBitCount == 2 {
-                magnitudes.append(state.getAmplitude(ofState: i).magnitude)
+                magnitudes.append(state.getAmplitude(ofState: i).magnitude())
             }
         }
 
@@ -398,7 +398,7 @@ struct EdgeCasesAndValidationTests {
         #expect(state.isNormalized(), "State should be auto-normalized")
 
         for i in 0 ..< 4 {
-            #expect(abs(state.getAmplitude(ofState: i).magnitude - 0.5) < 1e-10)
+            #expect(abs(state.getAmplitude(ofState: i).magnitude() - 0.5) < 1e-10)
         }
     }
 

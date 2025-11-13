@@ -81,7 +81,7 @@ struct ParameterizedGatePropertiesTests {
         ]
 
         for gate in gates {
-            let params = gate.parameters
+            let params = gate.parameters()
             #expect(params.count == 1)
             #expect(params.contains(param))
         }
@@ -97,19 +97,19 @@ struct ParameterizedGatePropertiesTests {
             phi: .parameter(phi),
             lambda: .parameter(lambda)
         )
-        #expect(u2.parameters.count == 2)
-        #expect(u2.parameters.contains(phi))
-        #expect(u2.parameters.contains(lambda))
+        #expect(u2.parameters().count == 2)
+        #expect(u2.parameters().contains(phi))
+        #expect(u2.parameters().contains(lambda))
 
         let u3 = ParameterizedGate.u3(
             theta: .parameter(theta),
             phi: .parameter(phi),
             lambda: .parameter(lambda)
         )
-        #expect(u3.parameters.count == 3)
-        #expect(u3.parameters.contains(theta))
-        #expect(u3.parameters.contains(phi))
-        #expect(u3.parameters.contains(lambda))
+        #expect(u3.parameters().count == 3)
+        #expect(u3.parameters().contains(theta))
+        #expect(u3.parameters().contains(phi))
+        #expect(u3.parameters().contains(lambda))
     }
 
     @Test("Extract parameters from controlled gates")
@@ -125,7 +125,7 @@ struct ParameterizedGatePropertiesTests {
         ]
 
         for gate in gates {
-            let params = gate.parameters
+            let params = gate.parameters()
             #expect(params.count == 1)
             #expect(params.contains(param))
         }
@@ -134,7 +134,7 @@ struct ParameterizedGatePropertiesTests {
     @Test("Concrete gates have no parameters")
     func concreteGatesNoParameters() {
         let gate = ParameterizedGate.concrete(.hadamard)
-        #expect(gate.parameters.isEmpty)
+        #expect(gate.parameters().isEmpty)
     }
 
     @Test("Mixed symbolic and concrete parameters")
@@ -146,7 +146,7 @@ struct ParameterizedGatePropertiesTests {
             lambda: .value(1.0)
         )
 
-        let params = gate.parameters
+        let params = gate.parameters()
         #expect(params.count == 1)
         #expect(params.contains(theta))
     }

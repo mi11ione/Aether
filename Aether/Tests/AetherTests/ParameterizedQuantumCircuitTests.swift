@@ -15,9 +15,9 @@ struct ParameterizedCircuitInitializationTests {
         let circuit = ParameterizedQuantumCircuit(numQubits: 2)
 
         #expect(circuit.numQubits == 2)
-        #expect(circuit.gateCount == 0)
-        #expect(circuit.isEmpty)
-        #expect(circuit.parameterCount == 0)
+        #expect(circuit.gateCount() == 0)
+        #expect(circuit.isEmpty())
+        #expect(circuit.parameterCount() == 0)
     }
 
     @Test("Create circuit with various qubit counts")
@@ -56,8 +56,8 @@ struct ParameterizedCircuitBuildingTests {
 
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
 
-        #expect(circuit.gateCount == 1)
-        #expect(!circuit.isEmpty)
+        #expect(circuit.gateCount() == 1)
+        #expect(!circuit.isEmpty())
     }
 
     @Test("Append concrete gate")
@@ -65,7 +65,7 @@ struct ParameterizedCircuitBuildingTests {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         circuit.append(gate: .concrete(.hadamard), toQubit: 0)
 
-        #expect(circuit.gateCount == 1)
+        #expect(circuit.gateCount() == 1)
     }
 
     @Test("Parameter auto-registration on append")
@@ -77,7 +77,7 @@ struct ParameterizedCircuitBuildingTests {
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
         circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
 
-        #expect(circuit.parameterCount == 2)
+        #expect(circuit.parameterCount() == 2)
         #expect(circuit.parameters.contains(theta))
         #expect(circuit.parameters.contains(phi))
     }
@@ -91,7 +91,7 @@ struct ParameterizedCircuitBuildingTests {
         circuit.append(gate: .rotationX(theta: .parameter(theta)), toQubit: 1)
         circuit.append(gate: .rotationZ(theta: .parameter(theta)), toQubit: 0)
 
-        #expect(circuit.parameterCount == 1)
+        #expect(circuit.parameterCount() == 1)
     }
 
     @Test("Parameter registration order preserved")
@@ -119,8 +119,8 @@ struct ParameterizedCircuitBuildingTests {
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
         circuit.append(gate: .concrete(.cnot(control: 0, target: 1)), qubits: [])
 
-        #expect(circuit.gateCount == 3)
-        #expect(circuit.parameterCount == 1)
+        #expect(circuit.gateCount() == 3)
+        #expect(circuit.parameterCount() == 1)
     }
 
     @Test("Append gate with timestamp")
@@ -153,7 +153,7 @@ struct ParameterizedCircuitBuildingTests {
             lambda: .parameter(lambda)
         ), toQubit: 0)
 
-        #expect(circuit.parameterCount == 3)
+        #expect(circuit.parameterCount() == 3)
     }
 }
 
@@ -180,23 +180,23 @@ struct ParameterizedCircuitQueryingTests {
     @Test("isEmpty reflects circuit state")
     func isEmptyReflectsState() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
-        #expect(circuit.isEmpty)
+        #expect(circuit.isEmpty())
 
         circuit.append(gate: .concrete(.hadamard), toQubit: 0)
-        #expect(!circuit.isEmpty)
+        #expect(!circuit.isEmpty())
     }
 
     @Test("Gate count reflects number of operations")
     func gateCountReflectsOperations() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
 
-        #expect(circuit.gateCount == 0)
+        #expect(circuit.gateCount() == 0)
 
         circuit.append(gate: .concrete(.hadamard), toQubit: 0)
-        #expect(circuit.gateCount == 1)
+        #expect(circuit.gateCount() == 1)
 
         circuit.append(gate: .concrete(.cnot(control: 0, target: 1)), qubits: [])
-        #expect(circuit.gateCount == 2)
+        #expect(circuit.gateCount() == 2)
     }
 
     @Test("Parameter count reflects unique parameters")
@@ -206,13 +206,13 @@ struct ParameterizedCircuitQueryingTests {
         let phi = Parameter(name: "phi")
 
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-        #expect(circuit.parameterCount == 1)
+        #expect(circuit.parameterCount() == 1)
 
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 1)
-        #expect(circuit.parameterCount == 1)
+        #expect(circuit.parameterCount() == 1)
 
         circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 2)
-        #expect(circuit.parameterCount == 2)
+        #expect(circuit.parameterCount() == 2)
     }
 
     @Test("maxQubitUsed returns highest qubit index")
@@ -858,8 +858,8 @@ struct ParameterizedCircuitIntegrationTests {
         let state = concrete.execute()
 
         #expect(state.isNormalized())
-        #expect(circuit.parameterCount == 4)
-        #expect(circuit.gateCount == 7)
+        #expect(circuit.parameterCount() == 4)
+        #expect(circuit.gateCount() == 7)
     }
 
     @Test("QAOA MaxCut workflow")
@@ -888,7 +888,7 @@ struct ParameterizedCircuitIntegrationTests {
         let state = concrete.execute()
 
         #expect(state.isNormalized())
-        #expect(circuit.parameterCount == 2)
+        #expect(circuit.parameterCount() == 2)
     }
 
     @Test("Parameter shift gradient computation workflow")
@@ -933,8 +933,8 @@ struct ParameterizedCircuitIntegrationTests {
             }
         }
 
-        #expect(circuit.parameterCount == 6)
-        #expect(circuit.gateCount == 10)
+        #expect(circuit.parameterCount() == 6)
+        #expect(circuit.gateCount() == 10)
 
         let params: [Double] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
         let concrete = try circuit.bind(parameterVector: params)
@@ -1052,8 +1052,8 @@ struct ParameterizedCircuitCustomInitTests {
         )
 
         #expect(circuit.numQubits == 2)
-        #expect(circuit.gateCount == 2)
-        #expect(circuit.parameterCount == 2)
+        #expect(circuit.gateCount() == 2)
+        #expect(circuit.parameterCount() == 2)
         #expect(circuit.parameters == [theta, phi])
     }
 
@@ -1066,8 +1066,8 @@ struct ParameterizedCircuitCustomInitTests {
         )
 
         #expect(circuit.numQubits == 3)
-        #expect(circuit.isEmpty)
-        #expect(circuit.parameterCount == 0)
+        #expect(circuit.isEmpty())
+        #expect(circuit.parameterCount() == 0)
     }
 
     @Test("Init preserves operation order")
@@ -1109,7 +1109,7 @@ struct ParameterizedCircuitCustomInitTests {
             parameters: [theta]
         )
 
-        #expect(circuit.parameterCount == 1)
+        #expect(circuit.parameterCount() == 1)
         #expect(circuit.parameters == [theta])
     }
 }

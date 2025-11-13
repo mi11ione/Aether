@@ -23,9 +23,11 @@ public typealias ShotAllocation = [Int: Int]
 /// nᵢ = N × (|cᵢ| √Var(Pᵢ)) / (Σⱼ |cⱼ| √Var(Pⱼ))
 ///
 /// This typically reduces shot requirements by 2-10× compared to uniform allocation.
+@frozen
 public struct ShotAllocator {
     // MARK: - Configuration
 
+    @frozen
     public struct Config: Sendable {
         /// Minimum shots per term (avoid zero allocation)
         public let minShotsPerTerm: Int
@@ -69,6 +71,9 @@ public struct ShotAllocator {
     /// // allocation[0] = 250  (high-weight term gets more shots)
     /// // allocation[1] = 100  (low-weight term gets fewer shots)
     /// ```
+    @_optimize(speed)
+    @_effects(readonly)
+    @_eagerMove
     public func allocate(
         terms: PauliTerms,
         totalShots: Int,
@@ -145,6 +150,9 @@ public struct ShotAllocator {
     /// )
     /// // Combines grouping (41× reduction) + optimal allocation (2-10× fewer shots)
     /// ```
+    @_optimize(speed)
+    @_effects(readonly)
+    @_eagerMove
     public func allocateForGroups(
         groups: [QWCGroup],
         totalShots: Int,
@@ -209,12 +217,15 @@ public struct ShotAllocator {
     ///   - terms: Array of (coefficient, PauliString) pairs
     ///   - state: Quantum state
     /// - Returns: Array of variances for each term
-    private func batchEstimateVariances(
+    @_optimize(speed)
+    @_effects(readonly)
+    @_eagerMove
+    func batchEstimateVariances(
         terms: PauliTerms,
         state: QuantumState
     ) -> [Double] {
         terms.map { term in
-            let expectation = computeExpectation(
+            let expectation = Observable.computePauliExpectation(
                 pauliString: term.pauliString,
                 state: state
             )
@@ -231,31 +242,23 @@ public struct ShotAllocator {
     ///   - coefficient: Coefficient of the term
     ///   - state: Quantum state (if available for exact calculation)
     /// - Returns: Estimated variance
+    @_effects(readonly)
     private func estimateVariance(
         pauliString: PauliString,
         coefficient _: Double,
         state: QuantumState?
     ) -> Double {
         if let state {
-            let expectation = computeExpectation(pauliString: pauliString, state: state)
+            let expectation = Observable.computePauliExpectation(pauliString: pauliString, state: state)
             return 1.0 - expectation * expectation
         } else {
             return 1.0
         }
     }
 
-    /// Compute expectation value of Pauli string.
-    ///
-    /// - Parameters:
-    ///   - pauliString: Pauli string operator
-    ///   - state: Quantum state
-    /// - Returns: Expectation value ⟨ψ|P|ψ⟩
-    private func computeExpectation(pauliString: PauliString, state: QuantumState) -> Double {
-        Observable.computePauliExpectation(pauliString: pauliString, state: state)
-    }
-
     // MARK: - Allocation Helpers
 
+    @_effects(readonly)
     private func uniformAllocation(numTerms: Int, totalShots: Int) -> ShotAllocation {
         let maxPossibleMin: Int = totalShots / max(numTerms, 1)
         let effectiveMinShots: Int = min(config.minShotsPerTerm, maxPossibleMin)
@@ -269,6 +272,8 @@ public struct ShotAllocator {
         return allocation
     }
 
+    @_optimize(speed)
+    @_effects(readonly)
     private func distributeRemainingShots(
         allocation: ShotAllocation,
         remaining: Int,
@@ -290,6 +295,8 @@ public struct ShotAllocator {
         return newAllocation
     }
 
+    @_optimize(speed)
+    @_effects(readonly)
     private func reduceShots(
         allocation: ShotAllocation,
         excess: Int,
@@ -319,6 +326,7 @@ public struct ShotAllocator {
 
     // MARK: - Statistics
 
+    @frozen
     public struct AllocationStats {
         public let totalShots: Int
         public let numTerms: Int
@@ -348,6 +356,8 @@ public struct ShotAllocator {
         }
     }
 
+    @_effects(readonly)
+    @inlinable
     public func statistics(for allocation: ShotAllocation) -> AllocationStats {
         let shots: Dictionary<Int, Int>.Values = allocation.values
         let totalShots: Int = shots.reduce(0, +)
@@ -376,6 +386,8 @@ public struct ShotAllocator {
     ///   - uniformShots: Shots per term with uniform allocation
     ///   - state: Quantum state for variance estimation (optional)
     /// - Returns: Variance reduction factor
+    @_optimize(speed)
+    @_effects(readonly)
     public func estimateVarianceReduction(
         terms: PauliTerms,
         allocation: ShotAllocation,

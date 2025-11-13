@@ -55,6 +55,8 @@ public extension Observable {
     /// // Final iterations
     /// let energy = hamiltonian.expectationValue(state: state)  // Accurate
     /// ```
+    @_eagerMove
+    @_effects(readonly)
     func truncate(threshold: Double) -> Observable {
         let significantTerms: PauliTerms = terms.filter { abs($0.coefficient) >= threshold }
 
@@ -75,6 +77,9 @@ public extension Observable {
     /// let approxH = hamiltonian.topK(k: 100)  // Keep 100 largest terms
     /// print("Using \(approxH.terms.count) out of \(hamiltonian.terms.count) terms")
     /// ```
+    @_optimize(speed)
+    @_eagerMove
+    @_effects(readonly)
     func topK(k: Int) -> Observable {
         guard k > 0 else {
             if let largest = terms.max(by: { abs($0.coefficient) < abs($1.coefficient) }) {
@@ -95,6 +100,7 @@ public extension Observable {
     ///   - approximate: Approximated observable
     ///   - state: Quantum state to evaluate on
     /// - Returns: Absolute error |⟨H⟩ - ⟨H'⟩|
+    @_effects(readonly)
     func approximationError(approximate: Observable, state: QuantumState) -> Double {
         let exactValue: Double = expectationValue(state: state)
         let approxValue: Double = approximate.expectationValue(state: state)
@@ -107,6 +113,7 @@ public extension Observable {
     ///   - approximate: Approximated observable
     ///   - state: Quantum state to evaluate on
     /// - Returns: Relative error |⟨H⟩ - ⟨H'⟩| / |⟨H⟩|
+    @_effects(readonly)
     func relativeApproximationError(approximate: Observable, state: QuantumState) -> Double {
         let exactValue: Double = expectationValue(state: state)
         guard abs(exactValue) > 1e-10 else { return 0.0 }
@@ -118,6 +125,7 @@ public extension Observable {
     // MARK: - Adaptive Approximation Strategies
 
     /// Adaptive threshold schedule for VQE optimization.
+    @frozen
     struct AdaptiveSchedule: Sendable {
         /// Initial threshold (largest, most aggressive truncation)
         public let initialThreshold: Double
@@ -132,6 +140,8 @@ public extension Observable {
         public var iteration: Int = 0
 
         /// Get threshold for current iteration.
+        @inlinable
+        @_effects(readonly)
         public func threshold() -> Double {
             let t = Double(iteration)
             return finalThreshold + (initialThreshold - finalThreshold) * exp(-decayRate * t)
@@ -164,6 +174,8 @@ public extension Observable {
     ///
     /// - Parameter schedule: Adaptive threshold schedule
     /// - Returns: Truncated observable for current iteration
+    @_eagerMove
+    @_effects(readonly)
     func adaptiveTruncate(schedule: AdaptiveSchedule) -> Observable {
         let threshold: Double = schedule.threshold()
         return truncate(threshold: threshold)
@@ -171,6 +183,7 @@ public extension Observable {
 
     // MARK: - Approximation Statistics
 
+    @frozen
     struct ApproximationStats {
         public let originalTerms: Int
         public let approximateTerms: Int
@@ -191,6 +204,8 @@ public extension Observable {
     }
 
     /// Compute approximation statistics.
+    @_eagerMove
+    @_effects(readonly)
     func approximationStatistics(approximate: Observable) -> ApproximationStats {
         let originalTerms: Int = terms.count
         let approximateTerms: Int = approximate.terms.count
@@ -220,6 +235,7 @@ public extension Observable {
     ///   - state: Test state
     ///   - tolerance: Maximum acceptable absolute error
     /// - Returns: True if error is within tolerance
+    @_effects(readonly)
     func validateApproximation(
         approximate: Observable,
         state: QuantumState,
@@ -236,6 +252,7 @@ public extension Observable {
     ///   - maxError: Maximum acceptable error
     ///   - searchSteps: Number of binary search steps
     /// - Returns: Minimum threshold meeting error tolerance
+    @_optimize(speed)
     func findOptimalThreshold(
         state: QuantumState,
         maxError: Double,

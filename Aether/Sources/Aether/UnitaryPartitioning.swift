@@ -8,6 +8,7 @@ import Foundation
 ///
 /// Terms in this partition can be measured simultaneously after applying
 /// the unitary transformation U, which approximately diagonalizes all terms.
+@frozen
 public struct UnitaryPartition: Sendable {
     /// Pauli strings with their coefficients
     public let terms: PauliTerms
@@ -20,6 +21,8 @@ public struct UnitaryPartition: Sendable {
     public let numQubits: Int
 
     /// Measurement basis after unitary transformation (computational basis)
+    @inlinable
+    @_eagerMove
     public var measurementBasis: MeasurementBasis {
         // After U†, measure in computational (Z) basis
         var basis: MeasurementBasis = [:]
@@ -32,7 +35,9 @@ public struct UnitaryPartition: Sendable {
     }
 
     /// Total weight (sum of absolute coefficients)
-    public var weight: Double {
+    @inlinable
+    @_effects(readonly)
+    public func weight() -> Double {
         terms.reduce(0.0) { $0 + abs($1.coefficient) }
     }
 }
@@ -51,9 +56,11 @@ public struct UnitaryPartition: Sendable {
 /// 5. Use L-BFGS-B for optimization
 ///
 /// This can reduce 2000 terms → 50 QWC groups → 10-20 unitary partitions.
+@frozen
 public struct UnitaryPartitioner {
     // MARK: - Configuration
 
+    @frozen
     public struct Config: Sendable {
         /// Maximum number of optimization iterations
         public let maxIterations: Int
@@ -102,6 +109,8 @@ public struct UnitaryPartitioner {
     /// print("Reduced \(hamiltonian.terms.count) terms to \(partitions.count) partitions")
     /// // Output: Reduced 2000 terms to 12 partitions (166× reduction)
     /// ```
+    @_optimize(speed)
+    @_eagerMove
     public func partition(
         terms: PauliTerms,
         numQubits: Int
@@ -139,7 +148,7 @@ public struct UnitaryPartitioner {
                     numQubits: numQubits
                 ))
             } else {
-                let identity: GateMatrix = identityMatrix(dimension: 1 << numQubits)
+                let identity: GateMatrix = MatrixUtilities.identityMatrix(dimension: 1 << numQubits)
                 partitions.append(UnitaryPartition(
                     terms: currentTerms,
                     unitaryMatrix: identity,
@@ -159,6 +168,8 @@ public struct UnitaryPartitioner {
     ///   - terms: Pauli terms to diagonalize
     ///   - numQubits: Number of qubits
     /// - Returns: Unitary matrix if found, nil if optimization fails
+    @_optimize(speed)
+    @_eagerMove
     private func findDiagonalizingUnitary(
         terms: PauliTerms,
         numQubits: Int
@@ -190,6 +201,8 @@ public struct UnitaryPartitioner {
     }
 
     /// Optimize unitary using variational ansatz.
+    @_optimize(speed)
+    @_eagerMove
     private func optimizeVariational(
         terms: PauliTerms,
         numQubits: Int
@@ -250,6 +263,7 @@ public struct UnitaryPartitioner {
 
     // MARK: - Cost and Gradient Functions
 
+    @_optimize(speed)
     private func costFunctionCached(
         parameters: [Double],
         terms: PauliTerms,
@@ -271,7 +285,7 @@ public struct UnitaryPartitioner {
 
             for i in 0 ..< dimension {
                 for j in 0 ..< dimension where i != j {
-                    cost += abs(term.coefficient) * conjugated[i][j].magnitude * conjugated[i][j].magnitude
+                    cost += abs(term.coefficient) * conjugated[i][j].magnitude() * conjugated[i][j].magnitude()
                 }
             }
         }
@@ -279,6 +293,8 @@ public struct UnitaryPartitioner {
         return cost
     }
 
+    @_optimize(speed)
+    @_eagerMove
     private func gradientFunctionCached(
         parameters: [Double],
         terms: PauliTerms,
@@ -314,19 +330,23 @@ public struct UnitaryPartitioner {
     // MARK: - Variational Ansatz
 
     /// Count parameters in variational ansatz.
-    private func variationalParameterCount(numQubits: Int, depth: Int) -> Int {
+    @inlinable
+    @_effects(readonly)
+    func variationalParameterCount(numQubits: Int, depth: Int) -> Int {
         // Each layer: single-qubit rotations (3 params per qubit) + CNOT ladder
         depth * numQubits * 3
     }
 
     /// Build unitary from variational parameters.
+    @_optimize(speed)
+    @_eagerMove
     private func buildVariationalUnitary(
         parameters: [Double],
         numQubits: Int,
         depth: Int
     ) -> GateMatrix {
         let dimension = 1 << numQubits
-        var unitary: GateMatrix = identityMatrix(dimension: dimension)
+        var unitary: GateMatrix = MatrixUtilities.identityMatrix(dimension: dimension)
 
         var paramIndex = 0
 
@@ -345,12 +365,12 @@ public struct UnitaryPartitioner {
                     numQubits: numQubits
                 )
 
-                unitary = matrixMultiply(rotation, unitary)
+                unitary = MatrixUtilities.matrixMultiply(rotation, unitary)
             }
 
             for qubit in 0 ..< (numQubits - 1) {
                 let cnot: GateMatrix = cnotMatrix(control: qubit, target: qubit + 1, numQubits: numQubits)
-                unitary = matrixMultiply(cnot, unitary)
+                unitary = MatrixUtilities.matrixMultiply(cnot, unitary)
             }
         }
 
@@ -359,119 +379,19 @@ public struct UnitaryPartitioner {
 
     // MARK: - Matrix Utilities
 
-    private func identityMatrix(dimension: Int) -> GateMatrix {
-        var matrix = Array(
-            repeating: Array(repeating: Complex<Double>.zero, count: dimension),
-            count: dimension
-        )
-        for i in 0 ..< dimension {
-            matrix[i][i] = .one
-        }
-        return matrix
-    }
-
-    private func matrixMultiply(
-        _ a: GateMatrix,
-        _ b: GateMatrix
-    ) -> GateMatrix {
-        let n: Int = a.count
-
-        // Fast path for small matrices
-        if n <= 4 {
-            var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
-            for i in 0 ..< n {
-                for j in 0 ..< n {
-                    for k in 0 ..< n {
-                        result[i][j] += a[i][k] * b[k][j]
-                    }
-                }
-            }
-            return result
-        }
-
-        // Use BLAS zgemm for larger matrices
-        // Convert to interleaved format for BLAS (column-major)
-        var aInterleaved = [Double](unsafeUninitializedCapacity: 2 * n * n) { buffer, count in
-            for col in 0 ..< n {
-                for row in 0 ..< n {
-                    buffer[(col * n + row) * 2] = a[row][col].real
-                    buffer[(col * n + row) * 2 + 1] = a[row][col].imaginary
-                }
-            }
-            count = n * n * 2
-        }
-
-        var bInterleaved = [Double](unsafeUninitializedCapacity: 2 * n * n) { buffer, count in
-            for col in 0 ..< n {
-                for row in 0 ..< n {
-                    buffer[(col * n + row) * 2] = b[row][col].real
-                    buffer[(col * n + row) * 2 + 1] = b[row][col].imaginary
-                }
-            }
-            count = n * n * 2
-        }
-
-        var cInterleaved = [Double](repeating: 0.0, count: 2 * n * n)
-
-        var alpha: [Double] = [1.0, 0.0]
-        var beta: [Double] = [0.0, 0.0]
-
-        aInterleaved.withUnsafeMutableBufferPointer { aPtr in
-            bInterleaved.withUnsafeMutableBufferPointer { bPtr in
-                cInterleaved.withUnsafeMutableBufferPointer { cPtr in
-                    alpha.withUnsafeMutableBufferPointer { alphaPtr in
-                        beta.withUnsafeMutableBufferPointer { betaPtr in
-                            cblas_zgemm(
-                                CblasColMajor,
-                                CblasNoTrans,
-                                CblasNoTrans,
-                                Int32(n), Int32(n), Int32(n),
-                                OpaquePointer(alphaPtr.baseAddress)!,
-                                OpaquePointer(aPtr.baseAddress), Int32(n),
-                                OpaquePointer(bPtr.baseAddress), Int32(n),
-                                OpaquePointer(betaPtr.baseAddress)!,
-                                OpaquePointer(cPtr.baseAddress), Int32(n)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Convert back to Complex<Double> matrix
-        var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
-        for col in 0 ..< n {
-            for row in 0 ..< n {
-                let idx = (col * n + row) * 2
-                result[row][col] = Complex(cInterleaved[idx], cInterleaved[idx + 1])
-            }
-        }
-
-        return result
-    }
-
+    @_optimize(speed)
+    @_eagerMove
     private func conjugateByUnitary(
         _ matrix: GateMatrix,
         unitary: GateMatrix
     ) -> GateMatrix {
-        let unitaryDagger: GateMatrix = hermitianConjugate(unitary)
-        let temp: GateMatrix = matrixMultiply(unitaryDagger, matrix)
-        return matrixMultiply(temp, unitary)
+        let unitaryDagger: GateMatrix = MatrixUtilities.hermitianConjugate(unitary)
+        let temp: GateMatrix = MatrixUtilities.matrixMultiply(unitaryDagger, matrix)
+        return MatrixUtilities.matrixMultiply(temp, unitary)
     }
 
-    private func hermitianConjugate(_ matrix: GateMatrix) -> GateMatrix {
-        let n: Int = matrix.count
-        var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
-
-        for i in 0 ..< n {
-            for j in 0 ..< n {
-                result[i][j] = matrix[j][i].conjugate
-            }
-        }
-
-        return result
-    }
-
+    @_optimize(speed)
+    @_effects(readonly)
     private func computeOffDiagonalNorm(
         operator matrix: GateMatrix,
         unitary: GateMatrix
@@ -482,13 +402,15 @@ public struct UnitaryPartitioner {
         var norm = 0.0
         for i in 0 ..< n {
             for j in 0 ..< n where i != j {
-                norm += conjugated[i][j].magnitude * conjugated[i][j].magnitude
+                norm += conjugated[i][j].magnitude() * conjugated[i][j].magnitude()
             }
         }
 
         return sqrt(norm)
     }
 
+    @_optimize(speed)
+    @_eagerMove
     private func singleQubitRotation(
         qubit: Int,
         theta: Double,
@@ -507,14 +429,16 @@ public struct UnitaryPartitioner {
         return embedSingleQubitGate(u3, qubit: qubit, numQubits: numQubits)
     }
 
+    @_optimize(speed)
+    @_eagerMove
     private func cnotMatrix(control: Int, target: Int, numQubits: Int) -> GateMatrix {
         let dimension = 1 << numQubits
-        var cnot: GateMatrix = identityMatrix(dimension: dimension)
+        var cnot: GateMatrix = MatrixUtilities.identityMatrix(dimension: dimension)
 
         for basis in 0 ..< dimension {
-            let controlBit: Int = (basis >> control) & 1
+            let controlBit: Int = BitUtilities.getBit(basis, qubit: control)
             if controlBit == 1 {
-                let flippedBasis: Int = basis ^ (1 << target)
+                let flippedBasis: Int = BitUtilities.flipBit(basis, qubit: target)
                 if flippedBasis != basis {
                     cnot[basis][basis] = .zero
                     cnot[basis][flippedBasis] = .one
@@ -525,6 +449,8 @@ public struct UnitaryPartitioner {
         return cnot
     }
 
+    @_optimize(speed)
+    @_eagerMove
     private func embedSingleQubitGate(
         _ gate: GateMatrix,
         qubit: Int,
@@ -535,11 +461,11 @@ public struct UnitaryPartitioner {
 
         for row in 0 ..< dimension {
             for col in 0 ..< dimension {
-                let rowBit: Int = (row >> qubit) & 1
-                let colBit: Int = (col >> qubit) & 1
+                let rowBit: Int = BitUtilities.getBit(row, qubit: qubit)
+                let colBit: Int = BitUtilities.getBit(col, qubit: qubit)
 
-                let rowRest: Int = row & ~(1 << qubit)
-                let colRest: Int = col & ~(1 << qubit)
+                let rowRest: Int = BitUtilities.clearBit(row, qubit: qubit)
+                let colRest: Int = BitUtilities.clearBit(col, qubit: qubit)
 
                 if rowRest == colRest {
                     result[row][col] = gate[rowBit][colBit]
@@ -556,6 +482,8 @@ public struct UnitaryPartitioner {
     ///
     /// - Parameter matrix: Hermitian matrix (n × n)
     /// - Returns: Eigenvalues (real, sorted) and eigenvectors (columns), or nil if decomposition fails
+    @_optimize(speed)
+    @_eagerMove
     private func eigendecompose(_ matrix: GateMatrix) -> (eigenvalues: [Double], eigenvectors: GateMatrix)? {
         let n: Int = matrix.count
 
@@ -649,6 +577,7 @@ public struct UnitaryPartitioner {
 
     // MARK: - L-BFGS-B Optimizer
 
+    @frozen
     public struct OptimizationResult {
         public let parameters: [Double]
         public let finalCost: Double
@@ -668,6 +597,8 @@ public struct UnitaryPartitioner {
     ///   - maxIterations: Maximum iterations
     ///   - tolerance: Convergence tolerance on gradient norm
     /// - Returns: Optimization result with final parameters and convergence info
+    @_optimize(speed)
+    @_eagerMove
     private func lbfgsb(
         initialParameters: [Double],
         costFunction: ([Double]) -> Double,
@@ -738,7 +669,7 @@ public struct UnitaryPartitioner {
                 yHistory.append(y)
                 rhoHistory.append(rho)
 
-                /// Defensible memory-safety code, partically unreachable
+                /// Defensible memory-safety code, practically unreachable
                 if sHistory.count > memorySize {
                     sHistory.removeFirst()
                     yHistory.removeFirst()
@@ -761,6 +692,8 @@ public struct UnitaryPartitioner {
     }
 
     /// Compute search direction using L-BFGS two-loop recursion.
+    @_optimize(speed)
+    @_eagerMove
     private func computeSearchDirection(
         gradient: [Double],
         sHistory: [[Double]],
@@ -796,6 +729,7 @@ public struct UnitaryPartitioner {
     }
 
     /// Backtracking line search with Wolfe conditions.
+    @_optimize(speed)
     private func lineSearch(
         params: [Double],
         direction: [Double],
@@ -835,37 +769,76 @@ public struct UnitaryPartitioner {
 // MARK: - PauliString Matrix Extension
 
 public extension PauliString {
+    /// Compute column index and phase transformation for Pauli string applied to basis state
+    ///
+    /// Core algorithm for converting Pauli strings to matrix representations. Given a basis state
+    /// (row index), computes the resulting state (column index) and accumulated phase after
+    /// applying the Pauli string operator. Used by both sparse matrix construction (SparseHamiltonian)
+    /// and dense matrix conversion (UnitaryPartitioning).
+    ///
+    /// **Pauli action on computational basis**:
+    /// - **X**: Bit flip → `col ^= (1 << qubit)`
+    /// - **Y**: Bit flip + phase → `col ^= (1 << qubit)`, `phase *= (bit==0 ? -i : i)`
+    /// - **Z**: Phase only → `phase *= (bit==0 ? +1 : -1)`
+    /// - **I** (identity): No-op → unchanged `col` and `phase`
+    ///
+    /// **Phase conventions**:
+    /// - Y operator: Y|0⟩ = i|1⟩, Y|1⟩ = -i|0⟩
+    /// - Z operator: Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩
+    /// - Combined via multiplication for multi-qubit tensors
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let yPauli = PauliString(operators: [(qubit: 0, basis: .y)])
+    /// let (col, phase) = yPauli.applyToRow(row: 0, numQubits: 1)
+    /// // Y|0⟩ = i|1⟩ → col = 1, phase = i
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - row: Input basis state index (0 to 2^numQubits - 1)
+    ///   - numQubits: Total number of qubits in system
+    /// - Returns: (column index, phase factor) representing P|row⟩ = phase * |col⟩
+    @_optimize(speed)
+    @inlinable
+    func applyToRow(row: Int, numQubits: Int) -> (col: Int, phase: Complex<Double>) {
+        var operatorMap: MeasurementBasis = [:]
+        for op in operators {
+            operatorMap[op.qubit] = op.basis
+        }
+
+        var col: Int = row
+        var phase = Complex<Double>.one
+
+        for qubit in 0 ..< numQubits {
+            let rowBit: Int = (row >> qubit) & 1
+
+            if let basis = operatorMap[qubit] {
+                switch basis {
+                case .x:
+                    col ^= (BitUtilities.bitMask(qubit: qubit))
+
+                case .y:
+                    col ^= (BitUtilities.bitMask(qubit: qubit))
+                    phase *= rowBit == 0 ? -Complex<Double>.i : Complex<Double>.i
+
+                case .z:
+                    phase *= rowBit == 0 ? .one : -.one
+                }
+            }
+        }
+
+        return (col, phase)
+    }
+
     /// Convert Pauli string to matrix representation.
+    @_optimize(speed)
+    @_eagerMove
     func toMatrix(numQubits: Int) -> GateMatrix {
         let dimension = 1 << numQubits
         var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
 
-        var ops: MeasurementBasis = [:]
-        for op in operators {
-            ops[op.qubit] = op.basis
-        }
-
         for row in 0 ..< dimension {
-            var col: Int = row
-            var phase = Complex<Double>.one
-
-            for qubit in 0 ..< numQubits {
-                let rowBit: Int = (row >> qubit) & 1
-
-                if let basis = ops[qubit] {
-                    switch basis {
-                    case .x: col ^= (1 << qubit)
-
-                    case .y:
-                        col ^= (1 << qubit)
-                        phase *= rowBit == 0 ? -Complex<Double>.i : Complex<Double>.i
-
-                    case .z: phase *= rowBit == 0 ? .one : -.one
-                    }
-                }
-                // If basis is nil (identity), do nothing
-            }
-
+            let (col, phase) = applyToRow(row: row, numQubits: numQubits)
             result[row][col] += phase
         }
 

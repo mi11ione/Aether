@@ -32,6 +32,7 @@ import Foundation
 /// let theta2 = Parameter(name: "theta")
 /// print(theta == theta2)  // true (same name)
 /// ```
+@frozen
 public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible {
     public let name: String
 
@@ -43,6 +44,7 @@ public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible 
     }
 
     /// String representation of parameter
+    @inlinable
     public var description: String { name }
 }
 
@@ -74,6 +76,7 @@ public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible 
 /// // Concrete values evaluate to themselves
 /// let concreteResult = try concrete.evaluate(with: [:])  // π/4
 /// ```
+@frozen
 public enum ParameterExpression: Equatable, Hashable, Sendable, CustomStringConvertible {
     /// Symbolic parameter reference
     case parameter(Parameter)
@@ -82,13 +85,17 @@ public enum ParameterExpression: Equatable, Hashable, Sendable, CustomStringConv
     case value(Double)
 
     /// Whether expression is symbolic (contains unbound parameters)
-    public var isSymbolic: Bool {
+    @inlinable
+    @_effects(readonly)
+    public func isSymbolic() -> Bool {
         if case .parameter = self { return true }
         return false
     }
 
     /// Whether expression is concrete (all parameters bound)
-    public var isConcrete: Bool { !isSymbolic }
+    @inlinable
+    @_effects(readonly)
+    public func isConcrete() -> Bool { !isSymbolic() }
 
     /// Evaluate expression with parameter bindings
     ///
@@ -114,6 +121,8 @@ public enum ParameterExpression: Equatable, Hashable, Sendable, CustomStringConv
     ///     print("Missing: \(name)")  // "Missing: gamma"
     /// }
     /// ```
+    @_optimize(speed)
+    @inlinable
     public func evaluate(with bindings: [String: Double]) throws -> Double {
         switch self {
         case let .value(v): return v
@@ -127,12 +136,15 @@ public enum ParameterExpression: Equatable, Hashable, Sendable, CustomStringConv
 
     /// Extract symbolic parameter if present
     /// - Returns: Parameter if expression is symbolic, nil if concrete
+    @inlinable
+    @_effects(readonly)
     public func extractParameter() -> Parameter? {
         if case let .parameter(p) = self { return p }
         return nil
     }
 
     /// String representation of expression
+    @inlinable
     public var description: String {
         switch self {
         case let .parameter(p): p.name
@@ -142,6 +154,7 @@ public enum ParameterExpression: Equatable, Hashable, Sendable, CustomStringConv
 }
 
 /// Errors that occur during parameter operations
+@frozen
 public enum ParameterError: Error, LocalizedError, Equatable {
     /// Parameter referenced in circuit but not provided in bindings
     case unboundParameter(String)

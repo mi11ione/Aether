@@ -190,34 +190,34 @@ struct GatePropertiesTests {
 @Suite("Self-Inverse Gates")
 struct SelfInverseGateTests {
     @Test("Hadamard is self-inverse: H·H = I")
-    func hadamardSelfInverse() throws {
+    func hadamardSelfInverse() {
         let h = QuantumGate.hadamard.matrix()
-        let product = try GateTestUtilities.matrixMultiply(h, h)
+        let product = QuantumGate.matrixMultiply(h, h)
 
-        #expect(GateTestUtilities.isIdentityMatrix(product))
+        #expect(QuantumGate.isIdentityMatrix(product))
     }
 
     @Test("Pauli gates are self-inverse")
-    func pauliGatesSelfInverse() throws {
+    func pauliGatesSelfInverse() {
         let x = QuantumGate.pauliX.matrix()
         let y = QuantumGate.pauliY.matrix()
         let z = QuantumGate.pauliZ.matrix()
 
-        let xx = try GateTestUtilities.matrixMultiply(x, x)
-        let yy = try GateTestUtilities.matrixMultiply(y, y)
-        let zz = try GateTestUtilities.matrixMultiply(z, z)
+        let xx = QuantumGate.matrixMultiply(x, x)
+        let yy = QuantumGate.matrixMultiply(y, y)
+        let zz = QuantumGate.matrixMultiply(z, z)
 
-        #expect(GateTestUtilities.isIdentityMatrix(xx))
-        #expect(GateTestUtilities.isIdentityMatrix(yy))
-        #expect(GateTestUtilities.isIdentityMatrix(zz))
+        #expect(QuantumGate.isIdentityMatrix(xx))
+        #expect(QuantumGate.isIdentityMatrix(yy))
+        #expect(QuantumGate.isIdentityMatrix(zz))
     }
 
     @Test("CNOT is self-inverse")
-    func cnotSelfInverse() throws {
+    func cnotSelfInverse() {
         let cnot = QuantumGate.cnot(control: 0, target: 1).matrix()
-        let product = try GateTestUtilities.matrixMultiply(cnot, cnot)
+        let product = QuantumGate.matrixMultiply(cnot, cnot)
 
-        #expect(GateTestUtilities.isIdentityMatrix(product))
+        #expect(QuantumGate.isIdentityMatrix(product))
     }
 }
 
@@ -231,7 +231,7 @@ struct ParameterizedGateTests {
         let phase = QuantumGate.phase(theta: 0).matrix()
         let identity = QuantumGate.identity.matrix()
 
-        #expect(GateTestUtilities.matricesEqual(phase, identity))
+        #expect(QuantumGate.matricesEqual(phase, identity))
     }
 
     @Test("Phase(π) equals Pauli-Z")
@@ -239,7 +239,7 @@ struct ParameterizedGateTests {
         let phase = QuantumGate.phase(theta: .pi).matrix()
         let z = QuantumGate.pauliZ.matrix()
 
-        #expect(GateTestUtilities.matricesEqual(phase, z))
+        #expect(QuantumGate.matricesEqual(phase, z))
     }
 
     @Test("S gate equals Phase(π/2)")
@@ -247,7 +247,7 @@ struct ParameterizedGateTests {
         let s = QuantumGate.sGate.matrix()
         let phase = QuantumGate.phase(theta: .pi / 2.0).matrix()
 
-        #expect(GateTestUtilities.matricesEqual(s, phase))
+        #expect(QuantumGate.matricesEqual(s, phase))
     }
 
     @Test("T gate equals Phase(π/4)")
@@ -255,7 +255,7 @@ struct ParameterizedGateTests {
         let t = QuantumGate.tGate.matrix()
         let phase = QuantumGate.phase(theta: .pi / 4.0).matrix()
 
-        #expect(GateTestUtilities.matricesEqual(t, phase))
+        #expect(QuantumGate.matricesEqual(t, phase))
     }
 
     @Test("Rotation(0) equals identity")
@@ -265,9 +265,9 @@ struct ParameterizedGateTests {
         let rz = QuantumGate.rotationZ(theta: 0).matrix()
         let identity = QuantumGate.identity.matrix()
 
-        #expect(GateTestUtilities.matricesEqual(rx, identity))
-        #expect(GateTestUtilities.matricesEqual(ry, identity))
-        #expect(GateTestUtilities.matricesEqual(rz, identity))
+        #expect(QuantumGate.matricesEqual(rx, identity))
+        #expect(QuantumGate.matricesEqual(ry, identity))
+        #expect(QuantumGate.matricesEqual(rz, identity))
     }
 }
 
@@ -417,202 +417,179 @@ struct ToffoliGateTests {
                     #expect(abs(matrix[i][j].real - 1.0) < 1e-10)
                     #expect(abs(matrix[i][j].imaginary) < 1e-10)
                 } else {
-                    #expect(abs(matrix[i][j].magnitude) < 1e-10)
+                    #expect(abs(matrix[i][j].magnitude()) < 1e-10)
                 }
             }
         }
 
         #expect(abs(matrix[6][7].real - 1.0) < 1e-10)
         #expect(abs(matrix[7][6].real - 1.0) < 1e-10)
-        #expect(abs(matrix[6][6].magnitude) < 1e-10)
-        #expect(abs(matrix[7][7].magnitude) < 1e-10)
+        #expect(abs(matrix[6][6].magnitude()) < 1e-10)
+        #expect(abs(matrix[7][7].magnitude()) < 1e-10)
     }
 
     @Test("Toffoli is self-inverse")
-    func toffoliSelfInverse() throws {
+    func toffoliSelfInverse() {
         let toffoli = QuantumGate.toffoli(control1: 0, control2: 1, target: 2).matrix()
-        let product = try GateTestUtilities.matrixMultiply(toffoli, toffoli)
-        #expect(GateTestUtilities.isIdentityMatrix(product))
+        let product = QuantumGate.matrixMultiply(toffoli, toffoli)
+        #expect(QuantumGate.isIdentityMatrix(product))
     }
 }
 
-/// Errors that can occur during matrix operations
-enum MatrixError: Error {
-    case incompatibleDimensions
-    case emptyMatrix
-    case nonSquareMatrix
-}
+/// Test suite for matrix utility functions.
+/// Validates edge cases and error paths
+/// for matricesEqual and isIdentityMatrix.
+@Suite("Matrix Utility Functions")
+struct MatrixUtilityTests {
+    @Test("matricesEqual returns false for different row counts")
+    func matricesEqualDifferentRows() {
+        let a: GateMatrix = [
+            [Complex<Double>.one, Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.one],
+        ]
+        let b: GateMatrix = [
+            [Complex<Double>.one, Complex<Double>.zero],
+        ]
 
-/// Shared utilities for quantum computing tests.
-/// Provides matrix operations and validation functions used across test files.
-enum GateTestUtilities {
-    /// Multiply two complex matrices with validation
-    /// - Parameters:
-    ///   - a: Left matrix
-    ///   - b: Right matrix
-    /// - Returns: Product matrix
-    /// - Throws: MatrixError if dimensions are incompatible
-    static func matrixMultiply(
-        _ a: GateMatrix,
-        _ b: GateMatrix
-    ) throws -> GateMatrix {
-        guard !a.isEmpty, !b.isEmpty else {
-            throw MatrixError.emptyMatrix
-        }
-
-        let rowsA = a.count
-        let colsA = a[0].count
-        let rowsB = b.count
-        let colsB = b[0].count
-
-        guard a.allSatisfy({ $0.count == colsA }),
-              b.allSatisfy({ $0.count == colsB })
-        else {
-            throw MatrixError.incompatibleDimensions
-        }
-
-        guard colsA == rowsB else {
-            throw MatrixError.incompatibleDimensions
-        }
-
-        var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: colsB), count: rowsA)
-
-        for i in 0 ..< rowsA {
-            for j in 0 ..< colsB {
-                var sum = Complex<Double>.zero
-                for k in 0 ..< colsA {
-                    sum = sum + (a[i][k] * b[k][j])
-                }
-                result[i][j] = sum
-            }
-        }
-
-        return result
+        #expect(!QuantumGate.matricesEqual(a, b))
     }
 
-    /// Compare two matrices for equality within tolerance
-    /// - Parameters:
-    ///   - a: First matrix
-    ///   - b: Second matrix
-    ///   - tolerance: Maximum allowed difference (default: 1e-10)
-    /// - Returns: True if matrices are equal within tolerance
-    static func matricesEqual(
-        _ a: GateMatrix,
-        _ b: GateMatrix,
-        tolerance: Double = 1e-10
-    ) -> Bool {
-        guard a.count == b.count else { return false }
+    @Test("matricesEqual returns false for different column counts")
+    func matricesEqualDifferentColumns() {
+        let a: GateMatrix = [
+            [Complex<Double>.one, Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.one],
+        ]
+        let b: GateMatrix = [
+            [Complex<Double>.one],
+            [Complex<Double>.one],
+        ]
 
-        for i in 0 ..< a.count {
-            guard a[i].count == b[i].count else { return false }
-            for j in 0 ..< a[i].count {
-                let diffReal = abs(a[i][j].real - b[i][j].real)
-                let diffImag = abs(a[i][j].imaginary - b[i][j].imaginary)
-
-                if diffReal > tolerance || diffImag > tolerance {
-                    return false
-                }
-            }
-        }
-
-        return true
+        #expect(!QuantumGate.matricesEqual(a, b))
     }
 
-    /// Check if matrix is the identity matrix within tolerance
-    /// - Parameters:
-    ///   - matrix: Matrix to check
-    ///   - tolerance: Maximum allowed difference from identity (default: 1e-10)
-    /// - Returns: True if matrix is identity within tolerance
-    static func isIdentityMatrix(
-        _ matrix: GateMatrix,
-        tolerance: Double = 1e-10
-    ) -> Bool {
-        guard !matrix.isEmpty else { return false }
+    @Test("matricesEqual returns false when real parts differ")
+    func matricesEqualDifferentRealParts() {
+        let a: GateMatrix = [
+            [Complex<Double>(1.0, 0.0), Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.one],
+        ]
+        let b: GateMatrix = [
+            [Complex<Double>(0.5, 0.0), Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.one],
+        ]
 
-        let n = matrix.count
-
-        guard matrix.allSatisfy({ $0.count == n }) else {
-            return false
-        }
-
-        for i in 0 ..< n {
-            for j in 0 ..< n {
-                let expected: Complex<Double> = (i == j) ? .one : .zero
-                let actual = matrix[i][j]
-
-                let diffReal = abs(actual.real - expected.real)
-                let diffImag = abs(actual.imaginary - expected.imaginary)
-
-                if diffReal > tolerance || diffImag > tolerance {
-                    return false
-                }
-            }
-        }
-
-        return true
+        #expect(!QuantumGate.matricesEqual(a, b))
     }
 
-    /// Create identity matrix of given size
-    /// - Parameter size: Matrix dimension
-    /// - Returns: Identity matrix
-    static func identityMatrix(size: Int) -> GateMatrix {
-        var matrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: size), count: size)
-        for i in 0 ..< size {
-            matrix[i][i] = .one
-        }
-        return matrix
+    @Test("matricesEqual returns false when imaginary parts differ")
+    func matricesEqualDifferentImaginaryParts() {
+        let a: GateMatrix = [
+            [Complex<Double>(1.0, 0.5), Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.one],
+        ]
+        let b: GateMatrix = [
+            [Complex<Double>(1.0, 0.0), Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.one],
+        ]
+
+        #expect(!QuantumGate.matricesEqual(a, b))
     }
 
-    /// Get matrix dimensions
-    /// - Parameter matrix: Matrix to analyze
-    /// - Returns: Tuple of (rows, columns)
-    static func matrixDimensions(_ matrix: GateMatrix) -> (rows: Int, cols: Int)? {
-        guard !matrix.isEmpty else { return nil }
-        let rows = matrix.count
-        let cols = matrix[0].count
-        guard matrix.allSatisfy({ $0.count == cols }) else { return nil }
-        return (rows, cols)
+    @Test("matricesEqual returns true for identical matrices")
+    func matricesEqualIdentical() {
+        let a: GateMatrix = [
+            [Complex<Double>.one, Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.one],
+        ]
+        let b: GateMatrix = [
+            [Complex<Double>.one, Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.one],
+        ]
+
+        #expect(QuantumGate.matricesEqual(a, b))
     }
 
-    /// Check if matrix is unitary within tolerance
-    /// Unitary matrices satisfy U†U = I
-    /// - Parameters:
-    ///   - matrix: Matrix to check
-    ///   - tolerance: Tolerance for comparisons
-    /// - Returns: True if matrix is unitary
-    static func isUnitary(
-        _ matrix: GateMatrix,
-        tolerance: Double = 1e-10
-    ) -> Bool {
-        guard let dims = matrixDimensions(matrix), dims.rows == dims.cols else {
-            return false
-        }
+    @Test("matricesEqual respects tolerance parameter")
+    func matricesEqualCustomTolerance() {
+        let a: GateMatrix = [
+            [Complex<Double>(1.0, 0.0), Complex<Double>.zero],
+        ]
+        let b: GateMatrix = [
+            [Complex<Double>(1.0 + 1e-11, 0.0), Complex<Double>.zero],
+        ]
 
-        do {
-            let conjugateTranspose = conjugateTranspose(matrix)
-            let product = try matrixMultiply(conjugateTranspose, matrix)
-            return isIdentityMatrix(product, tolerance: tolerance)
-        } catch {
-            return false
-        }
+        #expect(QuantumGate.matricesEqual(a, b, tolerance: 1e-10))
+        #expect(!QuantumGate.matricesEqual(a, b, tolerance: 1e-12))
     }
 
-    /// Compute conjugate transpose of matrix (U†)
-    /// - Parameter matrix: Input matrix
-    /// - Returns: Conjugate transpose
-    private static func conjugateTranspose(_ matrix: GateMatrix) -> GateMatrix {
-        guard let dims = matrixDimensions(matrix) else {
-            return []
-        }
+    @Test("isIdentityMatrix returns false for empty matrix")
+    func isIdentityMatrixEmpty() {
+        let empty: GateMatrix = []
 
-        var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: dims.rows), count: dims.cols)
+        #expect(!QuantumGate.isIdentityMatrix(empty))
+    }
 
-        for i in 0 ..< dims.rows {
-            for j in 0 ..< dims.cols {
-                result[j][i] = matrix[i][j].conjugate
-            }
-        }
+    @Test("isIdentityMatrix returns false for non-square matrix")
+    func isIdentityMatrixNonSquare() {
+        let nonSquare: GateMatrix = [
+            [Complex<Double>.one, Complex<Double>.zero, Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.one, Complex<Double>.zero],
+        ]
 
-        return result
+        #expect(!QuantumGate.isIdentityMatrix(nonSquare))
+    }
+
+    @Test("isIdentityMatrix returns false for matrix with wrong diagonal")
+    func isIdentityMatrixWrongDiagonal() {
+        let wrongDiagonal: GateMatrix = [
+            [Complex<Double>(2.0, 0.0), Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.one],
+        ]
+
+        #expect(!QuantumGate.isIdentityMatrix(wrongDiagonal))
+    }
+
+    @Test("isIdentityMatrix returns false for matrix with non-zero off-diagonal")
+    func isIdentityMatrixNonZeroOffDiagonal() {
+        let nonZeroOffDiagonal: GateMatrix = [
+            [Complex<Double>.one, Complex<Double>(0.1, 0.0)],
+            [Complex<Double>.zero, Complex<Double>.one],
+        ]
+
+        #expect(!QuantumGate.isIdentityMatrix(nonZeroOffDiagonal))
+    }
+
+    @Test("isIdentityMatrix returns true for 2×2 identity")
+    func isIdentityMatrix2x2() {
+        let identity: GateMatrix = [
+            [Complex<Double>.one, Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.one],
+        ]
+
+        #expect(QuantumGate.isIdentityMatrix(identity))
+    }
+
+    @Test("isIdentityMatrix returns true for 4×4 identity")
+    func isIdentityMatrix4x4() {
+        let identity: GateMatrix = [
+            [Complex<Double>.one, Complex<Double>.zero, Complex<Double>.zero, Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.one, Complex<Double>.zero, Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.zero, Complex<Double>.one, Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>.zero, Complex<Double>.zero, Complex<Double>.one],
+        ]
+
+        #expect(QuantumGate.isIdentityMatrix(identity))
+    }
+
+    @Test("isIdentityMatrix respects tolerance parameter")
+    func isIdentityMatrixCustomTolerance() {
+        let almostIdentity: GateMatrix = [
+            [Complex<Double>(1.0 + 1e-11, 0.0), Complex<Double>.zero],
+            [Complex<Double>.zero, Complex<Double>(1.0, 0.0)],
+        ]
+
+        #expect(QuantumGate.isIdentityMatrix(almostIdentity, tolerance: 1e-10))
+        #expect(!QuantumGate.isIdentityMatrix(almostIdentity, tolerance: 1e-12))
     }
 }

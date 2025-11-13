@@ -184,8 +184,8 @@ struct BellStateCircuitTests {
 
         #expect(abs(finalState.getAmplitude(ofState: 0).real - invSqrt2) < 1e-10)
         #expect(abs(finalState.getAmplitude(ofState: 3).real - invSqrt2) < 1e-10)
-        #expect(abs(finalState.getAmplitude(ofState: 1).magnitude) < 1e-10)
-        #expect(abs(finalState.getAmplitude(ofState: 2).magnitude) < 1e-10)
+        #expect(abs(finalState.getAmplitude(ofState: 1).magnitude()) < 1e-10)
+        #expect(abs(finalState.getAmplitude(ofState: 2).magnitude()) < 1e-10)
     }
 
     @Test("Bell state is normalized")
@@ -221,7 +221,7 @@ struct GHZStateCircuitTests {
         #expect(abs(finalState.getAmplitude(ofState: 7).real - invSqrt2) < 1e-10)
 
         for i in 1 ..< 7 {
-            #expect(abs(finalState.getAmplitude(ofState: i).magnitude) < 1e-10)
+            #expect(abs(finalState.getAmplitude(ofState: i).magnitude()) < 1e-10)
         }
     }
 
@@ -448,7 +448,7 @@ struct QFTCircuitTests {
 
         for i in 0 ..< 8 {
             let amp = finalState.getAmplitude(ofState: i)
-            #expect(abs(amp.magnitude - expectedAmp) < 1e-10)
+            #expect(abs(amp.magnitude() - expectedAmp) < 1e-10)
         }
     }
 
@@ -468,7 +468,7 @@ struct QFTCircuitTests {
 
         for i in 0 ..< 8 {
             if i != 5 {
-                #expect(abs(finalState.getAmplitude(ofState: i).magnitude) < 1e-8)
+                #expect(abs(finalState.getAmplitude(ofState: i).magnitude()) < 1e-8)
             }
         }
     }
@@ -510,7 +510,7 @@ struct QFTCircuitTests {
             let expectedMag = 1.0 / sqrt(Double(1 << n))
             for i in 0 ..< (1 << n) {
                 let amp = finalState.getAmplitude(ofState: i)
-                #expect(abs(amp.magnitude - expectedMag) < 1e-9)
+                #expect(abs(amp.magnitude() - expectedMag) < 1e-9)
             }
         }
     }

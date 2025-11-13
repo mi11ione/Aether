@@ -42,12 +42,6 @@
 /// // GPU processes 2048 amplitude pairs in parallel
 /// ```
 ///
-/// **Performance characteristics**:
-/// - Latency: ~0.5-2ms per gate (includes buffer allocation + transfer)
-/// - Throughput: ~10-50 GFLOPS depending on gate type and state size
-/// - Speedup: 2-10x over CPU for n≥10 qubits (M1/M2/M3 chips)
-/// - Memory bandwidth: ~200-400 GB/s on unified memory architecture
-///
 /// **Mathematical correctness**:
 /// All kernels implement the same quantum mechanics as CPU GateApplication:
 /// - Unitarity: U†U = I preserved through exact matrix operations

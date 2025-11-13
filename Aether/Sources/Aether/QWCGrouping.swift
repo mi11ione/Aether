@@ -4,6 +4,7 @@
 import Foundation
 
 /// A group of qubit-wise commuting Pauli strings that can be measured simultaneously.
+@frozen
 public struct QWCGroup: Sendable {
     /// Pauli strings in this group with their coefficients
     public let terms: PauliTerms
@@ -13,7 +14,9 @@ public struct QWCGroup: Sendable {
     public let measurementBasis: MeasurementBasis
 
     /// Total weight of this group (sum of absolute coefficients)
-    public var weight: Double {
+    @inlinable
+    @_effects(readonly)
+    public func weight() -> Double {
         terms.reduce(0.0) { $0 + abs($1.coefficient) }
     }
 
@@ -54,6 +57,8 @@ public enum QWCGrouper {
     /// print("Reduced \(hamiltonian.terms.count) terms to \(groups.count) groups")
     /// // Output: Reduced 2000 terms to 48 groups (41× reduction)
     /// ```
+    @_optimize(speed)
+    @_eagerMove
     public static func group(terms: PauliTerms) -> [QWCGroup] {
         guard !terms.isEmpty else { return [] }
 
@@ -66,6 +71,8 @@ public enum QWCGrouper {
     // MARK: - Graph Construction
 
     /// Build conflict graph where edges represent non-QWC pairs.
+    @_optimize(speed)
+    @_eagerMove
     private static func buildConflictGraph(terms: PauliTerms) -> [[Int]] {
         let n: Int = terms.count
         var adjacencyList: [[Int]] = Array(repeating: [Int](), count: n)
@@ -91,6 +98,8 @@ public enum QWCGrouper {
     ///
     /// DSATUR provides better coloring than simple greedy for most graphs.
     /// Time complexity: O(n²) where n = number of vertices
+    @_optimize(speed)
+    @_eagerMove
     private static func colorGraphDSATUR(graph: [[Int]]) -> [Int] {
         let n: Int = graph.count
         var colors: [Int] = Array(repeating: -1, count: n)
@@ -137,6 +146,8 @@ public enum QWCGrouper {
     // MARK: - Group Building
 
     /// Build QWC groups from coloring.
+    @_optimize(speed)
+    @_eagerMove
     private static func buildGroups(
         terms: PauliTerms,
         coloring: [Int]
@@ -152,10 +163,9 @@ public enum QWCGrouper {
         for (_, groupTerms) in colorToTerms.sorted(by: { $0.key < $1.key }) {
             let pauliStrings: [PauliString] = groupTerms.map(\.pauliString)
 
-            guard let basis: MeasurementBasis = PauliCommutation.measurementBasis(for: pauliStrings) else {
-                preconditionFailure("Invalid QWC group - measurement basis could not be determined. " +
-                    "This indicates a bug in graph coloring or conflict detection.")
-            }
+            // Safe: Graph coloring guarantees all strings in same color are QWC,
+            // so measurementBasis always succeeds
+            let basis: MeasurementBasis = PauliCommutation.measurementBasis(for: pauliStrings)!
 
             groups.append(QWCGroup(terms: groupTerms, measurementBasis: basis))
         }
@@ -166,6 +176,7 @@ public enum QWCGrouper {
     // MARK: - Statistics
 
     /// Compute grouping statistics.
+    @frozen
     public struct GroupingStats {
         public let numTerms: Int
         public let numGroups: Int
@@ -174,6 +185,7 @@ public enum QWCGrouper {
         public let averageGroupSize: Double
         public let groupSizes: [Int]
 
+        @inlinable
         public var description: String {
             """
             QWC Grouping Statistics:
@@ -201,6 +213,8 @@ public enum QWCGrouper {
     /// // - Groups: 48
     /// // - Reduction: 41.7×
     /// ```
+    @_optimize(speed)
+    @_eagerMove
     public static func statistics(for groups: [QWCGroup]) -> GroupingStats {
         let numGroups: Int = groups.count
         let groupSizes: [Int] = groups.map(\.terms.count)

@@ -104,7 +104,9 @@ public actor SparseHamiltonian {
     public nonisolated let nnz: Int
 
     /// Sparsity ratio (non-zeros / total elements)
-    public nonisolated var sparsity: Double {
+    @inlinable
+    @_effects(readonly)
+    public nonisolated func sparsity() -> Double {
         Double(nnz) / Double(dimension * dimension)
     }
 
@@ -162,7 +164,8 @@ public actor SparseHamiltonian {
 
     // MARK: - Sparse Matrix Construction (COO Format)
 
-    private struct COOElement {
+    @frozen
+    public struct COOElement {
         let row: Int
         let col: Int
         let value: Complex<Double>
@@ -184,6 +187,8 @@ public actor SparseHamiltonian {
     ///   - observable: Observable with Pauli decomposition
     ///   - dimension: Hilbert space dimension (2^numQubits)
     /// - Returns: Array of COO elements (row, col, value)
+    @_optimize(speed)
+    @_eagerMove
     private static func buildCOOMatrix(
         from observable: Observable,
         dimension: Int
@@ -209,7 +214,7 @@ public actor SparseHamiltonian {
 
         let tolerance = 1e-12
         let nonZeros: [COOElement] = elements.compactMap { index, value -> COOElement? in
-            guard abs(value.magnitude) > tolerance else { return nil }
+            guard abs(value.magnitude()) > tolerance else { return nil }
             return COOElement(row: index.row, col: index.col, value: value)
         }
 
@@ -240,41 +245,18 @@ public actor SparseHamiltonian {
     ///   - pauliString: Pauli operators (sparse: only non-identity qubits)
     ///   - dimension: Hilbert space dimension
     /// - Returns: Sparse matrix as COO elements
+    @_optimize(speed)
+    @_eagerMove
     private static func pauliStringToSparseMatrix(
         _ pauliString: PauliString,
         dimension: Int
     ) -> [COOElement] {
-        var pauliMap: MeasurementBasis = [:]
-        for op in pauliString.operators {
-            pauliMap[op.qubit] = op.basis
-        }
-
         let numQubits = Int(log2(Double(dimension)))
         var elements: [COOElement] = []
         elements.reserveCapacity(dimension)
 
         for row in 0 ..< dimension {
-            var col: Int = row
-            var phase = Complex<Double>.one
-
-            for qubit in 0 ..< numQubits {
-                let rowBit: Int = (row >> qubit) & 1
-
-                if let pauli = pauliMap[qubit] {
-                    switch pauli {
-                    case .x:
-                        col ^= (1 << qubit)
-
-                    case .y:
-                        col ^= (1 << qubit)
-                        phase = phase * (rowBit == 0 ? -Complex<Double>.i : Complex<Double>.i)
-
-                    case .z:
-                        phase = phase * (rowBit == 0 ? .one : -.one)
-                    }
-                }
-            }
-
+            let (col, phase) = pauliString.applyToRow(row: row, numQubits: numQubits)
             elements.append(COOElement(row: row, col: col, value: phase))
         }
 
@@ -313,20 +295,7 @@ public actor SparseHamiltonian {
         guard !cooMatrix.isEmpty else { return nil }
         guard let device = MTLCreateSystemDefaultDevice() else { return nil }
         guard let commandQueue = device.makeCommandQueue() else { return nil }
-        let library: MTLLibrary? = {
-            if let metallibURL = Bundle.module.url(forResource: "default", withExtension: "metallib"),
-               let lib = try? device.makeLibrary(URL: metallibURL) { return lib }
-
-            if let defaultLibrary = device.makeDefaultLibrary() { return defaultLibrary }
-
-            guard let resourceURL = Bundle.module.url(forResource: "QuantumGPU", withExtension: "metal"),
-                  let source = try? String(contentsOf: resourceURL, encoding: .utf8),
-                  let lib = try? device.makeLibrary(source: source, options: nil)
-            else { return nil }
-
-            return lib
-        }()
-        guard let library else { return nil }
+        guard let library = MetalUtilities.loadLibrary(device: device) else { return nil }
         guard let kernelFunction = library.makeFunction(name: "csrSparseMatVec") else { return nil }
         guard let pipelineState = try? device.makeComputePipelineState(function: kernelFunction) else { return nil }
 
@@ -390,6 +359,8 @@ public actor SparseHamiltonian {
     ///   - cooMatrix: COO elements (must be sorted by row then column)
     ///   - numRows: Number of rows in matrix
     /// - Returns: (rowPointers, columnIndices, values) in CSR format
+    @_optimize(speed)
+    @_eagerMove
     private static func convertCOOtoCSR(
         cooMatrix: [COOElement],
         numRows: Int
@@ -510,6 +481,7 @@ public actor SparseHamiltonian {
     ///   - values: Matrix values (Double array)
     ///   - dimension: Matrix dimension (N×N)
     /// - Returns: Accelerate sparse matrix or nil if construction fails
+    @_eagerMove
     private static func buildAccelerateSparseMatrix(
         rows: [Int32],
         cols: [Int32],
@@ -580,7 +552,7 @@ public actor SparseHamiltonian {
     /// - Returns: Expectation value ⟨ψ|H|ψ⟩ ∈ ℝ
     public func expectationValue(state: QuantumState) -> Double {
         precondition(state.numQubits == numQubits, "State must have \(numQubits) qubits")
-        precondition(state.isNormalized(), "State must be normalized")
+        ValidationUtilities.validateNormalizedState(state)
 
         switch backend {
         case let .metalGPU(device, commandQueue, pipelineState, rowPointers, columnIndices, values, nnz):
@@ -627,6 +599,7 @@ public actor SparseHamiltonian {
     ///   - values: CSR complex values buffer
     ///   - nnz: Number of non-zeros
     /// - Returns: Expectation value
+    @_optimize(speed)
     private func computeMetalGPU(
         state: QuantumState,
         device: MTLDevice,
@@ -655,11 +628,7 @@ public actor SparseHamiltonian {
             options: .storageModeShared
         ) else { return observable.expectationValue(state: state) }
 
-        guard let commandBuffer = commandQueue.makeCommandBuffer() else {
-            return observable.expectationValue(state: state)
-        }
-
-        guard let encoder = commandBuffer.makeComputeCommandEncoder() else {
+        guard let (commandBuffer, encoder) = MetalUtilities.createCommandEncoder(queue: commandQueue) else {
             return observable.expectationValue(state: state)
         }
 
@@ -695,7 +664,7 @@ public actor SparseHamiltonian {
                 Double(outputPointer[i].0),
                 Double(outputPointer[i].1)
             )
-            result = result + state.amplitudes[i].conjugate * hPsiElement
+            result = result + state.amplitudes[i].conjugate() * hPsiElement
         }
 
         return result.real
@@ -725,6 +694,7 @@ public actor SparseHamiltonian {
     ///   - imagMatrix: Imaginary part of Hamiltonian (B)
     ///   - dimension: Hilbert space dimension
     /// - Returns: Expectation value ⟨ψ|H|ψ⟩ ∈ ℝ
+    @_optimize(speed)
     private func computeAccelerateSparse(
         state: QuantumState,
         realMatrix: SparseMatrix_Double,
@@ -799,20 +769,22 @@ public actor SparseHamiltonian {
     // MARK: - Diagnostics
 
     public var backendDescription: String {
-        "\(backend.description) (\(nnz) non-zeros, \(String(format: "%.2f%%", sparsity * 100)) sparse)"
+        "\(backend.description) (\(nnz) non-zeros, \(String(format: "%.2f%%", sparsity() * 100)) sparse)"
     }
 
+    @_eagerMove
     public func getStatistics() -> SparseMatrixStatistics {
         SparseMatrixStatistics(
             numQubits: numQubits,
             dimension: dimension,
             nonZeros: nnz,
-            sparsity: sparsity,
+            sparsity: sparsity(),
             backend: backend.description,
             memoryBytes: estimatedMemoryUsage()
         )
     }
 
+    @_effects(readonly)
     private func estimatedMemoryUsage() -> Int {
         // CSR format: rowPointers (dimension+1) + columnIndices (nnz) + values (nnz)
         let rowPointerBytes: Int = (dimension + 1) * MemoryLayout<UInt32>.stride
@@ -826,12 +798,14 @@ public actor SparseHamiltonian {
 // MARK: - Supporting Types
 
 /// Matrix index (row, column) for sparse accumulation
-private struct MatrixIndex: Hashable {
+@frozen
+public struct MatrixIndex: Hashable {
     public let row: Int
     public let col: Int
 }
 
 /// Statistics about sparse Hamiltonian
+@frozen
 public struct SparseMatrixStatistics: CustomStringConvertible, Sendable {
     public let numQubits: Int
     public let dimension: Int
@@ -849,6 +823,7 @@ public struct SparseMatrixStatistics: CustomStringConvertible, Sendable {
         self.memoryBytes = memoryBytes
     }
 
+    @inlinable
     public var description: String {
         let sparsityPercent = String(format: "%.4f%%", sparsity * 100)
         let memoryKB = Double(memoryBytes) / 1024.0

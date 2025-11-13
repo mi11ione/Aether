@@ -21,9 +21,9 @@ func demoBellState() {
 
     for i in 0 ..< state.amplitudes.count {
         let amp = state.amplitudes[i]
-        if abs(amp.magnitude) > 1e-10 {
+        if abs(amp.magnitude()) > 1e-10 {
             let basis = String(i, radix: 2).padLeft(toLength: 2, withPad: "0")
-            print("  |\(basis)⟩: \(String(format: "%.4f", amp.magnitude))")
+            print("  |\(basis)⟩: \(String(format: "%.4f", amp.magnitude()))")
         }
     }
 
@@ -39,7 +39,7 @@ func demoLargeHamiltonian() async {
 
     let start = Date()
 
-    var terms: [(coefficient: Double, pauliString: PauliString)] = []
+    var terms: PauliTerms = []
 
     terms.append((coefficient: -1.0523732, pauliString: PauliString(operators: [])))
 

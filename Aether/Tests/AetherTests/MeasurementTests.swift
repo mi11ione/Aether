@@ -57,18 +57,18 @@ struct StateCollapseTests {
         let collapsed = Measurement.collapseToOutcome(0, numQubits: 2)
 
         #expect(abs(collapsed.getAmplitude(ofState: 0).real - 1.0) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 1).magnitude) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 2).magnitude) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 3).magnitude) < 1e-10)
+        #expect(abs(collapsed.getAmplitude(ofState: 1).magnitude()) < 1e-10)
+        #expect(abs(collapsed.getAmplitude(ofState: 2).magnitude()) < 1e-10)
+        #expect(abs(collapsed.getAmplitude(ofState: 3).magnitude()) < 1e-10)
     }
 
     @Test("Collapse to outcome 3")
     func collapseToThree() {
         let collapsed = Measurement.collapseToOutcome(3, numQubits: 2)
 
-        #expect(abs(collapsed.getAmplitude(ofState: 0).magnitude) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 1).magnitude) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 2).magnitude) < 1e-10)
+        #expect(abs(collapsed.getAmplitude(ofState: 0).magnitude()) < 1e-10)
+        #expect(abs(collapsed.getAmplitude(ofState: 1).magnitude()) < 1e-10)
+        #expect(abs(collapsed.getAmplitude(ofState: 2).magnitude()) < 1e-10)
         #expect(abs(collapsed.getAmplitude(ofState: 3).real - 1.0) < 1e-10)
     }
 
@@ -256,8 +256,8 @@ struct PartialMeasurementTests {
         let invSqrt2 = 1.0 / sqrt(2.0)
         #expect(abs(collapsed.getAmplitude(ofState: 0).real - invSqrt2) < 1e-10)
         #expect(abs(collapsed.getAmplitude(ofState: 2).real - invSqrt2) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 1).magnitude) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 3).magnitude) < 1e-10)
+        #expect(abs(collapsed.getAmplitude(ofState: 1).magnitude()) < 1e-10)
+        #expect(abs(collapsed.getAmplitude(ofState: 3).magnitude()) < 1e-10)
     }
 
     @Test("Partial collapse renormalizes state")

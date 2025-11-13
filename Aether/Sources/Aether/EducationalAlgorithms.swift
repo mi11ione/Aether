@@ -25,6 +25,7 @@ public extension QuantumCircuit {
     // MARK: - Deutsch-Jozsa Algorithm
 
     /// Result of Deutsch-Jozsa algorithm
+    @frozen
     enum DeutschJozsaResult: Equatable {
         case constant // f(x) = 0 for all x, or f(x) = 1 for all x
         case balanced // f(x) = 0 for exactly half of inputs
@@ -67,6 +68,9 @@ public extension QuantumCircuit {
     /// let state = circuit.execute()
     /// // Measure input qubits: all |0⟩ → constant, any |1⟩ → balanced
     /// ```
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
     static func deutschJozsa(
         numInputQubits: Int,
         oracle: Oracle
@@ -131,11 +135,14 @@ public extension QuantumCircuit {
     /// let state = circuit.execute()
     /// // Measure input qubits: expect to see |101⟩
     /// ```
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
     static func bernsteinVazirani(
         numQubits: Int,
         oracle: Oracle
     ) -> QuantumCircuit {
-        precondition(numQubits > 0, "Must have at least 1 qubit")
+        ValidationUtilities.validatePositiveQubits(numQubits)
         precondition(numQubits <= 20, "Too many qubits for simulation")
 
         let numInputQubits: Int = numQubits
@@ -200,11 +207,14 @@ public extension QuantumCircuit {
     /// // Measure first n qubits: get y where y·s = 0 (mod 2)
     /// // Repeat n-1 times and solve linear system to recover s
     /// ```
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
     static func simonIteration(
         numQubits: Int,
         oracle: Oracle
     ) -> QuantumCircuit {
-        precondition(numQubits > 0, "Must have at least 1 qubit")
+        ValidationUtilities.validatePositiveQubits(numQubits)
         precondition(numQubits <= 15, "Simon's algorithm requires 2n qubits - use n≤15")
 
         let totalQubits: Int = numQubits * 2
@@ -230,6 +240,8 @@ public extension QuantumCircuit {
 
     /// Create constant oracle for Deutsch-Jozsa (always returns 0)
     /// - Returns: Oracle that implements f(x) = 0 for all x
+    @_effects(readonly)
+    @inlinable
     static func constantZeroOracle() -> Oracle {
         { _, _, _ in
             // Do nothing: |y⟩ remains unchanged → f(x) = 0
@@ -238,6 +250,8 @@ public extension QuantumCircuit {
 
     /// Create constant oracle for Deutsch-Jozsa (always returns 1)
     /// - Returns: Oracle that implements f(x) = 1 for all x
+    @_effects(readonly)
+    @inlinable
     static func constantOneOracle() -> Oracle {
         { _, outputQubit, circuit in
             circuit.append(gate: .pauliX, toQubit: outputQubit)
@@ -246,6 +260,8 @@ public extension QuantumCircuit {
 
     /// Create balanced oracle for Deutsch-Jozsa (returns parity of input)
     /// - Returns: Oracle that implements f(x) = x₀⊕x₁⊕...⊕xₙ₋₁
+    @_effects(readonly)
+    @inlinable
     static func balancedParityOracle() -> Oracle {
         { inputQubits, outputQubit, circuit in
             for input in inputQubits {
@@ -256,6 +272,8 @@ public extension QuantumCircuit {
 
     /// Create balanced oracle that checks if first qubit is |1⟩
     /// - Returns: Oracle that implements f(x) = x₀
+    @_effects(readonly)
+    @inlinable
     static func balancedFirstBitOracle() -> Oracle {
         { inputQubits, outputQubit, circuit in
             guard let firstQubit = inputQubits.first else { return }
@@ -272,6 +290,8 @@ public extension QuantumCircuit {
     /// let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: [1, 0, 1, 1])
     /// // Implements f(x) = x₀⊕x₂⊕x₃ (dot product with a=1011)
     /// ```
+    @_effects(readonly)
+    @inlinable
     static func bernsteinVaziraniOracle(hiddenString: [Int]) -> Oracle {
         precondition(hiddenString.allSatisfy { $0 == 0 || $0 == 1 },
                      "Hidden string must contain only 0s and 1s")
@@ -298,6 +318,8 @@ public extension QuantumCircuit {
     /// let oracle = QuantumCircuit.simonOracle(period: [1, 1, 0])
     /// // f(000) = f(110), f(001) = f(111), f(010) = f(100), f(011) = f(101)
     /// ```
+    @_effects(readonly)
+    @inlinable
     static func simonOracle(period: [Int]) -> Oracle {
         precondition(period.allSatisfy { $0 == 0 || $0 == 1 },
                      "Period must contain only 0s and 1s")
@@ -329,9 +351,11 @@ public extension QuantumState {
     /// This is a simplified measurement that returns the most probable outcome
     /// for the specified qubits. For proper quantum measurement with randomness,
     /// use the existing measurement infrastructure.
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
     func measureQubits(_ qubits: [Int]) -> [Int] {
-        precondition(qubits.allSatisfy { $0 >= 0 && $0 < numQubits },
-                     "All qubit indices must be valid")
+        ValidationUtilities.validateOperationQubits(qubits, numQubits: numQubits)
 
         let probs: [Double] = probabilities()
         // Safe to force unwrap: probabilities() always returns 2^n elements
@@ -339,13 +363,15 @@ public extension QuantumState {
         let maxIndex: Int = probs.indices.max(by: { probs[$0] < probs[$1] })!
 
         return qubits.map { qubit in
-            (maxIndex >> qubit) & 1
+            BitUtilities.getBit(maxIndex, qubit: qubit)
         }
     }
 
     /// Check if all specified qubits are measured as |0⟩
     /// - Parameter qubits: Indices of qubits to check
     /// - Returns: True if all qubits are in |0⟩ state (within threshold)
+    @_effects(readonly)
+    @inlinable
     func allQubitsAreZero(_ qubits: [Int]) -> Bool {
         let measurements: [Int] = measureQubits(qubits)
         return measurements.allSatisfy { $0 == 0 }

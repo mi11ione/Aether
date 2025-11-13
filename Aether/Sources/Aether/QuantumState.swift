@@ -77,6 +77,7 @@ public enum QuantumStateError: Error, LocalizedError {
 /// // Full probability distribution
 /// let allProbs = bellState.probabilities()  // [0.5, 0, 0, 0.5]
 /// ```
+@frozen
 public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     // MARK: - Properties
 
@@ -112,8 +113,8 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// // |000⟩: amplitudes = [1, 0, 0, 0, 0, 0, 0, 0]
     /// ```
     public init(numQubits: Int) {
-        precondition(numQubits > 0, "Number of qubits must be positive")
-        precondition(numQubits < 30, "Number of qubits too large (would exceed memory)")
+        ValidationUtilities.validatePositiveQubits(numQubits)
+        ValidationUtilities.validateMemoryLimit(numQubits)
 
         self.numQubits = numQubits
         let size = 1 << numQubits
@@ -168,7 +169,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// ])
     /// ```
     public init(numQubits: Int, amplitudes: AmplitudeVector) {
-        precondition(numQubits > 0, "Number of qubits must be positive")
+        ValidationUtilities.validatePositiveQubits(numQubits)
         precondition(amplitudes.count == (1 << numQubits),
                      "Amplitude array size must equal 2^numQubits")
 
@@ -223,7 +224,10 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
 
     /// Private helper: Compute magnitude squared for all amplitudes using Accelerate
     /// - Returns: Array of amplitude values
-    private func computeMagnitudesSquaredVectorized() -> [Double] {
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    func computeMagnitudesSquaredVectorized() -> [Double] {
         let interleavedAmps = [Double](unsafeUninitializedCapacity: amplitudes.count * 2) { buffer, count in
             for i in amplitudes.indices {
                 buffer[i * 2] = amplitudes[i].real
@@ -274,9 +278,10 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let p10 = bell.probability(ofState: 0b10)  // 0.0
     /// let p11 = bell.probability(ofState: 0b11)  // 0.5
     /// ```
+    @_effects(readonly)
+    @inlinable
     public func probability(ofState stateIndex: Int) -> Double {
-        precondition(stateIndex >= 0 && stateIndex < stateSpaceSize,
-                     "State index out of bounds")
+        ValidationUtilities.validateBasisStateIndex(stateIndex, stateSpaceSize: stateSpaceSize)
         return amplitudes[stateIndex].magnitudeSquared
     }
 
@@ -314,6 +319,9 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let ghzProbs = ghz.probabilities()
     /// // [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5]
     /// ```
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
     public func probabilities() -> [Double] {
         if amplitudes.count >= 64 {
             computeMagnitudesSquaredVectorized()
@@ -359,8 +367,10 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let (p0, p1) = product.singleQubitProbabilities(qubit: 0)
     /// // p0 = 0.0, p1 = 1.0
     /// ```
+    @_effects(readonly)
+    @inlinable
     public func singleQubitProbabilities(qubit: Int) -> (p0: Double, p1: Double) {
-        precondition(qubit >= 0 && qubit < numQubits, "Qubit index out of bounds")
+        ValidationUtilities.validateQubitIndex(qubit, numQubits: numQubits)
 
         var p0 = 0.0
         var p1 = 0.0
@@ -378,6 +388,28 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     }
 
     // MARK: - Normalization
+
+    /// Compute sum of squared magnitudes Σᵢ |cᵢ|² with vectorized optimization
+    ///
+    /// Uses Accelerate framework (vDSP) for states with ≥64 amplitudes, falling back to
+    /// scalar computation for smaller states. Shared by normalization checking and enforcement.
+    ///
+    /// **Performance**:
+    /// - Small states (< 64 amplitudes): Scalar reduction
+    /// - Large states (≥ 64 amplitudes): Vectorized
+    ///
+    /// - Returns: Σᵢ |cᵢ|² (should equal 1.0 for normalized states)
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    func computeNormSquared() -> Double {
+        if amplitudes.count >= 64 {
+            let magnitudesSquared: [Double] = computeMagnitudesSquaredVectorized()
+            return magnitudesSquared.reduce(0.0, +)
+        } else {
+            return amplitudes.reduce(0.0) { $0 + $1.magnitudeSquared }
+        }
+    }
 
     /// Check if quantum state satisfies normalization constraint
     ///
@@ -398,16 +430,10 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// ])
     /// custom.isNormalized()  // true (auto-normalized in init)
     /// ```
+    @_effects(readonly)
+    @inlinable
     public func isNormalized() -> Bool {
-        let sum: Double
-
-        if amplitudes.count >= 64 {
-            let magnitudesSquared: [Double] = computeMagnitudesSquaredVectorized()
-            sum = magnitudesSquared.reduce(0.0, +)
-        } else {
-            sum = amplitudes.reduce(0.0) { $0 + $1.magnitudeSquared }
-        }
-
+        let sum: Double = computeNormSquared()
         return abs(sum - 1.0) < 1e-10
     }
 
@@ -441,14 +467,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// // Now: [3/5, 4/5] since √(3² + 4²) = 5
     /// ```
     public mutating func normalize() throws {
-        let sumSquared: Double
-
-        if amplitudes.count >= 64 {
-            let magnitudesSquared: [Double] = computeMagnitudesSquaredVectorized()
-            sumSquared = magnitudesSquared.reduce(0.0, +)
-        } else {
-            sumSquared = amplitudes.reduce(0.0) { $0 + $1.magnitudeSquared }
-        }
+        let sumSquared: Double = computeNormSquared()
 
         guard sumSquared > 1e-15 else {
             throw QuantumStateError.cannotNormalizeZeroState
@@ -480,9 +499,10 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let amp0 = plus.getAmplitude(ofState: 0)  // (1/√2, 0)
     /// let amp1 = plus.getAmplitude(ofState: 1)  // (1/√2, 0)
     /// ```
+    @_effects(readonly)
+    @inlinable
     public func getAmplitude(ofState stateIndex: Int) -> Complex<Double> {
-        precondition(stateIndex >= 0 && stateIndex < stateSpaceSize,
-                     "State index out of bounds")
+        ValidationUtilities.validateBasisStateIndex(stateIndex, stateSpaceSize: stateSpaceSize)
         return amplitudes[stateIndex]
     }
 
@@ -504,8 +524,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// // Now state is |+⟩ = (|0⟩ + |1⟩)/√2
     /// ```
     public mutating func setAmplitude(ofState stateIndex: Int, amplitude: Complex<Double>) {
-        precondition(stateIndex >= 0 && stateIndex < stateSpaceSize,
-                     "State index out of bounds")
+        ValidationUtilities.validateBasisStateIndex(stateIndex, stateSpaceSize: stateSpaceSize)
         amplitudes[stateIndex] = amplitude
     }
 
@@ -533,8 +552,10 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let bit1 = state.getBit(index: 0b101, qubit: 1) // 0
     /// let bit2 = state.getBit(index: 0b101, qubit: 2) // 1 (MSB)
     /// ```
+    @_effects(readonly)
+    @inlinable
     public func getBit(index: Int, qubit: Int) -> Int {
-        (index >> qubit) & 1
+        BitUtilities.getBit(index, qubit: qubit)
     }
 
     /// Set bit value of specific qubit in state index
@@ -543,12 +564,10 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     ///   - qubit: Qubit position
     ///   - value: New bit value (0 or 1)
     /// - Returns: Modified state index
+    @_effects(readonly)
+    @inlinable
     public func setBit(index: Int, qubit: Int, value: Int) -> Int {
-        if value == 0 {
-            index & ~(1 << qubit) // Clear bit
-        } else {
-            index | (1 << qubit) // Set bit
-        }
+        BitUtilities.setBit(index, qubit: qubit, value: value)
     }
 
     /// Flip bit value of specific qubit in state index
@@ -556,14 +575,17 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     ///   - index: Original state index
     ///   - qubit: Qubit position
     /// - Returns: Modified state index with flipped bit
+    @_effects(readonly)
+    @inlinable
     public func flipBit(index: Int, qubit: Int) -> Int {
-        index ^ (1 << qubit)
+        BitUtilities.flipBit(index, qubit: qubit)
     }
 
     // MARK: - Validation
 
     /// Validate all state invariants
     /// - Returns: True if state is valid
+    @_effects(readonly)
     public func validate() -> Bool {
         // Check for NaN/Inf
         guard amplitudes.allSatisfy(\.isFinite) else { return false }
@@ -582,7 +604,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
 
         for (i, amp) in amplitudes.enumerated() {
             if amp.magnitudeSquared > threshold {
-                let ampStr = String(format: "%.4f", amp.magnitude)
+                let ampStr = String(format: "%.4f", amp.magnitude())
                 let basisState = String(i, radix: 2)
                     .padding(toLength: numQubits, withPad: "0", startingAt: 0)
                 terms.append("\(ampStr)|\(basisState)⟩")

@@ -83,9 +83,11 @@ public extension QuantumState {
     /// - Time: O(2^n) for amplitude array allocation, O(1) for initialization
     /// - Memory: O(2^n) for full statevector
     /// - Practical limit: n ≤ 30 qubits
+    @_optimize(speed)
+    @_eagerMove
     static func basisState(numQubits: Int, basisStateIndex: Int) -> QuantumState {
-        precondition(numQubits > 0, "Number of qubits must be positive")
-        precondition(numQubits <= 30, "Number of qubits too large (would exceed memory)")
+        ValidationUtilities.validatePositiveQubits(numQubits)
+        ValidationUtilities.validateMemoryLimit(numQubits)
 
         let stateSpaceSize = 1 << numQubits
         precondition(basisStateIndex >= 0 && basisStateIndex < stateSpaceSize,
@@ -131,6 +133,7 @@ public extension QuantumCircuit {
     /// let (p0_q0, p1_q0) = state.singleQubitProbabilities(qubit: 0)
     /// // p0_q0 = 0.5, p1_q0 = 0.5
     /// ```
+    @_eagerMove
     static func bellPhiPlus() -> QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
@@ -154,6 +157,7 @@ public extension QuantumCircuit {
     /// let p00 = state.probability(ofState: 0b00)  // 0.5
     /// let p11 = state.probability(ofState: 0b11)  // 0.5
     /// ```
+    @_eagerMove
     static func bellPhiMinus() -> QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
@@ -178,6 +182,7 @@ public extension QuantumCircuit {
     /// let p01 = state.probability(ofState: 0b01)  // 0.5
     /// let p10 = state.probability(ofState: 0b10)  // 0.5
     /// ```
+    @_eagerMove
     static func bellPsiPlus() -> QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
@@ -202,6 +207,7 @@ public extension QuantumCircuit {
     /// let p01 = state.probability(ofState: 0b01)  // 0.5
     /// let p10 = state.probability(ofState: 0b10)  // 0.5
     /// ```
+    @_eagerMove
     static func bellPsiMinus() -> QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
@@ -256,6 +262,8 @@ public extension QuantumCircuit {
     /// - Time: O(2^n) statevector enumeration
     /// - Memory: O(2^n) for full statevector
     /// - Practical limit: n ≤ 20 qubits
+    @_optimize(speed)
+    @_eagerMove
     static func wState(numQubits: Int) -> QuantumState {
         precondition(numQubits >= 2, "W state requires at least 2 qubits")
         precondition(numQubits <= 20, "W state with >20 qubits requires too much memory")
@@ -269,7 +277,7 @@ public extension QuantumCircuit {
         let amplitude: Complex<Double> = Complex(1.0 / sqrt(Double(numQubits)), 0.0)
 
         for qubit in 0 ..< numQubits {
-            amplitudes[1 << qubit] = amplitude
+            amplitudes[BitUtilities.bitMask(qubit: qubit)] = amplitude
         }
 
         return QuantumState(numQubits: numQubits, amplitudes: amplitudes)
@@ -279,6 +287,8 @@ public extension QuantumCircuit {
 
     /// Compute binomial coefficient C(n, k) = n! / (k! * (n-k)!)
     /// Uses multiplicative formula to avoid overflow: C(n,k) = ∏(i=1 to k) (n-k+i)/i
+    @_optimize(speed)
+    @_effects(readonly)
     private static func binomialCoefficient(_ n: Int, _ k: Int) -> Int {
         guard k > 0, k < n else { return 1 }
 
@@ -341,8 +351,10 @@ public extension QuantumCircuit {
     /// - Time: O(2^n) statevector enumeration
     /// - Memory: O(2^n) for full statevector
     /// - Practical limit: n ≤ 20 qubits
+    @_optimize(speed)
+    @_eagerMove
     static func dickeState(numQubits: Int, numOnes: Int) -> QuantumState {
-        precondition(numQubits > 0, "Number of qubits must be positive")
+        ValidationUtilities.validatePositiveQubits(numQubits)
         precondition(numQubits <= 20, "Dicke state with >20 qubits requires too much memory")
         precondition(numOnes >= 0 && numOnes <= numQubits,
                      "Number of ones must be between 0 and \(numQubits)")
@@ -399,9 +411,11 @@ public extension QuantumCircuit {
     /// - Gates: O(popcount(i)) ≤ O(n) X gates
     /// - Circuit depth: O(1) (all X gates commute)
     /// - Execution: O(2^n) for statevector simulation
+    @_optimize(speed)
+    @_eagerMove
     static func basisStateCircuit(numQubits: Int, basisStateIndex: Int) -> QuantumCircuit {
-        precondition(numQubits > 0, "Number of qubits must be positive")
-        precondition(numQubits <= 30, "Number of qubits too large")
+        ValidationUtilities.validatePositiveQubits(numQubits)
+        ValidationUtilities.validateMemoryLimit(numQubits)
 
         let stateSpaceSize = 1 << numQubits
         precondition(basisStateIndex >= 0 && basisStateIndex < stateSpaceSize,

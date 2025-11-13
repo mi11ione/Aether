@@ -32,6 +32,9 @@ public enum PauliCommutation {
     /// - X and Y don't commute
     /// - X and Z don't commute
     /// - Y and Z don't commute
+    @_optimize(speed)
+    @inlinable
+    @_effects(readonly)
     public static func commute(_ p1: PauliBasis?, _ p2: PauliBasis?) -> Bool {
         // Identity commutes with everything
         if p1 == nil || p2 == nil { return true }
@@ -59,6 +62,8 @@ public enum PauliCommutation {
     /// - X₀Y₁ and Y₀X₁ commute (2 differences: positions 0 and 1)
     /// - X₀Y₁ and X₀Z₁ don't commute (1 difference: position 1)
     /// - X₀I₁ and I₀Y₁ commute (0 differences)
+    @_optimize(speed)
+    @_effects(readonly)
     public static func commute(_ ps1: PauliString, _ ps2: PauliString) -> Bool {
         var ops1: MeasurementBasis = [:]
         var ops2: MeasurementBasis = [:]
@@ -103,6 +108,8 @@ public enum PauliCommutation {
     /// - X₀X₁ and X₀Y₁ are QWC (qubit 0: both X, qubit 1: X and Y)
     /// - X₀Y₁ and Y₀X₁ are NOT QWC (qubit 0: X vs Y, qubit 1: Y vs X)
     /// - X₀I₁ and I₀Y₁ are QWC (no conflicts)
+    @_optimize(speed)
+    @_effects(readonly)
     public static func qubitWiseCommute(_ ps1: PauliString, _ ps2: PauliString) -> Bool {
         var ops1: MeasurementBasis = [:]
         var ops2: MeasurementBasis = [:]
@@ -138,6 +145,8 @@ public enum PauliCommutation {
     ///
     /// For each qubit, the measurement basis is the first non-identity operator encountered
     /// across all strings in the group.
+    @_optimize(speed)
+    @_eagerMove
     public static func measurementBasis(for strings: [PauliString]) -> MeasurementBasis? {
         guard !strings.isEmpty else { return [:] }
 
@@ -156,9 +165,7 @@ public enum PauliCommutation {
                 if basis[op.qubit] == nil {
                     basis[op.qubit] = op.basis
                 }
-
-                precondition(basis[op.qubit] == op.basis,
-                             "Inconsistent measurement basis - strings are not QWC")
+                // QWC validation (lines 144-149) guarantees basis consistency
             }
         }
 

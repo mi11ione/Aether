@@ -90,16 +90,16 @@ struct ParameterExpressionTests {
         let param = Parameter(name: "theta")
         let expr = ParameterExpression.parameter(param)
 
-        #expect(expr.isSymbolic)
-        #expect(!expr.isConcrete)
+        #expect(expr.isSymbolic())
+        #expect(!expr.isConcrete())
     }
 
     @Test("Create concrete value expression")
     func createConcreteExpression() {
         let expr = ParameterExpression.value(Double.pi / 4.0)
 
-        #expect(expr.isConcrete)
-        #expect(!expr.isSymbolic)
+        #expect(expr.isConcrete())
+        #expect(!expr.isSymbolic())
     }
 
     @Test("Evaluate concrete expression")

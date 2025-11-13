@@ -52,6 +52,7 @@ import Foundation
 /// let concrete = try circuit.bind(parameters: bindings)
 /// let state = concrete.execute()
 /// ```
+@frozen
 public enum ParameterizedGate: Equatable, Hashable, Sendable, CustomStringConvertible {
     // MARK: - Single-Qubit Parameterized Gates
 
@@ -110,6 +111,7 @@ public enum ParameterizedGate: Equatable, Hashable, Sendable, CustomStringConver
     // MARK: - Gate Properties
 
     /// Number of qubits this gate operates on
+    @inlinable
     public var qubitsRequired: Int {
         switch self {
         case .phase, .rotationX, .rotationY, .rotationZ, .u1, .u2, .u3: 1
@@ -119,11 +121,15 @@ public enum ParameterizedGate: Equatable, Hashable, Sendable, CustomStringConver
     }
 
     /// Whether gate has symbolic parameters (unbound)
-    public var isParameterized: Bool { !parameters.isEmpty }
+    @inlinable
+    public var isParameterized: Bool { !parameters().isEmpty }
 
     /// Extract all symbolic parameters from gate
     /// - Returns: Set of symbolic parameters used in this gate
-    public var parameters: Set<Parameter> {
+    @_optimize(speed)
+    @inlinable
+    @_effects(readonly)
+    public func parameters() -> Set<Parameter> {
         var params = Set<Parameter>()
 
         switch self {
@@ -175,6 +181,9 @@ public enum ParameterizedGate: Equatable, Hashable, Sendable, CustomStringConver
     /// let concrete = try gate.bind(with: bindings)
     /// // concrete is QuantumGate.rotationY(theta: π/4)
     /// ```
+    @_optimize(speed)
+    @inlinable
+    @_eagerMove
     public func bind(with bindings: [String: Double]) throws -> QuantumGate {
         switch self {
         case let .phase(theta):
@@ -238,6 +247,8 @@ public enum ParameterizedGate: Equatable, Hashable, Sendable, CustomStringConver
     ///
     /// - Parameter maxAllowedQubit: Maximum allowed qubit index (inclusive)
     /// - Returns: True if all qubit indices are valid
+    @inlinable
+    @_effects(readonly)
     public func validateQubitIndices(maxAllowedQubit: Int) -> Bool {
         switch self {
         case .phase, .rotationX, .rotationY, .rotationZ, .u1, .u2, .u3: true

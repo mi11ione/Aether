@@ -126,7 +126,7 @@ struct QWCGroupingTests {
             terms: [(coefficient: 2.0, pauliString: ps1), (coefficient: -3.5, pauliString: ps2)],
             measurementBasis: [0: .x, 1: .y]
         )
-        #expect(abs(group.weight - 5.5) < 1e-10)
+        #expect(abs(group.weight() - 5.5) < 1e-10)
     }
 
     @Test("Grouping single Pauli term")
@@ -656,7 +656,7 @@ struct UnitaryPartitioningTests {
             unitaryMatrix: [[Complex(1.0, 0.0)]],
             numQubits: 1
         )
-        #expect(abs(partition.weight - 5.5) < 1e-10)
+        #expect(abs(partition.weight() - 5.5) < 1e-10)
     }
 
     @Test("Partition with adaptive depth enabled")

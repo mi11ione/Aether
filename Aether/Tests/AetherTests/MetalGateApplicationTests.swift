@@ -18,8 +18,8 @@ struct MetalGateApplicationTests {
         let newState = await metal.apply(gate: .hadamard, to: [0], state: state)
 
         #expect(newState.isNormalized())
-        #expect(abs(newState.getAmplitude(ofState: 0).magnitude - 1.0 / sqrt(2.0)) < 1e-5)
-        #expect(abs(newState.getAmplitude(ofState: 1).magnitude - 1.0 / sqrt(2.0)) < 1e-5)
+        #expect(abs(newState.getAmplitude(ofState: 0).magnitude() - 1.0 / sqrt(2.0)) < 1e-5)
+        #expect(abs(newState.getAmplitude(ofState: 1).magnitude() - 1.0 / sqrt(2.0)) < 1e-5)
     }
 
     @Test("Metal applies Pauli-X gate correctly")
@@ -173,7 +173,7 @@ struct MetalGateApplicationTests {
         let newState = await GateApplication.applyHybrid(gate: .hadamard, to: [0], state: state)
 
         #expect(newState.isNormalized())
-        #expect(abs(newState.getAmplitude(ofState: 0).magnitude - 1.0 / sqrt(2.0)) < 1e-10)
+        #expect(abs(newState.getAmplitude(ofState: 0).magnitude() - 1.0 / sqrt(2.0)) < 1e-10)
     }
 
     @Test("applyHybrid attempts GPU for large states")

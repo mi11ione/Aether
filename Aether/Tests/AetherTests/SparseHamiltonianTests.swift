@@ -254,7 +254,7 @@ struct SparseHamiltonianSparsityTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         #expect(sparseH.nnz == sparseH.dimension)
-        #expect(sparseH.sparsity == Double(sparseH.dimension) / Double(sparseH.dimension * sparseH.dimension))
+        #expect(sparseH.sparsity() == Double(sparseH.dimension) / Double(sparseH.dimension * sparseH.dimension))
     }
 
     @Test("Single Pauli-X is sparse")
@@ -266,7 +266,7 @@ struct SparseHamiltonianSparsityTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         #expect(sparseH.nnz == sparseH.dimension)
-        #expect(sparseH.sparsity < 1.0)
+        #expect(sparseH.sparsity() < 1.0)
     }
 
     @Test("Multi-term Hamiltonian has low sparsity")
@@ -279,7 +279,7 @@ struct SparseHamiltonianSparsityTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        #expect(sparseH.sparsity < 0.5)
+        #expect(sparseH.sparsity() < 0.5)
         #expect(sparseH.nnz > 0)
     }
 
@@ -291,8 +291,8 @@ struct SparseHamiltonianSparsityTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        #expect(sparseH.sparsity >= 0.0)
-        #expect(sparseH.sparsity <= 1.0)
+        #expect(sparseH.sparsity() >= 0.0)
+        #expect(sparseH.sparsity() <= 1.0)
     }
 }
 
@@ -314,7 +314,7 @@ struct SparseHamiltonianStatisticsTests {
         #expect(stats.numQubits == sparseH.numQubits)
         #expect(stats.dimension == sparseH.dimension)
         #expect(stats.nonZeros == sparseH.nnz)
-        #expect(abs(stats.sparsity - sparseH.sparsity) < 1e-10)
+        #expect(abs(stats.sparsity - sparseH.sparsity()) < 1e-10)
     }
 
     @Test("Backend description is non-empty")

@@ -67,14 +67,14 @@ struct ComplexPropertiesTests {
     @Test("Conjugate: (2+3i)* = (2-3i)")
     func conjugate() {
         let z = Complex(2.0, 3.0)
-        let conjugate = z.conjugate
+        let conjugate = z.conjugate()
         #expect(conjugate == Complex(2.0, -3.0))
     }
 
     @Test("Conjugate property: z · z* = |z|²")
     func conjugateProperty() {
         let z = Complex(3.0, 4.0)
-        let product = z * z.conjugate
+        let product = z * z.conjugate()
         #expect(abs(product.real - z.magnitudeSquared) < 1e-10)
         #expect(abs(product.imaginary) < 1e-10)
     }
@@ -82,7 +82,7 @@ struct ComplexPropertiesTests {
     @Test("Magnitude: |3+4i| = 5")
     func magnitude() {
         let z = Complex(3.0, 4.0)
-        #expect(abs(z.magnitude - 5.0) < 1e-10)
+        #expect(abs(z.magnitude() - 5.0) < 1e-10)
     }
 
     @Test("Magnitude squared: |3+4i|² = 25")
@@ -94,7 +94,7 @@ struct ComplexPropertiesTests {
     @Test("Phase: arg(1+i) = π/4")
     func phase() {
         let z = Complex(1.0, 1.0)
-        #expect(abs(z.phase - .pi / 4.0) < 1e-10)
+        #expect(abs(z.phase() - .pi / 4.0) < 1e-10)
     }
 }
 
@@ -267,7 +267,7 @@ struct ComplexNumericalStabilityTests {
     @Test("Magnitude is never negative")
     func magnitudeNeverNegative() {
         let z = Complex(-3.0, -4.0)
-        #expect(z.magnitude >= 0)
+        #expect(z.magnitude() >= 0)
     }
 }
 
@@ -429,11 +429,11 @@ struct ComplexFloatCoverageTests {
     func floatMagnitudePhase() {
         let z = Complex<Float>(3.0, 4.0)
 
-        #expect(abs(z.magnitude - 5.0) < 1e-5)
+        #expect(abs(z.magnitude() - 5.0) < 1e-5)
         #expect(abs(z.magnitudeSquared - 25.0) < 1e-5)
 
         let w = Complex<Float>(1.0, 1.0)
-        #expect(abs(w.phase - Float.pi / 4.0) < 1e-5)
+        #expect(abs(w.phase() - Float.pi / 4.0) < 1e-5)
     }
 
     @Test("Float: Trigonometric functions (cos/sin)")
@@ -458,7 +458,7 @@ struct ComplexFloatCoverageTests {
     @Test("Float: Magnitude calculation")
     func floatMagnitude() {
         let z = Complex<Float>(9.0, 0.0)
-        let mag = z.magnitude
+        let mag = z.magnitude()
 
         #expect(abs(mag - 9.0) < 1e-5)
     }
@@ -466,7 +466,7 @@ struct ComplexFloatCoverageTests {
     @Test("Float: atan2 function")
     func floatAtan2() {
         let z = Complex<Float>(1.0, 1.0)
-        let phase = z.phase
+        let phase = z.phase()
 
         #expect(abs(phase - Float.pi / 4.0) < 1e-5)
     }
@@ -661,12 +661,132 @@ struct ComplexCompoundAssignmentOperatorTests {
     @Test("Phase computation works for Float")
     func phaseComputationFloat() {
         let z = Complex<Float>(1.0, 1.0)
-        let theta = z.phase
+        let theta = z.phase()
         let expectedPhase = Float.pi / 4.0
         #expect(abs(theta - expectedPhase) < 1e-5)
 
         let zNegative = Complex<Float>(-1.0, 0.0)
-        let phaseNeg = zNegative.phase
+        let phaseNeg = zNegative.phase()
         #expect(abs(abs(phaseNeg) - Float.pi) < 1e-5)
+    }
+}
+
+/// Test suite for Hashable conformance with epsilon-based quantization.
+/// Validates that complex numbers equal within epsilon have equal hashes,
+/// enabling safe use in Sets and Dictionaries despite floating-point precision.
+@Suite("Hashable with Epsilon Quantization")
+struct ComplexHashableTests {
+    @Test("Equal complex numbers have equal hashes (Double)")
+    func equalNumbersEqualHashesDouble() {
+        let z1 = Complex<Double>(3.0, 4.0)
+        let z2 = Complex<Double>(3.0, 4.0)
+        #expect(z1.hashValue == z2.hashValue)
+    }
+
+    @Test("Numbers within epsilon have equal hashes (Double)")
+    func withinEpsilonEqualHashesDouble() {
+        let z1 = Complex<Double>(1.0, 2.0)
+        let z2 = Complex<Double>(1.0 + 1e-11, 2.0 + 1e-11)
+        #expect(z1 == z2, "Values should be equal within epsilon")
+        #expect(z1.hashValue == z2.hashValue, "Equal values must have equal hashes")
+    }
+
+    @Test("Numbers beyond epsilon have different hashes (Double)")
+    func beyondEpsilonDifferentHashesDouble() {
+        let z1 = Complex<Double>(1.0, 2.0)
+        let z2 = Complex<Double>(1.0 + 1e-8, 2.0)
+        #expect(z1 != z2, "Values should be unequal beyond epsilon")
+        #expect(z1.hashValue != z2.hashValue, "Unequal values should have different hashes")
+    }
+
+    @Test("Can be used in Set (Double)")
+    func canBeUsedInSetDouble() {
+        var set = Set<Complex<Double>>()
+        let z1 = Complex<Double>(1.0, 2.0)
+        let z2 = Complex<Double>(1.0 + 1e-11, 2.0)
+        let z3 = Complex<Double>(3.0, 4.0)
+
+        set.insert(z1)
+        set.insert(z2)
+        set.insert(z3)
+
+        #expect(set.count == 2, "z1 and z2 are equal, so only 2 unique values")
+        #expect(set.contains(z1))
+        #expect(set.contains(z2))
+        #expect(set.contains(z3))
+    }
+
+    @Test("Can be used as Dictionary key (Double)")
+    func canBeUsedAsDictionaryKeyDouble() {
+        var dict: [Complex<Double>: String] = [:]
+        let z1 = Complex<Double>(1.0, 2.0)
+        let z2 = Complex<Double>(1.0 + 1e-11, 2.0)
+
+        dict[z1] = "first"
+        dict[z2] = "second"
+
+        #expect(dict.count == 1, "z1 and z2 are equal, so only 1 key")
+        #expect(dict[z1] == "second", "z2 overwrote z1's value")
+        #expect(dict[z2] == "second")
+    }
+
+    @Test("Equal complex numbers have equal hashes (Float)")
+    func equalNumbersEqualHashesFloat() {
+        let z1 = Complex<Float>(3.0, 4.0)
+        let z2 = Complex<Float>(3.0, 4.0)
+        #expect(z1.hashValue == z2.hashValue)
+    }
+
+    @Test("Numbers within epsilon have equal hashes (Float)")
+    func withinEpsilonEqualHashesFloat() {
+        let z1 = Complex<Float>(1.0, 2.0)
+        let z2 = Complex<Float>(1.0 + 1e-7, 2.0 + 1e-7)
+        #expect(z1 == z2, "Values should be equal within epsilon")
+        #expect(z1.hashValue == z2.hashValue, "Equal values must have equal hashes")
+    }
+
+    @Test("Numbers beyond epsilon have different hashes (Float)")
+    func beyondEpsilonDifferentHashesFloat() {
+        let z1 = Complex<Float>(1.0, 2.0)
+        let z2 = Complex<Float>(1.0 + 1e-4, 2.0)
+        #expect(z1 != z2, "Values should be unequal beyond epsilon")
+        #expect(z1.hashValue != z2.hashValue, "Unequal values should have different hashes")
+    }
+
+    @Test("Can be used in Set (Float)")
+    func canBeUsedInSetFloat() {
+        var set = Set<Complex<Float>>()
+        let z1 = Complex<Float>(1.0, 2.0)
+        let z2 = Complex<Float>(1.0 + 1e-7, 2.0)
+        let z3 = Complex<Float>(3.0, 4.0)
+
+        set.insert(z1)
+        set.insert(z2)
+        set.insert(z3)
+
+        #expect(set.count == 2, "z1 and z2 are equal, so only 2 unique values")
+        #expect(set.contains(z1))
+        #expect(set.contains(z2))
+        #expect(set.contains(z3))
+    }
+
+    @Test("Zero has consistent hash")
+    func zeroHasConsistentHash() {
+        let zero1 = Complex<Double>.zero
+        let zero2 = Complex<Double>(0.0, 0.0)
+        let zero3 = Complex<Double>(1e-11, 1e-11)
+
+        #expect(zero1.hashValue == zero2.hashValue)
+        #expect(zero1.hashValue == zero3.hashValue, "Near-zero quantizes to zero")
+    }
+
+    @Test("Quantization boundary consistency")
+    func quantizationBoundaryConsistency() {
+        let epsilon = 1e-10
+        let z1 = Complex<Double>(epsilon, 0.0)
+        let z2 = Complex<Double>(epsilon * 0.5, 0.0)
+
+        #expect(z1 == z2, "Both should quantize to same grid point")
+        #expect(z1.hashValue == z2.hashValue)
     }
 }

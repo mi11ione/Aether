@@ -100,6 +100,8 @@ public actor QuantumSimulator {
     ///   - initialState: Optional initial state (defaults to |00...0⟩)
     /// - Returns: Final quantum state
     /// - Throws: CancellationError if task is cancelled
+    @_optimize(speed)
+    @_eagerMove
     public func execute(_ circuit: QuantumCircuit, from initialState: QuantumState? = nil) async throws -> QuantumState {
         guard !isExecuting else { throw SimulatorError.alreadyExecuting }
 
@@ -146,6 +148,8 @@ public actor QuantumSimulator {
     ///   - initialState: Optional initial state
     ///   - progressHandler: Called periodically with progress (0.0 to 1.0)
     /// - Returns: Final quantum state
+    @_optimize(speed)
+    @_eagerMove
     public func executeWithProgress(
         _ circuit: QuantumCircuit,
         from initialState: QuantumState? = nil,
@@ -198,15 +202,18 @@ public actor QuantumSimulator {
 
     /// Get current execution progress
     /// - Returns: Tuple of (executed gates, total gates, percentage)
+    @_effects(readonly)
     public func getProgress() -> (executed: Int, total: Int, percentage: Double) {
         let percentage = totalGates > 0 ? Double(executedGates) / Double(totalGates) : 0.0
         return (executedGates, totalGates, percentage)
     }
 
     /// Get current quantum state (if available)
+    @_effects(readonly)
     public func getCurrentState() -> QuantumState? { currentState }
 
     /// Check if simulator is currently executing
+    @_effects(readonly)
     public func isCurrentlyExecuting() -> Bool { isExecuting }
 
     // MARK: - Batch Execution
@@ -216,6 +223,8 @@ public actor QuantumSimulator {
     ///   - circuits: Array of circuits to execute
     ///   - useMetalAcceleration: Whether to use Metal GPU acceleration
     /// - Returns: Array of final states
+    @_optimize(speed)
+    @_eagerMove
     public static func executeBatch(
         _ circuits: [QuantumCircuit],
         useMetalAcceleration: Bool = true
@@ -241,6 +250,7 @@ public actor QuantumSimulator {
 
 // MARK: - Simulator Error
 
+@frozen
 public enum SimulatorError: Error, LocalizedError {
     case alreadyExecuting
     case invalidCircuit
@@ -263,6 +273,7 @@ public enum SimulatorError: Error, LocalizedError {
 public extension QuantumCircuit {
     /// Execute circuit asynchronously
     /// - Returns: Final quantum state
+    @_eagerMove
     func executeAsync() async throws -> QuantumState {
         let simulator = QuantumSimulator()
         return try await simulator.execute(self)
@@ -271,6 +282,7 @@ public extension QuantumCircuit {
     /// Execute circuit with progress updates
     /// - Parameter progressHandler: Called with progress updates
     /// - Returns: Final quantum state
+    @_eagerMove
     func executeAsync(
         progressHandler: @isolated(any) @Sendable @escaping (Double) async -> Void
     ) async throws -> QuantumState {

@@ -53,6 +53,7 @@ public typealias PauliTerms = [(coefficient: Double, pauliString: PauliString)]
 /// let expectation = observable.expectationValue(state: state)
 /// // expectation = +1.0 (|0⟩ is +1 eigenstate of Z)
 /// ```
+@frozen
 public struct Observable: CustomStringConvertible, Sendable {
     /// Terms in the observable: weighted Pauli strings (cᵢ, Pᵢ)
     /// Coefficients are real (required for Hermiticity)
@@ -97,8 +98,9 @@ public struct Observable: CustomStringConvertible, Sendable {
     /// let trialState = prepareAnsatz(parameters: theta)
     /// let energy = hamiltonian.expectationValue(state: trialState)
     /// ```
+    @_optimize(speed)
     public func expectationValue(state: QuantumState) -> Double {
-        precondition(state.isNormalized(), "State must be normalized")
+        ValidationUtilities.validateNormalizedState(state)
 
         var totalExpectation = 0.0
 
@@ -122,6 +124,7 @@ public struct Observable: CustomStringConvertible, Sendable {
     ///   - pauliString: Pauli string operator
     ///   - state: Normalized quantum state
     /// - Returns: Expectation value ⟨P⟩ ∈ [-1, +1]
+    @_optimize(speed)
     static func computePauliExpectation(
         pauliString: PauliString,
         state: QuantumState
@@ -183,6 +186,7 @@ public struct Observable: CustomStringConvertible, Sendable {
     /// let uncertainty = sqrt(variance)
     /// // Number of shots needed: O(variance / ε²) for accuracy ε
     /// ```
+    @_optimize(speed)
     public func variance(state: QuantumState) -> Double {
         let mean = expectationValue(state: state)
         let meanSquared = squared().expectationValue(state: state)
@@ -195,6 +199,8 @@ public struct Observable: CustomStringConvertible, Sendable {
     /// Result is guaranteed Hermitian (real coefficients) if input is Hermitian.
     ///
     /// - Returns: Observable representing O²
+    @_optimize(speed)
+    @_eagerMove
     private func squared() -> Observable {
         var squaredTerms: PauliTerms = []
 
@@ -227,6 +233,8 @@ public struct Observable: CustomStringConvertible, Sendable {
     ///   - lhs: Left Pauli string
     ///   - rhs: Right Pauli string
     /// - Returns: (phase, resulting Pauli string)
+    @_optimize(speed)
+    @_eagerMove
     private func multiplyPauliStrings(
         _ lhs: PauliString,
         _ rhs: PauliString
@@ -271,7 +279,9 @@ public struct Observable: CustomStringConvertible, Sendable {
     ///   - left: Left Pauli (nil = identity)
     ///   - right: Right Pauli (nil = identity)
     /// - Returns: (phase, result Pauli or nil for identity)
-    private func multiplySingleQubitPaulis(
+    @_optimize(speed)
+    @inlinable
+    func multiplySingleQubitPaulis(
         left: PauliBasis?,
         right: PauliBasis?
     ) -> (phase: Complex<Double>, result: PauliBasis?) {
@@ -304,6 +314,8 @@ public struct Observable: CustomStringConvertible, Sendable {
     ///
     /// - Parameter terms: Unsimplified terms
     /// - Returns: Simplified terms with combined coefficients
+    @_optimize(speed)
+    @_eagerMove
     private func combineLikeTerms(
         _ terms: PauliTerms
     ) -> PauliTerms {
@@ -320,6 +332,7 @@ public struct Observable: CustomStringConvertible, Sendable {
 
     // MARK: - CustomStringConvertible
 
+    @inlinable
     public var description: String {
         if terms.isEmpty { return "Observable: 0" }
 

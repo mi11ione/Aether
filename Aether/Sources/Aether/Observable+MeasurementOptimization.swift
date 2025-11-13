@@ -97,6 +97,7 @@ public extension Observable {
             unitaryPartitions.removeAll()
         }
 
+        @_effects(readonly)
         private func termsEqual(
             _ lhs: PauliTerms,
             _ rhs: PauliTerms
@@ -118,7 +119,9 @@ public extension Observable {
     ///
     /// Used as cache key for Observable (struct, not class).
     /// Combines coefficient and Pauli operator hashes.
-    private var termsHash: Int {
+    @inlinable
+    @_effects(readonly)
+    func termsHash() -> Int {
         var hasher = 0
         for (coefficient, pauliString) in terms {
             let bits = coefficient.bitPattern
@@ -149,8 +152,9 @@ public extension Observable {
     /// let groups = await hamiltonian.qwcGroups()  // Fast: cached after first call
     /// print("Reduced to \(groups.count) groups")
     /// ```
+    @_eagerMove
     func qwcGroups() async -> [QWCGroup] {
-        let hash: Int = termsHash
+        let hash: Int = termsHash()
 
         if let cached = await Self.cache.getQWCGroups(hash: hash, terms: terms) {
             return cached
@@ -180,8 +184,9 @@ public extension Observable {
     /// let partitions = await hamiltonian.unitaryPartitions(numQubits: 10)
     /// print("Reduced to \(partitions.count) partitions (100-250× reduction)")
     /// ```
+    @_eagerMove
     func unitaryPartitions(numQubits: Int, config: UnitaryPartitioner.Config = .default) async -> [UnitaryPartition] {
-        let hash: Int = termsHash ^ numQubits
+        let hash: Int = termsHash() ^ numQubits
 
         if let cached = await Self.cache.getUnitaryPartitions(hash: hash, terms: terms) {
             return cached
@@ -199,6 +204,7 @@ public extension Observable {
     // MARK: - Measurement Strategies
 
     /// Strategy for measuring Hamiltonian expectation values.
+    @frozen
     enum MeasurementStrategy {
         /// Measure each term independently (no optimization)
         case termByTerm
@@ -232,6 +238,7 @@ public extension Observable {
     }
 
     /// Select optimal measurement strategy automatically.
+    @_effects(readonly)
     private func selectOptimalStrategy(numQubits: Int) -> MeasurementStrategy {
         let numTerms: Int = terms.count
 
@@ -265,6 +272,7 @@ public extension Observable {
     /// )
     /// // Variance-weighted: high-impact terms get more shots
     /// ```
+    @_eagerMove
     func allocateShots(
         totalShots: Int,
         state: QuantumState? = nil,
@@ -290,6 +298,7 @@ public extension Observable {
     /// )
     /// // Combines QWC grouping + optimal shot allocation
     /// ```
+    @_eagerMove
     func allocateShotsForGroups(
         totalShots: Int,
         state: QuantumState? = nil,
@@ -302,6 +311,7 @@ public extension Observable {
 
     // MARK: - Comprehensive Statistics
 
+    @frozen
     struct MeasurementOptimizationStats {
         public let numTerms: Int
         public let numQWCGroups: Int
@@ -340,6 +350,7 @@ public extension Observable {
     ///
     /// - Parameter numQubits: Number of qubits (optional, for unitary partitioning)
     /// - Returns: Detailed statistics
+    @_eagerMove
     func measurementOptimizationStatistics(numQubits: Int? = nil) async -> MeasurementOptimizationStats {
         let numTerms: Int = terms.count
         let groups: [QWCGroup] = await qwcGroups()

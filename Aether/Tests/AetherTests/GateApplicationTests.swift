@@ -364,7 +364,7 @@ struct GHZStateTests {
         #expect(abs(state.getAmplitude(ofState: 7).real - invSqrt2) < 1e-10)
 
         for i in 1 ..< 7 {
-            #expect(abs(state.getAmplitude(ofState: i).magnitude) < 1e-10)
+            #expect(abs(state.getAmplitude(ofState: i).magnitude()) < 1e-10)
         }
     }
 }
@@ -385,7 +385,7 @@ struct ToffoliGateApplicationTests {
 
         #expect(abs(newState.getAmplitude(ofState: 0).real - 1.0) < 1e-10)
         for i in 1 ..< 8 {
-            #expect(abs(newState.getAmplitude(ofState: i).magnitude) < 1e-10)
+            #expect(abs(newState.getAmplitude(ofState: i).magnitude()) < 1e-10)
         }
     }
 
@@ -445,9 +445,9 @@ struct SwapAndControlledPhaseTests {
         )
 
         #expect(abs(newState.getAmplitude(ofState: 1).real - 1.0) < 1e-10)
-        #expect(abs(newState.getAmplitude(ofState: 0).magnitude) < 1e-10)
-        #expect(abs(newState.getAmplitude(ofState: 2).magnitude) < 1e-10)
-        #expect(abs(newState.getAmplitude(ofState: 3).magnitude) < 1e-10)
+        #expect(abs(newState.getAmplitude(ofState: 0).magnitude()) < 1e-10)
+        #expect(abs(newState.getAmplitude(ofState: 2).magnitude()) < 1e-10)
+        #expect(abs(newState.getAmplitude(ofState: 3).magnitude()) < 1e-10)
     }
 
     @Test("SWAP preserves normalization")

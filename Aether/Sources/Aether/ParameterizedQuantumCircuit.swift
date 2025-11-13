@@ -4,6 +4,7 @@
 import Foundation
 
 /// Single parameterized gate operation in a circuit
+@frozen
 public struct ParameterizedGateOperation: Equatable, Sendable, CustomStringConvertible {
     public let gate: ParameterizedGate
     public let qubits: [Int]
@@ -21,6 +22,7 @@ public struct ParameterizedGateOperation: Equatable, Sendable, CustomStringConve
     }
 
     /// String representation of operation
+    @inlinable
     public var description: String {
         let qubitStr = qubits.isEmpty ? "" : " on qubits \(qubits)"
         if let ts = timestamp {
@@ -140,6 +142,7 @@ public struct ParameterizedGateOperation: Equatable, Sendable, CustomStringConve
 /// let bindings = ["gamma": 0.5, "beta": 1.2]
 /// let concrete = try circuit.bind(parameters: bindings)
 /// ```
+@frozen
 public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConvertible {
     public private(set) var operations: [ParameterizedGateOperation]
     public private(set) var numQubits: Int
@@ -156,8 +159,8 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     /// Create empty parameterized quantum circuit
     /// - Parameter numQubits: Number of qubits (supports 1-30)
     public init(numQubits: Int) {
-        precondition(numQubits > 0, "Number of qubits must be positive")
-        precondition(numQubits <= 30, "Maximum 30 qubits supported (2^30 = 1B amplitudes)")
+        ValidationUtilities.validatePositiveQubits(numQubits)
+        ValidationUtilities.validateMemoryLimit(numQubits)
         self.numQubits = numQubits
         operations = []
         parameters = []
@@ -170,7 +173,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///   - operations: Initial gate operations
     ///   - parameters: Ordered parameter list
     init(numQubits: Int, operations: [ParameterizedGateOperation], parameters: [Parameter]) {
-        precondition(numQubits > 0, "Number of qubits must be positive")
+        ValidationUtilities.validatePositiveQubits(numQubits)
         self.numQubits = numQubits
         self.operations = operations
         self.parameters = parameters
@@ -210,6 +213,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///
     /// print(circuit.parameters)  // [theta, phi] in registration order
     /// ```
+    @_optimize(speed)
     public mutating func append(gate: ParameterizedGate, qubits: [Int], timestamp: Double? = nil) {
         precondition(qubits.allSatisfy { $0 >= 0 }, "Qubit indices must be non-negative")
 
@@ -238,8 +242,9 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
 
     /// Register new parameters from gate
     /// Auto-registers symbolic parameters in order of first appearance
+    @_optimize(speed)
     private mutating func registerParameters(from gate: ParameterizedGate) {
-        for param in gate.parameters {
+        for param in gate.parameters() {
             if !parameterSet.contains(param.name) {
                 parameters.append(param)
                 parameterSet.insert(param.name)
@@ -250,24 +255,34 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     // MARK: - Querying
 
     /// Number of gate operations in circuit
-    public var gateCount: Int { operations.count }
+    @inlinable
+    @_effects(readonly)
+    public func gateCount() -> Int { operations.count }
 
     /// Whether circuit is empty (no gates)
-    public var isEmpty: Bool { operations.isEmpty }
+    @inlinable
+    @_effects(readonly)
+    public func isEmpty() -> Bool { operations.isEmpty }
 
     /// Number of distinct parameters in circuit
-    public var parameterCount: Int { parameters.count }
+    @inlinable
+    @_effects(readonly)
+    public func parameterCount() -> Int { parameters.count }
 
     /// Get gate operation at index
     /// - Parameter index: Operation index
     /// - Returns: Parameterized gate operation
+    @inlinable
+    @_effects(readonly)
     public func operation(at index: Int) -> ParameterizedGateOperation {
-        precondition(index >= 0 && index < operations.count, "Index out of bounds")
+        ValidationUtilities.validateArrayIndex(index, count: operations.count)
         return operations[index]
     }
 
     /// Find maximum qubit index used in circuit
     /// - Returns: Maximum qubit index, or numQubits-1 if no operations
+    @_optimize(speed)
+    @_effects(readonly)
     public func maxQubitUsed() -> Int {
         var maxQubit: Int = numQubits - 1
 
@@ -293,6 +308,8 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     }
 
     /// Extract maximum qubit from concrete gate
+    @_optimize(speed)
+    @_effects(readonly)
     private func maxQubitForConcreteGate(_ gate: QuantumGate) -> Int {
         switch gate {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
@@ -319,6 +336,8 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
 
     /// Validate circuit structure and parameter references
     /// - Returns: True if circuit is valid
+    @_optimize(speed)
+    @_effects(readonly)
     public func validate() -> Bool {
         let maxAllowedQubit = 29
 
@@ -376,6 +395,8 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///     print("Extra: \(names)")  // "Extra: [gamma]"
     /// }
     /// ```
+    @_optimize(speed)
+    @_eagerMove
     public func bind(parameters bindings: [String: Double]) throws -> QuantumCircuit {
         let requiredParams = Set(parameters.map(\.name))
         let providedParams = Set(bindings.keys)
@@ -441,6 +462,8 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///     return hamiltonian.expectation(in: state)
     /// }
     /// ```
+    @_optimize(speed)
+    @_eagerMove
     public func bind(parameterVector: [Double]) throws -> QuantumCircuit {
         guard parameterVector.count == parameters.count else {
             throw ParameterError.invalidVectorLength(expected: parameters.count, got: parameterVector.count)
@@ -493,6 +516,8 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///
     /// let gradient = (energyPlus - energyMinus) / 2.0
     /// ```
+    @_optimize(speed)
+    @_eagerMove
     public func generateShiftedCircuits(
         parameterName: String,
         baseBindings: [String: Double],
@@ -545,6 +570,8 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///     baseVector: baseParams
     /// )
     /// ```
+    @_optimize(speed)
+    @_eagerMove
     public func generateShiftedCircuits(
         parameterIndex: Int,
         baseVector: [Double],
@@ -570,9 +597,10 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     // MARK: - CustomStringConvertible
 
     /// String representation of parameterized circuit
+    @inlinable
     public var description: String {
         if operations.isEmpty {
-            return "ParameterizedQuantumCircuit(\(numQubits) qubits, \(parameterCount) params, empty)"
+            return "ParameterizedQuantumCircuit(\(numQubits) qubits, \(parameterCount()) params, empty)"
         }
 
         let gateList = operations.prefix(3).map(\.description).joined(separator: ", ")
@@ -582,7 +610,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
 
         return """
         ParameterizedQuantumCircuit(\(numQubits) qubits, \(operations.count) gates, \
-        \(parameterCount) params: [\(paramList)\(paramSuffix)]): \(gateList)\(suffix)
+        \(parameterCount()) params: [\(paramList)\(paramSuffix)]): \(gateList)\(suffix)
         """
     }
 }

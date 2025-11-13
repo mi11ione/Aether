@@ -57,6 +57,7 @@ public typealias GateMatrix = [AmplitudeVector]
 /// // Convenience method
 /// let result = initial.applying(gate: .hadamard, toQubit: 0)
 /// ```
+@frozen
 public enum GateApplication {
     // MARK: - Main Application Function
 
@@ -66,9 +67,11 @@ public enum GateApplication {
     ///   - qubits: Target qubit indices (for single-qubit gates)
     ///   - state: Current quantum state
     /// - Returns: New transformed quantum state
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
     public static func apply(gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {
-        precondition(qubits.allSatisfy { $0 >= 0 && $0 < state.numQubits },
-                     "Qubit indices out of bounds")
+        ValidationUtilities.validateOperationQubits(qubits, numQubits: state.numQubits)
 
         switch gate {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
@@ -108,7 +111,11 @@ public enum GateApplication {
     ///   - qubit: Target qubit index
     ///   - state: Current quantum state
     /// - Returns: Transformed state
-    private static func applySingleQubitGate(
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applySingleQubitGate(
         gate: QuantumGate,
         qubit: Int,
         state: QuantumState
@@ -121,13 +128,13 @@ public enum GateApplication {
 
         // Create new amplitude array (allocate directly instead of copying)
         var newAmplitudes = AmplitudeVector(repeating: .zero, count: state.stateSpaceSize)
-        let bitMask = 1 << qubit
+        let bitMask = BitUtilities.bitMask(qubit: qubit)
 
         for i in 0 ..< state.stateSpaceSize {
             // Only process indices where target qubit is 0
             // (to avoid processing each pair twice)
             if (i & bitMask) == 0 {
-                let j: Int = i | bitMask
+                let j: Int = BitUtilities.setBit(i, qubit: qubit, value: 1)
 
                 let ci: Complex<Double> = state.amplitudes[i]
                 let cj: Complex<Double> = state.amplitudes[j]
@@ -149,7 +156,11 @@ public enum GateApplication {
     ///   - target: Target qubit index
     ///   - state: Current quantum state
     /// - Returns: Transformed state
-    private static func applyTwoQubitGate(
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applyTwoQubitGate(
         gate: QuantumGate,
         control: Int,
         target: Int,
@@ -159,8 +170,8 @@ public enum GateApplication {
         var newAmplitudes = AmplitudeVector(repeating: .zero, count: state.stateSpaceSize)
 
         // States differing only in control and target qubits
-        let controlMask = 1 << control
-        let targetMask = 1 << target
+        let controlMask = BitUtilities.bitMask(qubit: control)
+        let targetMask = BitUtilities.bitMask(qubit: target)
         let bothMask: Int = controlMask | targetMask
 
         let stateSize: Int = state.stateSpaceSize
@@ -200,19 +211,22 @@ public enum GateApplication {
     ///   - target: Target qubit index
     ///   - state: Current quantum state
     /// - Returns: Transformed state
-    private static func applyCNOT(
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applyCNOT(
         control: Int,
         target: Int,
         state: QuantumState
     ) -> QuantumState {
         var newAmplitudes: AmplitudeVector = Array(repeating: Complex<Double>.zero, count: state.stateSpaceSize)
 
-        let controlMask = 1 << control
-        let targetMask = 1 << target
+        let controlMask = BitUtilities.bitMask(qubit: control)
 
         for i in 0 ..< state.stateSpaceSize {
             if (i & controlMask) != 0 {
-                newAmplitudes[i ^ targetMask] = state.amplitudes[i]
+                newAmplitudes[BitUtilities.flipBit(i, qubit: target)] = state.amplitudes[i]
             } else {
                 newAmplitudes[i] = state.amplitudes[i]
             }
@@ -229,15 +243,19 @@ public enum GateApplication {
     ///   - target: Target qubit index
     ///   - state: Current quantum state
     /// - Returns: Transformed state
-    private static func applyCZ(
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applyCZ(
         control: Int,
         target: Int,
         state: QuantumState
     ) -> QuantumState {
         var newAmplitudes = AmplitudeVector(repeating: .zero, count: state.stateSpaceSize)
 
-        let controlMask = 1 << control
-        let targetMask = 1 << target
+        let controlMask = BitUtilities.bitMask(qubit: control)
+        let targetMask = BitUtilities.bitMask(qubit: target)
 
         for i in 0 ..< state.stateSpaceSize {
             if (i & controlMask) != 0, (i & targetMask) != 0 {
@@ -259,7 +277,11 @@ public enum GateApplication {
     ///   - target: Target qubit
     ///   - state: Current quantum state
     /// - Returns: Transformed state
-    private static func applyToffoli(
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applyToffoli(
         control1: Int,
         control2: Int,
         target: Int,
@@ -267,13 +289,12 @@ public enum GateApplication {
     ) -> QuantumState {
         var newAmplitudes: AmplitudeVector = Array(repeating: Complex<Double>.zero, count: state.stateSpaceSize)
 
-        let c1Mask = 1 << control1
-        let c2Mask = 1 << control2
-        let targetMask = 1 << target
+        let c1Mask = BitUtilities.bitMask(qubit: control1)
+        let c2Mask = BitUtilities.bitMask(qubit: control2)
 
         for i in 0 ..< state.stateSpaceSize {
             if (i & c1Mask) != 0, (i & c2Mask) != 0 {
-                newAmplitudes[i ^ targetMask] = state.amplitudes[i]
+                newAmplitudes[BitUtilities.flipBit(i, qubit: target)] = state.amplitudes[i]
             } else {
                 newAmplitudes[i] = state.amplitudes[i]
             }
@@ -291,6 +312,9 @@ public extension QuantumState {
     ///   - gate: Gate to apply
     ///   - qubits: Target qubit indices
     /// - Returns: New transformed state
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
     func applying(gate: QuantumGate, to qubits: [Int]) -> QuantumState {
         GateApplication.apply(gate: gate, to: qubits, state: self)
     }
@@ -300,6 +324,9 @@ public extension QuantumState {
     ///   - gate: Single-qubit gate
     ///   - qubit: Target qubit
     /// - Returns: New transformed state
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
     func applying(gate: QuantumGate, toQubit qubit: Int) -> QuantumState {
         GateApplication.apply(gate: gate, to: [qubit], state: self)
     }
