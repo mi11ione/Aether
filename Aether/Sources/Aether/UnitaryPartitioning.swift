@@ -635,7 +635,7 @@ public struct UnitaryPartitioner {
                 break
             }
 
-            let direction: [Double] = computeSearchDirection(
+            let direction: [Double] = LBFGSBOptimizer.computeSearchDirection(
                 gradient: gradient,
                 sHistory: sHistory,
                 yHistory: yHistory,
@@ -689,43 +689,6 @@ public struct UnitaryPartitioner {
             iterations: iteration,
             converged: converged
         )
-    }
-
-    /// Compute search direction using L-BFGS two-loop recursion.
-    @_optimize(speed)
-    @_eagerMove
-    private func computeSearchDirection(
-        gradient: [Double],
-        sHistory: [[Double]],
-        yHistory: [[Double]],
-        rhoHistory: [Double]
-    ) -> [Double] {
-        guard !sHistory.isEmpty else { return gradient.map { -$0 } }
-
-        let m: Int = sHistory.count
-        var q = gradient
-        var alpha = [Double](repeating: 0.0, count: m)
-
-        for i in stride(from: m - 1, through: 0, by: -1) {
-            let a: Double = rhoHistory[i] * zip(sHistory[i], q).reduce(0.0) { $0 + $1.0 * $1.1 }
-            alpha[i] = a
-            q = zip(q, yHistory[i]).map { $0 - a * $1 }
-        }
-
-        let lastS: [Double] = sHistory[m - 1]
-        let lastY: [Double] = yHistory[m - 1]
-        let sy: Double = zip(lastS, lastY).reduce(0.0) { $0 + $1.0 * $1.1 }
-        let yy: Double = lastY.reduce(0.0) { $0 + $1 * $1 }
-        let gamma: Double = sy / yy
-
-        var r: [Double] = q.map { gamma * $0 }
-
-        for i in 0 ..< m {
-            let beta: Double = rhoHistory[i] * zip(yHistory[i], r).reduce(0.0) { $0 + $1.0 * $1.1 }
-            r = zip(r, sHistory[i]).map { $0 + (alpha[i] - beta) * $1 }
-        }
-
-        return r.map { -$0 }
     }
 
     /// Backtracking line search with Wolfe conditions.

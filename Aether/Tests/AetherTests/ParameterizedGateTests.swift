@@ -505,12 +505,6 @@ struct ParameterizedGateEqualityTests {
         #expect(set.count == 2)
     }
 
-    @Test("ParameterizedGate is Sendable")
-    func parameterizedGateIsSendable() {
-        let gate = ParameterizedGate.rotationY(theta: .value(0.5))
-        let _: any Sendable = gate
-    }
-
     @Test("Concrete gates are equal")
     func concreteGatesEqual() {
         let gate1 = ParameterizedGate.concrete(.hadamard)

@@ -5,8 +5,8 @@
 import Testing
 
 /// Test suite for QuantumSimulator actor.
-/// Validates Swift concurrency features: async execution, progress reporting,
-/// task cancellation, and thread-safe quantum circuit simulation.
+/// Validates Swift concurrency features: async execution
+/// progress reporting and thread-safe quantum circuit simulation.
 @Suite("Quantum Simulator")
 struct QuantumSimulatorTests {
     @Test("Simulator executes simple circuit asynchronously")
@@ -57,9 +57,9 @@ struct QuantumSimulatorTests {
 
         let accumulator = ProgressAccumulator()
 
-        _ = try await simulator.executeWithProgress(circuit) { progress in
+        _ = try await simulator.execute(circuit, progressHandler: { progress in
             await accumulator.append(progress)
-        }
+        })
 
         let progressUpdates = await accumulator.values
 
@@ -90,10 +90,10 @@ struct QuantumSimulatorTests {
 
         let tracker = ProgressTracker()
 
-        _ = try await simulator.executeWithProgress(circuit) { _ in
+        _ = try await simulator.execute(circuit, progressHandler: { _ in
             let progress = await simulator.getProgress()
             await tracker.capture(progress)
-        }
+        })
 
         let captured = await tracker.capturedProgress
         #expect(captured != nil)
@@ -120,10 +120,10 @@ struct QuantumSimulatorTests {
 
         let tracker = StateTracker()
 
-        _ = try await simulator.executeWithProgress(circuit) { _ in
+        _ = try await simulator.execute(circuit, progressHandler: { _ in
             let state = await simulator.getCurrentState()
             await tracker.capture(state)
-        }
+        })
 
         let state = await tracker.capturedState
         #expect(state != nil)
@@ -131,64 +131,6 @@ struct QuantumSimulatorTests {
             #expect(capturedState.numQubits == 2)
             #expect(capturedState.isNormalized())
         }
-    }
-
-    @Test("Simulator tracks execution status")
-    func simulatorTracksExecutionStatus() async throws {
-        let simulator = QuantumSimulator()
-
-        var circuit = QuantumCircuit(numQubits: 1)
-        for _ in 0 ..< 100 {
-            circuit.append(gate: .hadamard, toQubit: 0)
-        }
-
-        let beforeExecuting = await simulator.isCurrentlyExecuting()
-        #expect(beforeExecuting == false)
-
-        actor StatusTracker {
-            private(set) var duringExecution: Bool?
-            func capture(_ value: Bool) { duringExecution = value }
-        }
-
-        let tracker = StatusTracker()
-
-        _ = try await simulator.executeWithProgress(circuit) { _ in
-            let status = await simulator.isCurrentlyExecuting()
-            await tracker.capture(status)
-        }
-
-        let during = await tracker.duringExecution
-        #expect(during == true)
-
-        let after = await simulator.isCurrentlyExecuting()
-        #expect(after == false)
-    }
-
-    @Test("Simulator executes batch of circuits in parallel")
-    func simulatorExecutesBatchCircuits() async throws {
-        var circuit1 = QuantumCircuit(numQubits: 2)
-        circuit1.append(gate: .hadamard, toQubit: 0)
-
-        var circuit2 = QuantumCircuit(numQubits: 2)
-        circuit2.append(gate: .pauliX, toQubit: 1)
-
-        var circuit3 = QuantumCircuit(numQubits: 2)
-        circuit3.append(gate: .hadamard, toQubit: 0)
-        await circuit3.append(gate: .cnot(control: 0, target: 1), qubits: [])
-
-        let circuits = [circuit1, circuit2, circuit3]
-
-        let results = try await QuantumSimulator.executeBatch(circuits)
-
-        #expect(results.count == 3)
-
-        for state in results {
-            #expect(state.isNormalized())
-        }
-
-        #expect(results[0].numQubits == 2)
-        #expect(results[1].numQubits == 2)
-        #expect(results[2].numQubits == 2)
     }
 
     @Test("Circuit can be executed asynchronously via convenience method")
@@ -237,28 +179,6 @@ struct QuantumSimulatorTests {
         #expect(finalState.probability(ofState: 0) == 1.0)
     }
 
-    @Test("Simulator supports task cancellation")
-    func simulatorSupportsCancellation() async throws {
-        let simulator = QuantumSimulator()
-
-        var circuit = QuantumCircuit(numQubits: 1)
-        for _ in 0 ..< 1000 {
-            circuit.append(gate: .hadamard, toQubit: 0)
-        }
-
-        let task = Task {
-            try await simulator.execute(circuit)
-        }
-
-        task.cancel()
-
-        do {
-            _ = try await task.value
-        } catch {
-            #expect(error is CancellationError)
-        }
-    }
-
     @Test("Simulator handles pre-built Bell state circuit")
     func simulatorHandlesBellStateCircuit() async throws {
         let simulator = QuantumSimulator()
@@ -294,80 +214,13 @@ struct QuantumSimulatorTests {
 
     @Test("SimulatorError has correct descriptions")
     func simulatorErrorDescriptions() {
-        let error1 = SimulatorError.alreadyExecuting
-        let error2 = SimulatorError.invalidCircuit
-        let error3 = SimulatorError.metalNotAvailable
+        let error1 = SimulatorError.invalidCircuit
+        let error2 = SimulatorError.metalNotAvailable
 
         #expect(error1.errorDescription != nil)
         #expect(error2.errorDescription != nil)
-        #expect(error3.errorDescription != nil)
-        #expect(error1.errorDescription?.contains("executing") == true)
-        #expect(error2.errorDescription?.contains("invalid") == true)
-        #expect(error3.errorDescription?.contains("Metal") == true)
-    }
-
-    @Test("Simulator throws alreadyExecuting when concurrent execution attempted")
-    func simulatorThrowsAlreadyExecuting() async throws {
-        let simulator = QuantumSimulator()
-
-        var circuitBuilder = QuantumCircuit(numQubits: 1)
-        for _ in 0 ..< 100 {
-            circuitBuilder.append(gate: .hadamard, toQubit: 0)
-        }
-        let circuit = circuitBuilder
-
-        actor ErrorTracker {
-            private(set) var caughtError: SimulatorError?
-            func capture(_ error: SimulatorError) { caughtError = error }
-        }
-
-        let tracker = ErrorTracker()
-
-        _ = try await simulator.executeWithProgress(circuit) { _ in
-            do {
-                _ = try await simulator.execute(circuit)
-                Issue.record("Expected alreadyExecuting error")
-            } catch let error as SimulatorError {
-                await tracker.capture(error)
-            } catch {
-                Issue.record("Unexpected error type: \(error)")
-            }
-        }
-
-        let error = await tracker.caughtError
-        #expect(error == .alreadyExecuting)
-    }
-
-    @Test("Simulator throws alreadyExecuting for executeWithProgress during concurrent execution")
-    func simulatorThrowsAlreadyExecutingWithProgress() async throws {
-        let simulator = QuantumSimulator()
-
-        var circuitBuilder = QuantumCircuit(numQubits: 1)
-        for _ in 0 ..< 100 {
-            circuitBuilder.append(gate: .hadamard, toQubit: 0)
-        }
-        let circuit = circuitBuilder
-
-        actor ErrorTracker {
-            private(set) var caughtError: SimulatorError?
-            func capture(_ error: SimulatorError) { caughtError = error }
-        }
-
-        let tracker = ErrorTracker()
-
-        _ = try await simulator.executeWithProgress(circuit) { _ in
-            do {
-                _ = try await simulator.executeWithProgress(circuit) { _ in }
-                Issue.record("Expected alreadyExecuting error")
-            } catch let error as SimulatorError {
-                await tracker.capture(error)
-            } catch {
-                Issue.record("Unexpected error type: \(error)")
-            }
-        }
-
-        let error = await tracker.caughtError
-        #expect(error == .alreadyExecuting)
+        #expect(error1.errorDescription?.contains("invalid") == true)
+        #expect(error2.errorDescription?.contains("Metal") == true)
     }
 
     @Test("Simulator with Metal disabled works correctly")
@@ -382,30 +235,6 @@ struct QuantumSimulatorTests {
 
         #expect(finalState.numQubits == 2)
         #expect(finalState.isNormalized())
-    }
-
-    @Test("Progress handler receives final progress value")
-    func progressHandlerReceivesFinalProgress() async throws {
-        let simulator = QuantumSimulator()
-
-        var circuit = QuantumCircuit(numQubits: 1)
-        for _ in 0 ..< 10 {
-            circuit.append(gate: .hadamard, toQubit: 0)
-        }
-
-        actor FinalProgressTracker {
-            private(set) var finalProgress: Double = 0.0
-            func update(_ value: Double) { finalProgress = value }
-        }
-
-        let tracker = FinalProgressTracker()
-
-        _ = try await simulator.executeWithProgress(circuit) { progress in
-            await tracker.update(progress)
-        }
-
-        let final = await tracker.finalProgress
-        #expect(final >= 0.99)
     }
 
     @Test("Simulator uses Metal acceleration for large circuits")
@@ -443,9 +272,9 @@ struct QuantumSimulatorTests {
 
         let tracker = ProgressTracker()
 
-        let finalState = try await simulator.executeWithProgress(circuit) { progress in
+        let finalState = try await simulator.execute(circuit, progressHandler: { progress in
             await tracker.append(progress)
-        }
+        })
 
         #expect(finalState.numQubits == 12)
         #expect(finalState.isNormalized())
@@ -477,9 +306,9 @@ struct QuantumSimulatorTests {
 
         let tracker = ProgressTracker()
 
-        let finalState = try await simulator.executeWithProgress(circuit, from: initialState) { _ in
+        let finalState = try await simulator.execute(circuit, from: initialState, progressHandler: { _ in
             await tracker.markCalled()
-        }
+        })
 
         #expect(finalState.numQubits == 2)
         #expect(finalState.isNormalized())
@@ -542,9 +371,9 @@ struct QuantumSimulatorTests {
 
         let tracker = ProgressTracker()
 
-        let finalState = try await simulator.executeWithProgress(circuit) { _ in
+        let finalState = try await simulator.execute(circuit, progressHandler: { _ in
             await tracker.markCalled()
-        }
+        })
 
         #expect(finalState.isNormalized())
         #expect(finalState.probability(ofState: 0b11111) > 0.99)

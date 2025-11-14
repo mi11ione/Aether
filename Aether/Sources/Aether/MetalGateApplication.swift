@@ -125,10 +125,7 @@ public actor MetalGateApplication {
               let cnotPipeline = MetalResources.cnotPipeline,
               let twoQubitPipeline = MetalResources.twoQubitPipeline,
               let toffoliPipeline = MetalResources.toffoliPipeline
-        else {
-            print("Metal resources not available on this device")
-            return nil
-        }
+        else { return nil }
 
         self.device = device
         self.commandQueue = commandQueue
@@ -195,26 +192,19 @@ public actor MetalGateApplication {
             bytes: &floatAmplitudes,
             length: bufferSize,
             options: .storageModeShared
-        ) else {
-            print("Metal amplitude buffer allocation failed - falling back to CPU")
-            return GateApplication.apply(gate: gate, to: [qubit], state: state)
-        }
+        ) else { return GateApplication.apply(gate: gate, to: [qubit], state: state) }
 
         let matrixSize = 4 * MemoryLayout<GPUComplex>.stride
         guard let matrixBuffer = device.makeBuffer(
             bytes: &floatMatrix,
             length: matrixSize,
             options: .storageModeShared
-        ) else {
-            print("Metal matrix buffer allocation failed - falling back to CPU")
-            return GateApplication.apply(gate: gate, to: [qubit], state: state)
-        }
+        ) else { return GateApplication.apply(gate: gate, to: [qubit], state: state) }
 
         var qubitValue = UInt32(qubit)
         var numQubitsValue = UInt32(state.numQubits)
 
         guard let (commandBuffer, encoder) = MetalUtilities.createCommandEncoder(queue: commandQueue) else {
-            print("Metal command buffer/encoder creation failed - falling back to CPU")
             return GateApplication.apply(gate: gate, to: [qubit], state: state)
         }
 
@@ -248,7 +238,6 @@ public actor MetalGateApplication {
         }
 
         guard newAmplitudes.allSatisfy(\.isFinite) else {
-            print("GPU computation produced invalid values (NaN/Inf) - falling back to CPU")
             return GateApplication.apply(gate: gate, to: [qubit], state: state)
         }
 
@@ -264,13 +253,9 @@ public actor MetalGateApplication {
 
         guard let inputBuffer = device.makeBuffer(bytes: &floatAmplitudes, length: bufferSize, options: .storageModeShared),
               let outputBuffer = device.makeBuffer(length: bufferSize, options: .storageModeShared)
-        else {
-            print("Metal buffer allocation failed for CNOT - falling back to CPU")
-            return GateApplication.apply(gate: .cnot(control: control, target: target), to: [], state: state)
-        }
+        else { return GateApplication.apply(gate: .cnot(control: control, target: target), to: [], state: state) }
 
         guard let (commandBuffer, encoder) = MetalUtilities.createCommandEncoder(queue: commandQueue) else {
-            print("Metal command buffer/encoder creation failed for CNOT - falling back to CPU")
             return GateApplication.apply(gate: .cnot(control: control, target: target), to: [], state: state)
         }
 
@@ -297,7 +282,6 @@ public actor MetalGateApplication {
         let newAmplitudes: AmplitudeVector = (0 ..< stateSize).map { Complex(Double(resultPointer[$0].0), Double(resultPointer[$0].1)) }
 
         guard newAmplitudes.allSatisfy(\.isFinite) else {
-            print("GPU CNOT computation produced invalid values (NaN/Inf) - falling back to CPU")
             return GateApplication.apply(gate: .cnot(control: control, target: target), to: [], state: state)
         }
 
@@ -322,13 +306,9 @@ public actor MetalGateApplication {
 
         guard let inputBuffer = device.makeBuffer(bytes: &floatAmplitudes, length: bufferSize, options: .storageModeShared),
               let matrixBuffer = device.makeBuffer(bytes: &floatMatrix, length: matrixSize, options: .storageModeShared)
-        else {
-            print("Metal buffer allocation failed for two-qubit gate - falling back to CPU")
-            return GateApplication.apply(gate: gate, to: [control, target], state: state)
-        }
+        else { return GateApplication.apply(gate: gate, to: [control, target], state: state) }
 
         guard let (commandBuffer, encoder) = MetalUtilities.createCommandEncoder(queue: commandQueue) else {
-            print("Metal command buffer/encoder creation failed for two-qubit gate - falling back to CPU")
             return GateApplication.apply(gate: gate, to: [control, target], state: state)
         }
 
@@ -355,7 +335,6 @@ public actor MetalGateApplication {
         let newAmplitudes: AmplitudeVector = (0 ..< stateSize).map { Complex(Double(resultPointer[$0].0), Double(resultPointer[$0].1)) }
 
         guard newAmplitudes.allSatisfy(\.isFinite) else {
-            print("GPU two-qubit gate computation produced invalid values (NaN/Inf) - falling back to CPU")
             return GateApplication.apply(gate: gate, to: [control, target], state: state)
         }
 
@@ -371,13 +350,9 @@ public actor MetalGateApplication {
 
         guard let inputBuffer = device.makeBuffer(bytes: &floatAmplitudes, length: bufferSize, options: .storageModeShared),
               let outputBuffer = device.makeBuffer(length: bufferSize, options: .storageModeShared)
-        else {
-            print("Metal buffer allocation failed for Toffoli - falling back to CPU")
-            return GateApplication.apply(gate: .toffoli(control1: control1, control2: control2, target: target), to: [], state: state)
-        }
+        else { return GateApplication.apply(gate: .toffoli(control1: control1, control2: control2, target: target), to: [], state: state) }
 
         guard let (commandBuffer, encoder) = MetalUtilities.createCommandEncoder(queue: commandQueue) else {
-            print("Metal command buffer/encoder creation failed for Toffoli - falling back to CPU")
             return GateApplication.apply(gate: .toffoli(control1: control1, control2: control2, target: target), to: [], state: state)
         }
 
@@ -406,7 +381,6 @@ public actor MetalGateApplication {
         let newAmplitudes: AmplitudeVector = (0 ..< stateSize).map { Complex(Double(resultPointer[$0].0), Double(resultPointer[$0].1)) }
 
         guard newAmplitudes.allSatisfy(\.isFinite) else {
-            print("GPU Toffoli computation produced invalid values (NaN/Inf) - falling back to CPU")
             return GateApplication.apply(gate: .toffoli(control1: control1, control2: control2, target: target), to: [], state: state)
         }
 

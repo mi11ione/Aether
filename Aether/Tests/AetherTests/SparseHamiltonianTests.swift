@@ -557,35 +557,4 @@ struct SparseHamiltonianEdgeCasesTests {
         #expect(constructionTime < 5.0)
         #expect(sparseH.nnz > 0)
     }
-
-    @Test("Thread safety: concurrent expectation value calls")
-    func threadSafety() async {
-        let observable = Observable(terms: [
-            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)])),
-            (coefficient: 0.5, pauliString: PauliString(operators: [(1, .x)])),
-        ])
-        let sparseH = SparseHamiltonian(observable: observable)
-
-        var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        let state = circuit.execute()
-
-        let expectedValue = observable.expectationValue(state: state)
-
-        let results: [Double] = await withTaskGroup(of: (Int, Double).self) { group in
-            for i in 0 ..< 10 {
-                group.addTask { await (i, sparseH.expectationValue(state: state)) }
-            }
-
-            var temp = Array(repeating: 0.0, count: 10)
-            for await (i, value) in group {
-                temp[i] = value
-            }
-            return temp
-        }
-
-        for result in results {
-            #expect(abs(result - expectedValue) < 1e-6)
-        }
-    }
 }

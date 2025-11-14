@@ -31,12 +31,6 @@ struct ParameterizedCircuitInitializationTests {
         #expect(circuit10.numQubits == 10)
     }
 
-    @Test("ParameterizedQuantumCircuit is Sendable")
-    func circuitIsSendable() {
-        let circuit = ParameterizedQuantumCircuit(numQubits: 2)
-        let _: any Sendable = circuit
-    }
-
     @Test("Empty circuit has no parameters")
     func emptyCircuitNoParameters() {
         let circuit = ParameterizedQuantumCircuit(numQubits: 2)

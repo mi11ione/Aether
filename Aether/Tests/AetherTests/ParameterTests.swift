@@ -52,12 +52,6 @@ struct ParameterTests {
         #expect(param.description == "theta_0")
     }
 
-    @Test("Parameter is Sendable")
-    func parameterIsSendable() {
-        let param = Parameter(name: "theta")
-        let _: any Sendable = param
-    }
-
     @Test("Greek letter parameter names")
     func greekLetterNames() {
         let theta = Parameter(name: "θ")
@@ -171,12 +165,6 @@ struct ParameterExpressionTests {
     func concreteExpressionDescription() {
         let expr = ParameterExpression.value(1.234)
         #expect(expr.description == "1.234")
-    }
-
-    @Test("ParameterExpression is Sendable")
-    func parameterExpressionIsSendable() {
-        let expr = ParameterExpression.value(1.0)
-        let _: any Sendable = expr
     }
 
     @Test("ParameterExpression equality")

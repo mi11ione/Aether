@@ -455,13 +455,8 @@ struct StateErrorHandlingTests {
         state.setAmplitude(ofState: 0, amplitude: Complex.zero)
         state.setAmplitude(ofState: 1, amplitude: Complex.zero)
 
-        do {
+        #expect(throws: QuantumStateError.cannotNormalizeZeroState) {
             try state.normalize()
-            Issue.record("Expected error to be thrown")
-        } catch let error as QuantumStateError {
-            #expect(error == .cannotNormalizeZeroState)
-        } catch {
-            Issue.record("Wrong error type thrown")
         }
     }
 }

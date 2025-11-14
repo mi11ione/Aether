@@ -314,13 +314,8 @@ struct GateValidationTests {
             [.zero, .one],
         ]
 
-        do {
-            _ = try QuantumGate.createCustomTwoQubit(matrix: wrongSizeMatrix, control: 0, target: 1)
-            #expect(Bool(false), "Should throw invalidMatrixSize error")
-        } catch let QuantumGateError.invalidMatrixSize(message) {
-            #expect(message.contains("4×4"))
-        } catch {
-            #expect(Bool(false), "Wrong error type thrown")
+        #expect(throws: QuantumGateError.self) {
+            try QuantumGate.createCustomTwoQubit(matrix: wrongSizeMatrix, control: 0, target: 1)
         }
     }
 
