@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-import Foundation
-
 /// Array of Pauli terms with coefficients.
 ///
 /// Represents weighted Pauli strings used in Hamiltonians and observables.

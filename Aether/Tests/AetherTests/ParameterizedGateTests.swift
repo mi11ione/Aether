@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0
 
 @testable import Aether
-import Foundation
 import Testing
 
 /// Test suite for ParameterizedGate properties.

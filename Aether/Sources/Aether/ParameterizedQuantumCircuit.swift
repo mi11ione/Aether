@@ -215,13 +215,12 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     /// ```
     @_optimize(speed)
     public mutating func append(gate: ParameterizedGate, qubits: [Int], timestamp: Double? = nil) {
-        precondition(qubits.allSatisfy { $0 >= 0 }, "Qubit indices must be non-negative")
+        ValidationUtilities.validateNonNegativeQubits(qubits)
 
         let maxQubit: Int = qubits.max() ?? -1
         if maxQubit >= numQubits {
             let newNumQubits: Int = maxQubit + 1
-            precondition(newNumQubits <= 30,
-                         "Circuit would grow to \(newNumQubits) qubits (max 30). This may be a typo.")
+            ValidationUtilities.validateMemoryLimit(newNumQubits)
             numQubits = newNumQubits
         }
 
@@ -275,7 +274,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     @inlinable
     @_effects(readonly)
     public func operation(at index: Int) -> ParameterizedGateOperation {
-        ValidationUtilities.validateArrayIndex(index, count: operations.count)
+        ValidationUtilities.validateIndexInBounds(index, bound: operations.count, name: "Index")
         return operations[index]
     }
 

@@ -1,12 +1,10 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-import Foundation
-
 /// Hardware-efficient ansatz builder for variational quantum algorithms
 ///
 /// Constructs parameterized quantum circuits optimized for near-term quantum hardware.
-/// This is the **PRIMARY ansatz** for general VQE problems, as specified in the roadmap.
+/// This is the **PRIMARY ansatz** for general VQE problems
 ///
 /// **Design Philosophy:**
 /// - Layers of single-qubit rotations followed by entangling gates
@@ -159,8 +157,8 @@ public struct HardwareEfficientAnsatz {
     ) -> ParameterizedQuantumCircuit {
         ValidationUtilities.validatePositiveQubits(numQubits)
         ValidationUtilities.validateMemoryLimit(numQubits)
-        precondition(depth > 0, "depth must be positive")
-        precondition(depth <= 100, "depth must be ≤ 100 (excessive circuit depth)")
+        ValidationUtilities.validatePositiveInt(depth, name: "depth")
+        ValidationUtilities.validateUpperBound(depth, max: 100, name: "depth")
 
         var circuit = ParameterizedQuantumCircuit(numQubits: numQubits)
 

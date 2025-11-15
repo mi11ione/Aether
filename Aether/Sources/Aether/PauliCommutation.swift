@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-import Foundation
-
 /// Maps qubit index to Pauli basis for measurement.
 ///
 /// Used throughout measurement optimization to specify which basis (X, Y, or Z)

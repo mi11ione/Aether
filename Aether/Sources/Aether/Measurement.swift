@@ -1,7 +1,6 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-import Foundation
 import GameplayKit
 
 /// Quantum measurement outcome with collapsed state
@@ -380,10 +379,7 @@ public struct Measurement {
     /// - Parameter probabilities: Probability distribution (must sum to 1.0)
     /// - Returns: Sampled outcome index
     private mutating func sampleOutcome(probabilities: [Double]) -> Int {
-        precondition(!probabilities.isEmpty, "Probability array must not be empty")
-
-        let sum = probabilities.reduce(0.0, +)
-        precondition(abs(sum - 1.0) < 1e-10, "Probabilities must sum to 1.0 (got \(sum))")
+        ValidationUtilities.validateProbabilityDistribution(probabilities)
 
         let random = Double.random(in: 0 ..< 1, using: &rng)
 
@@ -469,7 +465,7 @@ public struct Measurement {
     @_eagerMove
     public static func collapseToOutcome(_ outcome: Int, numQubits: Int) -> QuantumState {
         let stateSpaceSize = 1 << numQubits
-        precondition(outcome >= 0 && outcome < stateSpaceSize, "Outcome out of bounds")
+        ValidationUtilities.validateIndexInBounds(outcome, bound: stateSpaceSize, name: "Outcome")
 
         var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
         amplitudes[outcome] = Complex(1.0, 0.0)
@@ -523,7 +519,7 @@ public struct Measurement {
     /// ```
     @_eagerMove
     public mutating func measurePauli(qubit: Int, basis: PauliBasis, state: QuantumState) -> PauliMeasurementResult {
-        ValidationUtilities.validateQubitIndex(qubit, numQubits: state.numQubits)
+        ValidationUtilities.validateIndexInBounds(qubit, bound: state.numQubits, name: "Qubit index")
         ValidationUtilities.validateNormalizedState(state)
 
         // Apply basis rotation to diagonalize the Pauli operator
@@ -665,15 +661,10 @@ public struct Measurement {
         basisState: AmplitudeVector,
         state: QuantumState
     ) -> (outcome: Int, collapsedState: QuantumState) {
-        ValidationUtilities.validateQubitIndex(qubit, numQubits: state.numQubits)
-        precondition(basisState.count == 2, "Basis state must have 2 components")
+        ValidationUtilities.validateIndexInBounds(qubit, bound: state.numQubits, name: "Qubit index")
+        ValidationUtilities.validateTwoComponentBasis(basisState)
         ValidationUtilities.validateNormalizedState(state)
-
-        // Validate basis state normalization
-        // Use 1e-10 tolerance to account for accumulated floating-point errors
-        // in user-provided basis states (e.g., cos(θ)/sqrt(2) chains)
-        let norm = sqrt(basisState[0].magnitudeSquared + basisState[1].magnitudeSquared)
-        precondition(abs(norm - 1.0) < 1e-10, "Basis state must be normalized")
+        ValidationUtilities.validateNormalizedBasis(basisState)
 
         // Construct unitary that rotates basisState → |0⟩
         // U = [[c₀*, c₁*], [-c₁, c₀]] where basisState = [c₀, c₁]
@@ -762,16 +753,12 @@ public struct Measurement {
 
         // Validate all qubit indices
         for op in pauliString.operators {
-            ValidationUtilities.validateQubitIndex(op.qubit, numQubits: state.numQubits)
+            ValidationUtilities.validateIndexInBounds(op.qubit, bound: state.numQubits, name: "Qubit index")
         }
 
         // Check for duplicate qubits (measuring same qubit in multiple bases is undefined)
         let qubits = pauliString.operators.map(\.qubit)
-        let uniqueQubits = Set(qubits)
-        precondition(
-            uniqueQubits.count == qubits.count,
-            "Pauli string contains duplicate qubit indices: cannot measure same qubit in multiple bases simultaneously"
-        )
+        ValidationUtilities.validateUniqueQubits(qubits)
 
         // Handle identity operator (empty Pauli string)
         if pauliString.operators.isEmpty {
@@ -877,14 +864,13 @@ public struct Measurement {
         _ qubits: [Int],
         state: QuantumState
     ) -> (outcomes: [Int], collapsedState: QuantumState) {
-        precondition(!qubits.isEmpty, "Must specify at least one qubit to measure")
+        ValidationUtilities.validateNonEmpty(qubits, name: "qubits")
         ValidationUtilities.validateNormalizedState(state)
 
         // Validate qubit indices are unique and in bounds
-        let uniqueQubits = Set(qubits)
-        precondition(uniqueQubits.count == qubits.count, "Qubit indices must be unique")
+        ValidationUtilities.validateUniqueQubits(qubits)
         for qubit in qubits {
-            ValidationUtilities.validateQubitIndex(qubit, numQubits: state.numQubits)
+            ValidationUtilities.validateIndexInBounds(qubit, bound: state.numQubits, name: "Qubit index")
         }
 
         // Calculate joint probability distribution for specified qubits
@@ -938,8 +924,8 @@ public struct Measurement {
         state: QuantumState,
         probability: Double
     ) -> QuantumState {
-        precondition(qubits.count == outcomes.count, "Number of qubits and outcomes must match")
-        precondition(probability > 0, "Probability must be positive")
+        ValidationUtilities.validateEqualCounts(qubits, outcomes, name1: "qubits", name2: "outcomes")
+        ValidationUtilities.validatePositiveDouble(probability, name: "probability")
 
         // Renormalization factor: 1/√P(outcome)
         let normalizationFactor = 1.0 / sqrt(probability)
@@ -1010,7 +996,7 @@ public struct Measurement {
     /// ```
     @_eagerMove
     public mutating func measureQubit(_ qubit: Int, state: QuantumState) -> (outcome: Int, collapsedState: QuantumState) {
-        ValidationUtilities.validateQubitIndex(qubit, numQubits: state.numQubits)
+        ValidationUtilities.validateIndexInBounds(qubit, bound: state.numQubits, name: "Qubit index")
         ValidationUtilities.validateNormalizedState(state)
 
         // Calculate marginal probabilities for this qubit
@@ -1071,8 +1057,8 @@ public struct Measurement {
         state: QuantumState,
         probability: Double
     ) -> QuantumState {
-        precondition(outcome == 0 || outcome == 1, "Outcome must be 0 or 1")
-        precondition(probability > 0, "Probability must be positive")
+        ValidationUtilities.validateBinaryValue(outcome, name: "Outcome")
+        ValidationUtilities.validatePositiveDouble(probability, name: "probability")
 
         // Renormalization factor: 1/√P(outcome)
         let normalizationFactor = 1.0 / sqrt(probability)
@@ -1202,7 +1188,7 @@ public struct Measurement {
     /// ```
     @_eagerMove
     public mutating func runMultiple(circuit: QuantumCircuit, numRuns: Int) -> [Int] {
-        precondition(numRuns > 0, "Number of runs must be positive")
+        ValidationUtilities.validatePositiveInt(numRuns, name: "numRuns")
 
         var outcomes: [Int] = []
         outcomes.reserveCapacity(numRuns)
@@ -1248,8 +1234,8 @@ public struct Measurement {
         expected: [Double],
         totalRuns: Int
     ) -> Double {
-        precondition(observed.count == expected.count, "Array sizes must match")
-        precondition(totalRuns > 0, "Total runs must be positive")
+        ValidationUtilities.validateEqualCounts(observed, expected, name1: "observed", name2: "expected")
+        ValidationUtilities.validatePositiveInt(totalRuns, name: "totalRuns")
 
         var maxError = 0.0
 
@@ -1299,8 +1285,8 @@ public struct Measurement {
         expected: [Double],
         totalRuns: Int
     ) -> ChiSquaredResult {
-        precondition(observed.count == expected.count, "Array sizes must match")
-        precondition(totalRuns > 0, "Total runs must be positive")
+        ValidationUtilities.validateEqualCounts(observed, expected, name1: "observed", name2: "expected")
+        ValidationUtilities.validatePositiveInt(totalRuns, name: "totalRuns")
 
         var chiSq = 0.0
         var testedBins = 0

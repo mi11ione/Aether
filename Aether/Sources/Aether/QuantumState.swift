@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0
 
 import Accelerate
-import Foundation
 
 /// Errors that can occur during quantum state operations
 public enum QuantumStateError: Error, LocalizedError {
@@ -170,8 +169,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// ```
     public init(numQubits: Int, amplitudes: AmplitudeVector) {
         ValidationUtilities.validatePositiveQubits(numQubits)
-        precondition(amplitudes.count == (1 << numQubits),
-                     "Amplitude array size must equal 2^numQubits")
+        ValidationUtilities.validateAmplitudeCount(amplitudes, numQubits: numQubits)
 
         self.numQubits = numQubits
         self.amplitudes = amplitudes
@@ -202,7 +200,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// // |1⟩: amplitudes = [0, 1]
     /// ```
     public init(singleQubit state: Int) {
-        precondition(state == 0 || state == 1, "Single qubit state must be 0 or 1")
+        ValidationUtilities.validateBinaryValue(state, name: "Single qubit state")
 
         numQubits = 1
         var amps = AmplitudeVector(repeating: .zero, count: 2)
@@ -217,7 +215,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     ///   - amplitudes: Amplitudes array (can be wrong size)
     ///   - bypassValidation: Must be true to use this initializer
     public init(numQubits: Int, amplitudes: AmplitudeVector, bypassValidation: Bool) {
-        precondition(bypassValidation, "This initializer is for testing only")
+        ValidationUtilities.validateBypassEnabled(bypassValidation)
         self.numQubits = numQubits
         self.amplitudes = amplitudes
     }
@@ -281,7 +279,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     @_effects(readonly)
     @inlinable
     public func probability(ofState stateIndex: Int) -> Double {
-        ValidationUtilities.validateBasisStateIndex(stateIndex, stateSpaceSize: stateSpaceSize)
+        ValidationUtilities.validateIndexInBounds(stateIndex, bound: stateSpaceSize, name: "Basis state index")
         return amplitudes[stateIndex].magnitudeSquared
     }
 
@@ -370,7 +368,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     @_effects(readonly)
     @inlinable
     public func singleQubitProbabilities(qubit: Int) -> (p0: Double, p1: Double) {
-        ValidationUtilities.validateQubitIndex(qubit, numQubits: numQubits)
+        ValidationUtilities.validateIndexInBounds(qubit, bound: numQubits, name: "Qubit index")
 
         var p0 = 0.0
         var p1 = 0.0
@@ -502,7 +500,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     @_effects(readonly)
     @inlinable
     public func getAmplitude(ofState stateIndex: Int) -> Complex<Double> {
-        ValidationUtilities.validateBasisStateIndex(stateIndex, stateSpaceSize: stateSpaceSize)
+        ValidationUtilities.validateIndexInBounds(stateIndex, bound: stateSpaceSize, name: "Basis state index")
         return amplitudes[stateIndex]
     }
 
@@ -524,7 +522,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// // Now state is |+⟩ = (|0⟩ + |1⟩)/√2
     /// ```
     public mutating func setAmplitude(ofState stateIndex: Int, amplitude: Complex<Double>) {
-        ValidationUtilities.validateBasisStateIndex(stateIndex, stateSpaceSize: stateSpaceSize)
+        ValidationUtilities.validateIndexInBounds(stateIndex, bound: stateSpaceSize, name: "Basis state index")
         amplitudes[stateIndex] = amplitude
     }
 

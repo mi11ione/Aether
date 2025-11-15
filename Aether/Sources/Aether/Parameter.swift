@@ -39,7 +39,7 @@ public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible 
     /// Create symbolic parameter with name
     /// - Parameter name: Parameter name (must be non-empty)
     public init(name: String) {
-        precondition(!name.isEmpty, "Parameter name cannot be empty")
+        ValidationUtilities.validateNonEmptyString(name, name: "Parameter name")
         self.name = name
     }
 
@@ -55,7 +55,6 @@ public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible 
 /// same parameterized circuit.
 ///
 /// **Design rationale**:
-/// - No arithmetic expressions in v1 (keep simple, match roadmap requirements)
 /// - Evaluation requires binding dictionary for symbolic parameters
 /// - Type-safe distinction between symbolic and concrete
 ///

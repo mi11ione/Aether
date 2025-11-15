@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0
 
 import Accelerate
-import Foundation
 
 /// Quantum gates: unitary transformations for quantum circuits
 ///

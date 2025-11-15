@@ -75,10 +75,10 @@ public struct ConvergenceCriteria: Sendable {
         gradientNormTolerance: Double? = nil,
         maxIterations: Int = 1000,
     ) {
-        precondition(energyTolerance > 0, "energyTolerance must be positive")
-        precondition(maxIterations > 0, "maxIterations must be positive")
+        ValidationUtilities.validatePositiveDouble(energyTolerance, name: "energyTolerance")
+        ValidationUtilities.validatePositiveInt(maxIterations, name: "maxIterations")
         if let gnt = gradientNormTolerance {
-            precondition(gnt > 0, "gradientNormTolerance must be positive")
+            ValidationUtilities.validatePositiveDouble(gnt, name: "gradientNormTolerance")
         }
 
         self.energyTolerance = energyTolerance
@@ -230,8 +230,8 @@ public struct NelderMeadOptimizer: Optimizer {
     ///   - tolerance: Convergence tolerance (default: 1e-6)
     ///   - initialSimplexSize: Initial simplex size (default: 0.1)
     public init(tolerance: Double = 1e-6, initialSimplexSize: Double = 0.1) {
-        precondition(tolerance > 0, "tolerance must be positive")
-        precondition(initialSimplexSize > 0, "initialSimplexSize must be positive")
+        ValidationUtilities.validatePositiveDouble(tolerance, name: "tolerance")
+        ValidationUtilities.validatePositiveDouble(initialSimplexSize, name: "initialSimplexSize")
         self.tolerance = tolerance
         self.initialSimplexSize = initialSimplexSize
     }
@@ -245,7 +245,7 @@ public struct NelderMeadOptimizer: Optimizer {
         progressCallback: (@Sendable (Int, Double) async -> Void)?
     ) async throws -> OptimizerResult {
         let n: Int = initialParameters.count
-        precondition(n > 0, "initialParameters cannot be empty")
+        ValidationUtilities.validateNonEmpty(initialParameters, name: "initialParameters")
 
         var simplex: [SimplexVertex] = []
         simplex.reserveCapacity(n + 1)
@@ -445,9 +445,9 @@ public struct GradientDescentOptimizer: Optimizer {
         useAdaptiveLearningRate: Bool = true,
         parameterShift: Double = .pi / 2
     ) {
-        precondition(learningRate > 0, "learningRate must be positive")
-        precondition(momentum >= 0 && momentum < 1, "momentum must be in [0, 1)")
-        precondition(parameterShift > 0, "parameterShift must be positive")
+        ValidationUtilities.validatePositiveDouble(learningRate, name: "learningRate")
+        ValidationUtilities.validateHalfOpenRange(momentum, min: 0, max: 1, name: "momentum")
+        ValidationUtilities.validatePositiveDouble(parameterShift, name: "parameterShift")
 
         self.learningRate = learningRate
         self.momentum = momentum
@@ -464,7 +464,7 @@ public struct GradientDescentOptimizer: Optimizer {
         progressCallback: (@Sendable (Int, Double) async -> Void)?
     ) async throws -> OptimizerResult {
         let n: Int = initialParameters.count
-        precondition(n > 0, "initialParameters cannot be empty")
+        ValidationUtilities.validateNonEmpty(initialParameters, name: "initialParameters")
 
         var currentParameters = initialParameters
         var currentValue: Double = try await objectiveFunction(currentParameters)
@@ -639,10 +639,10 @@ public struct LBFGSBOptimizer: Optimizer {
         maxLineSearchSteps: Int = 20,
         parameterShift: Double = .pi / 2
     ) {
-        precondition(memorySize > 0, "memorySize must be positive")
-        precondition(tolerance > 0, "tolerance must be positive")
-        precondition(maxLineSearchSteps > 0, "maxLineSearchSteps must be positive")
-        precondition(parameterShift > 0, "parameterShift must be positive")
+        ValidationUtilities.validatePositiveInt(memorySize, name: "memorySize")
+        ValidationUtilities.validatePositiveDouble(tolerance, name: "tolerance")
+        ValidationUtilities.validatePositiveInt(maxLineSearchSteps, name: "maxLineSearchSteps")
+        ValidationUtilities.validatePositiveDouble(parameterShift, name: "parameterShift")
 
         self.memorySize = memorySize
         self.tolerance = tolerance
@@ -659,7 +659,7 @@ public struct LBFGSBOptimizer: Optimizer {
         progressCallback: (@Sendable (Int, Double) async -> Void)?
     ) async throws -> OptimizerResult {
         let n: Int = initialParameters.count
-        precondition(n > 0, "initialParameters cannot be empty")
+        ValidationUtilities.validateNonEmpty(initialParameters, name: "initialParameters")
 
         var params = initialParameters
         var cost: Double = try await objectiveFunction(params)
@@ -750,12 +750,6 @@ public struct LBFGSBOptimizer: Optimizer {
                 sHistory.append(s)
                 yHistory.append(y)
                 rhoHistory.append(1.0 / ys)
-
-                if sHistory.count > memorySize {
-                    sHistory.removeFirst()
-                    yHistory.removeFirst()
-                    rhoHistory.removeFirst()
-                }
             }
 
             params = newParams
@@ -970,11 +964,11 @@ public struct SPSAOptimizer: Optimizer {
         perturbationDecayExponent: Double = 0.101,
         stabilityConstant: Double = 100.0
     ) {
-        precondition(initialStepSize > 0, "initialStepSize must be positive")
-        precondition(initialPerturbation > 0, "initialPerturbation must be positive")
-        precondition(decayExponent > 0 && decayExponent <= 1, "decayExponent must be in (0, 1]")
-        precondition(perturbationDecayExponent > 0 && perturbationDecayExponent <= 1, "perturbationDecayExponent must be in (0, 1]")
-        precondition(stabilityConstant >= 0, "stabilityConstant must be non-negative")
+        ValidationUtilities.validatePositiveDouble(initialStepSize, name: "initialStepSize")
+        ValidationUtilities.validatePositiveDouble(initialPerturbation, name: "initialPerturbation")
+        ValidationUtilities.validateOpenMinRange(decayExponent, min: 0, max: 1, name: "decayExponent")
+        ValidationUtilities.validateOpenMinRange(perturbationDecayExponent, min: 0, max: 1, name: "perturbationDecayExponent")
+        ValidationUtilities.validateNonNegativeDouble(stabilityConstant, name: "stabilityConstant")
 
         self.initialStepSize = initialStepSize
         self.initialPerturbation = initialPerturbation
@@ -992,7 +986,7 @@ public struct SPSAOptimizer: Optimizer {
         progressCallback: (@Sendable (Int, Double) async -> Void)?
     ) async throws -> OptimizerResult {
         let n: Int = initialParameters.count
-        precondition(n > 0, "initialParameters cannot be empty")
+        ValidationUtilities.validateNonEmpty(initialParameters, name: "initialParameters")
 
         var params = initialParameters
         var currentValue: Double = try await objectiveFunction(params)

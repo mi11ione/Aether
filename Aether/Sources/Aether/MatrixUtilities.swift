@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0
 
 import Accelerate
-import Foundation
 
 /// Shared matrix utilities for quantum computing
 ///
@@ -47,10 +46,9 @@ public enum MatrixUtilities {
     @inlinable
     @_eagerMove
     static func matrixMultiply(_ a: GateMatrix, _ b: GateMatrix) -> GateMatrix {
-        precondition(!a.isEmpty && !b.isEmpty, "Matrices must not be empty")
-        precondition(a.count == b.count, "Matrices must have same dimensions")
-        precondition(a.allSatisfy { $0.count == a.count }, "Matrix A must be square")
-        precondition(b.allSatisfy { $0.count == b.count }, "Matrix B must be square")
+        ValidationUtilities.validateSquareMatrix(a, name: "Matrix A")
+        ValidationUtilities.validateSquareMatrix(b, name: "Matrix B")
+        ValidationUtilities.validateSameDimensions(a, b, name1: "Matrix A", name2: "Matrix B")
 
         let n: Int = a.count
 
@@ -147,9 +145,8 @@ public enum MatrixUtilities {
     @inlinable
     @_eagerMove
     static func hermitianConjugate(_ matrix: GateMatrix) -> GateMatrix {
-        precondition(!matrix.isEmpty, "Matrix must not be empty")
+        ValidationUtilities.validateSquareMatrix(matrix, name: "Matrix")
         let n: Int = matrix.count
-        precondition(matrix.allSatisfy { $0.count == n }, "Matrix must be square")
 
         var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
 
@@ -181,7 +178,7 @@ public enum MatrixUtilities {
     @inlinable
     @_eagerMove
     static func identityMatrix(dimension: Int) -> GateMatrix {
-        precondition(dimension > 0, "Matrix dimension must be positive")
+        ValidationUtilities.validateMatrixDimension(dimension)
 
         var matrix = Array(
             repeating: Array(repeating: Complex<Double>.zero, count: dimension),

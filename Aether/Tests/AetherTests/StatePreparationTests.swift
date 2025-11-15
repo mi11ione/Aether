@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0
 
 @testable import Aether
-import Foundation
 import Testing
 
 /// Tests for preparing specific quantum states and validating their properties.
@@ -80,10 +79,9 @@ struct StatePreparationTests {
     func basisStateCircuitGateCount() {
         let circuit = QuantumCircuit.basisStateCircuit(numQubits: 4, basisStateIndex: 10)
 
-        let xGateCount = circuit.operations.filter {
-            if case .pauliX = $0.gate { return true }
-            return false
-        }.count
+        let xGateCount = circuit.operations.count(where: {
+            if case .pauliX = $0.gate { true } else { false }
+        })
 
         #expect(xGateCount == 2, "Binary 1010 has 2 ones, should apply 2 X gates")
     }

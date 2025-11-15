@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-import Foundation
-
 /// Educational quantum algorithms demonstrating quantum advantage
 ///
 /// These algorithms showcase fundamental quantum computing principles:
@@ -75,8 +73,8 @@ public extension QuantumCircuit {
         numInputQubits: Int,
         oracle: Oracle
     ) -> QuantumCircuit {
-        precondition(numInputQubits > 0, "Must have at least 1 input qubit")
-        precondition(numInputQubits <= 20, "Too many qubits for simulation")
+        ValidationUtilities.validateMinimumQubits(numInputQubits, min: 1, algorithmName: "Deutsch-Jozsa")
+        ValidationUtilities.validateAlgorithmQubitLimit(numInputQubits, max: 20, algorithmName: "Deutsch-Jozsa")
 
         let numQubits: Int = numInputQubits + 1
         var circuit = QuantumCircuit(numQubits: numQubits)
@@ -143,7 +141,7 @@ public extension QuantumCircuit {
         oracle: Oracle
     ) -> QuantumCircuit {
         ValidationUtilities.validatePositiveQubits(numQubits)
-        precondition(numQubits <= 20, "Too many qubits for simulation")
+        ValidationUtilities.validateAlgorithmQubitLimit(numQubits, max: 20, algorithmName: "Bernstein-Vazirani")
 
         let numInputQubits: Int = numQubits
         let totalQubits: Int = numInputQubits + 1
@@ -215,7 +213,7 @@ public extension QuantumCircuit {
         oracle: Oracle
     ) -> QuantumCircuit {
         ValidationUtilities.validatePositiveQubits(numQubits)
-        precondition(numQubits <= 15, "Simon's algorithm requires 2n qubits - use n≤15")
+        ValidationUtilities.validateAlgorithmQubitLimit(numQubits, max: 15, algorithmName: "Simon's algorithm")
 
         let totalQubits: Int = numQubits * 2
         var circuit = QuantumCircuit(numQubits: totalQubits)
@@ -293,12 +291,10 @@ public extension QuantumCircuit {
     @_effects(readonly)
     @inlinable
     static func bernsteinVaziraniOracle(hiddenString: [Int]) -> Oracle {
-        precondition(hiddenString.allSatisfy { $0 == 0 || $0 == 1 },
-                     "Hidden string must contain only 0s and 1s")
+        ValidationUtilities.validateBinaryArray(hiddenString, name: "Hidden string")
 
         return { inputQubits, outputQubit, circuit in
-            precondition(inputQubits.count == hiddenString.count,
-                         "Number of input qubits must match hidden string length")
+            ValidationUtilities.validateEqualCounts(inputQubits, hiddenString, name1: "input qubits", name2: "hidden string")
 
             for (i, bit) in hiddenString.enumerated() where bit == 1 {
                 circuit.append(gate: .cnot(control: inputQubits[i], target: outputQubit), qubits: [])
@@ -321,14 +317,11 @@ public extension QuantumCircuit {
     @_effects(readonly)
     @inlinable
     static func simonOracle(period: [Int]) -> Oracle {
-        precondition(period.allSatisfy { $0 == 0 || $0 == 1 },
-                     "Period must contain only 0s and 1s")
-        precondition(period.contains(1),
-                     "Period must be non-zero (at least one bit = 1)")
+        ValidationUtilities.validateBinaryArray(period, name: "Period")
+        ValidationUtilities.validateNonZeroBinary(period, name: "Period")
 
         return { inputQubits, outputQubit, circuit in
-            precondition(inputQubits.count == period.count,
-                         "Number of input qubits must match period length")
+            ValidationUtilities.validateEqualCounts(inputQubits, period, name1: "input qubits", name2: "period")
 
             // Standard construction: Copy input bits where period bit is 0
             // This ensures f(x) = f(x⊕s) because XOR with s flips bits where s=1,

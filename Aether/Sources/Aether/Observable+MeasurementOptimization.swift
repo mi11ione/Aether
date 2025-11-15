@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-import Foundation
-
 /// Observable measurement optimization for efficient Hamiltonian expectation values
 ///
 /// Provides advanced measurement grouping techniques that dramatically reduce the number

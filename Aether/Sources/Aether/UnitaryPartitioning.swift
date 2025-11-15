@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0
 
 import Accelerate
-import Foundation
 
 /// A partition of Pauli terms grouped by a unitary transformation.
 ///
@@ -606,7 +605,6 @@ public struct UnitaryPartitioner {
         maxIterations: Int,
         tolerance: Double
     ) -> OptimizationResult {
-        let memorySize = 10 // L-BFGS memory parameter (m)
         let c1 = 1e-4 // Wolfe condition constant
         let c2 = 0.9 // Curvature condition constant
 
@@ -668,13 +666,6 @@ public struct UnitaryPartitioner {
                 sHistory.append(s)
                 yHistory.append(y)
                 rhoHistory.append(rho)
-
-                /// Defensible memory-safety code, practically unreachable
-                if sHistory.count > memorySize {
-                    sHistory.removeFirst()
-                    yHistory.removeFirst()
-                    rhoHistory.removeFirst()
-                }
             }
 
             params = newParams

@@ -137,13 +137,12 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
     /// circuit.append(gate: .hadamard, toQubit: 0, timestamp: 1.5)
     /// ```
     public mutating func append(gate: QuantumGate, qubits: [Int], timestamp: Double? = nil) {
-        precondition(qubits.allSatisfy { $0 >= 0 }, "Qubit indices must be non-negative")
+        ValidationUtilities.validateNonNegativeQubits(qubits)
 
         let maxQubit: Int = qubits.max() ?? -1
         if maxQubit >= numQubits {
             let newNumQubits: Int = maxQubit + 1
-            precondition(newNumQubits <= 30,
-                         "Circuit would grow to \(newNumQubits) qubits (max 30). This may be a typo.")
+            ValidationUtilities.validateMemoryLimit(newNumQubits)
             numQubits = newNumQubits
         }
 
@@ -167,7 +166,7 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
     ///   - index: Position to insert at
     ///   - timestamp: Optional timestamp
     public mutating func insert(gate: QuantumGate, qubits: [Int], at index: Int, timestamp: Double? = nil) {
-        ValidationUtilities.validateArrayIndex(index, count: operations.count)
+        ValidationUtilities.validateIndexInBounds(index, bound: operations.count, name: "Index")
         ValidationUtilities.validateOperationQubits(qubits, numQubits: numQubits)
 
         let operation = GateOperation(gate: gate, qubits: qubits, timestamp: timestamp)
@@ -176,7 +175,7 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
 
     /// Remove gate at index
     public mutating func remove(at index: Int) {
-        ValidationUtilities.validateArrayIndex(index, count: operations.count)
+        ValidationUtilities.validateIndexInBounds(index, bound: operations.count, name: "Index")
         operations.remove(at: index)
     }
 
@@ -189,7 +188,7 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
     /// - Parameter index: Index of operation
     /// - Returns: Gate operation
     public func operation(at index: Int) -> GateOperation {
-        ValidationUtilities.validateArrayIndex(index, count: operations.count)
+        ValidationUtilities.validateIndexInBounds(index, bound: operations.count, name: "Index")
         return operations[index]
     }
 
@@ -299,9 +298,8 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
     @_optimize(speed)
     @_eagerMove
     public func execute(on initialState: QuantumState) -> QuantumState {
-        precondition(initialState.numQubits >= numQubits,
-                     "Initial state must have at least as many qubits as circuit")
-        precondition(validate(), "Circuit validation failed")
+        ValidationUtilities.validateStateQubitCount(initialState, required: numQubits)
+        ValidationUtilities.validateCircuit(validate())
 
         let maxQubit = maxQubitUsed()
         var currentState = Self.expandStateForAncilla(initialState, maxQubit: maxQubit)
@@ -353,10 +351,8 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
     @_optimize(speed)
     @_eagerMove
     public func execute(on initialState: QuantumState, upToIndex: Int) -> QuantumState {
-        precondition(initialState.numQubits >= numQubits,
-                     "Initial state must have at least as many qubits as circuit")
-        precondition(upToIndex >= 0 && upToIndex <= operations.count,
-                     "Index out of bounds")
+        ValidationUtilities.validateStateQubitCount(initialState, required: numQubits)
+        ValidationUtilities.validateUpToIndex(upToIndex, operationCount: operations.count)
 
         let maxQubit = maxQubitUsed()
         var currentState = Self.expandStateForAncilla(initialState, maxQubit: maxQubit)
@@ -403,7 +399,7 @@ public extension QuantumCircuit {
     /// - Parameter numQubits: Number of qubits (default 3)
     @_eagerMove
     static func ghzState(numQubits: Int = 3) -> QuantumCircuit {
-        precondition(numQubits >= 2, "GHZ state requires at least 2 qubits")
+        ValidationUtilities.validateMinimumQubits(numQubits, min: 2, algorithmName: "GHZ state")
 
         var circuit = QuantumCircuit(numQubits: numQubits)
 
@@ -447,7 +443,7 @@ public extension QuantumCircuit {
     @_eagerMove
     static func qft(numQubits: Int) -> QuantumCircuit {
         ValidationUtilities.validatePositiveQubits(numQubits)
-        precondition(numQubits <= 16, "QFT with >16 qubits is computationally expensive")
+        ValidationUtilities.validateAlgorithmQubitLimit(numQubits, max: 16, algorithmName: "QFT")
 
         var circuit = QuantumCircuit(numQubits: numQubits)
 
@@ -526,10 +522,10 @@ public extension QuantumCircuit {
     @_eagerMove
     static func grover(numQubits: Int, target: Int, iterations: Int? = nil) -> QuantumCircuit {
         ValidationUtilities.validatePositiveQubits(numQubits)
-        precondition(numQubits <= 10, "Grover with >10 qubits requires many iterations")
+        ValidationUtilities.validateAlgorithmQubitLimit(numQubits, max: 10, algorithmName: "Grover")
 
         let stateSpaceSize = 1 << numQubits
-        ValidationUtilities.validateBasisStateIndex(target, stateSpaceSize: stateSpaceSize)
+        ValidationUtilities.validateIndexInBounds(target, bound: stateSpaceSize, name: "Target basis state")
 
         let optimalIterations: Int = iterations ?? Int((Double.pi / 4.0) * sqrt(Double(stateSpaceSize)))
 
@@ -702,7 +698,7 @@ public extension QuantumCircuit {
         controls: [Int],
         target: Int
     ) {
-        precondition(gate.qubitsRequired == 1, "Multi-controlled U requires single-qubit gate")
+        ValidationUtilities.validateControlledGateIsSingleQubit(gate.qubitsRequired)
 
         let n = controls.count
 
@@ -783,8 +779,8 @@ public extension QuantumCircuit {
     @_eagerMove
     static func annealing(numQubits: Int, problem: IsingProblem, annealingSteps: Int = 20) -> QuantumCircuit {
         ValidationUtilities.validatePositiveQubits(numQubits)
-        ValidationUtilities.validatePositiveCount(annealingSteps, name: "annealingSteps")
-        precondition(numQubits <= 8, "Annealing with >8 qubits becomes computationally expensive")
+        ValidationUtilities.validatePositiveInt(annealingSteps, name: "annealingSteps")
+        ValidationUtilities.validateAlgorithmQubitLimit(numQubits, max: 8, algorithmName: "Annealing")
 
         var circuit = QuantumCircuit(numQubits: numQubits)
 
@@ -850,8 +846,7 @@ public extension QuantumCircuit {
         ///   - transverseField: Transverse field strengths (defaults to uniform field of 1.0)
         public init(localFields: [Double], couplings: [[Double]], transverseField: [Double]? = nil) {
             let n = localFields.count
-            precondition(couplings.count == n, "Couplings matrix must be N×N")
-            precondition(couplings.allSatisfy { $0.count == n }, "Couplings matrix must be square")
+            ValidationUtilities.validateSquareMatrix(couplings, name: "Couplings matrix")
 
             self.localFields = localFields
             self.couplings = couplings
@@ -876,7 +871,7 @@ public extension QuantumCircuit {
 
         /// Create simple quadratic optimization problem: minimize x² - 2x
         public static func quadraticMinimum(numQubits: Int = 4) -> IsingProblem {
-            precondition(numQubits >= 2, "Need at least 2 qubits for meaningful quadratic")
+            ValidationUtilities.validateMinimumQubits(numQubits, min: 2, algorithmName: "Quadratic minimum")
 
             var localFields = [Double](repeating: 0.0, count: numQubits)
             var couplings = [[Double]](repeating: [Double](repeating: 0.0, count: numQubits), count: numQubits)

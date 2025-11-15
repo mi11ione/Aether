@@ -209,6 +209,71 @@ struct NelderMeadOptimizerTests {
         #expect(result.optimalValue < 1.0)
         #expect(result.iterations > 0)
     }
+
+    @Test("Simplex shrink on Rosenbrock function")
+    func simplexShrinkOnRosenbrock() async throws {
+        let optimizer = NelderMeadOptimizer(tolerance: 1e-6, initialSimplexSize: 5.0)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            let y = params[1]
+            let a = 1.0
+            let b = 100.0
+            return (a - x) * (a - x) + b * (y - x * x) * (y - x * x)
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [-2.0, 2.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 1000),
+            progressCallback: nil
+        )
+
+        #expect(result.iterations > 20, "Rosenbrock function requires many iterations")
+        #expect(result.optimalValue < 5.0)
+    }
+
+    @Test("Simplex outside contraction succeeds")
+    func simplexOutsideContractionSucceeds() async throws {
+        let optimizer = NelderMeadOptimizer(tolerance: 1e-4, initialSimplexSize: 1.0)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            let y = params[1]
+            return (y - x * x / 4.0) * (y - x * x / 4.0) + x * x / 100.0
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [2.0, -1.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 200),
+            progressCallback: nil
+        )
+
+        #expect(result.optimalValue < 0.1)
+        #expect(result.iterations > 5)
+    }
+
+    @Test("Simplex forced to shrink on rugged landscape")
+    func simplexForcedToShrink() async throws {
+        let optimizer = NelderMeadOptimizer(tolerance: 1e-5, initialSimplexSize: 10.0)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            let y = params[1]
+            let a = 10.0
+            return 2.0 * a + (x * x - a * cos(2.0 * .pi * x)) + (y * y - a * cos(2.0 * .pi * y))
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [4.5, 4.5],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 500),
+            progressCallback: nil
+        )
+
+        #expect(result.iterations > 10, "Rastrigin requires many iterations")
+    }
 }
 
 /// Test suite for GradientDescentOptimizer.
@@ -340,6 +405,45 @@ struct GradientDescentOptimizerTests {
 
         #expect(result.iterations > 0)
         #expect(result.optimalValue < 0.001)
+    }
+
+    @Test("Stagnation without adaptive learning rate")
+    func stagnationWithoutAdaptiveLearningRate() async throws {
+        let optimizer = GradientDescentOptimizer(learningRate: 0.001, useAdaptiveLearningRate: false)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            return x * x * x * x
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [0.1],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-12, gradientNormTolerance: 1e-15, maxIterations: 100),
+            progressCallback: nil
+        )
+
+        #expect(result.iterations > 5, "Should take multiple iterations with stagnation")
+    }
+
+    @Test("Stagnation with adaptive learning rate decreases rate")
+    func stagnationWithAdaptiveLearningRateDecreasesRate() async throws {
+        let optimizer = GradientDescentOptimizer(learningRate: 0.01, useAdaptiveLearningRate: true)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            let y = params[1]
+            return (x * x + y - 11.0) * (x * x + y - 11.0) + (x + y * y - 7.0) * (x + y * y - 7.0)
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [0.0, 0.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, gradientNormTolerance: 1e-8, maxIterations: 100),
+            progressCallback: nil
+        )
+
+        #expect(result.iterations > 10, "Should take many iterations with stagnation")
     }
 }
 

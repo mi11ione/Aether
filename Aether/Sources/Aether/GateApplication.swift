@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-import Foundation
-
 /// Amplitude vector for quantum states
 public typealias AmplitudeVector = [Complex<Double>]
 
@@ -77,7 +75,7 @@ public enum GateApplication {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
              .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
              .u1, .u2, .u3, .sx, .sy, .customSingleQubit:
-            precondition(qubits.count == 1, "Single-qubit gate requires exactly 1 qubit")
+            ValidationUtilities.validateSingleQubitGate(qubits)
             return applySingleQubitGate(gate: gate, qubit: qubits[0], state: state)
 
         case let .cnot(control, target):

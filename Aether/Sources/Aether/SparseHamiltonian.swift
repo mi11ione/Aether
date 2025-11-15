@@ -2,8 +2,6 @@
 // Licensed under the Apache License, Version 2.0
 
 import Accelerate
-import Foundation
-import Metal
 
 /// Sparse Hamiltonian: High-performance expectation value computation
 ///
@@ -551,7 +549,7 @@ public actor SparseHamiltonian {
     /// - Parameter state: Normalized quantum state |ψ⟩
     /// - Returns: Expectation value ⟨ψ|H|ψ⟩ ∈ ℝ
     public func expectationValue(state: QuantumState) -> Double {
-        precondition(state.numQubits == numQubits, "State must have \(numQubits) qubits")
+        ValidationUtilities.validateStateQubitCount(state, required: numQubits, exact: true)
         ValidationUtilities.validateNormalizedState(state)
 
         switch backend {

@@ -395,7 +395,7 @@ public struct ShotAllocator {
         state: QuantumState? = nil
     ) -> Double {
         let optimalVariance: Double = terms.enumerated().map { index, term in
-            precondition(allocation[index] != nil, "Allocation must contain entry for term index \(index)")
+            ValidationUtilities.validateAllocationContainsIndex(allocation, index: index)
             let shots = Double(allocation[index]!)
             let variance = estimateVariance(pauliString: term.pauliString, coefficient: term.coefficient, state: state)
             return term.coefficient * term.coefficient * variance / shots

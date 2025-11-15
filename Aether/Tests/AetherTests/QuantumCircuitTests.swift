@@ -779,8 +779,8 @@ struct GroverCircuitTests {
             counts[outcome, default: 0] += 1
         }
 
-        let mostFrequent = counts.max(by: { $0.value < $1.value })?.key ?? 0
-        let frequency = Double(counts[mostFrequent] ?? 0) / Double(outcomes.count)
+        let mostFrequent = counts.max(by: { $0.value < $1.value })?.key
+        let frequency = Double(counts[mostFrequent!]!) / Double(outcomes.count)
 
         #expect(mostFrequent == 3, "Optimal solution should be |11⟩ (state 3), got \(mostFrequent)")
         #expect(frequency > 0.5, "Optimal solution frequency: \(frequency) (should be >0.5)")

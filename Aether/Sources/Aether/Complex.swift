@@ -23,10 +23,10 @@ extension Double: ComplexScalar {
     @inlinable public static var complexEpsilon: Double { 1e-10 }
     @inlinable public static var complexDivisionThreshold: Double { 1e-15 }
 
-    @inlinable public static func complexSqrt(_ value: Double) -> Double { Foundation.sqrt(value) }
-    @inlinable public static func complexCos(_ value: Double) -> Double { Foundation.cos(value) }
-    @inlinable public static func complexSin(_ value: Double) -> Double { Foundation.sin(value) }
-    @inlinable public static func complexAtan2(_ y: Double, _ x: Double) -> Double { Foundation.atan2(y, x) }
+    @inlinable public static func complexSqrt(_ value: Double) -> Double { sqrt(value) }
+    @inlinable public static func complexCos(_ value: Double) -> Double { cos(value) }
+    @inlinable public static func complexSin(_ value: Double) -> Double { sin(value) }
+    @inlinable public static func complexAtan2(_ y: Double, _ x: Double) -> Double { atan2(y, x) }
     @inlinable public static func complexAbs(_ value: Double) -> Double { value < 0 ? -value : value }
 }
 

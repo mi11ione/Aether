@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-import Foundation
-
 /// Parameterized quantum gate for variational algorithms
 ///
 /// Extends quantum gates to support symbolic parameters that can be bound at

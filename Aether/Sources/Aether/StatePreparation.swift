@@ -90,8 +90,7 @@ public extension QuantumState {
         ValidationUtilities.validateMemoryLimit(numQubits)
 
         let stateSpaceSize = 1 << numQubits
-        precondition(basisStateIndex >= 0 && basisStateIndex < stateSpaceSize,
-                     "Basis state index \(basisStateIndex) out of bounds [0, \(stateSpaceSize - 1)]")
+        ValidationUtilities.validateIndexInBounds(basisStateIndex, bound: stateSpaceSize, name: "Basis state index")
 
         var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
         amplitudes[basisStateIndex] = .one
@@ -265,8 +264,8 @@ public extension QuantumCircuit {
     @_optimize(speed)
     @_eagerMove
     static func wState(numQubits: Int) -> QuantumState {
-        precondition(numQubits >= 2, "W state requires at least 2 qubits")
-        precondition(numQubits <= 20, "W state with >20 qubits requires too much memory")
+        ValidationUtilities.validateMinimumQubits(numQubits, min: 2, algorithmName: "W state")
+        ValidationUtilities.validateAlgorithmQubitLimit(numQubits, max: 20, algorithmName: "W state")
 
         let stateSpaceSize = 1 << numQubits
         var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
@@ -355,9 +354,8 @@ public extension QuantumCircuit {
     @_eagerMove
     static func dickeState(numQubits: Int, numOnes: Int) -> QuantumState {
         ValidationUtilities.validatePositiveQubits(numQubits)
-        precondition(numQubits <= 20, "Dicke state with >20 qubits requires too much memory")
-        precondition(numOnes >= 0 && numOnes <= numQubits,
-                     "Number of ones must be between 0 and \(numQubits)")
+        ValidationUtilities.validateAlgorithmQubitLimit(numQubits, max: 20, algorithmName: "Dicke state")
+        ValidationUtilities.validateDickeParameters(numOnes, numQubits: numQubits)
 
         let stateSpaceSize = 1 << numQubits
         var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
@@ -418,8 +416,7 @@ public extension QuantumCircuit {
         ValidationUtilities.validateMemoryLimit(numQubits)
 
         let stateSpaceSize = 1 << numQubits
-        precondition(basisStateIndex >= 0 && basisStateIndex < stateSpaceSize,
-                     "Basis state index \(basisStateIndex) out of bounds [0, \(stateSpaceSize - 1)]")
+        ValidationUtilities.validateIndexInBounds(basisStateIndex, bound: stateSpaceSize, name: "Basis state index")
 
         var circuit = QuantumCircuit(numQubits: numQubits)
 
