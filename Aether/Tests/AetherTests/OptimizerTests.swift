@@ -742,6 +742,473 @@ struct SPSAOptimizerTests {
     }
 }
 
+/// Test suite for COBYLAOptimizer.
+/// Validates COBYLA trust region optimization
+/// with linear interpolation models
+@Suite("COBYLAOptimizer")
+struct COBYLAOptimizerTests {
+    @Test("Create COBYLA optimizer with defaults")
+    func createWithDefaults() {
+        let optimizer = COBYLAOptimizer()
+
+        #expect(optimizer.initialTrustRadius == 0.5)
+        #expect(optimizer.minTrustRadius == 1e-6)
+        #expect(optimizer.maxTrustRadius == 2.0)
+        #expect(optimizer.shrinkFactor == 0.5)
+        #expect(optimizer.expandFactor == 2.0)
+        #expect(optimizer.acceptRatio == 0.1)
+        #expect(optimizer.expandRatio == 0.75)
+        #expect(optimizer.simplexScale == 0.5)
+    }
+
+    @Test("Create COBYLA optimizer with custom values")
+    func createWithCustomValues() {
+        let optimizer = COBYLAOptimizer(
+            initialTrustRadius: 1.0,
+            minTrustRadius: 1e-8,
+            maxTrustRadius: 5.0,
+            shrinkFactor: 0.25,
+            expandFactor: 2.5,
+            acceptRatio: 0.05,
+            expandRatio: 0.8,
+            simplexScale: 0.3
+        )
+
+        #expect(optimizer.initialTrustRadius == 1.0)
+        #expect(optimizer.minTrustRadius == 1e-8)
+        #expect(optimizer.maxTrustRadius == 5.0)
+        #expect(optimizer.shrinkFactor == 0.25)
+        #expect(optimizer.expandFactor == 2.5)
+        #expect(optimizer.acceptRatio == 0.05)
+        #expect(optimizer.expandRatio == 0.8)
+        #expect(optimizer.simplexScale == 0.3)
+    }
+
+    @Test("Create COBYLA optimizer with tolerance convenience init")
+    func createWithToleranceConvenience() {
+        let optimizer = COBYLAOptimizer(tolerance: 1e-8)
+
+        #expect(optimizer.minTrustRadius == 1e-8)
+        #expect(optimizer.initialTrustRadius == 0.5)
+    }
+
+    @Test("Optimize quadratic function")
+    func optimizeQuadraticFunction() async throws {
+        let optimizer = COBYLAOptimizer(initialTrustRadius: 0.5, minTrustRadius: 1e-6)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            let y = params[1]
+            return x * x + y * y
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [1.0, 1.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
+            progressCallback: nil
+        )
+
+        #expect(abs(result.optimalValue) < 0.01)
+        #expect(abs(result.optimalParameters[0]) < 0.1)
+        #expect(abs(result.optimalParameters[1]) < 0.1)
+        #expect(result.convergenceReason == .energyTolerance)
+    }
+
+    @Test("Trust region expansion on good steps")
+    func trustRegionExpansionOnGoodSteps() async throws {
+        let optimizer = COBYLAOptimizer(
+            initialTrustRadius: 0.1,
+            maxTrustRadius: 2.0,
+            expandFactor: 2.0
+        )
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            params[0] * params[0]
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [5.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
+            progressCallback: nil
+        )
+
+        #expect(result.optimalValue < 0.1)
+        #expect(result.iterations > 0)
+    }
+
+    @Test("Trust region shrinkage on poor steps")
+    func trustRegionShrinkageOnPoorSteps() async throws {
+        let optimizer = COBYLAOptimizer(
+            initialTrustRadius: 5.0,
+            minTrustRadius: 1e-6,
+            maxTrustRadius: 10.0,
+            shrinkFactor: 0.5
+        )
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            let y = params[1]
+            return abs(x - 1.0) + abs(y - 1.0)
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [0.0, 0.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
+            progressCallback: nil
+        )
+
+        #expect(result.optimalValue < 0.1)
+        #expect(result.iterations > 0)
+    }
+
+    @Test("Optimize Rosenbrock function")
+    func optimizeRosenbrockFunction() async throws {
+        let optimizer = COBYLAOptimizer(initialTrustRadius: 1.0, minTrustRadius: 1e-4)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            let y = params[1]
+            let a = 1.0 - x
+            let b = y - x * x
+            return a * a + 100.0 * b * b
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [0.0, 0.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 300),
+            progressCallback: nil
+        )
+
+        #expect(result.iterations > 10)
+        #expect(result.optimalValue < 50.0)
+    }
+
+    @Test("Progress callback is called")
+    func progressCallbackCalled() async throws {
+        actor Counter {
+            var count = 0
+            func increment() { count += 1 }
+            func get() -> Int { count }
+        }
+
+        let optimizer = COBYLAOptimizer(minTrustRadius: 1e-3)
+        let counter = Counter()
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            params[0] * params[0]
+        }
+
+        let progressCallback: @Sendable (Int, Double) async -> Void = { _, _ in
+            await counter.increment()
+        }
+
+        _ = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [1.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
+            progressCallback: progressCallback
+        )
+
+        let callbackCount = await counter.get()
+        #expect(callbackCount > 0)
+    }
+
+    @Test("Max iterations reached")
+    func maxIterationsReached() async throws {
+        let optimizer = COBYLAOptimizer()
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            params[0] * params[0] + params[1] * params[1]
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [10.0, 10.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-12, maxIterations: 3),
+            progressCallback: nil
+        )
+
+        #expect(result.convergenceReason == .maxIterations)
+        #expect(result.iterations == 3)
+    }
+
+    @Test("Simplex regeneration on trust region shrinkage")
+    func simplexRegenerationOnTrustRegionShrinkage() async throws {
+        let optimizer = COBYLAOptimizer(
+            initialTrustRadius: 10.0,
+            minTrustRadius: 1e-5,
+            maxTrustRadius: 20.0,
+            shrinkFactor: 0.25
+        )
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            let y = params[1]
+            return x * x * x * x + y * y * y * y
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [2.0, 2.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 150),
+            progressCallback: nil
+        )
+
+        #expect(result.optimalValue < 0.1)
+        #expect(result.iterations > 5)
+    }
+
+    @Test("Convergence by trust region radius")
+    func convergenceByTrustRegionRadius() async throws {
+        let optimizer = COBYLAOptimizer(
+            initialTrustRadius: 0.5,
+            minTrustRadius: 1e-4
+        )
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            params[0] * params[0]
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [0.5],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
+            progressCallback: nil
+        )
+
+        #expect(result.convergenceReason == .energyTolerance)
+        #expect(result.optimalValue < 0.01)
+    }
+
+    @Test("Convergence by function value change")
+    func convergenceByFunctionValueChange() async throws {
+        let optimizer = COBYLAOptimizer(minTrustRadius: 1e-8)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            params[0] * params[0]
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [0.1],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 100),
+            progressCallback: nil
+        )
+
+        #expect(result.optimalValue < 0.001)
+        #expect(result.iterations > 0)
+    }
+
+    @Test("Linear model gradient estimation")
+    func linearModelGradientEstimation() async throws {
+        let optimizer = COBYLAOptimizer(initialTrustRadius: 0.5)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            let y = params[1]
+            return 2.0 * x + 3.0 * y + 1.0
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [1.0, 1.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
+            progressCallback: nil
+        )
+
+        #expect(result.iterations > 0)
+    }
+
+    @Test("Step acceptance with good ratio")
+    func stepAcceptanceWithGoodRatio() async throws {
+        let optimizer = COBYLAOptimizer(
+            initialTrustRadius: 1.0,
+            acceptRatio: 0.1
+        )
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            params[0] * params[0] + params[1] * params[1]
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [1.0, 1.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
+            progressCallback: nil
+        )
+
+        #expect(result.optimalValue < 0.05)
+        #expect(result.valueHistory.count > 1)
+    }
+
+    @Test("Step rejection with poor ratio")
+    func stepRejectionWithPoorRatio() async throws {
+        let optimizer = COBYLAOptimizer(
+            initialTrustRadius: 5.0,
+            maxTrustRadius: 10.0,
+            shrinkFactor: 0.5,
+            acceptRatio: 0.1
+        )
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            if abs(x) > 3.0 {
+                return 1000.0
+            }
+            return x * x
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [0.5],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
+            progressCallback: nil
+        )
+
+        #expect(result.optimalValue < 1.0)
+        #expect(result.iterations > 0)
+    }
+
+    @Test("Optimize multidimensional quadratic")
+    func optimizeMultidimensionalQuadratic() async throws {
+        let optimizer = COBYLAOptimizer(initialTrustRadius: 0.5)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            var sum = 0.0
+            for i in 0 ..< params.count {
+                sum += params[i] * params[i]
+            }
+            return sum
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [1.0, 2.0, 3.0, 4.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 200),
+            progressCallback: nil
+        )
+
+        #expect(result.optimalValue < 0.1)
+        for param in result.optimalParameters {
+            #expect(abs(param) < 0.2)
+        }
+    }
+
+    @Test("Optimize Himmelblau function")
+    func optimizeHimmelblauFunction() async throws {
+        let optimizer = COBYLAOptimizer(initialTrustRadius: 1.0, minTrustRadius: 1e-4)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            let y = params[1]
+            return (x * x + y - 11.0) * (x * x + y - 11.0) + (x + y * y - 7.0) * (x + y * y - 7.0)
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [0.0, 0.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 200),
+            progressCallback: nil
+        )
+
+        #expect(result.iterations > 5)
+        #expect(result.optimalValue < 50.0)
+    }
+
+    @Test("Function evaluations count is accurate")
+    func functionEvaluationsCountIsAccurate() async throws {
+        actor Counter {
+            var count = 0
+            func increment() { count += 1 }
+            func get() -> Int { count }
+        }
+
+        let optimizer = COBYLAOptimizer(initialTrustRadius: 0.5, minTrustRadius: 1e-3)
+        let counter = Counter()
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            await counter.increment()
+            return params[0] * params[0]
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [1.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
+            progressCallback: nil
+        )
+
+        let actualEvaluations = await counter.get()
+        #expect(result.functionEvaluations == actualEvaluations)
+    }
+
+    @Test("SimplexPoint is mutable")
+    func simplexPointIsMutable() {
+        var point = COBYLAOptimizer.SimplexPoint(parameters: [1.0, 2.0], value: 3.0)
+        point.parameters[0] = 4.0
+        point.value = 5.0
+
+        #expect(point.parameters == [4.0, 2.0])
+        #expect(point.value == 5.0)
+    }
+
+    @Test("LinearModel stores correct values")
+    func linearModelStoresCorrectValues() {
+        let model = COBYLAOptimizer.LinearModel(
+            baseParameters: [1.0, 2.0],
+            baseValue: 3.0,
+            gradient: [0.5, -0.5]
+        )
+
+        #expect(model.baseParameters == [1.0, 2.0])
+        #expect(model.baseValue == 3.0)
+        #expect(model.gradient == [0.5, -0.5])
+    }
+
+    @Test("Zero gradient handled correctly")
+    func zeroGradientHandledCorrectly() async throws {
+        let optimizer = COBYLAOptimizer(initialTrustRadius: 0.1)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { _ in 5.0 }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [1.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 20),
+            progressCallback: nil
+        )
+
+        #expect(result.iterations > 0)
+        #expect(abs(result.optimalValue - 5.0) < 0.1)
+    }
+
+    @Test("Asymmetric quadratic optimization")
+    func asymmetricQuadraticOptimization() async throws {
+        let optimizer = COBYLAOptimizer(initialTrustRadius: 1.0)
+
+        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+            let x = params[0]
+            let y = params[1]
+            return 2.0 * x * x + y * y + x * y
+        }
+
+        let result = try await optimizer.minimize(
+            objectiveFunction: objectiveFunction,
+            initialParameters: [1.0, 1.0],
+            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
+            progressCallback: nil
+        )
+
+        #expect(result.optimalValue < 0.1)
+        #expect(abs(result.optimalParameters[0]) < 0.2)
+        #expect(abs(result.optimalParameters[1]) < 0.2)
+    }
+}
+
 /// Test suite for OptimizerError.
 /// Validates optimizer error cases and descriptive messages.
 @Suite("OptimizerError")

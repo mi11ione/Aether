@@ -535,6 +535,49 @@ public enum ValidationUtilities {
         precondition(numQubits >= min, "\(algorithmName) requires at least \(min) qubit\(min > 1 ? "s" : "") (got \(numQubits))")
     }
 
+    // MARK: - Optimizer Validations
+
+    /// Validate trust region radius relationships
+    ///
+    /// Trust region optimizers require: min < initial <= max
+    ///
+    /// - Parameters:
+    ///   - minRadius: Minimum trust region radius
+    ///   - initialRadius: Initial trust region radius
+    ///   - maxRadius: Maximum trust region radius
+    /// - Precondition: minRadius < initialRadius <= maxRadius
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateTrustRadiusRelationships(min minRadius: Double, initial initialRadius: Double, max maxRadius: Double) {
+        precondition(
+            minRadius < initialRadius,
+            "minTrustRadius must be less than initialTrustRadius (got \(minRadius) >= \(initialRadius))"
+        )
+        precondition(
+            initialRadius <= maxRadius,
+            "initialTrustRadius must be less than or equal to maxTrustRadius (got \(initialRadius) > \(maxRadius))"
+        )
+    }
+
+    /// Validate that accept ratio is less than expand ratio
+    ///
+    /// Trust region optimizers require acceptRatio < expandRatio for proper step acceptance logic.
+    ///
+    /// - Parameters:
+    ///   - acceptRatio: Threshold for accepting steps
+    ///   - expandRatio: Threshold for expanding trust region
+    /// - Precondition: acceptRatio < expandRatio
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateAcceptExpandRatios(accept acceptRatio: Double, expand expandRatio: Double) {
+        precondition(
+            acceptRatio < expandRatio,
+            "acceptRatio must be less than expandRatio (got \(acceptRatio) >= \(expandRatio))"
+        )
+    }
+
     // MARK: - Special Validations
 
     /// Validate that allocation dictionary contains required index
