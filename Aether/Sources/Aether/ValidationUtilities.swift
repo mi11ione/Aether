@@ -362,7 +362,7 @@ public enum ValidationUtilities {
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateTwoComponentBasis(_ basisState: [Complex<Double>]) {
+    static func validateTwoComponentBasis(_ basisState: AmplitudeVector) {
         precondition(basisState.count == 2, "Basis state must have 2 components (got \(basisState.count))")
     }
 
@@ -375,7 +375,7 @@ public enum ValidationUtilities {
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateNormalizedBasis(_ basisState: [Complex<Double>], tolerance: Double = 1e-10) {
+    static func validateNormalizedBasis(_ basisState: AmplitudeVector, tolerance: Double = 1e-10) {
         let norm = basisState.reduce(0.0) { $0 + $1.magnitudeSquared }
         precondition(abs(norm - 1.0) < tolerance, "Basis state must be normalized (got norm² = \(norm))")
     }
@@ -400,7 +400,7 @@ public enum ValidationUtilities {
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateAmplitudeCount(_ amplitudes: [Complex<Double>], numQubits: Int) {
+    static func validateAmplitudeCount(_ amplitudes: AmplitudeVector, numQubits: Int) {
         let expectedCount = 1 << numQubits
         precondition(
             amplitudes.count == expectedCount,
@@ -589,7 +589,7 @@ public enum ValidationUtilities {
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateAllocationContainsIndex(_ allocation: [Int: Int], index: Int) {
+    static func validateAllocationContainsIndex(_ allocation: ShotAllocation, index: Int) {
         precondition(allocation[index] != nil, "Allocation must contain entry for term index \(index)")
     }
 

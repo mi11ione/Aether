@@ -27,12 +27,12 @@ import Accelerate
 /// **Three-Tier Performance Architecture:**
 /// 1. **Metal GPU** (fastest): Custom CSR sparse kernel with native complex support
 ///    - Used when: Metal available AND numQubits ≥ 8
-///    - Performance: 100-1000× faster than Observable for molecular Hamiltonians
+///    - GPU-accelerated sparse matrix-vector multiplication
 ///    - Primary path for VQE on modern Macs (M1/M2/M3)
 ///
 /// 2. **Accelerate Sparse (AMX)**: Apple's optimized sparse BLAS
 ///    - Used when: Metal unavailable OR numQubits < 8 (GPU overhead too high)
-///    - Performance: 10-20× faster than manual loops via AMX coprocessor
+///    - Hardware-accelerated via AMX coprocessor
 ///    - Complex arithmetic: H = A + iB → 4 real SpMV operations
 ///    - Automatic vectorization, cache blocking, and AMX acceleration
 ///
@@ -127,8 +127,10 @@ public actor SparseHamiltonian {
     /// - Memory: Store only non-zeros (~0.01%-1% of full matrix)
     /// - Reuse for all VQE iterations
     ///
-    /// - Parameter observable: Quantum observable H = Σᵢ cᵢ Pᵢ
-    public init(observable: Observable) {
+    /// - Parameters:
+    ///   - observable: Quantum observable H = Σᵢ cᵢ Pᵢ
+    ///   - numQubits: Total system size (optional). If nil, inferred from observable
+    public init(observable: Observable, numQubits: Int? = nil) {
         self.observable = observable
 
         var maxQubit: Int = -1
@@ -138,16 +140,16 @@ public actor SparseHamiltonian {
             }
         }
 
-        numQubits = max(maxQubit + 1, 1)
-        dimension = 1 << numQubits
+        self.numQubits = numQubits ?? max(maxQubit + 1, 1)
+        dimension = 1 << self.numQubits
 
         let cooMatrix: [COOElement] = Self.buildCOOMatrix(from: observable, dimension: dimension)
         nnz = cooMatrix.count
 
-        if numQubits >= 8, let metalBackend = Self.tryMetalGPUBackend(
+        if self.numQubits >= 8, let metalBackend = Self.tryMetalGPUBackend(
             cooMatrix: cooMatrix,
             dimension: dimension,
-            numQubits: numQubits
+            numQubits: self.numQubits
         ) {
             backend = metalBackend
         } else if let accelerateBackend = Self.tryAccelerateSparseBackend(

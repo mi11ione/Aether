@@ -383,12 +383,12 @@ public struct NelderMeadOptimizer: Optimizer {
 /// **Algorithm:**
 /// 1. Compute gradient via parameter shift: ∂E/∂θᵢ = [E(θᵢ+π/2) - E(θᵢ-π/2)] / 2
 /// 2. Update parameters: θ ← θ - η∇E (with adaptive learning rate)
-/// 3. Optional momentum: velocity accumulation for faster convergence
+/// 3. Optional momentum: velocity accumulation for improved convergence
 ///
 /// **Advantages:**
 /// - Exact gradients (no finite difference errors)
-/// - Faster convergence than simplex for smooth landscapes
-/// - Scales better to high dimensions (n > 50)
+/// - Gradient-based optimization for smooth landscapes
+/// - Scales to high dimensions (n > 50)
 ///
 /// **Disadvantages:**
 /// - Requires 2n circuit evaluations per iteration (gradient computation)
@@ -573,10 +573,10 @@ public struct GradientDescentOptimizer: Optimizer {
 /// 4. Update parameter history (limited to m previous steps)
 ///
 /// **Advantages:**
-/// - Faster convergence than gradient descent (uses curvature information)
+/// - Uses curvature information (second-order method)
 /// - Memory efficient: O(m·n) vs O(n²) for full BFGS
 /// - Box constraints support (parameter bounds)
-/// - Fewer iterations than gradient descent (typically 3-5× faster)
+/// - Quasi-Newton optimization with limited memory
 ///
 /// **Disadvantages:**
 /// - Requires 2n circuit evaluations per iteration (gradient computation)
@@ -1078,9 +1078,9 @@ public struct SPSAOptimizer: Optimizer {
 ///
 /// **Performance characteristics**:
 /// - Function evaluations: 1-2 per iteration (n+1 initial simplex construction)
-/// - Convergence: Superlinear near optimum, faster than Nelder-Mead
+/// - Convergence: Superlinear near optimum (trust region method)
 /// - Robustness: Linear model smooths measurement noise from quantum circuits
-/// - Parameter range: Optimal for 5-50 parameters (VQE sweet spot)
+/// - Parameter range: Suitable for 5-50 parameters (VQE typical use)
 /// - No gradient computation: Avoids parameter shift rule (2n evaluations)
 ///
 /// **VQE application**:

@@ -22,7 +22,8 @@ public typealias ShotAllocation = [Int: Int]
 ///
 /// nᵢ = N × (|cᵢ| √Var(Pᵢ)) / (Σⱼ |cⱼ| √Var(Pⱼ))
 ///
-/// This typically reduces shot requirements by 2-10× compared to uniform allocation.
+/// This reduces shot requirements compared to uniform allocation by concentrating
+/// shots on high-variance, high-weight terms.
 @frozen
 public struct ShotAllocator {
     // MARK: - Configuration
@@ -148,7 +149,7 @@ public struct ShotAllocator {
     ///     totalShots: 10000,
     ///     state: currentState
     /// )
-    /// // Combines grouping (41× reduction) + optimal allocation (2-10× fewer shots)
+    /// // Combines grouping reduction + optimal allocation
     /// ```
     @_optimize(speed)
     @_effects(readonly)

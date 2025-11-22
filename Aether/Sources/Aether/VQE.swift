@@ -12,7 +12,7 @@ import Foundation
 ///
 /// **Algorithm Overview:**
 /// 1. **Prepare parameterized state**: |ψ(θ⃗)⟩ via hardware-efficient ansatz
-/// 2. **Measure energy**: ⟨ψ(θ⃗)|H|ψ(θ⃗)⟩ using SparseHamiltonian (100-1000× speedup)
+/// 2. **Measure energy**: ⟨ψ(θ⃗)|H|ψ(θ⃗)⟩ using SparseHamiltonian backend
 /// 3. **Classical optimization**: Update θ⃗ to minimize energy
 /// 4. **Repeat until convergence**: |E_new - E_old| < ε
 ///
@@ -23,7 +23,7 @@ import Foundation
 /// - Guaranteed convergence to local minimum
 ///
 /// **Performance:**
-/// - SparseHamiltonian backend: 100-1000× faster than Observable for molecular Hamiltonians
+/// - SparseHamiltonian backend: GPU/Accelerate hardware acceleration
 /// - Typical convergence: 50-300 optimizer iterations
 /// - Circuit depth: shallow (NISQ-compatible)
 /// - Hardware requirements: coherence time > circuit execution time
@@ -86,7 +86,7 @@ import Foundation
 /// **Architecture:**
 /// - Actor-based: Thread-safe, prevents data races
 /// - Async optimization: Non-blocking for UI applications
-/// - SparseHamiltonian: 100-1000× speedup for molecular Hamiltonians
+/// - SparseHamiltonian: GPU/Accelerate hardware acceleration
 /// - Observable fallback: Guaranteed correctness if sparse construction fails
 /// - Progress tracking: Real-time energy updates
 public actor VariationalQuantumEigensolver {
@@ -123,11 +123,10 @@ public actor VariationalQuantumEigensolver {
     /// Create VQE instance
     ///
     /// Configures hybrid quantum-classical optimization for ground state search.
-    /// Automatically constructs SparseHamiltonian backend if useSparseBackend=true
-    /// (100-1000× speedup for molecular Hamiltonians with 0.01-1% sparsity).
+    /// Automatically constructs SparseHamiltonian backend if useSparseBackend=true.
     ///
     /// **Backend Selection:**
-    /// - SparseHamiltonian (default): GPU/Accelerate acceleration
+    /// - SparseHamiltonian (default): GPU/Accelerate hardware acceleration
     /// - Observable (fallback): Term-by-term measurement
     ///
     /// **Performance:**

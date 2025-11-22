@@ -8,13 +8,13 @@
 /// QWC grouping and unitary partitioning with automatic strategy selection and caching.
 ///
 /// **Optimization strategies**:
-/// - **QWC grouping**: Group qubit-wise commuting Pauli strings (10-50× reduction)
-/// - **Unitary partitioning**: Find unitaries to diagonalize non-commuting terms (100-250× reduction)
+/// - **QWC grouping**: Group qubit-wise commuting Pauli strings
+/// - **Unitary partitioning**: Find unitaries to diagonalize non-commuting terms
 /// - **Shot allocation**: Variance-weighted distribution of measurement shots
 ///
 /// **Performance improvements**:
 /// - Typical Hamiltonian (2000 terms) → 50-200 QWC groups → 10-20 unitary partitions
-/// - Overall reduction: 100-200× fewer quantum circuits needed
+/// - Reduces number of quantum circuits required for expectation values
 /// - Thread-safe caching: Actor-based isolation prevents redundant computation
 ///
 /// **Automatic strategy selection**:
@@ -180,7 +180,7 @@ public extension Observable {
     /// ```swift
     /// let hamiltonian = Observable(terms: molecularTerms)
     /// let partitions = await hamiltonian.unitaryPartitions(numQubits: 10)
-    /// print("Reduced to \(partitions.count) partitions (100-250× reduction)")
+    /// print("Reduced to \(partitions.count) partitions")
     /// ```
     @_eagerMove
     func unitaryPartitions(numQubits: Int, config: UnitaryPartitioner.Config = .default) async -> [UnitaryPartition] {
@@ -207,10 +207,10 @@ public extension Observable {
         /// Measure each term independently (no optimization)
         case termByTerm
 
-        /// Use qubit-wise commuting groups (10-50× reduction)
+        /// Use qubit-wise commuting groups
         case qwcGrouping
 
-        /// Use unitary partitioning (100-250× reduction, computationally expensive)
+        /// Use unitary partitioning (computationally expensive)
         case unitaryPartitioning(numQubits: Int, config: UnitaryPartitioner.Config)
 
         /// Automatically select best strategy based on problem size

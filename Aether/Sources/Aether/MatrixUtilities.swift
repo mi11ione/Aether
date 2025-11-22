@@ -17,8 +17,8 @@ public enum MatrixUtilities {
     /// Complex matrix multiplication using BLAS (A × B)
     ///
     /// Computes matrix product C = A × B for square complex matrices using Apple's
-    /// Accelerate framework BLAS. Achieves 10-100× speedup over naive triple-loop
-    /// implementation through vectorization and AMX coprocessor utilization.
+    /// Accelerate framework BLAS with hardware-accelerated vectorization and AMX
+    /// coprocessor utilization.
     ///
     /// **Algorithm**:
     /// 1. Convert Swift Complex<Double> arrays to interleaved Double arrays [r₀, i₀, r₁, i₁, ...]
@@ -29,8 +29,8 @@ public enum MatrixUtilities {
     /// - Indexing: buffer[(row * n + col) * 2] = real, buffer[(row * n + col) * 2 + 1] = imag
     /// - Matches Swift's natural matrix[row][col] access pattern
     ///
-    /// **Complexity**: O(n³) arithmetic operations, but with ~100× lower constant
-    /// factor than naive loops due to SIMD and cache optimization.
+    /// **Complexity**: O(n³) arithmetic operations with hardware acceleration via SIMD
+    /// and cache optimization.
     ///
     /// **Use Cases**:
     /// - Gate composition: U = U₂ × U₁

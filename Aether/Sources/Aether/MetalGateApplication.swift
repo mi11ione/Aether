@@ -52,11 +52,10 @@ private enum MetalResources {
 ///
 /// Provides hardware-accelerated quantum gate execution using Apple's Metal GPU framework.
 /// Automatically falls back to CPU when Metal unavailable or for small states where GPU
-/// overhead exceeds benefits. Achieves 2-10x speedup for states with ≥10 qubits.
+/// overhead exceeds benefits. Enabled for states with ≥10 qubits.
 ///
 /// **Performance characteristics**:
-/// - GPU threshold: Accelerates states with ≥10 qubits (2^10 = 1024 amplitudes)
-/// - Speedup: 2-10x depending on hardware (M1/M2/M3 chips)
+/// - GPU threshold: Activates for states with ≥10 qubits (2^10 = 1024 amplitudes)
 /// - Overhead: Buffer allocation + data transfer (amortized over many gates)
 /// - Precision: Float32 on GPU, converted to/from Float64 CPU state
 ///
