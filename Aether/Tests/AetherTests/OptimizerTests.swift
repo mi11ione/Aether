@@ -286,7 +286,7 @@ struct GradientDescentOptimizerTests {
 
         #expect(optimizer.learningRate == 0.1)
         #expect(optimizer.momentum == 0.0)
-        #expect(optimizer.useAdaptiveLearningRate == true)
+        #expect(optimizer.useAdaptiveLearningRate)
         #expect(abs(optimizer.parameterShift - .pi / 2) < 1e-10)
     }
 
@@ -301,7 +301,7 @@ struct GradientDescentOptimizerTests {
 
         #expect(optimizer.learningRate == 0.05)
         #expect(optimizer.momentum == 0.9)
-        #expect(optimizer.useAdaptiveLearningRate == false)
+        #expect(!optimizer.useAdaptiveLearningRate)
         #expect(optimizer.parameterShift == 0.01)
     }
 

@@ -552,8 +552,8 @@ struct SeededMeasurementTests {
         let measurement1 = Measurement()
         let measurement2 = Measurement(seed: 42)
 
-        #expect(measurement1.isSeeded == false)
-        #expect(measurement2.isSeeded == true)
+        #expect(!measurement1.isSeeded)
+        #expect(measurement2.isSeeded)
     }
 
     @Test("Seeded measurement produces valid outcomes")

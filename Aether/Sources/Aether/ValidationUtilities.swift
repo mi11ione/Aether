@@ -85,6 +85,25 @@ public enum ValidationUtilities {
         )
     }
 
+    /// Validate that qubit index is within bounds
+    ///
+    /// Single-qubit operations must operate on valid qubit index.
+    /// Checks that index is non-negative and less than total qubit count.
+    ///
+    /// - Parameters:
+    ///   - qubit: Qubit index to validate
+    ///   - numQubits: Total number of qubits in system
+    /// - Precondition: 0 <= qubit < numQubits
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateQubitIndex(_ qubit: Int, numQubits: Int) {
+        precondition(
+            qubit >= 0 && qubit < numQubits,
+            "Qubit index \(qubit) out of bounds (valid range: 0..<\(numQubits))"
+        )
+    }
+
     /// Validate that all qubits in operation are within bounds
     ///
     /// Multi-qubit gates (CNOT, Toffoli, etc.) must operate on valid qubit indices.
@@ -117,6 +136,19 @@ public enum ValidationUtilities {
     @inline(__always)
     static func validatePositiveInt(_ value: Int, name: String) {
         precondition(value > 0, "\(name) must be positive (got \(value))")
+    }
+
+    /// Validate that integer value is non-negative
+    ///
+    /// - Parameters:
+    ///   - value: Value to validate
+    ///   - name: Parameter name for error message
+    /// - Precondition: value >= 0
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateNonNegativeInt(_ value: Int, name: String) {
+        precondition(value >= 0, "\(name) must be non-negative (got \(value))")
     }
 
     /// Validate that double value is positive
@@ -157,6 +189,20 @@ public enum ValidationUtilities {
     @inline(__always)
     static func validateUpperBound(_ value: Int, max: Int, name: String) {
         precondition(value <= max, "\(name) must be ≤ \(max) (got \(value))")
+    }
+
+    /// Validate that integer value is within inclusive lower bound
+    ///
+    /// - Parameters:
+    ///   - value: Value to validate
+    ///   - min: Minimum allowed value (inclusive)
+    ///   - name: Parameter name for error message
+    /// - Precondition: value >= min
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateLowerBound(_ value: Int, min: Int, name: String) {
+        precondition(value >= min, "\(name) must be ≥ \(min) (got \(value))")
     }
 
     /// Validate that double value is within half-open range [min, max)
@@ -575,6 +621,27 @@ public enum ValidationUtilities {
         precondition(
             acceptRatio < expandRatio,
             "acceptRatio must be less than expandRatio (got \(acceptRatio) >= \(expandRatio))"
+        )
+    }
+
+    // MARK: - Graph Validations
+
+    /// Validate that graph edge connects two distinct vertices
+    ///
+    /// Self-loops (edges from a vertex to itself) are invalid in graph problems
+    /// like MaxCut where edges must connect distinct vertices.
+    ///
+    /// - Parameters:
+    ///   - vertex1: First vertex index
+    ///   - vertex2: Second vertex index
+    /// - Precondition: vertex1 != vertex2
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateDistinctVertices(_ vertex1: Int, _ vertex2: Int) {
+        precondition(
+            vertex1 != vertex2,
+            "Self-loop edge (\(vertex1), \(vertex1)) is invalid. Edges must connect distinct vertices."
         )
     }
 

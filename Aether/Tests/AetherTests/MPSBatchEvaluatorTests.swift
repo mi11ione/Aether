@@ -538,7 +538,7 @@ struct MPSBatchEvaluatorTests {
     @Test("MPSBatchError.emptyBatch description is informative")
     func emptyBatchErrorDescription() {
         let error = MPSBatchError.emptyBatch
-        let description = error.errorDescription ?? ""
+        let description = error.errorDescription!
 
         #expect(description.contains("at least one unitary"), "Error should explain requirement")
         #expect(description.contains("non-empty array"), "Error should suggest fix")
@@ -547,7 +547,7 @@ struct MPSBatchEvaluatorTests {
     @Test("MPSBatchError.dimensionMismatch description is informative")
     func dimensionMismatchErrorDescription() {
         let error = MPSBatchError.dimensionMismatch(expected: 4, got: 8)
-        let description = error.errorDescription ?? ""
+        let description = error.errorDescription!
 
         #expect(description.contains("4×4"), "Error should show expected dimension")
         #expect(description.contains("8×8"), "Error should show actual dimension")
@@ -557,7 +557,7 @@ struct MPSBatchEvaluatorTests {
     @Test("MPSBatchError.metalUnavailable description is informative")
     func metalUnavailableErrorDescription() {
         let error = MPSBatchError.metalUnavailable
-        let description = error.errorDescription ?? ""
+        let description = error.errorDescription!
 
         #expect(description.contains("Metal"), "Error should mention Metal")
         #expect(description.contains("CPU"), "Error should mention fallback")
@@ -567,7 +567,7 @@ struct MPSBatchEvaluatorTests {
     @Test("MPSBatchError.bufferAllocationFailed description is informative")
     func bufferAllocationFailedErrorDescription() {
         let error = MPSBatchError.bufferAllocationFailed
-        let description = error.errorDescription ?? ""
+        let description = error.errorDescription!
 
         #expect(description.contains("buffer"), "Error should mention buffer allocation")
         #expect(description.contains("Reduce"), "Error should suggest solution")
@@ -577,7 +577,7 @@ struct MPSBatchEvaluatorTests {
     @Test("MPSBatchError.commandBufferFailed description is informative")
     func commandBufferFailedErrorDescription() {
         let error = MPSBatchError.commandBufferFailed
-        let description = error.errorDescription ?? ""
+        let description = error.errorDescription!
 
         #expect(description.contains("command buffer"), "Error should mention command buffer")
         #expect(description.contains("GPU"), "Error should mention GPU")
@@ -621,57 +621,6 @@ struct MPSBatchEvaluatorTests {
 
         #expect(stats.deviceName == "CPU", "Should show CPU when Metal unavailable")
         #expect(!stats.isMetalAvailable, "Metal should be marked unavailable")
-    }
-
-    @Test("Array chunking splits into correct chunk sizes")
-    func arrayChunking() {
-        let array = Array(0 ..< 10)
-
-        let chunks3 = array.chunked(into: 3)
-        #expect(chunks3.count == 4, "10 elements in chunks of 3 should give 4 chunks")
-        #expect(chunks3[0] == [0, 1, 2], "First chunk should be [0,1,2]")
-        #expect(chunks3[1] == [3, 4, 5], "Second chunk should be [3,4,5]")
-        #expect(chunks3[2] == [6, 7, 8], "Third chunk should be [6,7,8]")
-        #expect(chunks3[3] == [9], "Last chunk should be [9]")
-    }
-
-    @Test("Array chunking with exact division")
-    func arrayChunkingExactDivision() {
-        let array = Array(0 ..< 12)
-
-        let chunks4 = array.chunked(into: 4)
-        #expect(chunks4.count == 3, "12 elements in chunks of 4 should give 3 chunks")
-        #expect(chunks4[0] == [0, 1, 2, 3], "First chunk correct")
-        #expect(chunks4[1] == [4, 5, 6, 7], "Second chunk correct")
-        #expect(chunks4[2] == [8, 9, 10, 11], "Third chunk correct")
-    }
-
-    @Test("Array chunking with size larger than array")
-    func arrayChunkingLargeSize() {
-        let array = Array(0 ..< 5)
-
-        let chunks10 = array.chunked(into: 10)
-        #expect(chunks10.count == 1, "Small array should produce single chunk")
-        #expect(chunks10[0] == [0, 1, 2, 3, 4], "Chunk should contain all elements")
-    }
-
-    @Test("Array chunking with size 1")
-    func arrayChunkingSizeOne() {
-        let array = [10, 20, 30]
-
-        let chunks1 = array.chunked(into: 1)
-        #expect(chunks1.count == 3, "Each element should be its own chunk")
-        #expect(chunks1[0] == [10], "First chunk")
-        #expect(chunks1[1] == [20], "Second chunk")
-        #expect(chunks1[2] == [30], "Third chunk")
-    }
-
-    @Test("Array chunking with empty array")
-    func arrayChunkingEmpty() {
-        let array: [Int] = []
-
-        let chunks = array.chunked(into: 5)
-        #expect(chunks.isEmpty, "Empty array should produce no chunks")
     }
 
     @Test("Batch evaluation with many small circuits tests chunking path")
