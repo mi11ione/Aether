@@ -58,10 +58,25 @@ public extension Observable {
     @_eagerMove
     @_effects(readonly)
     func truncate(threshold: Double) -> Observable {
-        let significantTerms: PauliTerms = terms.filter { abs($0.coefficient) >= threshold }
+        var significantTerms: PauliTerms = []
+        significantTerms.reserveCapacity(terms.count)
 
-        if significantTerms.isEmpty, let largest = terms.max(by: { abs($0.coefficient) < abs($1.coefficient) }) {
-            return Observable(terms: [largest])
+        var maxCoeff = -Double.infinity
+        var maxIndex = -1
+
+        for i in 0 ..< terms.count {
+            let coeff = abs(terms[i].coefficient)
+            if coeff >= threshold {
+                significantTerms.append(terms[i])
+            }
+            if coeff > maxCoeff {
+                maxCoeff = coeff
+                maxIndex = i
+            }
+        }
+
+        if significantTerms.isEmpty, maxIndex >= 0 {
+            return Observable(terms: [terms[maxIndex]])
         }
 
         return Observable(terms: significantTerms)
@@ -88,8 +103,15 @@ public extension Observable {
             return Observable(terms: [])
         }
 
-        let sortedTerms: PauliTerms = terms.sorted { abs($0.coefficient) > abs($1.coefficient) }
-        let topTerms: PauliTerms = Array(sortedTerms.prefix(k))
+        let sortedTerms = terms.sorted { abs($0.coefficient) > abs($1.coefficient) }
+
+        let count = min(k, sortedTerms.count)
+        let topTerms = PauliTerms(unsafeUninitializedCapacity: count) { buffer, outCount in
+            for i in 0 ..< count {
+                buffer[i] = sortedTerms[i]
+            }
+            outCount = count
+        }
 
         return Observable(terms: topTerms)
     }
@@ -207,14 +229,21 @@ public extension Observable {
     @_eagerMove
     @_effects(readonly)
     func approximationStatistics(approximate: Observable) -> ApproximationStats {
-        let originalTerms: Int = terms.count
-        let approximateTerms: Int = approximate.terms.count
+        let originalTerms = terms.count
+        let approximateTerms = approximate.terms.count
 
-        let originalSum: Double = terms.reduce(0.0) { $0 + abs($1.coefficient) }
-        let approximateSum: Double = approximate.terms.reduce(0.0) { $0 + abs($1.coefficient) }
+        var originalSum = 0.0
+        var approximateSum = 0.0
 
-        let reductionFactor: Double = originalTerms > 0 ? Double(originalTerms) / Double(approximateTerms) : 1.0
-        let retention: Double = originalSum > 0 ? approximateSum / originalSum : 0.0
+        for i in 0 ..< terms.count {
+            originalSum += abs(terms[i].coefficient)
+        }
+        for i in 0 ..< approximate.terms.count {
+            approximateSum += abs(approximate.terms[i].coefficient)
+        }
+
+        let reductionFactor = originalTerms > 0 ? Double(originalTerms) / Double(approximateTerms) : 1.0
+        let retention = originalSum > 0 ? approximateSum / originalSum : 0.0
 
         return ApproximationStats(
             originalTerms: originalTerms,
@@ -258,22 +287,24 @@ public extension Observable {
         maxError: Double,
         searchSteps: Int = 20
     ) -> Double {
-        // Binary search for optimal threshold
+        var high = 0.0
+        for i in 0 ..< terms.count {
+            let coeff = abs(terms[i].coefficient)
+            if coeff > high { high = coeff }
+        }
+        if high == 0.0 { high = 1.0 }
+
+        let exactValue = expectationValue(state: state)
+
         var low = 0.0
-        var high: Double = terms.map { abs($0.coefficient) }.max() ?? 1.0
 
         for _ in 0 ..< searchSteps {
-            let mid: Double = (low + high) / 2.0
-            let approx: Observable = truncate(threshold: mid)
-            let error: Double = approximationError(approximate: approx, state: state)
+            let mid = (low + high) / 2.0
+            let approx = truncate(threshold: mid)
+            let approxValue = approx.expectationValue(state: state)
+            let error = abs(exactValue - approxValue)
 
-            if error <= maxError {
-                // Can increase threshold (more aggressive truncation)
-                low = mid
-            } else {
-                // Must decrease threshold (less truncation)
-                high = mid
-            }
+            if error <= maxError { low = mid } else { high = mid }
         }
 
         return low

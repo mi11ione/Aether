@@ -3,6 +3,9 @@
 
 import Accelerate
 
+/// Precomputed 1/√2 for Hadamard and related gates
+private let invSqrt2: Double = 1.0 / 2.0.squareRoot()
+
 /// Quantum gates: unitary transformations for quantum circuits
 ///
 /// Defines all supported quantum gates with their matrix representations and metadata.
@@ -340,7 +343,6 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     }
 
     private func hadamardMatrix() -> GateMatrix {
-        let invSqrt2 = 1.0 / sqrt(2.0)
         let c: Complex<Double> = Complex(invSqrt2, 0.0)
         return [
             [c, c],
@@ -397,10 +399,9 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
 
     private func u2Matrix(phi: Double, lambda: Double) -> GateMatrix {
         // U2(φ,λ) = (1/√2) * [[1, -e^(iλ)], [e^(iφ), e^(i(φ+λ))]]
-        let invSqrt2 = 1.0 / sqrt(2.0)
         let expPhi = Complex<Double>.exp(phi)
         let expLambda = Complex<Double>.exp(lambda)
-        let expPhiLambda = Complex<Double>.exp(phi + lambda)
+        let expPhiLambda: Complex<Double> = expPhi * expLambda
 
         return [
             [Complex(invSqrt2, 0.0), -expLambda * invSqrt2],
@@ -416,7 +417,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
 
         let expPhi = Complex<Double>.exp(phi)
         let expLambda = Complex<Double>.exp(lambda)
-        let expPhiLambda = Complex<Double>.exp(phi + lambda)
+        let expPhiLambda: Complex<Double> = expPhi * expLambda
 
         return [
             [Complex(cosHalfTheta, 0.0), -expLambda * sinHalfTheta],
@@ -503,7 +504,6 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
 
     private func chMatrix() -> GateMatrix {
         // Controlled-Hadamard
-        let invSqrt2 = 1.0 / sqrt(2.0)
         let c: Complex<Double> = Complex(invSqrt2, 0.0)
         return [
             [.one, .zero, .zero, .zero],
@@ -571,19 +571,16 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     // MARK: - Multi-Qubit Matrix Implementations
 
     private func toffoliMatrix() -> GateMatrix {
-        // 8×8 matrix for 3 qubits
-        // Flips target only if both controls are |1⟩
-        // Identity on all states except |110⟩↔|111⟩
-        var matrix: GateMatrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: 8), count: 8)
-
-        for i in 0 ..< 6 {
-            matrix[i][i] = .one
-        }
-
-        matrix[6][7] = .one
-        matrix[7][6] = .one
-
-        return matrix
+        [
+            [.one, .zero, .zero, .zero, .zero, .zero, .zero, .zero],
+            [.zero, .one, .zero, .zero, .zero, .zero, .zero, .zero],
+            [.zero, .zero, .one, .zero, .zero, .zero, .zero, .zero],
+            [.zero, .zero, .zero, .one, .zero, .zero, .zero, .zero],
+            [.zero, .zero, .zero, .zero, .one, .zero, .zero, .zero],
+            [.zero, .zero, .zero, .zero, .zero, .one, .zero, .zero],
+            [.zero, .zero, .zero, .zero, .zero, .zero, .zero, .one],
+            [.zero, .zero, .zero, .zero, .zero, .zero, .one, .zero],
+        ]
     }
 
     // MARK: - Validation
@@ -615,13 +612,13 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         switch self {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
              .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
-             .u1, .u2, .u3, .sx, .sy, .customSingleQubit: return true
+             .u1, .u2, .u3, .sx, .sy, .customSingleQubit: true
 
         case let .cnot(control, target),
              let .cz(control, target),
              let .cy(control, target),
              let .ch(control, target):
-            return control != target &&
+            control != target &&
                 control >= 0 && control <= maxAllowedQubit &&
                 target >= 0 && target <= maxAllowedQubit
 
@@ -630,18 +627,17 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
              let .controlledRotationY(_, control, target),
              let .controlledRotationZ(_, control, target),
              let .customTwoQubit(_, control, target):
-            return control != target &&
+            control != target &&
                 control >= 0 && control <= maxAllowedQubit &&
                 target >= 0 && target <= maxAllowedQubit
 
         case let .swap(q1, q2), let .sqrtSwap(q1, q2):
-            return q1 != q2 &&
+            q1 != q2 &&
                 q1 >= 0 && q1 <= maxAllowedQubit &&
                 q2 >= 0 && q2 <= maxAllowedQubit
 
         case let .toffoli(c1, c2, target):
-            let indices: Set<Int> = Set([c1, c2, target])
-            return indices.count == 3 &&
+            c1 != c2 && c1 != target && c2 != target &&
                 c1 >= 0 && c1 <= maxAllowedQubit &&
                 c2 >= 0 && c2 <= maxAllowedQubit &&
                 target >= 0 && target <= maxAllowedQubit
@@ -750,12 +746,25 @@ public extension QuantumGate {
     ///   - a: Left matrix
     ///   - b: Right matrix
     /// - Returns: Matrix product A × B
+    @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
     static func matrixMultiply(_ a: GateMatrix, _ b: GateMatrix) -> GateMatrix {
         let n: Int = a.count
 
-        // For small matrices (n ≤ 4), naive implementation is faster due to call overhead
+        if n == 2 {
+            return [
+                [
+                    a[0][0] * b[0][0] + a[0][1] * b[1][0],
+                    a[0][0] * b[0][1] + a[0][1] * b[1][1],
+                ],
+                [
+                    a[1][0] * b[0][0] + a[1][1] * b[1][0],
+                    a[1][0] * b[0][1] + a[1][1] * b[1][1],
+                ],
+            ]
+        }
+
         guard n > 4 else {
             var result: GateMatrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
             for i in 0 ..< n {

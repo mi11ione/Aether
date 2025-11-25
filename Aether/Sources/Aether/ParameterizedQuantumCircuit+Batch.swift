@@ -120,8 +120,8 @@ public extension ParameterizedQuantumCircuit {
     /// - More accurate than finite differences for quantum circuits
     ///
     /// **Output Format:**
-    /// - plusVectors[i]: All parameters at base values except θᵢ → θᵢ + π/2
-    /// - minusVectors[i]: All parameters at base values except θᵢ → θᵢ - π/2
+    /// - plusVectors[i]: All parameters at base values except θᵢ -> θᵢ + π/2
+    /// - minusVectors[i]: All parameters at base values except θᵢ -> θᵢ - π/2
     /// - Total vectors: 2N
     ///
     /// - Parameters:
@@ -180,15 +180,18 @@ public extension ParameterizedQuantumCircuit {
         plusVectors.reserveCapacity(numParams)
         minusVectors.reserveCapacity(numParams)
 
+        var buffer = baseParameters
+
         for i in 0 ..< numParams {
-            var plusVector = baseParameters
-            plusVector[i] += shift
+            let original: Double = buffer[i]
 
-            var minusVector = baseParameters
-            minusVector[i] -= shift
+            buffer[i] = original + shift
+            plusVectors.append(buffer)
 
-            plusVectors.append(plusVector)
-            minusVectors.append(minusVector)
+            buffer[i] = original - shift
+            minusVectors.append(buffer)
+
+            buffer[i] = original
         }
 
         return (plusVectors: plusVectors, minusVectors: minusVectors)
@@ -202,10 +205,10 @@ public extension ParameterizedQuantumCircuit {
     /// **Algorithm:**
     /// - Takes array of ranges (one per parameter)
     /// - Computes Cartesian product: all combinations of values
-    /// - Example: 2 params with 10 values each → 100 parameter vectors
+    /// - Example: 2 params with 10 values each -> 100 parameter vectors
     ///
     /// **Warning:** Exponential growth in batch size
-    /// - N parameters with M values each → M^N vectors
+    /// - N parameters with M values each -> M^N vectors
     /// - Practical limit: ~1000 vectors (GPU memory constraints)
     ///
     /// - Parameter ranges: Array of value arrays (one per parameter)
@@ -254,24 +257,35 @@ public extension ParameterizedQuantumCircuit {
             )
         }
 
-        for (index, range) in ranges.enumerated() {
-            guard !range.isEmpty else {
+        var totalCombinations = 1
+        for index in 0 ..< numParams {
+            let rangeCount: Int = ranges[index].count
+            guard rangeCount > 0 else {
                 throw ParameterError.emptyGridSearchRange(parameterIndex: index)
             }
+            totalCombinations *= rangeCount
         }
 
-        let totalCombinations: Int = ranges.reduce(1) { $0 * $1.count }
         var parameterVectors: [[Double]] = []
         parameterVectors.reserveCapacity(totalCombinations)
 
-        var indices: [Int] = Array(repeating: 0, count: numParams)
+        var indices = [Int](unsafeUninitializedCapacity: numParams) { buffer, count in
+            for i in 0 ..< numParams {
+                buffer[i] = 0
+            }
+            count = numParams
+        }
+
+        var currentVector = [Double](unsafeUninitializedCapacity: numParams) { buffer, count in
+            for i in 0 ..< numParams {
+                buffer[i] = ranges[i][0]
+            }
+            count = numParams
+        }
 
         while true {
-            var currentVector: [Double] = []
-            currentVector.reserveCapacity(numParams)
-
-            for (paramIndex, rangeIndex) in indices.enumerated() {
-                currentVector.append(ranges[paramIndex][rangeIndex])
+            for paramIndex in 0 ..< numParams {
+                currentVector[paramIndex] = ranges[paramIndex][indices[paramIndex]]
             }
 
             parameterVectors.append(currentVector)

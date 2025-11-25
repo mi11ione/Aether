@@ -116,6 +116,9 @@ public actor QAOA {
     /// Parameterized QAOA ansatz circuit
     private let ansatz: ParameterizedQuantumCircuit
 
+    /// Precomputed parameter binding structure: [(paramName, layerIndex, coefficient, isGamma)]
+    private let parameterBindingInfo: [(name: String, layerIndex: Int, coefficient: Double, isGamma: Bool)]
+
     // MARK: - State
 
     /// Current optimization iteration
@@ -167,13 +170,43 @@ public actor QAOA {
         sparseHamiltonian = useSparseBackend ? SparseHamiltonian(observable: costHamiltonian) : nil
         simulator = QuantumSimulator(useMetalAcceleration: useMetalAcceleration)
 
-        // Construct QAOA ansatz once at initialization
         ansatz = QAOAAnsatz.create(
             numQubits: numQubits,
             depth: depth,
             costHamiltonian: costHamiltonian,
             mixerHamiltonian: self.mixerHamiltonian
         )
+
+        parameterBindingInfo = Self.buildParameterBindingInfo(ansatz: ansatz)
+    }
+
+    /// Build parameter binding info at init time (avoids string parsing in hot loop)
+    @_optimize(speed)
+    private static func buildParameterBindingInfo(
+        ansatz: ParameterizedQuantumCircuit
+    ) -> [(name: String, layerIndex: Int, coefficient: Double, isGamma: Bool)] {
+        var info: [(name: String, layerIndex: Int, coefficient: Double, isGamma: Bool)] = []
+        info.reserveCapacity(ansatz.parameterCount())
+
+        for param in ansatz.parameters {
+            let paramName = param.name
+
+            guard let coeffSeparatorRange = paramName.range(of: "_c_") else { continue }
+
+            let baseName = String(paramName[..<coeffSeparatorRange.lowerBound])
+            let coeffStr = String(paramName[coeffSeparatorRange.upperBound...])
+            guard let coefficient = Double(coeffStr) else { continue }
+
+            guard let underscoreRange = baseName.range(of: "_", options: .backwards) else { continue }
+            let typeStr = String(baseName[..<underscoreRange.lowerBound])
+            let layerStr = String(baseName[underscoreRange.upperBound...])
+            guard let layer = Int(layerStr) else { continue }
+
+            let isGamma = typeStr == "gamma"
+            info.append((name: paramName, layerIndex: layer, coefficient: coefficient, isGamma: isGamma))
+        }
+
+        return info
     }
 
     // MARK: - Execution
@@ -182,7 +215,7 @@ public actor QAOA {
     ///
     /// Executes hybrid quantum-classical loop until convergence or max iterations.
     /// Each iteration:
-    /// 1. Bind current (γ⃗,β⃗) to ansatz → concrete circuit
+    /// 1. Bind current (γ⃗,β⃗) to ansatz -> concrete circuit
     /// 2. Execute circuit on simulator (GPU-accelerated if available)
     /// 3. Compute ⟨ψ|H_p|ψ⟩ using SparseHamiltonian (or Observable fallback)
     /// 4. Classical optimizer updates parameters
@@ -322,7 +355,7 @@ public actor QAOA {
     /// Handles special QAOA parameter binding where:
     /// - Base parameters: gamma_0, beta_0, ..., gamma_{depth-1}, beta_{depth-1}
     /// - Scaled parameters: gamma_i_c_{coeff} for each Hamiltonian term
-    /// - Binding: gamma_0 = v → {gamma_0_c_1.0: v, gamma_0_c_-0.5: -0.5v, ...}
+    /// - Binding: gamma_0 = v -> {gamma_0_c_1.0: v, gamma_0_c_-0.5: -0.5v, ...}
     ///
     /// - Parameter parameters: Array of 2·depth values (γ₀,β₀,...,γₚ₋₁,βₚ₋₁)
     /// - Returns: Concrete quantum circuit with bound parameters
@@ -330,34 +363,13 @@ public actor QAOA {
     @_optimize(speed)
     @_eagerMove
     private func bindQAOAParameters(parameters: [Double]) throws -> QuantumCircuit {
-        // Build binding dictionary for scaled parameters only
-        var bindings: [String: Double] = [:]
-        bindings.reserveCapacity(ansatz.parameterCount())
+        var bindings: [String: Double] = Dictionary(minimumCapacity: parameterBindingInfo.count)
 
-        // Expand base parameter values to all scaled parameters
-        // Ansatz contains parameters like "gamma_0_c_1.000000" which represent 2·γ·c
-        // We need to bind these to actual values: parameter_value * encoded_coefficient
-        for param in ansatz.parameters {
-            let paramName = param.name
-            if paramName.contains("_c_") {
-                let components = paramName.components(separatedBy: "_c_")
-                guard components.count == 2, let coefficientValue = Double(components[1]) else { continue }
-
-                let baseName = components[0]
-
-                let baseComponents = baseName.components(separatedBy: "_")
-                guard baseComponents.count == 2, let layer = Int(baseComponents[1]) else { continue }
-
-                let isGamma = baseComponents[0] == "gamma"
-                let paramIndex = isGamma ? (2 * layer) : (2 * layer + 1)
-
-                // Scaled value: base_value * coefficient
-                // Note: coefficient already includes factor of 2 from Rz(2θ)
-                bindings[paramName] = parameters[paramIndex] * coefficientValue
-            }
+        for info in parameterBindingInfo {
+            let paramIndex = info.isGamma ? (2 * info.layerIndex) : (2 * info.layerIndex + 1)
+            bindings[info.name] = parameters[paramIndex] * info.coefficient
         }
 
-        // Bind ansatz with scaled parameters only
         return try ansatz.bind(parameters: bindings)
     }
 
@@ -367,7 +379,7 @@ public actor QAOA {
     /// Filters to significant probabilities (> 1e-6) for practical analysis.
     ///
     /// - Parameter state: Final quantum state after QAOA circuit
-    /// - Returns: Dictionary [bitstring index → probability]
+    /// - Returns: Dictionary [bitstring index -> probability]
     @_optimize(speed)
     @_eagerMove
     @inline(__always)
@@ -452,7 +464,7 @@ public struct QAOAResult: Sendable, CustomStringConvertible {
     /// Optimal parameters (γ₀,β₀,...,γₚ₋₁,βₚ₋₁)
     public let optimalParameters: [Double]
 
-    /// Solution probability distribution [bitstring index → probability]
+    /// Solution probability distribution [bitstring index -> probability]
     /// Filtered to probabilities > 1e-6
     public let solutionProbabilities: [Int: Double]
 
@@ -486,12 +498,11 @@ public struct QAOAResult: Sendable, CustomStringConvertible {
         self.functionEvaluations = functionEvaluations
     }
 
-    @inlinable
     public var description: String {
         let paramStr = optimalParameters.prefix(4).map { String(format: "%.4f", $0) }.joined(separator: ", ")
         let paramSuffix = optimalParameters.count > 4 ? ", ..." : ""
 
-        let topSolutions = solutionProbabilities.sorted(by: { $0.value > $1.value }).prefix(3)
+        let topSolutions = topKSolutions(k: 3)
         let solutionsStr = topSolutions.map { bitstring, prob in
             let binary = String(bitstring, radix: 2)
             return "\(binary) (\(String(format: "%.1f%%", prob * 100)))"
@@ -506,6 +517,61 @@ public struct QAOAResult: Sendable, CustomStringConvertible {
           Function Evaluations: \(functionEvaluations)
           Convergence: \(convergenceReason)
         """
+    }
+
+    /// Get top-k solutions by probability using partial sort (O(n + k log k) vs O(n log n))
+    @_optimize(speed)
+    public func topKSolutions(k: Int) -> [(bitstring: Int, probability: Double)] {
+        let count = solutionProbabilities.count
+        guard count > 0, k > 0 else { return [] }
+
+        if count <= k * 4 {
+            return solutionProbabilities
+                .sorted { $0.value > $1.value }
+                .prefix(k)
+                .map { (bitstring: $0.key, probability: $0.value) }
+        }
+
+        var heap: [(bitstring: Int, probability: Double)] = []
+        heap.reserveCapacity(k)
+
+        for (bitstring, prob) in solutionProbabilities {
+            if heap.count < k {
+                heap.append((bitstring: bitstring, probability: prob))
+                if heap.count == k {
+                    for i in stride(from: k / 2 - 1, through: 0, by: -1) {
+                        siftDown(&heap, i, k)
+                    }
+                }
+            } else if prob > heap[0].probability {
+                heap[0] = (bitstring: bitstring, probability: prob)
+                siftDown(&heap, 0, k)
+            }
+        }
+
+        return heap.sorted { $0.probability > $1.probability }
+    }
+
+    /// Min-heap sift down helper
+    @inline(__always)
+    private func siftDown(_ heap: inout [(bitstring: Int, probability: Double)], _ index: Int, _ size: Int) {
+        var i = index
+        while true {
+            let left = 2 * i + 1
+            let right = 2 * i + 2
+            var smallest = i
+
+            if left < size, heap[left].probability < heap[smallest].probability {
+                smallest = left
+            }
+            if right < size, heap[right].probability < heap[smallest].probability {
+                smallest = right
+            }
+
+            if smallest == i { break }
+            heap.swapAt(i, smallest)
+            i = smallest
+        }
     }
 }
 

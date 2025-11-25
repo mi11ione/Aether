@@ -117,6 +117,12 @@ public struct PauliOperator: Equatable, Hashable, Sendable {
 
     /// Pauli basis (X, Y, or Z)
     public let basis: PauliBasis
+
+    @inlinable
+    public init(qubit: Int, basis: PauliBasis) {
+        self.qubit = qubit
+        self.basis = basis
+    }
 }
 
 /// Pauli string operator for multi-qubit measurements
@@ -158,6 +164,15 @@ public struct PauliString: Equatable, Hashable, CustomStringConvertible, Sendabl
     /// - Parameter operators: List of (qubit, basis) pairs
     public init(operators: [(qubit: Int, basis: PauliBasis)]) {
         self.operators = operators.map { PauliOperator(qubit: $0.qubit, basis: $0.basis) }
+    }
+
+    /// Create single-operator Pauli string (avoids array allocation)
+    /// - Parameters:
+    ///   - qubit: Target qubit index
+    ///   - basis: Pauli basis (X, Y, or Z)
+    @inlinable
+    public init(qubit: Int, basis: PauliBasis) {
+        operators = [PauliOperator(qubit: qubit, basis: basis)]
     }
 
     public var description: String {
@@ -207,8 +222,8 @@ public struct MeasurementOutcome: Equatable {
 /// let bell = QuantumCircuit.bellPhiPlus().execute()
 /// let result = measurement.measurePauliString(pauliString, state: bell)
 ///
-/// // Bell state: 50% |00⟩ (λ₀=+1, λ₁=+1 → product=+1)
-/// //             50% |11⟩ (λ₀=-1, λ₁=-1 → product=+1)
+/// // Bell state: 50% |00⟩ (λ₀=+1, λ₁=+1 -> product=+1)
+/// //             50% |11⟩ (λ₀=-1, λ₁=-1 -> product=+1)
 /// // result.eigenvalue: +1 (deterministic!)
 /// // result.individualOutcomes: [(0, 0), (1, 0)] or [(0, 1), (1, 1)]
 /// ```
@@ -435,7 +450,7 @@ public struct Measurement {
     /// let r1 = seeded.measure(state: plus)
     /// var seeded2 = Measurement(seed: 123)
     /// let r2 = seeded2.measure(state: plus)
-    /// // r1.outcome == r2.outcome (same seed → same result)
+    /// // r1.outcome == r2.outcome (same seed -> same result)
     /// ```
     @_eagerMove
     public mutating func measure(state: QuantumState) -> MeasurementResult {
@@ -467,8 +482,12 @@ public struct Measurement {
         let stateSpaceSize = 1 << numQubits
         ValidationUtilities.validateIndexInBounds(outcome, bound: stateSpaceSize, name: "Outcome")
 
-        var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
-        amplitudes[outcome] = Complex(1.0, 0.0)
+        let amplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+            for i in 0 ..< stateSpaceSize {
+                buffer[i] = i == outcome ? .one : .zero
+            }
+            count = stateSpaceSize
+        }
 
         return QuantumState(numQubits: numQubits, amplitudes: amplitudes)
     }
@@ -482,13 +501,13 @@ public struct Measurement {
     /// expectation values and quantum chemistry applications.
     ///
     /// **Implementation**:
-    /// - **X basis**: Apply H gate, measure Z, map 0→+1, 1→-1
-    /// - **Y basis**: Apply S†H gates, measure Z, map 0→+1, 1→-1
+    /// - **X basis**: Apply H gate, measure Z, map 0->+1, 1->-1
+    /// - **Y basis**: Apply S†H gates, measure Z, map 0->+1, 1->-1
     /// - **Z basis**: Measure Z directly (computational basis)
     ///
     /// **Eigenvalue mapping**:
-    /// - Outcome 0 → eigenvalue +1 (positive eigenstate)
-    /// - Outcome 1 → eigenvalue -1 (negative eigenstate)
+    /// - Outcome 0 -> eigenvalue +1 (positive eigenstate)
+    /// - Outcome 1 -> eigenvalue -1 (negative eigenstate)
     ///
     /// - Parameters:
     ///   - qubit: Qubit index to measure (0 to n-1)
@@ -528,7 +547,7 @@ public struct Measurement {
         // Measure in computational basis
         let (outcome, collapsedState) = measureQubit(qubit, state: rotatedState)
 
-        // Map outcome to eigenvalue: 0 → +1, 1 → -1
+        // Map outcome to eigenvalue: 0 -> +1, 1 -> -1
         let eigenvalue = (outcome == 0) ? 1 : -1
 
         // Rotate collapsed state back to original basis
@@ -540,8 +559,8 @@ public struct Measurement {
     /// Rotate state to diagonalize Pauli operator
     ///
     /// Applies unitary transformation that rotates Pauli eigenstates to computational basis:
-    /// - X basis: H gate (|+⟩ → |0⟩, |-⟩ → |1⟩)
-    /// - Y basis: HS† gates (|+i⟩ → |0⟩, |-i⟩ → |1⟩)
+    /// - X basis: H gate (|+⟩ -> |0⟩, |-⟩ -> |1⟩)
+    /// - Y basis: HS† gates (|+i⟩ -> |0⟩, |-i⟩ -> |1⟩)
     /// - Z basis: Identity (already diagonal)
     ///
     /// - Parameters:
@@ -555,11 +574,11 @@ public struct Measurement {
     public static func rotateToPauliBasis(qubit: Int, basis: PauliBasis, state: QuantumState) -> QuantumState {
         switch basis {
         case .x:
-            // X basis: Apply H to rotate |+⟩→|0⟩, |-⟩→|1⟩
+            // X basis: Apply H to rotate |+⟩->|0⟩, |-⟩->|1⟩
             return GateApplication.apply(gate: .hadamard, to: [qubit], state: state)
 
         case .y:
-            // Y basis: Apply S†H to rotate |+i⟩→|0⟩, |-i⟩→|1⟩
+            // Y basis: Apply S†H to rotate |+i⟩->|0⟩, |-i⟩->|1⟩
             // S† = phase(-π/2)
             var rotated = GateApplication.apply(gate: .phase(theta: -Double.pi / 2.0), to: [qubit], state: state)
             rotated = GateApplication.apply(gate: .hadamard, to: [qubit], state: rotated)
@@ -613,7 +632,7 @@ public struct Measurement {
     /// Generalizes Pauli measurements to any single-qubit unitary basis.
     ///
     /// **Algorithm**:
-    /// 1. Construct unitary U that rotates |ψ⟩ → |0⟩
+    /// 1. Construct unitary U that rotates |ψ⟩ -> |0⟩
     /// 2. Apply U to state
     /// 3. Measure in computational basis
     /// 4. Apply U† to collapsed state
@@ -666,7 +685,7 @@ public struct Measurement {
         ValidationUtilities.validateNormalizedState(state)
         ValidationUtilities.validateNormalizedBasis(basisState)
 
-        // Construct unitary that rotates basisState → |0⟩
+        // Construct unitary that rotates basisState -> |0⟩
         // U = [[c₀*, c₁*], [-c₁, c₀]] where basisState = [c₀, c₁]
         let c0 = basisState[0]
         let c1 = basisState[1]
@@ -676,6 +695,8 @@ public struct Measurement {
             [-c1, c0],
         ]
 
+        // Safety: rotationMatrix is unitary by construction (columns are orthonormal basis vectors)
+        // c0*c0 + c1*c1 = 1 (normalized input), and columns are orthogonal
         let rotationGate = try! QuantumGate.createCustomSingleQubit(matrix: rotationMatrix)
 
         let rotatedState = GateApplication.apply(gate: rotationGate, to: [qubit], state: state)
@@ -684,6 +705,7 @@ public struct Measurement {
 
         let adjointMatrix = MatrixUtilities.hermitianConjugate(rotationMatrix)
 
+        // Safety: Hermitian conjugate of unitary matrix is also unitary
         let inverseGate = try! QuantumGate.createCustomSingleQubit(matrix: adjointMatrix)
 
         let finalState = GateApplication.apply(gate: inverseGate, to: [qubit], state: collapsedRotated)
@@ -703,7 +725,7 @@ public struct Measurement {
     /// **Algorithm**:
     /// 1. Apply basis rotations to diagonalize each Pauli operator
     /// 2. Measure all qubits in computational basis
-    /// 3. Map each outcome to eigenvalue: 0→+1, 1→-1
+    /// 3. Map each outcome to eigenvalue: 0->+1, 1->-1
     /// 4. Compute product eigenvalue: λ = ∏ᵢ λᵢ
     /// 5. Rotate collapsed state back to original basis
     ///
@@ -726,8 +748,8 @@ public struct Measurement {
     ///
     /// let bell = QuantumCircuit.bellPhiPlus().execute()
     /// let result = measurement.measurePauliString(pauliString, state: bell)
-    /// // Outcomes: 50% |00⟩ (λ₀=+1, λ₁=+1 → product=+1)
-    /// //           50% |11⟩ (λ₀=-1, λ₁=-1 → product=+1)
+    /// // Outcomes: 50% |00⟩ (λ₀=+1, λ₁=+1 -> product=+1)
+    /// //           50% |11⟩ (λ₀=-1, λ₁=-1 -> product=+1)
     /// // result.eigenvalue: +1 (deterministic!)
     ///
     /// // Measure X₀⊗X₁ on Bell state
@@ -888,10 +910,11 @@ public struct Measurement {
         let jointOutcome = sampleOutcome(probabilities: probabilities)
 
         // Convert joint outcome to individual outcomes
-        var outcomes: [Int] = []
-        for bitPosition in 0 ..< qubits.count {
-            let bit = (jointOutcome >> bitPosition) & 1
-            outcomes.append(bit)
+        let outcomes = [Int](unsafeUninitializedCapacity: qubits.count) { buffer, count in
+            for bitPosition in 0 ..< qubits.count {
+                buffer[bitPosition] = (jointOutcome >> bitPosition) & 1
+            }
+            count = qubits.count
         }
 
         // Collapse state: keep amplitudes compatible with all measured outcomes
@@ -930,17 +953,19 @@ public struct Measurement {
         // Renormalization factor: 1/√P(outcome)
         let normalizationFactor = 1.0 / sqrt(probability)
 
+        // Precompute bitmask and expected value for O(1) compatibility check
+        // mask has 1s at all measured qubit positions
+        // expected has the outcome bits at those positions
+        var mask = 0
+        var expected = 0
+        for (qubit, outcome) in zip(qubits, outcomes) {
+            mask |= (1 << qubit)
+            expected |= (outcome << qubit)
+        }
+
         let newAmplitudes = AmplitudeVector(unsafeUninitializedCapacity: state.stateSpaceSize) { buffer, count in
             for i in 0 ..< state.stateSpaceSize {
-                var compatible = true
-                for (qubit, outcome) in zip(qubits, outcomes) {
-                    if state.getBit(index: i, qubit: qubit) != outcome {
-                        compatible = false
-                        break
-                    }
-                }
-
-                buffer[i] = compatible ? state.amplitudes[i] * normalizationFactor : .zero
+                buffer[i] = (i & mask) == expected ? state.amplitudes[i] * normalizationFactor : .zero
             }
             count = state.stateSpaceSize
         }
@@ -1027,11 +1052,12 @@ public struct Measurement {
     public static func marginalProbabilities(qubit: Int, state: QuantumState) -> (Double, Double) {
         var prob0 = 0.0
         var prob1 = 0.0
+        let bitMask = BitUtilities.bitMask(qubit: qubit)
 
         for i in 0 ..< state.stateSpaceSize {
             let probability = state.probability(ofState: i)
 
-            if state.getBit(index: i, qubit: qubit) == 0 {
+            if (i & bitMask) == 0 {
                 prob0 += probability
             } else {
                 prob1 += probability
@@ -1063,11 +1089,12 @@ public struct Measurement {
         // Renormalization factor: 1/√P(outcome)
         let normalizationFactor = 1.0 / sqrt(probability)
 
+        let bitMask = BitUtilities.bitMask(qubit: qubit)
+        let expected = outcome == 0 ? 0 : bitMask
+
         let newAmplitudes = AmplitudeVector(unsafeUninitializedCapacity: state.stateSpaceSize) { buffer, count in
             for i in 0 ..< state.stateSpaceSize {
-                buffer[i] = state.getBit(index: i, qubit: qubit) == outcome
-                    ? state.amplitudes[i] * normalizationFactor
-                    : .zero
+                buffer[i] = (i & bitMask) == expected ? state.amplitudes[i] * normalizationFactor : .zero
             }
             count = state.stateSpaceSize
         }
@@ -1184,7 +1211,7 @@ public struct Measurement {
     ///     expected: expected,
     ///     totalRuns: 1000
     /// )
-    /// // chiSq.chiSquared < critical value → good fit
+    /// // chiSq.chiSquared < critical value -> good fit
     /// ```
     @_eagerMove
     public mutating func runMultiple(circuit: QuantumCircuit, numRuns: Int) -> [Int] {
@@ -1212,11 +1239,15 @@ public struct Measurement {
     @_eagerMove
     public static func histogram(outcomes: [Int], numQubits: Int) -> [Int] {
         let stateSpaceSize = 1 << numQubits
-        var counts = [Int](repeating: 0, count: stateSpaceSize)
+
+        var counts = [Int](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+            buffer.initialize(repeating: 0)
+            count = stateSpaceSize
+        }
 
         for outcome in outcomes {
             if outcome >= 0, outcome < stateSpaceSize {
-                counts[outcome] += 1
+                counts[outcome] &+= 1
             }
         }
 

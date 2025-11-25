@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
+import Accelerate
 import Metal
 import MetalPerformanceShaders
 
@@ -258,7 +259,7 @@ public actor MPSBatchEvaluator {
         let numQubits: Int = initialState.numQubits
 
         for unitary in unitaries {
-            guard unitary.count == dimension, unitary.allSatisfy({ $0.count == dimension }) else {
+            if unitary.count != dimension || !unitary.allSatisfy({ $0.count == dimension }) {
                 throw MPSBatchError.dimensionMismatch(
                     expected: dimension,
                     got: unitary.count
@@ -334,15 +335,7 @@ public actor MPSBatchEvaluator {
 
         let sparseH = SparseHamiltonian(observable: hamiltonian, numQubits: initialState.numQubits)
 
-        var energies: [Double] = []
-        energies.reserveCapacity(states.count)
-
-        for state in states {
-            let energy: Double = await sparseH.expectationValue(state: state)
-            energies.append(energy)
-        }
-
-        return energies
+        return await computeExpectationValues(states: states, hamiltonian: sparseH)
     }
 
     /// Evaluate batch with SparseHamiltonian (maximum performance)
@@ -369,12 +362,20 @@ public actor MPSBatchEvaluator {
             initialState: initialState
         )
 
-        var energies: [Double] = []
-        energies.reserveCapacity(states.count)
+        return await computeExpectationValues(states: states, hamiltonian: sparseHamiltonian)
+    }
 
-        for state in states {
-            let energy: Double = await sparseHamiltonian.expectationValue(state: state)
-            energies.append(energy)
+    @_optimize(speed)
+    private func computeExpectationValues(
+        states: [QuantumState],
+        hamiltonian: SparseHamiltonian
+    ) async -> [Double] {
+        var energies = [Double](unsafeUninitializedCapacity: states.count) { _, count in
+            count = states.count
+        }
+
+        for i in 0 ..< states.count {
+            energies[i] = await hamiltonian.expectationValue(state: states[i])
         }
 
         return energies
@@ -394,28 +395,37 @@ public actor MPSBatchEvaluator {
 
         let batchSize: Int = unitaries.count
         let dimension = 1 << numQubits
+        let matrixElements = batchSize * dimension * dimension
 
-        var realMatrices: [Float] = []
-        var imagMatrices: [Float] = []
-        realMatrices.reserveCapacity(batchSize * dimension * dimension)
-        imagMatrices.reserveCapacity(batchSize * dimension * dimension)
+        var realMatrices = [Float](unsafeUninitializedCapacity: matrixElements) { _, count in
+            count = matrixElements
+        }
+        var imagMatrices = [Float](unsafeUninitializedCapacity: matrixElements) { _, count in
+            count = matrixElements
+        }
 
+        var idx = 0
         for unitary in unitaries {
             for row in unitary {
                 for element in row {
-                    realMatrices.append(Float(element.real))
-                    imagMatrices.append(Float(element.imaginary))
+                    realMatrices[idx] = Float(element.real)
+                    imagMatrices[idx] = Float(element.imaginary)
+                    idx += 1
                 }
             }
         }
 
-        var realState: [Float] = []
-        var imagState: [Float] = []
-        realState.reserveCapacity(dimension)
-        imagState.reserveCapacity(dimension)
-        for amplitude in initialState.amplitudes {
-            realState.append(Float(amplitude.real))
-            imagState.append(Float(amplitude.imaginary))
+        var realState = [Float](unsafeUninitializedCapacity: dimension) { _, count in
+            count = dimension
+        }
+        var imagState = [Float](unsafeUninitializedCapacity: dimension) { _, count in
+            count = dimension
+        }
+
+        initialState.amplitudes.withUnsafeBytes { srcBytes in
+            let srcDoubles = srcBytes.bindMemory(to: Double.self)
+            vDSP_vdpsp(srcDoubles.baseAddress!, 2, &realState, 1, vDSP_Length(dimension))
+            vDSP_vdpsp(srcDoubles.baseAddress! + 1, 2, &imagState, 1, vDSP_Length(dimension))
         }
 
         let matrixDescriptor = MPSMatrixDescriptor(
@@ -468,9 +478,39 @@ public actor MPSBatchEvaluator {
             throw MPSBatchError.commandBufferFailed
         }
 
+        let matVecInit = MPSMatrixVectorMultiplication(
+            device: device,
+            transpose: false,
+            rows: dimension,
+            columns: dimension,
+            alpha: 1.0,
+            beta: 0.0
+        )
+
+        let matVecAccumSub = MPSMatrixVectorMultiplication(
+            device: device,
+            transpose: false,
+            rows: dimension,
+            columns: dimension,
+            alpha: -1.0,
+            beta: 1.0
+        )
+
+        let matVecAccumAdd = MPSMatrixVectorMultiplication(
+            device: device,
+            transpose: false,
+            rows: dimension,
+            columns: dimension,
+            alpha: 1.0,
+            beta: 1.0
+        )
+
+        let realVec = MPSVector(buffer: realStateBuffer, descriptor: vectorDescriptor)
+        let imagVec = MPSVector(buffer: imagStateBuffer, descriptor: vectorDescriptor)
+
         for batchIndex in 0 ..< batchSize {
-            let matrixOffset: Int = batchIndex * dimension * dimension * MemoryLayout<Float>.stride
-            let resultOffset: Int = batchIndex * dimension * MemoryLayout<Float>.stride
+            let matrixOffset = batchIndex * dimension * dimension * MemoryLayout<Float>.stride
+            let resultOffset = batchIndex * dimension * MemoryLayout<Float>.stride
 
             let realMatrix = MPSMatrix(
                 buffer: realMatrixBuffer,
@@ -484,16 +524,6 @@ public actor MPSBatchEvaluator {
                 descriptor: matrixDescriptor
             )
 
-            let realVec = MPSVector(
-                buffer: realStateBuffer,
-                descriptor: vectorDescriptor
-            )
-
-            let imagVec = MPSVector(
-                buffer: imagStateBuffer,
-                descriptor: vectorDescriptor
-            )
-
             let resultReal = MPSVector(
                 buffer: resultRealBuffer,
                 offset: resultOffset,
@@ -504,33 +534,6 @@ public actor MPSBatchEvaluator {
                 buffer: resultImagBuffer,
                 offset: resultOffset,
                 descriptor: vectorDescriptor
-            )
-
-            let matVecInit = MPSMatrixVectorMultiplication(
-                device: device,
-                transpose: false,
-                rows: dimension,
-                columns: dimension,
-                alpha: 1.0,
-                beta: 0.0
-            )
-
-            let matVecAccumSub = MPSMatrixVectorMultiplication(
-                device: device,
-                transpose: false,
-                rows: dimension,
-                columns: dimension,
-                alpha: -1.0,
-                beta: 1.0
-            )
-
-            let matVecAccumAdd = MPSMatrixVectorMultiplication(
-                device: device,
-                transpose: false,
-                rows: dimension,
-                columns: dimension,
-                alpha: 1.0,
-                beta: 1.0
             )
 
             matVecInit.encode(
@@ -575,19 +578,19 @@ public actor MPSBatchEvaluator {
             capacity: batchSize * dimension
         )
 
-        var resultStates: [QuantumState] = []
+        var resultStates = [QuantumState]()
         resultStates.reserveCapacity(batchSize)
 
         for batchIndex in 0 ..< batchSize {
-            var amplitudes: AmplitudeVector = []
-            amplitudes.reserveCapacity(dimension)
+            let baseOffset = batchIndex * dimension
 
-            let baseOffset: Int = batchIndex * dimension
-
-            for i in 0 ..< dimension {
-                let realPart = Double(resultRealPointer[baseOffset + i])
-                let imagPart = Double(resultImagPointer[baseOffset + i])
-                amplitudes.append(Complex(realPart, imagPart))
+            let amplitudes = AmplitudeVector(unsafeUninitializedCapacity: dimension) { ampBuffer, ampCount in
+                for i in 0 ..< dimension {
+                    let realPart = Double(resultRealPointer[baseOffset + i])
+                    let imagPart = Double(resultImagPointer[baseOffset + i])
+                    ampBuffer[i] = Complex(realPart, imagPart)
+                }
+                ampCount = dimension
             }
 
             resultStates.append(QuantumState(numQubits: numQubits, amplitudes: amplitudes))
@@ -644,22 +647,56 @@ public actor MPSBatchEvaluator {
         return allResults
     }
 
-    /// Matrix-vector multiply (CPU implementation for fallback)
+    /// Matrix-vector multiply using BLAS cblas_zgemv (CPU fallback)
     @_optimize(speed)
     @_eagerMove
     private func matrixVectorMultiply(
         matrix: GateMatrix,
         vector: AmplitudeVector
     ) -> AmplitudeVector {
-        let dimension: Int = vector.count
-        var result: AmplitudeVector = Array(repeating: .zero, count: dimension)
+        let dimension = vector.count
 
-        for i in 0 ..< dimension {
-            var sum: Complex<Double> = .zero
-            for j in 0 ..< dimension {
-                sum = sum + matrix[i][j] * vector[j]
+        var matrixInterleaved = [Double](unsafeUninitializedCapacity: dimension * dimension * 2) { _, count in
+            count = dimension * dimension * 2
+        }
+
+        for col in 0 ..< dimension {
+            for row in 0 ..< dimension {
+                let idx = (col * dimension + row) * 2
+                matrixInterleaved[idx] = matrix[row][col].real
+                matrixInterleaved[idx + 1] = matrix[row][col].imaginary
             }
-            result[i] = sum
+        }
+
+        var result = AmplitudeVector(unsafeUninitializedCapacity: dimension) { _, count in
+            count = dimension
+        }
+
+        let alpha: [Double] = [1.0, 0.0]
+        let beta: [Double] = [0.0, 0.0]
+
+        vector.withUnsafeBytes { vecBytes in
+            let vecPtr = vecBytes.baseAddress!
+            result.withUnsafeMutableBytes { resBytes in
+                let resPtr = resBytes.baseAddress!
+                matrixInterleaved.withUnsafeBytes { matBytes in
+                    let matPtr = matBytes.baseAddress!
+                    cblas_zgemv(
+                        CblasColMajor,
+                        CblasNoTrans,
+                        Int32(dimension),
+                        Int32(dimension),
+                        OpaquePointer(alpha.withUnsafeBufferPointer { $0.baseAddress! }),
+                        OpaquePointer(matPtr),
+                        Int32(dimension),
+                        OpaquePointer(vecPtr),
+                        1,
+                        OpaquePointer(beta.withUnsafeBufferPointer { $0.baseAddress! }),
+                        OpaquePointer(resPtr),
+                        1
+                    )
+                }
+            }
         }
 
         return result

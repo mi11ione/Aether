@@ -252,18 +252,19 @@ public enum CircuitUnitary {
     /// Expand single-qubit gate to full space
     ///
     /// **Algorithm:**
-    /// For each (row, col) in 2ⁿ × 2ⁿ matrix:
-    /// - Extract target bit from row and col
-    /// - If other bits differ, matrix[row][col] = 0
-    /// - If other bits match, matrix[row][col] = gate[rowBit][colBit]
+    /// Instead of iterating all dimension² pairs, directly compute valid indices.
+    /// For single-qubit gate, only pairs where other bits match are non-zero.
+    /// For each "other bits" pattern (dimension/2 patterns), we have 4 entries (2×2 gate).
+    ///
+    /// **Complexity:** O(2ⁿ × 4) = O(2ⁿ⁺²) instead of O(2²ⁿ)
     ///
     /// **Example:** H on qubit 0 of 2-qubit system
     /// ```
     /// Basis: |00⟩, |01⟩, |10⟩, |11⟩
-    /// Row 0 (00): H maps |0⟩ → (|0⟩+|1⟩)/√2, so row = [1/√2, 1/√2, 0, 0]
-    /// Row 1 (01): H maps |1⟩ → (|0⟩-|1⟩)/√2, so row = [1/√2, -1/√2, 0, 0]
-    /// Row 2 (10): H maps |0⟩ → (|0⟩+|1⟩)/√2, so row = [0, 0, 1/√2, 1/√2]
-    /// Row 3 (11): H maps |1⟩ → (|0⟩-|1⟩)/√2, so row = [0, 0, 1/√2, -1/√2]
+    /// Row 0 (00): H maps |0⟩ -> (|0⟩+|1⟩)/√2, so row = [1/√2, 1/√2, 0, 0]
+    /// Row 1 (01): H maps |1⟩ -> (|0⟩-|1⟩)/√2, so row = [1/√2, -1/√2, 0, 0]
+    /// Row 2 (10): H maps |0⟩ -> (|0⟩+|1⟩)/√2, so row = [0, 0, 1/√2, 1/√2]
+    /// Row 3 (11): H maps |1⟩ -> (|0⟩-|1⟩)/√2, so row = [0, 0, 1/√2, -1/√2]
     /// ```
     @_optimize(speed)
     @_eagerMove
@@ -280,20 +281,16 @@ public enum CircuitUnitary {
 
         let targetMask = 1 << targetQubit
 
-        for row in 0 ..< dimension {
-            for col in 0 ..< dimension {
-                let rowWithoutTarget: Int = row & ~targetMask
-                let colWithoutTarget: Int = col & ~targetMask
+        for otherBits in 0 ..< dimension {
+            guard (otherBits & targetMask) == 0 else { continue }
 
-                guard rowWithoutTarget == colWithoutTarget else {
-                    continue
-                }
+            let base0 = otherBits
+            let base1 = otherBits | targetMask
 
-                let rowTargetBit: Int = (row & targetMask) >> targetQubit
-                let colTargetBit: Int = (col & targetMask) >> targetQubit
-
-                fullMatrix[row][col] = smallMatrix[rowTargetBit][colTargetBit]
-            }
+            fullMatrix[base0][base0] = smallMatrix[0][0]
+            fullMatrix[base0][base1] = smallMatrix[0][1]
+            fullMatrix[base1][base0] = smallMatrix[1][0]
+            fullMatrix[base1][base1] = smallMatrix[1][1]
         }
 
         return fullMatrix
@@ -302,11 +299,11 @@ public enum CircuitUnitary {
     /// Expand two-qubit gate to full space
     ///
     /// **Algorithm:**
-    /// For each (row, col):
-    /// - Extract control and target bits from row and col
-    /// - If other bits differ, matrix[row][col] = 0
-    /// - If other bits match, matrix[row][col] = gate[rowBits][colBits]
-    ///   where rowBits = (controlBit << 1) | targetBit (2-bit index)
+    /// Instead of iterating all dimension² pairs, directly compute valid indices.
+    /// For two-qubit gate, only pairs where other bits match are non-zero.
+    /// For each "other bits" pattern (dimension/4 patterns), we have 16 entries (4×4 gate).
+    ///
+    /// **Complexity:** O(2ⁿ × 16 / 4) = O(2ⁿ⁺²) instead of O(2²ⁿ)
     ///
     /// **Index Mapping:**
     /// - Gate matrix is 4×4: indices 0-3 map to (c,t) = (0,0), (0,1), (1,0), (1,1)
@@ -329,24 +326,22 @@ public enum CircuitUnitary {
         let targetMask = 1 << target
         let bothMask: Int = controlMask | targetMask
 
-        for row in 0 ..< dimension {
-            for col in 0 ..< dimension {
-                let rowWithoutBoth: Int = row & ~bothMask
-                let colWithoutBoth: Int = col & ~bothMask
+        for otherBits in 0 ..< dimension {
+            guard (otherBits & bothMask) == 0 else { continue }
 
-                guard rowWithoutBoth == colWithoutBoth else {
-                    continue
+            let base00 = otherBits
+            let base01 = otherBits | targetMask
+            let base10 = otherBits | controlMask
+            let base11 = otherBits | bothMask
+
+            let bases = [base00, base01, base10, base11]
+
+            for rowIdx in 0 ..< 4 {
+                let row = bases[rowIdx]
+                for colIdx in 0 ..< 4 {
+                    let col = bases[colIdx]
+                    fullMatrix[row][col] = smallMatrix[rowIdx][colIdx]
                 }
-
-                let rowControlBit: Int = (row & controlMask) >> control
-                let rowTargetBit: Int = (row & targetMask) >> target
-                let colControlBit: Int = (col & controlMask) >> control
-                let colTargetBit: Int = (col & targetMask) >> target
-
-                let rowIndex: Int = (rowControlBit << 1) | rowTargetBit
-                let colIndex: Int = (colControlBit << 1) | colTargetBit
-
-                fullMatrix[row][col] = smallMatrix[rowIndex][colIndex]
             }
         }
 
@@ -362,13 +357,16 @@ public enum CircuitUnitary {
     /// **Matrix Form:**
     /// ```
     /// For basis state |c1,c2,t⟩:
-    /// - If c1=1 AND c2=1: |c1,c2,t⟩ → |c1,c2,t⊕1⟩
-    /// - Otherwise: |c1,c2,t⟩ → |c1,c2,t⟩
+    /// - If c1=1 AND c2=1: |c1,c2,t⟩ -> |c1,c2,t⊕1⟩
+    /// - Otherwise: |c1,c2,t⟩ -> |c1,c2,t⟩
     /// ```
     ///
     /// **Implementation:**
-    /// - Diagonal except for swaps when both controls = 1
-    /// - Row with (c1=1, c2=1, t=0) swaps with row (c1=1, c2=1, t=1)
+    /// Direct construction without creating identity first.
+    /// - Most entries are identity (diagonal = 1)
+    /// - Only rows where both controls = 1 have off-diagonal entries
+    ///
+    /// **Complexity:** O(2ⁿ) to set diagonal + O(2ⁿ/4) to modify control rows
     @_optimize(speed)
     @_eagerMove
     private static func expandToffoliGate(
@@ -377,24 +375,23 @@ public enum CircuitUnitary {
         target: Int,
         dimension: Int
     ) -> GateMatrix {
-        var fullMatrix: GateMatrix = MatrixUtilities.identityMatrix(dimension: dimension)
+        var fullMatrix: GateMatrix = Array(
+            repeating: Array(repeating: Complex<Double>.zero, count: dimension),
+            count: dimension
+        )
 
         let c1Mask = 1 << control1
         let c2Mask = 1 << control2
+        let bothControlsMask = c1Mask | c2Mask
         let targetMask = 1 << target
 
         for row in 0 ..< dimension {
-            let c1Bit: Int = row & c1Mask
-            let c2Bit: Int = row & c2Mask
-
-            guard c1Bit != 0, c2Bit != 0 else {
-                continue
+            if (row & bothControlsMask) == bothControlsMask {
+                let flippedRow = row ^ targetMask
+                fullMatrix[row][flippedRow] = Complex<Double>(1, 0)
+            } else {
+                fullMatrix[row][row] = Complex<Double>(1, 0)
             }
-
-            let flippedRow: Int = row ^ targetMask
-
-            fullMatrix[row][row] = .zero
-            fullMatrix[row][flippedRow] = Complex<Double>(1, 0)
         }
 
         return fullMatrix
@@ -422,8 +419,9 @@ public enum CircuitUnitary {
         guard numQubits > 0, numQubits <= 30 else { return false }
 
         let memoryBytes: Int = estimateMemoryUsage(numQubits: numQubits)
-        let memoryGB = Double(memoryBytes) / (1024.0 * 1024.0 * 1024.0)
+        let availableMemory: UInt64 = ProcessInfo.processInfo.physicalMemory
+        let threshold: UInt64 = (availableMemory * 80) / 100
 
-        return memoryGB < 16.0
+        return UInt64(memoryBytes) < threshold
     }
 }

@@ -124,39 +124,44 @@ public enum ParameterizedGate: Equatable, Hashable, Sendable, CustomStringConver
 
     /// Extract all symbolic parameters from gate
     /// - Returns: Set of symbolic parameters used in this gate
+    /// - Complexity: O(1) - gates have at most 3 parameters
     @_optimize(speed)
     @inlinable
     @_effects(readonly)
     public func parameters() -> Set<Parameter> {
-        var params = Set<Parameter>()
-
         switch self {
         case let .phase(theta),
              let .rotationX(theta),
              let .rotationY(theta),
              let .rotationZ(theta),
-             let .u1(theta):
-            if let p = theta.extractParameter() { params.insert(p) }
-
-        case let .u2(phi, lambda):
-            if let p = phi.extractParameter() { params.insert(p) }
-            if let p = lambda.extractParameter() { params.insert(p) }
-
-        case let .u3(theta, phi, lambda):
-            if let p = theta.extractParameter() { params.insert(p) }
-            if let p = phi.extractParameter() { params.insert(p) }
-            if let p = lambda.extractParameter() { params.insert(p) }
-
-        case let .controlledPhase(theta, _, _),
+             let .u1(theta),
+             let .controlledPhase(theta, _, _),
              let .controlledRotationX(theta, _, _),
              let .controlledRotationY(theta, _, _),
              let .controlledRotationZ(theta, _, _):
-            if let p = theta.extractParameter() { params.insert(p) }
+            if let p = theta.extractParameter() {
+                return [p]
+            }
+            return []
 
-        case .concrete: break
+        case let .u2(phi, lambda):
+            var arr: [Parameter] = []
+            arr.reserveCapacity(2)
+            if let p = phi.extractParameter() { arr.append(p) }
+            if let p = lambda.extractParameter() { arr.append(p) }
+            return Set(arr)
+
+        case let .u3(theta, phi, lambda):
+            var arr: [Parameter] = []
+            arr.reserveCapacity(3)
+            if let p = theta.extractParameter() { arr.append(p) }
+            if let p = phi.extractParameter() { arr.append(p) }
+            if let p = lambda.extractParameter() { arr.append(p) }
+            return Set(arr)
+
+        case .concrete:
+            return []
         }
-
-        return params
     }
 
     // MARK: - Parameter Binding

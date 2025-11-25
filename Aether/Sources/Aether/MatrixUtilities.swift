@@ -50,51 +50,53 @@ public enum MatrixUtilities {
         ValidationUtilities.validateSquareMatrix(b, name: "Matrix B")
         ValidationUtilities.validateSameDimensions(a, b, name1: "Matrix A", name2: "Matrix B")
 
-        let n: Int = a.count
+        let n = a.count
+        let nn = n * n
+        let nn2 = nn * 2
 
-        // Convert to BLAS-compatible interleaved format: [real₀, imag₀, real₁, imag₁, ...]
-        // Row-major layout: element (i,j) at index (i*n + j)*2
-        var aInterleaved = [Double](unsafeUninitializedCapacity: n * n * 2) { buffer, count in
+        var aInterleaved = [Double](unsafeUninitializedCapacity: nn2) { buffer, count in
             for i in 0 ..< n {
                 for j in 0 ..< n {
-                    buffer[(i * n + j) * 2] = a[i][j].real
-                    buffer[(i * n + j) * 2 + 1] = a[i][j].imaginary
+                    let idx = (i * n + j) * 2
+                    buffer[idx] = a[i][j].real
+                    buffer[idx + 1] = a[i][j].imaginary
                 }
             }
-            count = n * n * 2
+            count = nn2
         }
 
-        var bInterleaved = [Double](unsafeUninitializedCapacity: n * n * 2) { buffer, count in
+        var bInterleaved = [Double](unsafeUninitializedCapacity: nn2) { buffer, count in
             for i in 0 ..< n {
                 for j in 0 ..< n {
-                    buffer[(i * n + j) * 2] = b[i][j].real
-                    buffer[(i * n + j) * 2 + 1] = b[i][j].imaginary
+                    let idx = (i * n + j) * 2
+                    buffer[idx] = b[i][j].real
+                    buffer[idx + 1] = b[i][j].imaginary
                 }
             }
-            count = n * n * 2
+            count = nn2
         }
 
-        var resultInterleaved = [Double](repeating: 0.0, count: n * n * 2)
+        var resultInterleaved = [Double](unsafeUninitializedCapacity: nn2) { _, count in
+            count = nn2
+        }
 
-        // BLAS matrix multiplication: C = alpha*A*B + beta*C
-        // alpha = 1.0 + 0.0i, beta = 0.0 + 0.0i (pure multiplication, no accumulation)
-        var alpha: [Double] = [1.0, 0.0]
-        var beta: [Double] = [0.0, 0.0]
+        var alpha = (1.0, 0.0)
+        var beta = (0.0, 0.0)
 
         aInterleaved.withUnsafeMutableBufferPointer { aPtr in
             bInterleaved.withUnsafeMutableBufferPointer { bPtr in
                 resultInterleaved.withUnsafeMutableBufferPointer { cPtr in
-                    alpha.withUnsafeMutableBufferPointer { alphaPtr in
-                        beta.withUnsafeMutableBufferPointer { betaPtr in
+                    withUnsafeMutablePointer(to: &alpha) { alphaPtr in
+                        withUnsafeMutablePointer(to: &beta) { betaPtr in
                             cblas_zgemm(
                                 CblasRowMajor,
                                 CblasNoTrans,
                                 CblasNoTrans,
                                 Int32(n), Int32(n), Int32(n),
-                                OpaquePointer(alphaPtr.baseAddress)!,
+                                OpaquePointer(alphaPtr),
                                 OpaquePointer(aPtr.baseAddress), Int32(n),
                                 OpaquePointer(bPtr.baseAddress), Int32(n),
-                                OpaquePointer(betaPtr.baseAddress)!,
+                                OpaquePointer(betaPtr),
                                 OpaquePointer(cPtr.baseAddress), Int32(n)
                             )
                         }
@@ -103,13 +105,13 @@ public enum MatrixUtilities {
             }
         }
 
-        // Convert back to Complex<Double> matrix
-        var result: GateMatrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
-        for i in 0 ..< n {
-            for j in 0 ..< n {
-                let real = resultInterleaved[(i * n + j) * 2]
-                let imag = resultInterleaved[(i * n + j) * 2 + 1]
-                result[i][j] = Complex(real, imag)
+        let result = (0 ..< n).map { i in
+            [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
+                for j in 0 ..< n {
+                    let idx = (i * n + j) * 2
+                    buffer[j] = Complex(resultInterleaved[idx], resultInterleaved[idx + 1])
+                }
+                count = n
             }
         }
 
@@ -146,18 +148,16 @@ public enum MatrixUtilities {
     @_eagerMove
     static func hermitianConjugate(_ matrix: GateMatrix) -> GateMatrix {
         ValidationUtilities.validateSquareMatrix(matrix, name: "Matrix")
-        let n: Int = matrix.count
+        let n = matrix.count
 
-        var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
-
-        for i in 0 ..< n {
-            for j in 0 ..< n {
-                // Transpose indices (i ↔ j) and conjugate (negate imaginary part)
-                result[i][j] = matrix[j][i].conjugate()
+        return (0 ..< n).map { i in
+            [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
+                for j in 0 ..< n {
+                    buffer[j] = matrix[j][i].conjugate()
+                }
+                count = n
             }
         }
-
-        return result
     }
 
     /// Create identity matrix of specified dimension
@@ -180,15 +180,13 @@ public enum MatrixUtilities {
     static func identityMatrix(dimension: Int) -> GateMatrix {
         ValidationUtilities.validateMatrixDimension(dimension)
 
-        var matrix = Array(
-            repeating: Array(repeating: Complex<Double>.zero, count: dimension),
-            count: dimension
-        )
-
-        for i in 0 ..< dimension {
-            matrix[i][i] = .one
+        return (0 ..< dimension).map { i in
+            [Complex<Double>](unsafeUninitializedCapacity: dimension) { buffer, count in
+                for j in 0 ..< dimension {
+                    buffer[j] = (i == j) ? .one : .zero
+                }
+                count = dimension
+            }
         }
-
-        return matrix
     }
 }

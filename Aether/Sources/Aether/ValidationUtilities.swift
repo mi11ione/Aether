@@ -297,8 +297,18 @@ public enum ValidationUtilities {
     @inlinable
     @inline(__always)
     static func validateUniqueQubits(_ qubits: [Int]) {
-        let uniqueQubits = Set(qubits)
-        precondition(uniqueQubits.count == qubits.count, "Qubit indices must be unique (got \(qubits))")
+        switch qubits.count {
+        case 0, 1: return
+        case 2: precondition(qubits[0] != qubits[1], "Qubit indices must be unique (got \(qubits))")
+        case 3:
+            precondition(
+                qubits[0] != qubits[1] && qubits[0] != qubits[2] && qubits[1] != qubits[2],
+                "Qubit indices must be unique (got \(qubits))"
+            )
+        default:
+            let uniqueQubits = Set(qubits)
+            precondition(uniqueQubits.count == qubits.count, "Qubit indices must be unique (got \(qubits))")
+        }
     }
 
     /// Validate that two arrays have equal count
@@ -316,6 +326,17 @@ public enum ValidationUtilities {
         precondition(
             array1.count == array2.count,
             "\(name1) and \(name2) must have equal counts (got \(array1.count) and \(array2.count))"
+        )
+    }
+
+    /// Validate array count matches expected value
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateArrayCount(_ array: [some Any], expected: Int, name: String) {
+        precondition(
+            array.count == expected,
+            "\(name) count must be \(expected) but got \(array.count)"
         )
     }
 

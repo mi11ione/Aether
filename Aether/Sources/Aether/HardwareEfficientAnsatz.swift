@@ -18,14 +18,14 @@
 /// 2. **Entangling layer**: Create entanglement via two-qubit gates (CNOT chain default)
 ///
 /// **Trade-offs:**
-/// - More layers → more expressivity but harder optimization (barren plateaus risk)
-/// - More parameters → can represent more states but longer optimization time
-/// - Circuit depth → coherence time constraints on real hardware
+/// - More layers -> more expressivity but harder optimization (barren plateaus risk)
+/// - More parameters -> can represent more states but longer optimization time
+/// - Circuit depth -> coherence time constraints on real hardware
 ///
 /// **Mathematical Form:**
 /// For depth p, numQubits n:
 /// - Total parameters: p × n (for single rotation gate per qubit per layer)
-/// - Circuit: [Rotation layer] → [Entangling layer] → repeat p times
+/// - Circuit: [Rotation layer] -> [Entangling layer] -> repeat p times
 /// - Ansatz |ψ(θ)⟩ = U_p(θ_{p-1}) ... U_2(θ_1) U_1(θ_0) |0⟩^⊗n
 ///
 /// **Example - 4-qubit, depth=2 ansatz:**
@@ -35,9 +35,9 @@
 ///
 /// // Structure:
 /// // Layer 0: Ry(θ0) on q0, Ry(θ1) on q1, Ry(θ2) on q2, Ry(θ3) on q3
-/// //          CNOT(q0→q1), CNOT(q1→q2), CNOT(q2→q3)
+/// //          CNOT(q0->q1), CNOT(q1->q2), CNOT(q2->q3)
 /// // Layer 1: Ry(θ4) on q0, Ry(θ5) on q1, Ry(θ6) on q2, Ry(θ7) on q3
-/// //          CNOT(q0→q1), CNOT(q1→q2), CNOT(q2→q3)
+/// //          CNOT(q0->q1), CNOT(q1->q2), CNOT(q2->q3)
 ///
 /// print(ansatz.parameterCount())  // 8
 /// print(ansatz.gateCount())       // 20 gates (8 Ry + 6 CNOT × 2 layers)
@@ -70,7 +70,7 @@
 /// let customAnsatz = HardwareEfficientAnsatz.create(
 ///     numQubits: 4,
 ///     depth: 2,
-///     entanglingPattern: .circular  // Includes CNOT(q3→q0) for circular topology
+///     entanglingPattern: .circular  // Includes CNOT(q3->q0) for circular topology
 /// )
 /// ```
 @frozen
@@ -104,10 +104,10 @@ public struct HardwareEfficientAnsatz {
     /// Entangling gate pattern for two-qubit layers
     @frozen
     public enum EntanglingPattern: Sendable {
-        /// Linear chain: CNOT(i → i+1) for i=0..n-2
+        /// Linear chain: CNOT(i -> i+1) for i=0..n-2
         case linear
 
-        /// Circular chain: Linear + CNOT(n-1 → 0)
+        /// Circular chain: Linear + CNOT(n-1 -> 0)
         case circular
 
         /// All-to-all: CNOT between every qubit pair (expensive, deep circuits)
@@ -160,7 +160,16 @@ public struct HardwareEfficientAnsatz {
         ValidationUtilities.validatePositiveInt(depth, name: "depth")
         ValidationUtilities.validateUpperBound(depth, max: 100, name: "depth")
 
+        let rotationsPerLayer = numQubits * rotationGates.parametersPerQubit()
+        let entanglingGatesPerLayer: Int = switch entanglingPattern {
+        case .linear: numQubits - 1
+        case .circular: numQubits
+        case .allToAll: numQubits * (numQubits - 1) / 2
+        }
+        let totalGates = depth * (rotationsPerLayer + entanglingGatesPerLayer)
+
         var circuit = ParameterizedQuantumCircuit(numQubits: numQubits)
+        circuit.reserveCapacity(totalGates)
 
         for layerIndex in 0 ..< depth {
             appendRotationLayer(
@@ -200,42 +209,33 @@ public struct HardwareEfficientAnsatz {
         layerIndex: Int,
         rotationGates: RotationGateSet
     ) {
+        let layerPrefix = "theta_\(layerIndex)_"
+
         switch rotationGates {
         case .ry:
             for qubit in 0 ..< numQubits {
-                let paramName = "theta_\(layerIndex)_\(qubit)"
-                let param = Parameter(name: paramName)
-                circuit.append(
-                    gate: .rotationY(theta: .parameter(param)),
-                    toQubit: qubit
-                )
+                let param = Parameter(name: layerPrefix + String(qubit))
+                circuit.append(gate: .rotationY(theta: .parameter(param)), toQubit: qubit)
             }
 
         case .rx:
             for qubit in 0 ..< numQubits {
-                let paramName = "theta_\(layerIndex)_\(qubit)"
-                let param = Parameter(name: paramName)
-                circuit.append(
-                    gate: .rotationX(theta: .parameter(param)),
-                    toQubit: qubit
-                )
+                let param = Parameter(name: layerPrefix + String(qubit))
+                circuit.append(gate: .rotationX(theta: .parameter(param)), toQubit: qubit)
             }
 
         case .rz:
             for qubit in 0 ..< numQubits {
-                let paramName = "theta_\(layerIndex)_\(qubit)"
-                let param = Parameter(name: paramName)
-                circuit.append(
-                    gate: .rotationZ(theta: .parameter(param)),
-                    toQubit: qubit
-                )
+                let param = Parameter(name: layerPrefix + String(qubit))
+                circuit.append(gate: .rotationZ(theta: .parameter(param)), toQubit: qubit)
             }
 
         case .full:
             for qubit in 0 ..< numQubits {
-                let paramZ1 = Parameter(name: "theta_\(layerIndex)_\(qubit)_z1")
-                let paramY = Parameter(name: "theta_\(layerIndex)_\(qubit)_y")
-                let paramZ2 = Parameter(name: "theta_\(layerIndex)_\(qubit)_z2")
+                let qubitStr = String(qubit)
+                let paramZ1 = Parameter(name: layerPrefix + qubitStr + "_z1")
+                let paramY = Parameter(name: layerPrefix + qubitStr + "_y")
+                let paramZ2 = Parameter(name: layerPrefix + qubitStr + "_z2")
 
                 circuit.append(gate: .rotationZ(theta: .parameter(paramZ1)), toQubit: qubit)
                 circuit.append(gate: .rotationY(theta: .parameter(paramY)), toQubit: qubit)
@@ -250,9 +250,9 @@ public struct HardwareEfficientAnsatz {
     /// Uses CNOT gates (standard for most hardware platforms).
     ///
     /// **Patterns:**
-    /// - Linear: q0→q1, q1→q2, ..., q(n-2)→q(n-1)
-    /// - Circular: Linear + q(n-1)→q0
-    /// - All-to-all: Every pair (i→j) for i<j
+    /// - Linear: q0->q1, q1->q2, ..., q(n-2)->q(n-1)
+    /// - Circular: Linear + q(n-1)->q0
+    /// - All-to-all: Every pair (i->j) for i<j
     ///
     /// - Parameters:
     ///   - circuit: Circuit to modify
@@ -265,36 +265,18 @@ public struct HardwareEfficientAnsatz {
         pattern: EntanglingPattern
     ) {
         switch pattern {
-        case .linear:
+        case .linear, .circular:
             for i in 0 ..< (numQubits - 1) {
-                circuit.append(
-                    gate: .concrete(.cnot(control: i, target: i + 1)),
-                    qubits: []
-                )
+                circuit.append(gate: .concrete(.cnot(control: i, target: i + 1)), qubits: [])
             }
-
-        case .circular:
-            for i in 0 ..< (numQubits - 1) {
-                circuit.append(
-                    gate: .concrete(.cnot(control: i, target: i + 1)),
-                    qubits: []
-                )
-            }
-
-            if numQubits >= 2 {
-                circuit.append(
-                    gate: .concrete(.cnot(control: numQubits - 1, target: 0)),
-                    qubits: []
-                )
+            if pattern == .circular, numQubits >= 2 {
+                circuit.append(gate: .concrete(.cnot(control: numQubits - 1, target: 0)), qubits: [])
             }
 
         case .allToAll:
             for i in 0 ..< numQubits {
                 for j in (i + 1) ..< numQubits {
-                    circuit.append(
-                        gate: .concrete(.cnot(control: i, target: j)),
-                        qubits: []
-                    )
+                    circuit.append(gate: .concrete(.cnot(control: i, target: j)), qubits: [])
                 }
             }
         }

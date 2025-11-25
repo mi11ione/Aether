@@ -45,7 +45,7 @@ public struct GateOperation: Equatable, CustomStringConvertible, Sendable {
 /// - Optional timestamping for animation/visualization
 ///
 /// **Execution modes**:
-/// - Full execution: `circuit.execute()` → final state
+/// - Full execution: `circuit.execute()` -> final state
 /// - Step-by-step: External caching for animation
 /// - Validation: Check circuit correctness before execution
 ///
@@ -72,6 +72,8 @@ public struct GateOperation: Equatable, CustomStringConvertible, Sendable {
 public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
     public private(set) var operations: [GateOperation]
     public private(set) var numQubits: Int
+    @usableFromInline
+    var cachedMaxQubitUsed: Int
 
     // Note: State cache removed for thread safety
     // Caching should be implemented at a higher level (e.g., in simulator actor)
@@ -93,6 +95,7 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
     public init(numQubits: Int) {
         ValidationUtilities.validatePositiveQubits(numQubits)
         self.numQubits = numQubits
+        cachedMaxQubitUsed = numQubits - 1
         operations = []
     }
 
@@ -104,6 +107,12 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
         ValidationUtilities.validatePositiveQubits(numQubits)
         self.numQubits = numQubits
         self.operations = operations
+        var maxQubit: Int = numQubits - 1
+        for operation in operations {
+            let gateMax: Int = Self.computeGateMaxQubit(operation)
+            if gateMax > maxQubit { maxQubit = gateMax }
+        }
+        cachedMaxQubitUsed = maxQubit
     }
 
     // MARK: - Building Methods
@@ -148,6 +157,9 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
 
         let operation = GateOperation(gate: gate, qubits: qubits, timestamp: timestamp)
         operations.append(operation)
+
+        let operationMax: Int = Self.computeGateMaxQubit(operation)
+        if operationMax > cachedMaxQubitUsed { cachedMaxQubitUsed = operationMax }
     }
 
     /// Append single-qubit gate (convenience)
@@ -171,16 +183,35 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
 
         let operation = GateOperation(gate: gate, qubits: qubits, timestamp: timestamp)
         operations.insert(operation, at: index)
+
+        let operationMax: Int = Self.computeGateMaxQubit(operation)
+        if operationMax > cachedMaxQubitUsed { cachedMaxQubitUsed = operationMax }
     }
 
     /// Remove gate at index
     public mutating func remove(at index: Int) {
         ValidationUtilities.validateIndexInBounds(index, bound: operations.count, name: "Index")
+        let removedMax: Int = Self.computeGateMaxQubit(operations[index])
         operations.remove(at: index)
+
+        if removedMax == cachedMaxQubitUsed { recomputeMaxQubitCache() }
     }
 
     /// Remove all gates
-    public mutating func clear() { operations.removeAll() }
+    public mutating func clear() {
+        operations.removeAll()
+        cachedMaxQubitUsed = numQubits - 1
+    }
+
+    @inline(__always)
+    private mutating func recomputeMaxQubitCache() {
+        var maxQubit: Int = numQubits - 1
+        for operation in operations {
+            let gateMax: Int = Self.computeGateMaxQubit(operation)
+            if gateMax > maxQubit { maxQubit = gateMax }
+        }
+        cachedMaxQubitUsed = maxQubit
+    }
 
     // MARK: - Querying
 
@@ -214,40 +245,42 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
     /// Find maximum qubit index referenced by any operation in circuit
     /// Used to detect ancilla qubits that may exceed logical circuit size
     /// - Returns: Maximum qubit index, or numQubits-1 if no operations
+    /// - Complexity: O(1) - cached during append operations
     @_optimize(speed)
     @_effects(readonly)
-    public func maxQubitUsed() -> Int {
-        var maxQubit: Int = numQubits - 1
+    @inlinable
+    public func maxQubitUsed() -> Int { cachedMaxQubitUsed }
 
-        for operation in operations {
-            let gateMax: Int = switch operation.gate {
-            case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
-                 .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
-                 .u1, .u2, .u3, .sx, .sy, .customSingleQubit:
-                operation.qubits.max() ?? -1
+    /// Compute maximum qubit index for a single gate operation
+    /// - Parameter operation: The gate operation to analyze
+    /// - Returns: Maximum qubit index used by this operation
+    @_optimize(speed)
+    @_effects(readonly)
+    @inline(__always)
+    private static func computeGateMaxQubit(_ operation: GateOperation) -> Int {
+        switch operation.gate {
+        case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
+             .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
+             .u1, .u2, .u3, .sx, .sy, .customSingleQubit:
+            operation.qubits.max() ?? -1
 
-            case let .cnot(control, target),
-                 let .cz(control, target),
-                 let .cy(control, target),
-                 let .ch(control, target),
-                 let .controlledPhase(_, control, target),
-                 let .controlledRotationX(_, control, target),
-                 let .controlledRotationY(_, control, target),
-                 let .controlledRotationZ(_, control, target),
-                 let .customTwoQubit(_, control, target):
-                max(control, target)
+        case let .cnot(control, target),
+             let .cz(control, target),
+             let .cy(control, target),
+             let .ch(control, target),
+             let .controlledPhase(_, control, target),
+             let .controlledRotationX(_, control, target),
+             let .controlledRotationY(_, control, target),
+             let .controlledRotationZ(_, control, target),
+             let .customTwoQubit(_, control, target):
+            max(control, target)
 
-            case let .swap(q1, q2), let .sqrtSwap(q1, q2):
-                max(q1, q2)
+        case let .swap(q1, q2), let .sqrtSwap(q1, q2):
+            max(q1, q2)
 
-            case let .toffoli(c1, c2, target):
-                max(c1, c2, target)
-            }
-
-            maxQubit = max(maxQubit, gateMax)
+        case let .toffoli(c1, c2, target):
+            max(c1, c2, target)
         }
-
-        return maxQubit
     }
 
     // MARK: - Execution
@@ -261,15 +294,21 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
     static func expandStateForAncilla(_ state: QuantumState, maxQubit: Int) -> QuantumState {
         guard maxQubit >= state.numQubits else { return state }
 
-        let numAncillaQubits = maxQubit - state.numQubits + 1
+        let numAncillaQubits: Int = maxQubit - state.numQubits + 1
         let expandedSize = 1 << (state.numQubits + numAncillaQubits)
+        let originalSize: Int = state.stateSpaceSize
 
         // Copy original amplitudes; rest are zero (ancilla in |0⟩)
         // In little-endian ordering, ancilla are high-order bits
         // So original amplitudes stay at same indices (where ancilla bits are 0)
-        var expandedAmplitudes = AmplitudeVector(repeating: .zero, count: expandedSize)
-        for i in 0 ..< state.stateSpaceSize {
-            expandedAmplitudes[i] = state.amplitudes[i]
+        let expandedAmplitudes = AmplitudeVector(unsafeUninitializedCapacity: expandedSize) { buffer, count in
+            for i in 0 ..< originalSize {
+                buffer[i] = state.amplitudes[i]
+            }
+            for i in originalSize ..< expandedSize {
+                buffer[i] = .zero
+            }
+            count = expandedSize
         }
 
         return QuantumState(numQubits: maxQubit + 1, amplitudes: expandedAmplitudes)
@@ -374,7 +413,12 @@ public struct QuantumCircuit: Equatable, CustomStringConvertible, Sendable {
     public var description: String {
         if operations.isEmpty { return "QuantumCircuit(\(numQubits) qubits, empty)" }
 
-        let gateList = operations.prefix(5).map(\.description).joined(separator: ", ")
+        var gateList = ""
+        let limit = min(operations.count, 5)
+        for i in 0 ..< limit {
+            if i > 0 { gateList += ", " }
+            gateList += operations[i].description
+        }
         let suffix = operations.count > 5 ? ", ..." : ""
 
         return "QuantumCircuit(\(numQubits) qubits, \(operations.count) gates): \(gateList)\(suffix)"
@@ -615,29 +659,28 @@ public extension QuantumCircuit {
         } else {
             // Allocate ancilla qubits: use high-numbered qubits beyond existing circuit qubits
             // Note: Circuit size remains at logical qubit count; ancilla handled during execution
-            // Force-unwrap: unreachable nil-coalescing
-            let maxUsedQubit = max(controls.max()!, target)
-            let firstAncilla = maxUsedQubit + 1
-            let numAncilla = n - 2
-            let ancillaQubits = (0 ..< numAncilla).map { firstAncilla + $0 }
+            // Safe force-unwrap: controls is non-empty (n >= 3)
+            let maxUsedQubit: Int = max(controls.max()!, target)
+            let firstAncilla: Int = maxUsedQubit + 1
+            let numAncilla: Int = n - 2
 
             // a0 = c0 ∧ c1
-            circuit.append(gate: .toffoli(control1: controls[0], control2: controls[1], target: ancillaQubits[0]), qubits: [])
+            circuit.append(gate: .toffoli(control1: controls[0], control2: controls[1], target: firstAncilla), qubits: [])
 
             // a_i = a_{i-1} ∧ c_{i+1} for i = 1 to n-3
             for i in 1 ..< numAncilla {
-                circuit.append(gate: .toffoli(control1: ancillaQubits[i - 1], control2: controls[i + 1], target: ancillaQubits[i]), qubits: [])
+                circuit.append(gate: .toffoli(control1: firstAncilla + i - 1, control2: controls[i + 1], target: firstAncilla + i), qubits: [])
             }
 
             // Final gate: a_{n-3} ∧ c_{n-1} controls target
-            circuit.append(gate: .toffoli(control1: ancillaQubits[numAncilla - 1], control2: controls[n - 1], target: target), qubits: [])
+            circuit.append(gate: .toffoli(control1: firstAncilla + numAncilla - 1, control2: controls[n - 1], target: target), qubits: [])
 
             // Reverse pass: uncompute ancilla qubits (clean up workspace)
             for i in (1 ..< numAncilla).reversed() {
-                circuit.append(gate: .toffoli(control1: ancillaQubits[i - 1], control2: controls[i + 1], target: ancillaQubits[i]), qubits: [])
+                circuit.append(gate: .toffoli(control1: firstAncilla + i - 1, control2: controls[i + 1], target: firstAncilla + i), qubits: [])
             }
 
-            circuit.append(gate: .toffoli(control1: controls[0], control2: controls[1], target: ancillaQubits[0]), qubits: [])
+            circuit.append(gate: .toffoli(control1: controls[0], control2: controls[1], target: firstAncilla), qubits: [])
         }
     }
 
@@ -855,13 +898,26 @@ public extension QuantumCircuit {
 
         /// Create random Ising problem for demonstration
         public static func random(numQubits: Int, maxCoupling: Double = 1.0) -> IsingProblem {
-            var couplings = [[Double]](repeating: [Double](repeating: 0.0, count: numQubits), count: numQubits)
-            var localFields = [Double]()
+            var couplings: [[Double]] = []
+            couplings.reserveCapacity(numQubits)
+
+            let localFields = [Double](unsafeUninitializedCapacity: numQubits) { buffer, count in
+                for i in 0 ..< numQubits {
+                    buffer[i] = Double.random(in: -1.0 ... 1.0) * maxCoupling
+                }
+                count = numQubits
+            }
 
             for i in 0 ..< numQubits {
-                localFields.append((Double.random(in: -1.0 ... 1.0)) * maxCoupling)
+                var row = [Double](repeating: 0.0, count: numQubits)
                 for j in (i + 1) ..< numQubits {
-                    couplings[i][j] = (Double.random(in: -1.0 ... 1.0)) * maxCoupling
+                    row[j] = Double.random(in: -1.0 ... 1.0) * maxCoupling
+                }
+                couplings.append(row)
+            }
+
+            for i in 0 ..< numQubits {
+                for j in (i + 1) ..< numQubits {
                     couplings[j][i] = couplings[i][j]
                 }
             }

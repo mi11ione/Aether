@@ -15,6 +15,8 @@ public protocol ComplexScalar: BinaryFloatingPoint, Sendable {
     static func complexSin(_ value: Self) -> Self
     static func complexAtan2(_ y: Self, _ x: Self) -> Self
     static func complexAbs(_ value: Self) -> Self
+    static func complexHypot(_ x: Self, _ y: Self) -> Self
+    static func complexFma(_ a: Self, _ b: Self, _ c: Self) -> Self
 }
 
 extension Double: ComplexScalar {
@@ -27,7 +29,12 @@ extension Double: ComplexScalar {
     @inlinable public static func complexCos(_ value: Double) -> Double { cos(value) }
     @inlinable public static func complexSin(_ value: Double) -> Double { sin(value) }
     @inlinable public static func complexAtan2(_ y: Double, _ x: Double) -> Double { atan2(y, x) }
-    @inlinable public static func complexAbs(_ value: Double) -> Double { value < 0 ? -value : value }
+    @inlinable public static func complexAbs(_ value: Double) -> Double {
+        Double(bitPattern: value.bitPattern & 0x7FFF_FFFF_FFFF_FFFF)
+    }
+
+    @inlinable public static func complexHypot(_ x: Double, _ y: Double) -> Double { hypot(x, y) }
+    @inlinable public static func complexFma(_ a: Double, _ b: Double, _ c: Double) -> Double { fma(a, b, c) }
 }
 
 extension Float: ComplexScalar {
@@ -36,11 +43,16 @@ extension Float: ComplexScalar {
     @inlinable public static var complexEpsilon: Float { 1e-6 }
     @inlinable public static var complexDivisionThreshold: Float { 1e-10 }
 
-    @inlinable public static func complexSqrt(_ value: Float) -> Float { Foundation.sqrt(value) }
-    @inlinable public static func complexCos(_ value: Float) -> Float { Foundation.cos(value) }
-    @inlinable public static func complexSin(_ value: Float) -> Float { Foundation.sin(value) }
+    @inlinable public static func complexSqrt(_ value: Float) -> Float { sqrt(value) }
+    @inlinable public static func complexCos(_ value: Float) -> Float { cos(value) }
+    @inlinable public static func complexSin(_ value: Float) -> Float { sin(value) }
     @inlinable public static func complexAtan2(_ y: Float, _ x: Float) -> Float { Foundation.atan2(y, x) }
-    @inlinable public static func complexAbs(_ value: Float) -> Float { value < 0 ? -value : value }
+    @inlinable public static func complexAbs(_ value: Float) -> Float {
+        Float(bitPattern: value.bitPattern & 0x7FFF_FFFF)
+    }
+
+    @inlinable public static func complexHypot(_ x: Float, _ y: Float) -> Float { hypot(x, y) }
+    @inlinable public static func complexFma(_ a: Float, _ b: Float, _ c: Float) -> Float { fma(a, b, c) }
 }
 
 /// Generic complex number type for quantum computing
@@ -165,6 +177,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
 
     /// Magnitude squared: |z|² = a² + b²
     ///
+    /// Uses fused multiply-add (FMA) for better precision with single rounding.
     /// Optimized computation avoiding square root. Used for probabilities
     /// in quantum mechanics where |ψ|² represents probability.
     ///
@@ -175,10 +188,14 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// ```
     @inlinable
     public var magnitudeSquared: T {
-        real * real + imaginary * imaginary
+        T.complexFma(real, real, imaginary * imaginary)
     }
 
     /// Magnitude: |z| = √(a² + b²)
+    ///
+    /// Uses `hypot` for numerical stability, avoiding overflow/underflow
+    /// when real² + imaginary² would exceed representable range even though
+    /// the result is representable.
     ///
     /// Example:
     /// ```swift
@@ -188,7 +205,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     @_effects(readonly)
     @inlinable
     public func magnitude() -> T {
-        T.complexSqrt(magnitudeSquared)
+        T.complexHypot(real, imaginary)
     }
 
     /// Phase/argument: arg(z) = atan2(b, a) ∈ (-π, π]
@@ -300,13 +317,13 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
 
     // MARK: - Hashable
 
+    /// Hash using epsilon-quantized integer buckets for consistent hashing
+    /// of approximately equal values. Uses rounding to match == semantics.
     public func hash(into hasher: inout Hasher) {
-        let quantized = (
-            (real / T.complexEpsilon).rounded() * T.complexEpsilon,
-            (imaginary / T.complexEpsilon).rounded() * T.complexEpsilon
-        )
-        hasher.combine(quantized.0)
-        hasher.combine(quantized.1)
+        let realBucket = Int64((real / T.complexEpsilon).rounded())
+        let imagBucket = Int64((imaginary / T.complexEpsilon).rounded())
+        hasher.combine(realBucket)
+        hasher.combine(imagBucket)
     }
 }
 
@@ -344,13 +361,12 @@ public func * <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
 @_optimize(speed)
 @inlinable
 public func / <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
-    let denominator = rhs.magnitudeSquared
+    let denominator: T = rhs.magnitudeSquared
 
-    guard denominator > T.complexDivisionThreshold else {
-        return Complex(T.nan, T.nan)
-    }
-    let real = (lhs.real * rhs.real + lhs.imaginary * rhs.imaginary) / denominator
-    let imag = (lhs.imaginary * rhs.real - lhs.real * rhs.imaginary) / denominator
+    guard denominator > T.complexDivisionThreshold else { return Complex(T.nan, T.nan) }
+    let invDenom = T.complexOne / denominator
+    let real = T.complexFma(lhs.real, rhs.real, lhs.imaginary * rhs.imaginary) * invDenom
+    let imag = T.complexFma(lhs.imaginary, rhs.real, -lhs.real * rhs.imaginary) * invDenom
     return Complex(real, imag)
 }
 

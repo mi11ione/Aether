@@ -87,7 +87,8 @@ public actor QuantumSimulator {
         from initialState: QuantumState? = nil,
         progressHandler: (@isolated(any) @Sendable (Double) async -> Void)? = nil
     ) async throws -> QuantumState {
-        totalGates = circuit.gateCount
+        let operationCount: Int = circuit.gateCount
+        totalGates = operationCount
         executedGates = 0
 
         let startState: QuantumState = if let initialState {
@@ -100,9 +101,18 @@ public actor QuantumSimulator {
         var state = QuantumCircuit.expandStateForAncilla(startState, maxQubit: maxQubit)
         currentState = state
 
-        for (index, operation) in circuit.operations.enumerated() {
-            if useMetalAcceleration, let metal = metalApplication, state.numQubits >= MetalGateApplication.gpuThreshold {
-                state = await metal.apply(gate: operation.gate, to: operation.qubits, state: state)
+        // Hoist GPU decision before loop - state.numQubits is constant after expansion
+        let useGPU: Bool = useMetalAcceleration && metalApplication != nil && state.numQubits >= MetalGateApplication.gpuThreshold
+        let progressMultiplier: Double = operationCount > 0 ? 1.0 / Double(operationCount) : 0.0
+        let lastIndex: Int = operationCount - 1
+        let operations = circuit.operations
+
+        var progressCounter = 0
+
+        for index in 0 ..< operationCount {
+            let operation = operations[index]
+            if useGPU {
+                state = await metalApplication!.apply(gate: operation.gate, to: operation.qubits, state: state)
             } else {
                 state = GateApplication.apply(gate: operation.gate, to: operation.qubits, state: state)
             }
@@ -110,9 +120,12 @@ public actor QuantumSimulator {
             currentState = state
             executedGates = index + 1
 
-            if let progressHandler, index % 5 == 0 || index == totalGates - 1 {
-                let progress = Double(executedGates) / Double(totalGates)
-                await progressHandler(progress)
+            if let progressHandler {
+                progressCounter += 1
+                if progressCounter >= 5 || index == lastIndex {
+                    progressCounter = 0
+                    await progressHandler(Double(executedGates) * progressMultiplier)
+                }
             }
         }
 
@@ -152,20 +165,12 @@ public enum SimulatorError: Error, LocalizedError {
 // MARK: - Convenience Extensions
 
 public extension QuantumCircuit {
-    /// Execute circuit asynchronously
-    /// - Returns: Final quantum state
-    @_eagerMove
-    func executeAsync() async throws -> QuantumState {
-        let simulator = QuantumSimulator()
-        return try await simulator.execute(self)
-    }
-
-    /// Execute circuit with progress updates
-    /// - Parameter progressHandler: Called with progress updates
+    /// Execute circuit asynchronously with optional progress updates
+    /// - Parameter progressHandler: Optional callback for progress updates (0.0 to 1.0)
     /// - Returns: Final quantum state
     @_eagerMove
     func executeAsync(
-        progressHandler: @isolated(any) @Sendable @escaping (Double) async -> Void
+        progressHandler: (@isolated(any) @Sendable (Double) async -> Void)? = nil
     ) async throws -> QuantumState {
         let simulator = QuantumSimulator()
         return try await simulator.execute(self, progressHandler: progressHandler)

@@ -19,7 +19,7 @@ import Foundation
 /// **Mathematical Foundation:**
 /// - Variational principle: ⟨ψ|H|ψ⟩ ≥ E₀ for any |ψ⟩
 /// - VQE finds upper bound on ground state energy E₀
-/// - Better ansatz (more parameters) → tighter bound → closer to E₀
+/// - Better ansatz (more parameters) -> tighter bound -> closer to E₀
 /// - Guaranteed convergence to local minimum
 ///
 /// **Performance:**
@@ -230,12 +230,7 @@ public actor VariationalQuantumEigensolver {
         initialParameters: [Double],
         progressCallback: (@Sendable (Int, Double) async -> Void)?
     ) async throws -> VQEResult {
-        guard initialParameters.count == ansatz.parameterCount() else {
-            throw VQEError.parameterCountMismatch(
-                expected: ansatz.parameterCount(),
-                got: initialParameters.count
-            )
-        }
+        ValidationUtilities.validateArrayCount(initialParameters, expected: ansatz.parameterCount(), name: "initialParameters")
 
         currentIteration = 0
         currentEnergy = 0.0
@@ -258,15 +253,9 @@ public actor VariationalQuantumEigensolver {
             return energy
         }
 
-        let optimizerProgressCallback: (@Sendable (Int, Double) async -> Void)? = if let callback = progressCallback {
-            { iteration, energy in
-                await self.updateProgress(iteration: iteration, energy: energy)
-                await callback(iteration, energy)
-            }
-        } else {
-            { iteration, energy in
-                await self.updateProgress(iteration: iteration, energy: energy)
-            }
+        let optimizerProgressCallback: @Sendable (Int, Double) async -> Void = { iteration, energy in
+            await self.updateProgress(iteration: iteration, energy: energy)
+            await progressCallback?(iteration, energy)
         }
 
         let optimizerResult: OptimizerResult = try await optimizer.minimize(
@@ -379,9 +368,13 @@ public struct VQEResult: Sendable, CustomStringConvertible {
         self.functionEvaluations = functionEvaluations
     }
 
-    @inlinable
     public var description: String {
-        let paramStr = optimalParameters.prefix(3).map { String(format: "%.4f", $0) }.joined(separator: ", ")
+        var paramStr = ""
+        let displayCount = min(optimalParameters.count, 3)
+        for i in 0 ..< displayCount {
+            if i > 0 { paramStr += ", " }
+            paramStr += String(format: "%.4f", optimalParameters[i])
+        }
         let paramSuffix = optimalParameters.count > 3 ? ", ..." : ""
 
         return """

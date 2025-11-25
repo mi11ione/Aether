@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
+import Accelerate
 import Foundation
 
 /// Classical optimizer for variational quantum algorithms
@@ -56,10 +57,10 @@ public protocol Optimizer: Sendable {
 /// ```
 @frozen
 public struct ConvergenceCriteria: Sendable {
-    /// Energy change threshold: |E_new - E_old| < ε → converged
+    /// Energy change threshold: |E_new - E_old| < ε -> converged
     public let energyTolerance: Double
 
-    /// Gradient norm threshold: ||∇E|| < δ → converged (gradient-based only)
+    /// Gradient norm threshold: ||∇E|| < δ -> converged (gradient-based only)
     public let gradientNormTolerance: Double?
 
     /// Maximum optimization iterations
@@ -286,28 +287,36 @@ public struct NelderMeadOptimizer: Optimizer {
                 )
             }
 
-            var centroid = [Double](repeating: 0.0, count: n)
-            for i in 0 ..< n {
+            var centroid = [Double](unsafeUninitializedCapacity: n) { buffer, count in
                 for j in 0 ..< n {
-                    centroid[j] += simplex[i].parameters[j]
+                    buffer[j] = 0.0
                 }
+                count = n
             }
-            for j in 0 ..< n {
-                centroid[j] /= Double(n)
+            for i in 0 ..< n {
+                vDSP_vaddD(centroid, 1, simplex[i].parameters, 1, &centroid, 1, vDSP_Length(n))
             }
+            var scale = 1.0 / Double(n)
+            vDSP_vsmulD(centroid, 1, &scale, &centroid, 1, vDSP_Length(n))
 
-            var reflected = [Double](repeating: 0.0, count: n)
-            for j in 0 ..< n {
-                reflected[j] = centroid[j] + alpha * (centroid[j] - simplex[n].parameters[j])
+            var reflected = [Double](unsafeUninitializedCapacity: n) { _, count in
+                count = n
             }
+            var onePlusAlpha = 1.0 + alpha
+            var negAlpha = -alpha
+            vDSP_vsmulD(centroid, 1, &onePlusAlpha, &reflected, 1, vDSP_Length(n))
+            vDSP_vsmaD(simplex[n].parameters, 1, &negAlpha, reflected, 1, &reflected, 1, vDSP_Length(n))
             let reflectedValue: Double = try await objectiveFunction(reflected)
             functionEvaluations += 1
 
             if reflectedValue < simplex[0].value {
-                var expanded = [Double](repeating: 0.0, count: n)
-                for j in 0 ..< n {
-                    expanded[j] = centroid[j] + gamma * (reflected[j] - centroid[j])
+                var expanded = [Double](unsafeUninitializedCapacity: n) { _, count in
+                    count = n
                 }
+                var oneMinusGamma = 1.0 - gamma
+                var gammaVal = gamma
+                vDSP_vsmulD(centroid, 1, &oneMinusGamma, &expanded, 1, vDSP_Length(n))
+                vDSP_vsmaD(reflected, 1, &gammaVal, expanded, 1, &expanded, 1, vDSP_Length(n))
                 let expandedValue: Double = try await objectiveFunction(expanded)
                 functionEvaluations += 1
 
@@ -320,10 +329,13 @@ public struct NelderMeadOptimizer: Optimizer {
                 simplex[n] = SimplexVertex(parameters: reflected, value: reflectedValue)
             } else {
                 if reflectedValue < simplex[n].value {
-                    var contracted = [Double](repeating: 0.0, count: n)
-                    for j in 0 ..< n {
-                        contracted[j] = centroid[j] + rho * (reflected[j] - centroid[j])
+                    var contracted = [Double](unsafeUninitializedCapacity: n) { _, count in
+                        count = n
                     }
+                    var oneMinusRho = 1.0 - rho
+                    var rhoVal = rho
+                    vDSP_vsmulD(centroid, 1, &oneMinusRho, &contracted, 1, vDSP_Length(n))
+                    vDSP_vsmaD(reflected, 1, &rhoVal, contracted, 1, &contracted, 1, vDSP_Length(n))
                     let contractedValue: Double = try await objectiveFunction(contracted)
                     functionEvaluations += 1
 
@@ -332,10 +344,13 @@ public struct NelderMeadOptimizer: Optimizer {
                         continue
                     }
                 } else {
-                    var contracted = [Double](repeating: 0.0, count: n)
-                    for j in 0 ..< n {
-                        contracted[j] = centroid[j] + rho * (simplex[n].parameters[j] - centroid[j])
+                    var contracted = [Double](unsafeUninitializedCapacity: n) { _, count in
+                        count = n
                     }
+                    var oneMinusRho = 1.0 - rho
+                    var rhoVal = rho
+                    vDSP_vsmulD(centroid, 1, &oneMinusRho, &contracted, 1, vDSP_Length(n))
+                    vDSP_vsmaD(simplex[n].parameters, 1, &rhoVal, contracted, 1, &contracted, 1, vDSP_Length(n))
                     let contractedValue: Double = try await objectiveFunction(contracted)
                     functionEvaluations += 1
 
@@ -345,10 +360,15 @@ public struct NelderMeadOptimizer: Optimizer {
                     }
                 }
 
+                var oneMinusSigma = 1.0 - sigma
+                var sigmaVal = sigma
                 for i in 1 ... n {
-                    for j in 0 ..< n {
-                        simplex[i].parameters[j] = simplex[0].parameters[j] + sigma * (simplex[i].parameters[j] - simplex[0].parameters[j])
+                    var newParams = [Double](unsafeUninitializedCapacity: n) { _, count in
+                        count = n
                     }
+                    vDSP_vsmulD(simplex[0].parameters, 1, &oneMinusSigma, &newParams, 1, vDSP_Length(n))
+                    vDSP_vsmaD(simplex[i].parameters, 1, &sigmaVal, newParams, 1, &newParams, 1, vDSP_Length(n))
+                    simplex[i].parameters = newParams
                     simplex[i].value = try await objectiveFunction(simplex[i].parameters)
                 }
                 functionEvaluations += n
@@ -471,7 +491,12 @@ public struct GradientDescentOptimizer: Optimizer {
         var valueHistory: [Double] = [currentValue]
         var functionEvaluations = 1
 
-        var velocity = [Double](repeating: 0.0, count: n)
+        var velocity = [Double](unsafeUninitializedCapacity: n) { buffer, count in
+            for i in 0 ..< n {
+                buffer[i] = 0.0
+            }
+            count = n
+        }
         var currentLearningRate: Double = learningRate
         var bestValue: Double = currentValue
         var iterationsSinceImprovement = 0
@@ -481,7 +506,9 @@ public struct GradientDescentOptimizer: Optimizer {
                 await callback(iteration, currentValue)
             }
 
-            var gradient = [Double](repeating: 0.0, count: n)
+            var gradient = [Double](unsafeUninitializedCapacity: n) { _, count in
+                count = n
+            }
 
             for i in 0 ..< n {
                 var paramsPlus = currentParameters
@@ -496,11 +523,9 @@ public struct GradientDescentOptimizer: Optimizer {
             }
             functionEvaluations += 2 * n
 
-            var gradientNorm = 0.0
-            for i in 0 ..< n {
-                gradientNorm += gradient[i] * gradient[i]
-            }
-            gradientNorm = gradientNorm.squareRoot()
+            var gradientNormSq = 0.0
+            vDSP_svesqD(gradient, 1, &gradientNormSq, vDSP_Length(n))
+            let gradientNorm: Double = sqrt(gradientNormSq)
 
             if let gnt = convergenceCriteria.gradientNormTolerance,
                gradientNorm < gnt
@@ -680,7 +705,9 @@ public struct LBFGSBOptimizer: Optimizer {
                 await callback(iteration, cost)
             }
 
-            let gradNorm: Double = sqrt(gradient.reduce(0.0) { $0 + $1 * $1 })
+            var gradNormSq = 0.0
+            vDSP_svesqD(gradient, 1, &gradNormSq, vDSP_Length(gradient.count))
+            let gradNorm: Double = sqrt(gradNormSq)
 
             if let gnt = convergenceCriteria.gradientNormTolerance,
                gradNorm < gnt
@@ -723,7 +750,11 @@ public struct LBFGSBOptimizer: Optimizer {
 
             functionEvaluations += lsr.evaluations
 
-            let newParams: [Double] = zip(params, direction).map { $0 + lsr.alpha * $1 }
+            var newParams = [Double](unsafeUninitializedCapacity: n) { _, count in
+                count = n
+            }
+            var alphaVal = lsr.alpha
+            vDSP_vsmaD(direction, 1, &alphaVal, params, 1, &newParams, 1, vDSP_Length(n))
             let newCost: Double = try await objectiveFunction(newParams)
             let newGradient: [Double] = try await computeGradient(
                 params: newParams,
@@ -742,9 +773,18 @@ public struct LBFGSBOptimizer: Optimizer {
                 )
             }
 
-            let s: [Double] = zip(newParams, params).map { $0 - $1 }
-            let y: [Double] = zip(newGradient, gradient).map { $0 - $1 }
-            let ys: Double = zip(y, s).reduce(0.0) { $0 + $1.0 * $1.1 }
+            var s = [Double](unsafeUninitializedCapacity: n) { _, count in
+                count = n
+            }
+            vDSP_vsubD(params, 1, newParams, 1, &s, 1, vDSP_Length(n))
+
+            var y = [Double](unsafeUninitializedCapacity: n) { _, count in
+                count = n
+            }
+            vDSP_vsubD(gradient, 1, newGradient, 1, &y, 1, vDSP_Length(n))
+
+            var ys = 0.0
+            vDSP_dotprD(y, 1, s, 1, &ys, vDSP_Length(n))
 
             if ys > 1e-10 {
                 sHistory.append(s)
@@ -776,7 +816,9 @@ public struct LBFGSBOptimizer: Optimizer {
         objectiveFunction: @Sendable ([Double]) async throws -> Double
     ) async throws -> [Double] {
         let n: Int = params.count
-        var gradient = [Double](repeating: 0.0, count: n)
+        var gradient = [Double](unsafeUninitializedCapacity: n) { _, count in
+            count = n
+        }
 
         for i in 0 ..< n {
             var paramsPlus = params
@@ -807,14 +849,20 @@ public struct LBFGSBOptimizer: Optimizer {
         cost: Double,
         objectiveFunction: @Sendable ([Double]) async throws -> Double
     ) async throws -> LineSearchResult? {
+        let n: Int = params.count
         var alpha = 1.0
         let rho = 0.5
         var evaluations = 0
 
-        let dirGrad: Double = zip(direction, gradient).reduce(0.0) { $0 + $1.0 * $1.1 }
+        var dirGrad = 0.0
+        vDSP_dotprD(direction, 1, gradient, 1, &dirGrad, vDSP_Length(n))
 
         for _ in 0 ..< maxLineSearchSteps {
-            let newParams: [Double] = zip(params, direction).map { $0 + alpha * $1 }
+            var newParams = [Double](unsafeUninitializedCapacity: n) { _, count in
+                count = n
+            }
+            var alphaVal = alpha
+            vDSP_vsmaD(direction, 1, &alphaVal, params, 1, &newParams, 1, vDSP_Length(n))
             let newCost: Double = try await objectiveFunction(newParams)
             evaluations += 1
 
@@ -823,9 +871,10 @@ public struct LBFGSBOptimizer: Optimizer {
                     params: newParams,
                     objectiveFunction: objectiveFunction
                 )
-                evaluations += 2 * params.count
+                evaluations += 2 * n
 
-                let newDirGrad: Double = zip(direction, newGradient).reduce(0.0) { $0 + $1.0 * $1.1 }
+                var newDirGrad = 0.0
+                vDSP_dotprD(direction, 1, newGradient, 1, &newDirGrad, vDSP_Length(n))
 
                 if abs(newDirGrad) <= -c2 * dirGrad {
                     return LineSearchResult(alpha: alpha, evaluations: evaluations)
@@ -842,6 +891,7 @@ public struct LBFGSBOptimizer: Optimizer {
     ///
     /// Approximates Hessian inverse using limited memory (last m iterations).
     /// Uses stored parameter differences (s) and gradient differences (y).
+    /// Optimized with vDSP for all vector operations.
     ///
     /// - Parameters:
     ///   - gradient: Current gradient
@@ -857,32 +907,57 @@ public struct LBFGSBOptimizer: Optimizer {
         yHistory: [[Double]],
         rhoHistory: [Double]
     ) -> [Double] {
-        guard !sHistory.isEmpty else { return gradient.map { -$0 } }
+        let n: Int = gradient.count
+
+        guard !sHistory.isEmpty else {
+            var result = [Double](unsafeUninitializedCapacity: n) { _, count in
+                count = n
+            }
+            vDSP_vnegD(gradient, 1, &result, 1, vDSP_Length(n))
+            return result
+        }
 
         let m: Int = sHistory.count
         var q = gradient
-        var alpha = [Double](repeating: 0.0, count: m)
+        var alpha = [Double](unsafeUninitializedCapacity: m) { _, count in
+            count = m
+        }
 
         for i in stride(from: m - 1, through: 0, by: -1) {
-            let a: Double = rhoHistory[i] * zip(sHistory[i], q).reduce(0.0) { $0 + $1.0 * $1.1 }
+            var dotResult = 0.0
+            vDSP_dotprD(sHistory[i], 1, q, 1, &dotResult, vDSP_Length(n))
+            let a: Double = rhoHistory[i] * dotResult
             alpha[i] = a
-            q = zip(q, yHistory[i]).map { $0 - a * $1 }
+
+            var negA = -a
+            vDSP_vsmaD(yHistory[i], 1, &negA, q, 1, &q, 1, vDSP_Length(n))
         }
 
         let lastS: [Double] = sHistory[m - 1]
         let lastY: [Double] = yHistory[m - 1]
-        let sy: Double = zip(lastS, lastY).reduce(0.0) { $0 + $1.0 * $1.1 }
-        let yy: Double = lastY.reduce(0.0) { $0 + $1 * $1 }
+        var sy = 0.0
+        vDSP_dotprD(lastS, 1, lastY, 1, &sy, vDSP_Length(n))
+        var yy = 0.0
+        vDSP_svesqD(lastY, 1, &yy, vDSP_Length(n))
         let gamma: Double = sy / yy
 
-        var r: [Double] = q.map { gamma * $0 }
+        var r = [Double](unsafeUninitializedCapacity: n) { _, count in
+            count = n
+        }
+        var gammaVal = gamma
+        vDSP_vsmulD(q, 1, &gammaVal, &r, 1, vDSP_Length(n))
 
         for i in 0 ..< m {
-            let beta: Double = rhoHistory[i] * zip(yHistory[i], r).reduce(0.0) { $0 + $1.0 * $1.1 }
-            r = zip(r, sHistory[i]).map { $0 + (alpha[i] - beta) * $1 }
+            var dotResult = 0.0
+            vDSP_dotprD(yHistory[i], 1, r, 1, &dotResult, vDSP_Length(n))
+            let beta: Double = rhoHistory[i] * dotResult
+
+            var scale = alpha[i] - beta
+            vDSP_vsmaD(sHistory[i], 1, &scale, r, 1, &r, 1, vDSP_Length(n))
         }
 
-        return r.map { -$0 }
+        vDSP_vnegD(r, 1, &r, 1, vDSP_Length(n))
+        return r
     }
 }
 
@@ -1002,17 +1077,31 @@ public struct SPSAOptimizer: Optimizer {
             let ak: Double = initialStepSize / pow(k + stabilityConstant, decayExponent)
             let ck: Double = initialPerturbation / pow(k, perturbationDecayExponent)
 
-            var delta = [Double](repeating: 0.0, count: n)
-            for i in 0 ..< n {
-                delta[i] = Bool.random() ? 1.0 : -1.0
+            let delta = [Double](unsafeUninitializedCapacity: n) { buffer, count in
+                let numBytes = (n + 7) / 8
+                var randomBytes = [UInt8](repeating: 0, count: numBytes)
+                arc4random_buf(&randomBytes, numBytes)
+
+                for i in 0 ..< n {
+                    let byteIndex = i / 8
+                    let bitIndex = i % 8
+                    let bit = (randomBytes[byteIndex] >> bitIndex) & 1
+                    buffer[i] = bit == 0 ? -1.0 : 1.0
+                }
+                count = n
             }
 
-            var paramsPlus = [Double](repeating: 0.0, count: n)
-            var paramsMinus = [Double](repeating: 0.0, count: n)
-            for i in 0 ..< n {
-                paramsPlus[i] = params[i] + ck * delta[i]
-                paramsMinus[i] = params[i] - ck * delta[i]
+            var paramsPlus = [Double](unsafeUninitializedCapacity: n) { _, count in
+                count = n
             }
+            var ckVal = ck
+            vDSP_vsmaD(delta, 1, &ckVal, params, 1, &paramsPlus, 1, vDSP_Length(n))
+
+            var paramsMinus = [Double](unsafeUninitializedCapacity: n) { _, count in
+                count = n
+            }
+            var negCk = -ck
+            vDSP_vsmaD(delta, 1, &negCk, params, 1, &paramsMinus, 1, vDSP_Length(n))
 
             let valuePlus: Double = try await objectiveFunction(paramsPlus)
             let valueMinus: Double = try await objectiveFunction(paramsMinus)
@@ -1020,9 +1109,8 @@ public struct SPSAOptimizer: Optimizer {
 
             let gradientApprox: Double = (valuePlus - valueMinus) / (2.0 * ck)
 
-            for i in 0 ..< n {
-                params[i] -= ak * gradientApprox * delta[i]
-            }
+            var negAkGrad = -ak * gradientApprox
+            vDSP_vsmaD(delta, 1, &negAkGrad, params, 1, &params, 1, vDSP_Length(n))
 
             let newValue: Double = try await objectiveFunction(params)
             functionEvaluations += 1
@@ -1252,10 +1340,10 @@ public struct COBYLAOptimizer: Optimizer {
                 trustRadius: currentTrustRadius
             )
 
-            var trialParameters = [Double](repeating: 0.0, count: n)
-            for i in 0 ..< n {
-                trialParameters[i] = bestParameters[i] + step[i]
+            var trialParameters = [Double](unsafeUninitializedCapacity: n) { _, count in
+                count = n
             }
+            vDSP_vaddD(bestParameters, 1, step, 1, &trialParameters, 1, vDSP_Length(n))
 
             let trialValue: Double = try await objectiveFunction(trialParameters)
             functionEvaluations += 1
@@ -1286,24 +1374,19 @@ public struct COBYLAOptimizer: Optimizer {
                 bestValue = trialValue
                 valueHistory.append(bestValue)
 
-                var worstIndex = 0
-                var worstValue = simplex[0].value
-                for i in 1 ..< simplex.count {
-                    if simplex[i].value > worstValue {
-                        worstValue = simplex[i].value
-                        worstIndex = i
-                    }
-                }
+                let simplexValues: [Double] = simplex.map(\.value)
+                var worstValue = 0.0
+                var worstIdx: vDSP_Length = 0
+                vDSP_maxviD(simplexValues, 1, &worstValue, &worstIdx, vDSP_Length(simplex.count))
+                let worstIndex = Int(worstIdx)
                 simplex[worstIndex] = SimplexPoint(parameters: trialParameters, value: trialValue)
 
-                bestIndex = 0
-                bestValue = simplex[0].value
-                for i in 1 ..< simplex.count {
-                    if simplex[i].value < bestValue {
-                        bestValue = simplex[i].value
-                        bestIndex = i
-                    }
-                }
+                let updatedValues: [Double] = simplex.map(\.value)
+                var minVal = 0.0
+                var minIdx: vDSP_Length = 0
+                vDSP_minviD(updatedValues, 1, &minVal, &minIdx, vDSP_Length(simplex.count))
+                bestIndex = Int(minIdx)
+                bestValue = minVal
             } else {
                 if currentTrustRadius < previousRadius * 0.9 {
                     let newSimplexSize: Double = currentTrustRadius * simplexScale
@@ -1375,23 +1458,28 @@ public struct COBYLAOptimizer: Optimizer {
         let basePoint: [Double] = simplex[baseIndex].parameters
         let baseValue: Double = simplex[baseIndex].value
 
-        var gradient = [Double](repeating: 0.0, count: n)
+        var gradient = [Double](unsafeUninitializedCapacity: n) { buffer, count in
+            for j in 0 ..< n {
+                buffer[j] = 0.0
+            }
+            count = n
+        }
         var directions: [[Double]] = []
         var valueDifferences: [Double] = []
 
         for i in simplex.indices where i != baseIndex {
-            var direction = [Double](repeating: 0.0, count: n)
-            var normSq = 0.0
-            for j in 0 ..< n {
-                direction[j] = simplex[i].parameters[j] - basePoint[j]
-                normSq += direction[j] * direction[j]
+            var direction = [Double](unsafeUninitializedCapacity: n) { _, count in
+                count = n
             }
+            vDSP_vsubD(basePoint, 1, simplex[i].parameters, 1, &direction, 1, vDSP_Length(n))
+
+            var normSq = 0.0
+            vDSP_svesqD(direction, 1, &normSq, vDSP_Length(n))
 
             if normSq > 1e-12 {
                 let norm: Double = sqrt(normSq)
-                for j in 0 ..< n {
-                    direction[j] /= norm
-                }
+                var invNorm = 1.0 / norm
+                vDSP_vsmulD(direction, 1, &invNorm, &direction, 1, vDSP_Length(n))
                 let valueDiff: Double = (simplex[i].value - baseValue) / norm
                 directions.append(direction)
                 valueDifferences.append(valueDiff)
@@ -1399,13 +1487,22 @@ public struct COBYLAOptimizer: Optimizer {
         }
 
         if !directions.isEmpty {
-            var weights = [Double](repeating: 0.0, count: n)
+            var weights = [Double](unsafeUninitializedCapacity: n) { buffer, count in
+                for j in 0 ..< n {
+                    buffer[j] = 0.0
+                }
+                count = n
+            }
 
             for (direction, valueDiff) in zip(directions, valueDifferences) {
-                for j in 0 ..< n {
-                    gradient[j] += direction[j] * valueDiff
-                    weights[j] += abs(direction[j])
+                var vd = valueDiff
+                vDSP_vsmaD(direction, 1, &vd, gradient, 1, &gradient, 1, vDSP_Length(n))
+
+                var absDirection = [Double](unsafeUninitializedCapacity: n) { _, count in
+                    count = n
                 }
+                vDSP_vabsD(direction, 1, &absDirection, 1, vDSP_Length(n))
+                vDSP_vaddD(weights, 1, absDirection, 1, &weights, 1, vDSP_Length(n))
             }
 
             for j in 0 ..< n {
@@ -1447,20 +1544,23 @@ public struct COBYLAOptimizer: Optimizer {
         let n: Int = gradient.count
 
         var gradNormSq = 0.0
-        for i in 0 ..< n {
-            gradNormSq += gradient[i] * gradient[i]
-        }
+        vDSP_svesqD(gradient, 1, &gradNormSq, vDSP_Length(n))
 
         guard gradNormSq > 1e-12 else {
-            return [Double](repeating: 0.0, count: n)
+            return [Double](unsafeUninitializedCapacity: n) { buffer, count in
+                for i in 0 ..< n {
+                    buffer[i] = 0.0
+                }
+                count = n
+            }
         }
 
         let gradNorm: Double = sqrt(gradNormSq)
-        let stepLength: Double = trustRadius
-        var step = [Double](repeating: 0.0, count: n)
-        for i in 0 ..< n {
-            step[i] = -stepLength * gradient[i] / gradNorm
+        var step = [Double](unsafeUninitializedCapacity: n) { _, count in
+            count = n
         }
+        var scale = -trustRadius / gradNorm
+        vDSP_vsmulD(gradient, 1, &scale, &step, 1, vDSP_Length(n))
 
         return step
     }
@@ -1482,9 +1582,7 @@ public struct COBYLAOptimizer: Optimizer {
         step: [Double]
     ) -> Double {
         var value = 0.0
-        for i in gradient.indices {
-            value += gradient[i] * step[i]
-        }
+        vDSP_dotprD(gradient, 1, step, 1, &value, vDSP_Length(gradient.count))
         return value
     }
 

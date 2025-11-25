@@ -33,7 +33,7 @@
 /// let hamiltonian = MaxCut.hamiltonian(edges: edges)
 ///
 /// // Hamiltonian: H = -½(Z₀Z₁ + Z₁Z₂ + Z₂Z₃ + Z₃Z₀)
-/// // Optimal cut: {0,2} vs {1,3} → 4 edges cut
+/// // Optimal cut: {0,2} vs {1,3} -> 4 edges cut
 /// // Ground state energy: E₀ = -2.0
 /// // Verification: maxcut = -2·E₀ = 4 ✓
 ///
@@ -56,7 +56,7 @@
 /// let edges = [(0,1), (1,2), (0,2)]
 /// let hamiltonian = MaxCut.hamiltonian(edges: edges)
 ///
-/// // Optimal cut: any single vertex vs others → 2 edges
+/// // Optimal cut: any single vertex vs others -> 2 edges
 /// // Ground state energy: E₀ = -1.0
 /// // MaxCut value: 2
 /// ```
@@ -83,7 +83,7 @@ public struct MaxCut {
     /// **Hamiltonian structure:**
     /// - Number of terms: |E| (one per edge)
     /// - Sparsity: Depends on graph connectivity
-    /// - Dense graphs (many edges) → more terms → slower QAOA
+    /// - Dense graphs (many edges) -> more terms -> slower QAOA
     ///
     /// **Complexity:**
     /// - Construction: O(|E|) time and space
@@ -107,7 +107,7 @@ public struct MaxCut {
     /// // Result: H = -0.5·Z₀Z₁ - 0.5·Z₁Z₂ - 0.5·Z₂Z₃
     /// print(hamiltonian.terms.count)  // 3 terms
     ///
-    /// // Optimal cuts: {0,2} vs {1,3} → 3 edges cut
+    /// // Optimal cuts: {0,2} vs {1,3} -> 3 edges cut
     /// // Ground state energy: E₀ = -1.5
     /// // MaxCut value: 3
     ///
@@ -134,7 +134,8 @@ public struct MaxCut {
 
             // H_p term: -0.5 * Z_i⊗Z_j
             // Sorted order ensures (i,j) and (j,i) produce identical PauliStrings
-            let (vertex1, vertex2) = i < j ? (i, j) : (j, i)
+            let vertex1 = min(i, j)
+            let vertex2 = max(i, j)
             let pauliString = PauliString(operators: [
                 (qubit: vertex1, basis: .z),
                 (qubit: vertex2, basis: .z),
@@ -249,14 +250,13 @@ public struct MaxCut {
         public static func linearChain(numVertices: Int) -> [(Int, Int)] {
             ValidationUtilities.validateLowerBound(numVertices, min: 2, name: "numVertices")
 
-            var edges: [(Int, Int)] = []
-            edges.reserveCapacity(numVertices - 1)
-
-            for i in 0 ..< (numVertices - 1) {
-                edges.append((i, i + 1))
+            let edgeCount = numVertices - 1
+            return [(Int, Int)](unsafeUninitializedCapacity: edgeCount) { buffer, count in
+                for i in 0 ..< edgeCount {
+                    buffer[i] = (i, i + 1)
+                }
+                count = edgeCount
             }
-
-            return edges
         }
 
         /// Star graph: central vertex connected to all others
@@ -281,14 +281,13 @@ public struct MaxCut {
         public static func star(numVertices: Int) -> [(Int, Int)] {
             ValidationUtilities.validateLowerBound(numVertices, min: 2, name: "numVertices")
 
-            var edges: [(Int, Int)] = []
-            edges.reserveCapacity(numVertices - 1)
-
-            for i in 1 ..< numVertices {
-                edges.append((0, i))
+            let edgeCount = numVertices - 1
+            return [(Int, Int)](unsafeUninitializedCapacity: edgeCount) { buffer, count in
+                for i in 0 ..< edgeCount {
+                    buffer[i] = (0, i + 1)
+                }
+                count = edgeCount
             }
-
-            return edges
         }
     }
 }

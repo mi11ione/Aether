@@ -102,12 +102,12 @@ public struct Observable: CustomStringConvertible, Sendable {
 
         var totalExpectation = 0.0
 
-        for (coefficient, pauliString) in terms {
+        for i in 0 ..< terms.count {
             let pauliExpectation = Self.computePauliExpectation(
-                pauliString: pauliString,
+                pauliString: terms[i].pauliString,
                 state: state
             )
-            totalExpectation += coefficient * pauliExpectation
+            totalExpectation += terms[i].coefficient * pauliExpectation
         }
 
         return totalExpectation
@@ -127,30 +127,26 @@ public struct Observable: CustomStringConvertible, Sendable {
         pauliString: PauliString,
         state: QuantumState
     ) -> Double {
-        if pauliString.operators.isEmpty {
-            return 1.0 // ⟨I⟩ = 1
-        }
+        if pauliString.operators.isEmpty { return 1.0 }
 
         var rotatedState = state
-        for op in pauliString.operators {
+        var qubitMask = 0
+
+        for i in 0 ..< pauliString.operators.count {
+            let op = pauliString.operators[i]
             rotatedState = Measurement.rotateToPauliBasis(
                 qubit: op.qubit,
                 basis: op.basis,
                 state: rotatedState
             )
+            qubitMask |= (1 << op.qubit)
         }
 
-        // Compute expectation value: ⟨P⟩ = Σᵢ λᵢ P(i)
-        // λᵢ is product of individual Pauli eigenvalues (±1 for each qubit)
         var expectation = 0.0
 
         for i in 0 ..< rotatedState.stateSpaceSize {
-            var eigenvalue = 1
-            for op in pauliString.operators {
-                let bit = rotatedState.getBit(index: i, qubit: op.qubit)
-                eigenvalue *= (bit == 0) ? 1 : -1
-            }
-
+            let parity = (i & qubitMask).nonzeroBitCount & 1
+            let eigenvalue = 1 - 2 * parity
             expectation += Double(eigenvalue) * rotatedState.probability(ofState: i)
         }
 
@@ -193,28 +189,38 @@ public struct Observable: CustomStringConvertible, Sendable {
 
     /// Compute O² by expanding (Σᵢ cᵢ Pᵢ)² = Σᵢⱼ cᵢcⱼ PᵢPⱼ
     ///
-    /// Multiplies all pairs of Pauli strings and combines like terms.
+    /// Multiplies all pairs of Pauli strings and combines like terms inline.
     /// Result is guaranteed Hermitian (real coefficients) if input is Hermitian.
     ///
     /// - Returns: Observable representing O²
     @_optimize(speed)
     @_eagerMove
     private func squared() -> Observable {
-        var squaredTerms: PauliTerms = []
+        var coefficientMap: [PauliString: Double] = [:]
+        coefficientMap.reserveCapacity(terms.count * terms.count)
 
-        // Expand (Σᵢ cᵢ Pᵢ)²
-        for (ci, Pi) in terms {
-            for (cj, Pj) in terms {
+        for i in 0 ..< terms.count {
+            let ci = terms[i].coefficient
+            let Pi = terms[i].pauliString
+
+            for j in 0 ..< terms.count {
+                let cj = terms[j].coefficient
+                let Pj = terms[j].pauliString
+
                 let (phase, product) = multiplyPauliStrings(Pi, Pj)
-
                 let coefficient = ci * cj * phase.real
+
                 if abs(coefficient) > 1e-15 {
-                    squaredTerms.append((coefficient, product))
+                    coefficientMap[product, default: 0.0] += coefficient
                 }
             }
         }
 
-        return Observable(terms: combineLikeTerms(squaredTerms))
+        let squaredTerms: PauliTerms = coefficientMap.compactMap { key, value in
+            abs(value) > 1e-15 ? (coefficient: value, pauliString: key) : nil
+        }
+
+        return Observable(terms: squaredTerms)
     }
 
     /// Multiply two Pauli strings with proper phase tracking
@@ -237,28 +243,30 @@ public struct Observable: CustomStringConvertible, Sendable {
         _ lhs: PauliString,
         _ rhs: PauliString
     ) -> (phase: Complex<Double>, result: PauliString) {
-        var lhsMap: MeasurementBasis = [:]
+        var pauliMap: [Int: (left: PauliBasis?, right: PauliBasis?)] = [:]
+        pauliMap.reserveCapacity(lhs.operators.count + rhs.operators.count)
+
         for op in lhs.operators {
-            lhsMap[op.qubit] = op.basis
+            pauliMap[op.qubit] = (left: op.basis, right: nil)
         }
-
-        var rhsMap: MeasurementBasis = [:]
         for op in rhs.operators {
-            rhsMap[op.qubit] = op.basis
+            if let existing = pauliMap[op.qubit] {
+                pauliMap[op.qubit] = (left: existing.left, right: op.basis)
+            } else {
+                pauliMap[op.qubit] = (left: nil, right: op.basis)
+            }
         }
-
-        let allQubits = Set(lhsMap.keys).union(rhsMap.keys).sorted()
 
         var phase = Complex<Double>(1.0, 0.0)
         var resultOperators: [(qubit: Int, basis: PauliBasis)] = []
+        resultOperators.reserveCapacity(pauliMap.count)
 
-        for qubit in allQubits {
-            let leftPauli = lhsMap[qubit]
-            let rightPauli = rhsMap[qubit]
+        for qubit in pauliMap.keys.sorted() {
+            let (left, right) = pauliMap[qubit]!
 
             let (localPhase, resultPauli) = multiplySingleQubitPaulis(
-                left: leftPauli,
-                right: rightPauli
+                left: left,
+                right: right
             )
 
             phase = phase * localPhase
@@ -315,17 +323,18 @@ public struct Observable: CustomStringConvertible, Sendable {
     @_optimize(speed)
     @_eagerMove
     private func combineLikeTerms(
-        _ terms: PauliTerms
+        _ inputTerms: PauliTerms
     ) -> PauliTerms {
         var coefficientMap: [PauliString: Double] = [:]
+        coefficientMap.reserveCapacity(inputTerms.count)
 
-        for (coefficient, pauliString) in terms {
-            coefficientMap[pauliString, default: 0.0] += coefficient
+        for i in 0 ..< inputTerms.count {
+            coefficientMap[inputTerms[i].pauliString, default: 0.0] += inputTerms[i].coefficient
         }
 
-        return coefficientMap
-            .filter { abs($0.value) > 1e-15 }
-            .map { (coefficient: $0.value, pauliString: $0.key) }
+        return coefficientMap.compactMap { key, value in
+            abs(value) > 1e-15 ? (coefficient: value, pauliString: key) : nil
+        }
     }
 
     // MARK: - CustomStringConvertible
@@ -334,12 +343,15 @@ public struct Observable: CustomStringConvertible, Sendable {
     public var description: String {
         if terms.isEmpty { return "Observable: 0" }
 
-        let termStrings = terms.map { coeff, pauli in
+        var result = "Observable: "
+        for i in 0 ..< terms.count {
+            let coeff = terms[i].coefficient
+            let pauli = terms[i].pauliString
             let sign = coeff >= 0 ? "+" : ""
             let pauliDesc = pauli.operators.isEmpty ? "I" : pauli.description
-            return "\(sign)\(coeff)·\(pauliDesc)"
+            if i > 0 { result += " " }
+            result += "\(sign)\(coeff)·\(pauliDesc)"
         }
-
-        return "Observable: " + termStrings.joined(separator: " ")
+        return result
     }
 }

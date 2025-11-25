@@ -262,21 +262,6 @@ struct ShotAllocationTests {
         #expect(allocation[1]! >= 50)
     }
 
-    @Test("Allocation for empty terms")
-    func allocationEmptyTerms() {
-        let allocator = ShotAllocator()
-        let allocation = allocator.allocate(terms: [], totalShots: 1000, state: nil)
-        #expect(allocation.isEmpty)
-    }
-
-    @Test("Allocation for zero shots")
-    func allocationZeroShots() {
-        let allocator = ShotAllocator()
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
-        let allocation = allocator.allocate(terms: [(coefficient: 1.0, pauliString: ps)], totalShots: 0, state: nil)
-        #expect(allocation.isEmpty)
-    }
-
     @Test("Total allocated shots equals requested total")
     func totalShotsMatches() {
         let allocator = ShotAllocator()

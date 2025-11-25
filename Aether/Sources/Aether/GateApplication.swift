@@ -43,7 +43,7 @@ public typealias GateMatrix = [AmplitudeVector]
 /// let after = GateApplication.apply(gate: .hadamard, to: [0], state: initial)
 /// // Result: (|00⟩ + |01⟩)/√2
 ///
-/// // Apply CNOT(0→1): creates Bell state
+/// // Apply CNOT(0->1): creates Bell state
 /// let cnot = QuantumGate.cnot(control: 0, target: 1)
 /// let bell = GateApplication.apply(gate: cnot, to: [], state: after)
 /// // Result: (|00⟩ + |11⟩)/√2
@@ -124,22 +124,20 @@ public enum GateApplication {
         let g10: Complex<Double> = gateMatrix[1][0]
         let g11: Complex<Double> = gateMatrix[1][1]
 
-        // Create new amplitude array (allocate directly instead of copying)
-        var newAmplitudes = AmplitudeVector(repeating: .zero, count: state.stateSpaceSize)
+        let stateSize = state.stateSpaceSize
         let bitMask = BitUtilities.bitMask(qubit: qubit)
 
-        for i in 0 ..< state.stateSpaceSize {
-            // Only process indices where target qubit is 0
-            // (to avoid processing each pair twice)
-            if (i & bitMask) == 0 {
-                let j: Int = BitUtilities.setBit(i, qubit: qubit, value: 1)
+        let newAmplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize where (i & bitMask) == 0 {
+                let j = i | bitMask
 
-                let ci: Complex<Double> = state.amplitudes[i]
-                let cj: Complex<Double> = state.amplitudes[j]
+                let ci = state.amplitudes[i]
+                let cj = state.amplitudes[j]
 
-                newAmplitudes[i] = g00 * ci + g01 * cj
-                newAmplitudes[j] = g10 * ci + g11 * cj
+                buffer[i] = g00 * ci + g01 * cj
+                buffer[j] = g10 * ci + g11 * cj
             }
+            count = stateSize
         }
 
         return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
@@ -165,36 +163,35 @@ public enum GateApplication {
         state: QuantumState
     ) -> QuantumState {
         let gateMatrix: GateMatrix = gate.matrix()
-        var newAmplitudes = AmplitudeVector(repeating: .zero, count: state.stateSpaceSize)
+        let stateSize = state.stateSpaceSize
 
-        // States differing only in control and target qubits
         let controlMask = BitUtilities.bitMask(qubit: control)
         let targetMask = BitUtilities.bitMask(qubit: target)
-        let bothMask: Int = controlMask | targetMask
+        let bothMask = controlMask | targetMask
 
-        let stateSize: Int = state.stateSpaceSize
+        let g00 = gateMatrix[0][0], g01 = gateMatrix[0][1], g02 = gateMatrix[0][2], g03 = gateMatrix[0][3]
+        let g10 = gateMatrix[1][0], g11 = gateMatrix[1][1], g12 = gateMatrix[1][2], g13 = gateMatrix[1][3]
+        let g20 = gateMatrix[2][0], g21 = gateMatrix[2][1], g22 = gateMatrix[2][2], g23 = gateMatrix[2][3]
+        let g30 = gateMatrix[3][0], g31 = gateMatrix[3][1], g32 = gateMatrix[3][2], g33 = gateMatrix[3][3]
 
-        for i in 0 ..< stateSize {
-            if (i & bothMask) == 0 {
-                let i00: Int = i // control=0, target=0
-                let i01: Int = i | targetMask // control=0, target=1
-                let i10: Int = i | controlMask // control=1, target=0
-                let i11: Int = i | bothMask // control=1, target=1
+        let newAmplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize where (i & bothMask) == 0 {
+                let i00 = i
+                let i01 = i | targetMask
+                let i10 = i | controlMask
+                let i11 = i | bothMask
 
-                let c00: Complex<Double> = state.amplitudes[i00]
-                let c01: Complex<Double> = state.amplitudes[i01]
-                let c10: Complex<Double> = state.amplitudes[i10]
-                let c11: Complex<Double> = state.amplitudes[i11]
+                let c00 = state.amplitudes[i00]
+                let c01 = state.amplitudes[i01]
+                let c10 = state.amplitudes[i10]
+                let c11 = state.amplitudes[i11]
 
-                newAmplitudes[i00] = gateMatrix[0][0] * c00 + gateMatrix[0][1] * c01 +
-                    gateMatrix[0][2] * c10 + gateMatrix[0][3] * c11
-                newAmplitudes[i01] = gateMatrix[1][0] * c00 + gateMatrix[1][1] * c01 +
-                    gateMatrix[1][2] * c10 + gateMatrix[1][3] * c11
-                newAmplitudes[i10] = gateMatrix[2][0] * c00 + gateMatrix[2][1] * c01 +
-                    gateMatrix[2][2] * c10 + gateMatrix[2][3] * c11
-                newAmplitudes[i11] = gateMatrix[3][0] * c00 + gateMatrix[3][1] * c01 +
-                    gateMatrix[3][2] * c10 + gateMatrix[3][3] * c11
+                buffer[i00] = g00 * c00 + g01 * c01 + g02 * c10 + g03 * c11
+                buffer[i01] = g10 * c00 + g11 * c01 + g12 * c10 + g13 * c11
+                buffer[i10] = g20 * c00 + g21 * c01 + g22 * c10 + g23 * c11
+                buffer[i11] = g30 * c00 + g31 * c01 + g32 * c10 + g33 * c11
             }
+            count = stateSize
         }
 
         return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
@@ -218,16 +215,18 @@ public enum GateApplication {
         target: Int,
         state: QuantumState
     ) -> QuantumState {
-        var newAmplitudes: AmplitudeVector = Array(repeating: Complex<Double>.zero, count: state.stateSpaceSize)
-
+        let stateSize = state.stateSpaceSize
         let controlMask = BitUtilities.bitMask(qubit: control)
 
-        for i in 0 ..< state.stateSpaceSize {
-            if (i & controlMask) != 0 {
-                newAmplitudes[BitUtilities.flipBit(i, qubit: target)] = state.amplitudes[i]
-            } else {
-                newAmplitudes[i] = state.amplitudes[i]
+        let newAmplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                if (i & controlMask) != 0 {
+                    buffer[BitUtilities.flipBit(i, qubit: target)] = state.amplitudes[i]
+                } else {
+                    buffer[i] = state.amplitudes[i]
+                }
             }
+            count = stateSize
         }
 
         return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
@@ -250,17 +249,18 @@ public enum GateApplication {
         target: Int,
         state: QuantumState
     ) -> QuantumState {
-        var newAmplitudes = AmplitudeVector(repeating: .zero, count: state.stateSpaceSize)
+        let stateSize = state.stateSpaceSize
+        let bothMask = BitUtilities.bitMask(qubit: control) | BitUtilities.bitMask(qubit: target)
 
-        let controlMask = BitUtilities.bitMask(qubit: control)
-        let targetMask = BitUtilities.bitMask(qubit: target)
-
-        for i in 0 ..< state.stateSpaceSize {
-            if (i & controlMask) != 0, (i & targetMask) != 0 {
-                newAmplitudes[i] = -state.amplitudes[i]
-            } else {
-                newAmplitudes[i] = state.amplitudes[i]
+        let newAmplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                if (i & bothMask) == bothMask {
+                    buffer[i] = -state.amplitudes[i]
+                } else {
+                    buffer[i] = state.amplitudes[i]
+                }
             }
+            count = stateSize
         }
 
         return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
@@ -285,17 +285,21 @@ public enum GateApplication {
         target: Int,
         state: QuantumState
     ) -> QuantumState {
-        var newAmplitudes: AmplitudeVector = Array(repeating: Complex<Double>.zero, count: state.stateSpaceSize)
-
+        let stateSize = state.stateSpaceSize
         let c1Mask = BitUtilities.bitMask(qubit: control1)
         let c2Mask = BitUtilities.bitMask(qubit: control2)
+        let bothControlMask = c1Mask | c2Mask
+        let targetMask = BitUtilities.bitMask(qubit: target)
 
-        for i in 0 ..< state.stateSpaceSize {
-            if (i & c1Mask) != 0, (i & c2Mask) != 0 {
-                newAmplitudes[BitUtilities.flipBit(i, qubit: target)] = state.amplitudes[i]
-            } else {
-                newAmplitudes[i] = state.amplitudes[i]
+        let newAmplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                if (i & bothControlMask) == bothControlMask {
+                    buffer[i ^ targetMask] = state.amplitudes[i]
+                } else {
+                    buffer[i] = state.amplitudes[i]
+                }
             }
+            count = stateSize
         }
 
         return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)

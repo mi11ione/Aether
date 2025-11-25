@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
+import Accelerate
 import Metal
 
 /// GPU-compatible complex number representation (real, imaginary)
@@ -116,6 +117,70 @@ public actor MetalGateApplication {
     /// Threshold: use GPU for states with >= this many qubits
     public static let gpuThreshold = 10
 
+    // MARK: - Conversion Helpers
+
+    /// Convert Complex<Double> amplitudes to GPU-compatible Float pairs using vDSP
+    @inline(__always)
+    private static func toGPUAmplitudes(_ amplitudes: AmplitudeVector) -> [GPUComplex] {
+        let n = amplitudes.count
+        var result = [GPUComplex](unsafeUninitializedCapacity: n) { _, count in
+            count = n
+        }
+
+        amplitudes.withUnsafeBytes { srcBytes in
+            let srcDoubles = srcBytes.bindMemory(to: Double.self)
+            result.withUnsafeMutableBytes { dstBytes in
+                let dstFloats = dstBytes.bindMemory(to: Float.self)
+                vDSP_vdpsp(srcDoubles.baseAddress!, 1, dstFloats.baseAddress!, 1, vDSP_Length(n * 2))
+            }
+        }
+
+        return result
+    }
+
+    /// Convert GPU Float pairs back to Complex<Double> amplitudes using vDSP
+    @inline(__always)
+    private static func fromGPUAmplitudes(_ pointer: UnsafePointer<GPUComplex>, count: Int) -> AmplitudeVector {
+        var result = AmplitudeVector(unsafeUninitializedCapacity: count) { _, outCount in
+            outCount = count
+        }
+
+        result.withUnsafeMutableBytes { dstBytes in
+            let dstDoubles = dstBytes.bindMemory(to: Double.self)
+            let srcFloats = UnsafeRawPointer(pointer).bindMemory(to: Float.self, capacity: count * 2)
+            vDSP_vspdp(srcFloats, 1, dstDoubles.baseAddress!, 1, vDSP_Length(count * 2))
+        }
+
+        return result
+    }
+
+    /// Convert 2x2 gate matrix to flat GPU format
+    @inline(__always)
+    private static func toGPUMatrix2x2(_ matrix: GateMatrix) -> [GPUComplex] {
+        [GPUComplex](unsafeUninitializedCapacity: 4) { buffer, count in
+            buffer[0] = (Float(matrix[0][0].real), Float(matrix[0][0].imaginary))
+            buffer[1] = (Float(matrix[0][1].real), Float(matrix[0][1].imaginary))
+            buffer[2] = (Float(matrix[1][0].real), Float(matrix[1][0].imaginary))
+            buffer[3] = (Float(matrix[1][1].real), Float(matrix[1][1].imaginary))
+            count = 4
+        }
+    }
+
+    /// Convert 4x4 gate matrix to flat GPU format
+    @inline(__always)
+    private static func toGPUMatrix4x4(_ matrix: GateMatrix) -> [GPUComplex] {
+        [GPUComplex](unsafeUninitializedCapacity: 16) { buffer, count in
+            var idx = 0
+            for row in 0 ..< 4 {
+                for col in 0 ..< 4 {
+                    buffer[idx] = (Float(matrix[row][col].real), Float(matrix[row][col].imaginary))
+                    idx += 1
+                }
+            }
+            count = 16
+        }
+    }
+
     public init?() {
         guard let device = MetalResources.device,
               let commandQueue = MetalResources.commandQueue,
@@ -174,17 +239,11 @@ public actor MetalGateApplication {
     @_optimize(speed)
     @_eagerMove
     private func applySingleQubitGate(gate: QuantumGate, qubit: Int, state: QuantumState) -> QuantumState {
-        // Convert amplitudes to Float for GPU
-        var floatAmplitudes: [GPUComplex] = state.amplitudes.map { amp in
-            (Float(amp.real), Float(amp.imaginary))
-        }
+        var floatAmplitudes = Self.toGPUAmplitudes(state.amplitudes)
+        var floatMatrix = Self.toGPUMatrix2x2(gate.matrix())
 
-        var floatMatrix: [GPUComplex] = gate.matrix().flatMap { row in
-            row.flatMap { [(Float($0.real), Float($0.imaginary))] }
-        }
-
-        let stateSize: Int = state.stateSpaceSize
-        let bufferSize: Int = stateSize * MemoryLayout<GPUComplex>.stride
+        let stateSize = state.stateSpaceSize
+        let bufferSize = stateSize * MemoryLayout<GPUComplex>.stride
 
         guard let amplitudeBuffer = device.makeBuffer(
             bytes: &floatAmplitudes,
@@ -212,9 +271,10 @@ public actor MetalGateApplication {
         encoder.setBuffer(matrixBuffer, offset: 0, index: 2)
         encoder.setBytes(&numQubitsValue, length: MemoryLayout<UInt32>.stride, index: 3)
 
-        let threadsPerGroup = MTLSize(width: min(singleQubitPipeline.maxTotalThreadsPerThreadgroup, stateSize), height: 1, depth: 1)
+        let numPairs = stateSize / 2
+        let threadsPerGroup = MTLSize(width: min(singleQubitPipeline.maxTotalThreadsPerThreadgroup, numPairs), height: 1, depth: 1)
         let threadgroups = MTLSize(
-            width: (stateSize + threadsPerGroup.width - 1) / threadsPerGroup.width,
+            width: (numPairs + threadsPerGroup.width - 1) / threadsPerGroup.width,
             height: 1,
             depth: 1
         )
@@ -225,15 +285,8 @@ public actor MetalGateApplication {
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
 
-        let resultPointer = amplitudeBuffer.contents().bindMemory(
-            to: GPUComplex.self,
-            capacity: stateSize
-        )
-
-        let newAmplitudes: AmplitudeVector = (0 ..< stateSize).map { i -> Complex<Double> in
-            let (real, imag): GPUComplex = resultPointer[i]
-            return Complex(Double(real), Double(imag))
-        }
+        let resultPointer = amplitudeBuffer.contents().bindMemory(to: GPUComplex.self, capacity: stateSize)
+        let newAmplitudes = Self.fromGPUAmplitudes(resultPointer, count: stateSize)
 
         guard newAmplitudes.allSatisfy(\.isFinite) else {
             return GateApplication.apply(gate: gate, to: [qubit], state: state)
@@ -245,9 +298,9 @@ public actor MetalGateApplication {
     @_optimize(speed)
     @_eagerMove
     private func applyCNOT(control: Int, target: Int, state: QuantumState) -> QuantumState {
-        var floatAmplitudes: [GPUComplex] = state.amplitudes.map { (Float($0.real), Float($0.imaginary)) }
-        let stateSize: Int = state.stateSpaceSize
-        let bufferSize: Int = stateSize * MemoryLayout<GPUComplex>.stride
+        var floatAmplitudes = Self.toGPUAmplitudes(state.amplitudes)
+        let stateSize = state.stateSpaceSize
+        let bufferSize = stateSize * MemoryLayout<GPUComplex>.stride
 
         guard let inputBuffer = device.makeBuffer(bytes: &floatAmplitudes, length: bufferSize, options: .storageModeShared),
               let outputBuffer = device.makeBuffer(length: bufferSize, options: .storageModeShared)
@@ -277,7 +330,7 @@ public actor MetalGateApplication {
         commandBuffer.waitUntilCompleted()
 
         let resultPointer = outputBuffer.contents().bindMemory(to: GPUComplex.self, capacity: stateSize)
-        let newAmplitudes: AmplitudeVector = (0 ..< stateSize).map { Complex(Double(resultPointer[$0].0), Double(resultPointer[$0].1)) }
+        let newAmplitudes = Self.fromGPUAmplitudes(resultPointer, count: stateSize)
 
         guard newAmplitudes.allSatisfy(\.isFinite) else {
             return GateApplication.apply(gate: .cnot(control: control, target: target), to: [], state: state)
@@ -289,17 +342,11 @@ public actor MetalGateApplication {
     @_optimize(speed)
     @_eagerMove
     private func applyTwoQubitGate(gate: QuantumGate, control: Int, target: Int, state: QuantumState) -> QuantumState {
-        var floatAmplitudes: [GPUComplex] = state.amplitudes.map { (Float($0.real), Float($0.imaginary)) }
-        let stateSize: Int = state.stateSpaceSize
-        let bufferSize: Int = stateSize * MemoryLayout<GPUComplex>.stride
+        var floatAmplitudes = Self.toGPUAmplitudes(state.amplitudes)
+        var floatMatrix = Self.toGPUMatrix4x4(gate.matrix())
 
-        var floatMatrix: [GPUComplex] = []
-        for row in gate.matrix() {
-            for element in row {
-                floatMatrix.append((Float(element.real), Float(element.imaginary)))
-            }
-        }
-
+        let stateSize = state.stateSpaceSize
+        let bufferSize = stateSize * MemoryLayout<GPUComplex>.stride
         let matrixSize = 16 * MemoryLayout<GPUComplex>.stride
 
         guard let inputBuffer = device.makeBuffer(bytes: &floatAmplitudes, length: bufferSize, options: .storageModeShared),
@@ -321,8 +368,9 @@ public actor MetalGateApplication {
         encoder.setBuffer(matrixBuffer, offset: 0, index: 3)
         encoder.setBytes(&numQubitsValue, length: MemoryLayout<UInt32>.stride, index: 4)
 
-        let threadsPerGroup = MTLSize(width: min(twoQubitPipeline.maxTotalThreadsPerThreadgroup, stateSize), height: 1, depth: 1)
-        let threadgroups = MTLSize(width: (stateSize + threadsPerGroup.width - 1) / threadsPerGroup.width, height: 1, depth: 1)
+        let numQuartets = stateSize / 4
+        let threadsPerGroup = MTLSize(width: min(twoQubitPipeline.maxTotalThreadsPerThreadgroup, numQuartets), height: 1, depth: 1)
+        let threadgroups = MTLSize(width: (numQuartets + threadsPerGroup.width - 1) / threadsPerGroup.width, height: 1, depth: 1)
 
         encoder.dispatchThreadgroups(threadgroups, threadsPerThreadgroup: threadsPerGroup)
         encoder.endEncoding()
@@ -330,7 +378,7 @@ public actor MetalGateApplication {
         commandBuffer.waitUntilCompleted()
 
         let resultPointer = inputBuffer.contents().bindMemory(to: GPUComplex.self, capacity: stateSize)
-        let newAmplitudes: AmplitudeVector = (0 ..< stateSize).map { Complex(Double(resultPointer[$0].0), Double(resultPointer[$0].1)) }
+        let newAmplitudes = Self.fromGPUAmplitudes(resultPointer, count: stateSize)
 
         guard newAmplitudes.allSatisfy(\.isFinite) else {
             return GateApplication.apply(gate: gate, to: [control, target], state: state)
@@ -342,9 +390,9 @@ public actor MetalGateApplication {
     @_optimize(speed)
     @_eagerMove
     private func applyToffoli(control1: Int, control2: Int, target: Int, state: QuantumState) -> QuantumState {
-        var floatAmplitudes: [GPUComplex] = state.amplitudes.map { (Float($0.real), Float($0.imaginary)) }
-        let stateSize: Int = state.stateSpaceSize
-        let bufferSize: Int = stateSize * MemoryLayout<GPUComplex>.stride
+        var floatAmplitudes = Self.toGPUAmplitudes(state.amplitudes)
+        let stateSize = state.stateSpaceSize
+        let bufferSize = stateSize * MemoryLayout<GPUComplex>.stride
 
         guard let inputBuffer = device.makeBuffer(bytes: &floatAmplitudes, length: bufferSize, options: .storageModeShared),
               let outputBuffer = device.makeBuffer(length: bufferSize, options: .storageModeShared)
@@ -376,7 +424,7 @@ public actor MetalGateApplication {
         commandBuffer.waitUntilCompleted()
 
         let resultPointer = outputBuffer.contents().bindMemory(to: GPUComplex.self, capacity: stateSize)
-        let newAmplitudes: AmplitudeVector = (0 ..< stateSize).map { Complex(Double(resultPointer[$0].0), Double(resultPointer[$0].1)) }
+        let newAmplitudes = Self.fromGPUAmplitudes(resultPointer, count: stateSize)
 
         guard newAmplitudes.allSatisfy(\.isFinite) else {
             return GateApplication.apply(gate: .toffoli(control1: control1, control2: control2, target: target), to: [], state: state)

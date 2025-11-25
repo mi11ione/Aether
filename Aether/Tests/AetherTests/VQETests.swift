@@ -84,23 +84,6 @@ struct VariationalQuantumEigensolverTests {
         #expect(abs(lastEnergy - result.optimalEnergy) < 1e-6)
     }
 
-    @Test("VQE rejects parameter count mismatch")
-    func rejectsParameterCountMismatch() async throws {
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1) // 2 parameters
-        let optimizer = NelderMeadOptimizer()
-
-        let vqe = VariationalQuantumEigensolver(
-            hamiltonian: hamiltonian,
-            ansatz: ansatz,
-            optimizer: optimizer
-        )
-
-        await #expect(throws: VQEError.self) {
-            try await vqe.run(initialParameters: [0.1])
-        }
-    }
-
     @Test("VQE tracks progress")
     func vqeTracksProgress() async throws {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))

@@ -10,7 +10,7 @@ import Foundation
 ///
 /// **QAOA Circuit Structure:**
 /// ```
-/// |0⟩^⊗n → H^⊗n → [Problem layer] → [Mixer layer] → repeat p times → Measure
+/// |0⟩^⊗n -> H^⊗n -> [Problem layer] -> [Mixer layer] -> repeat p times -> Measure
 /// ```
 ///
 /// Each QAOA layer consists of:
@@ -81,7 +81,7 @@ public struct QAOAAnsatz {
     /// initial superposition + alternating problem/mixer layers × depth.
     ///
     /// **Algorithm:**
-    /// 1. Apply Hadamard to all qubits: |0⟩^⊗n → |+⟩^⊗n
+    /// 1. Apply Hadamard to all qubits: |0⟩^⊗n -> |+⟩^⊗n
     /// 2. For each layer k = 0 to depth-1:
     ///    a. Problem layer: Apply exp(-iγₖ·cᵢ·Pᵢ) for each term in H_p
     ///    b. Mixer layer: Apply exp(-iβₖ·dⱼ·Qⱼ) for each term in H_m
@@ -216,14 +216,14 @@ public struct QAOAAnsatz {
     /// 3. Reverse basis rotations
     ///
     /// **CNOT ladder for ZZ...Z rotation:**
-    /// - CNOT chain: q₀→q₁→...→qₖ (entangle all qubits)
+    /// - CNOT chain: q₀->q₁->...->qₖ (entangle all qubits)
     /// - Rz(2·θ·c) on last qubit qₖ
-    /// - Reverse CNOT chain: qₖ₋₁→...→q₀ (disentangle)
+    /// - Reverse CNOT chain: qₖ₋₁->...->q₀ (disentangle)
     ///
     /// **Basis conversion:**
-    /// - X → Z: H (Hadamard)
-    /// - Y → Z: Rx(-π/2) = S†·H
-    /// - Z → Z: Identity (no conversion)
+    /// - X -> Z: H (Hadamard)
+    /// - Y -> Z: Rx(-π/2) = S†·H
+    /// - Z -> Z: Identity (no conversion)
     ///
     /// **Coefficient handling:**
     /// - Symbolic parameter θ bound at runtime
@@ -244,34 +244,36 @@ public struct QAOAAnsatz {
         coefficient: Double,
         numQubits: Int
     ) {
-        let qubits: [Int] = pauliString.operators.map(\.qubit).sorted()
+        let operatorCount = pauliString.operators.count
 
-        // Validate qubit indices
-        for qubit in qubits {
-            ValidationUtilities.validateQubitIndex(qubit, numQubits: numQubits)
-        }
+        var qubits = [Int](unsafeUninitializedCapacity: operatorCount) { buffer, count in
+            for i in 0 ..< operatorCount {
+                let op = pauliString.operators[i]
+                ValidationUtilities.validateQubitIndex(op.qubit, numQubits: numQubits)
+                buffer[i] = op.qubit
 
-        // Step 1: Convert to Z basis
-        for op in pauliString.operators {
-            switch op.basis {
-            case .z: break // Already in Z basis
-            case .x: circuit.append(gate: .concrete(.hadamard), toQubit: op.qubit)
-            case .y:
-                circuit.append(
-                    gate: .concrete(.rotationX(theta: -.pi / 2)),
-                    toQubit: op.qubit
-                )
+                switch op.basis {
+                case .z: break
+                case .x: circuit.append(gate: .concrete(.hadamard), toQubit: op.qubit)
+                case .y:
+                    circuit.append(
+                        gate: .concrete(.rotationX(theta: -.pi / 2)),
+                        toQubit: op.qubit
+                    )
+                }
             }
+            count = operatorCount
         }
+        qubits.sort()
 
         // Step 2: Apply multi-qubit Z rotation with coefficient scaling
-        // exp(-i·θ·c·P) → Rz(2·θ·c) where θ is symbolic, c is concrete
+        // exp(-i·θ·c·P) -> Rz(2·θ·c) where θ is symbolic, c is concrete
         //
         // **Approach**: Create unique scaled parameter for each (base_param, coefficient) pair
         // - Parameter name encodes coefficient: "gamma_0_c_1.000000"
         // - QAOA binds base parameters (gamma_0, beta_0) to values
         // - Custom binding in QAOA.swift expands to all scaled variants
-        // - Example: gamma_0=0.5 → {gamma_0_c_1.0: 0.5, gamma_0_c_-0.5: -0.25, ...}
+        // - Example: gamma_0=0.5 -> {gamma_0_c_1.0: 0.5, gamma_0_c_-0.5: -0.25, ...}
         let scaledParameter = createScaledParameter(base: parameter, coefficient: coefficient)
 
         if qubits.count == 1 {
@@ -345,7 +347,7 @@ public struct QAOAAnsatz {
     ///
     /// **Actually**, looking at the code flow more carefully:
     /// - ParameterizedGate.rotationZ takes ParameterExpression
-    /// - During binding, we substitute parameter → value
+    /// - During binding, we substitute parameter -> value
     /// - But we need value * 2 * coefficient for the angle
     ///
     /// **Better approach**: Use the base parameter directly and handle
@@ -367,9 +369,8 @@ public struct QAOAAnsatz {
         coefficient: Double
     ) -> Parameter {
         // Store coefficient in parameter name for proper scaling during binding
-        // Format: "base_name_c_coefficient" where coefficient is formatted with 6 decimals
-        // This ensures unique parameters for each term while preserving base parameter identity
-        let coefficientStr = String(format: "%.6f", coefficient * 2.0) // Pre-multiply by 2 for Rz(2θ)
-        return Parameter(name: "\(base.name)_c_\(coefficientStr)")
+        // Format: "base_name_c_coefficient"
+        let scaledCoeff = coefficient * 2.0
+        return Parameter(name: "\(base.name)_c_\(scaledCoeff)")
     }
 }

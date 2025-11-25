@@ -274,10 +274,10 @@ struct CoefficientScalingTests {
         #expect(!scaledBetaParams.isEmpty)
 
         let gammaCoefficient = -0.5 * 2.0
-        #expect(ansatz.parameters.contains { $0.name.contains("gamma_0_c_") && $0.name.contains(String(format: "%.6f", gammaCoefficient)) })
+        #expect(ansatz.parameters.contains { $0.name == "gamma_0_c_\(gammaCoefficient)" })
 
         let betaCoefficient = 1.0 * 2.0
-        #expect(ansatz.parameters.contains { $0.name.contains("beta_0_c_") && $0.name.contains(String(format: "%.6f", betaCoefficient)) })
+        #expect(ansatz.parameters.contains { $0.name == "beta_0_c_\(betaCoefficient)" })
     }
 
     @Test("Near-zero coefficients are filtered")

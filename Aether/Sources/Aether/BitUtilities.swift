@@ -29,9 +29,9 @@ public enum BitUtilities {
     /// **Example**:
     /// ```swift
     /// let state = 5  // |101⟩ in binary
-    /// BitUtilities.getBit(state, qubit: 0)  // → 1 (LSB)
-    /// BitUtilities.getBit(state, qubit: 1)  // → 0
-    /// BitUtilities.getBit(state, qubit: 2)  // → 1 (MSB)
+    /// BitUtilities.getBit(state, qubit: 0)  // -> 1 (LSB)
+    /// BitUtilities.getBit(state, qubit: 1)  // -> 0
+    /// BitUtilities.getBit(state, qubit: 2)  // -> 1 (MSB)
     /// ```
     ///
     /// **Use Cases**:
@@ -66,8 +66,8 @@ public enum BitUtilities {
     /// **Example**:
     /// ```swift
     /// let state = 5  // |101⟩
-    /// BitUtilities.setBit(state, qubit: 1, value: 1)  // → 7 (|111⟩)
-    /// BitUtilities.setBit(state, qubit: 0, value: 0)  // → 4 (|100⟩)
+    /// BitUtilities.setBit(state, qubit: 1, value: 1)  // -> 7 (|111⟩)
+    /// BitUtilities.setBit(state, qubit: 0, value: 0)  // -> 4 (|100⟩)
     /// ```
     ///
     /// **Use Cases**:
@@ -84,16 +84,12 @@ public enum BitUtilities {
     @inlinable
     @inline(__always)
     static func setBit(_ index: Int, qubit: Int, value: Int) -> Int {
-        if value == 0 {
-            index & ~(1 << qubit) // Clear bit
-        } else {
-            index | (1 << qubit) // Set bit
-        }
+        (index & ~(1 << qubit)) | (value << qubit)
     }
 
     /// Flip bit at specific qubit position
     ///
-    /// Toggles the specified qubit: 0→1 or 1→0. Essential for implementing
+    /// Toggles the specified qubit: 0->1 or 1->0. Essential for implementing
     /// X gates and CNOT operations which flip target qubits.
     ///
     /// **Algorithm**: `index ^ (1 << qubit)`
@@ -103,9 +99,9 @@ public enum BitUtilities {
     /// **Example**:
     /// ```swift
     /// let state = 5  // |101⟩
-    /// BitUtilities.flipBit(state, qubit: 1)  // → 7 (|111⟩)
-    /// BitUtilities.flipBit(state, qubit: 0)  // → 4 (|100⟩)
-    /// BitUtilities.flipBit(state, qubit: 2)  // → 1 (|001⟩)
+    /// BitUtilities.flipBit(state, qubit: 1)  // -> 7 (|111⟩)
+    /// BitUtilities.flipBit(state, qubit: 0)  // -> 4 (|100⟩)
+    /// BitUtilities.flipBit(state, qubit: 2)  // -> 1 (|001⟩)
     /// ```
     ///
     /// **Use Cases**:
@@ -149,9 +145,9 @@ public enum BitUtilities {
     ///
     /// **Example**:
     /// ```swift
-    /// BitUtilities.bitMask(qubit: 0)  // → 1 (0b001)
-    /// BitUtilities.bitMask(qubit: 1)  // → 2 (0b010)
-    /// BitUtilities.bitMask(qubit: 2)  // → 4 (0b100)
+    /// BitUtilities.bitMask(qubit: 0)  // -> 1 (0b001)
+    /// BitUtilities.bitMask(qubit: 1)  // -> 2 (0b010)
+    /// BitUtilities.bitMask(qubit: 2)  // -> 4 (0b100)
     /// ```
     ///
     /// **Use Cases**:
@@ -178,8 +174,8 @@ public enum BitUtilities {
     /// **Example**:
     /// ```swift
     /// let state = 7  // |111⟩
-    /// BitUtilities.getBits(state, qubits: [0, 1])  // → 3 (both bits are 1)
-    /// BitUtilities.getBits(state, qubits: [1, 2])  // → 3
+    /// BitUtilities.getBits(state, qubits: [0, 1])  // -> 3 (both bits are 1)
+    /// BitUtilities.getBits(state, qubits: [1, 2])  // -> 3
     /// ```
     ///
     /// **Use Cases**:
@@ -196,10 +192,27 @@ public enum BitUtilities {
     @inline(__always)
     static func getBits(_ index: Int, qubits: [Int]) -> Int {
         var result = 0
-        for (position, qubit) in qubits.enumerated() {
-            let bit = getBit(index, qubit: qubit)
+        for position in 0 ..< qubits.count {
+            let bit = (index >> qubits[position]) & 1
             result |= (bit << position)
         }
         return result
+    }
+
+    /// Extract two bits as integer value (optimized for Toffoli gate)
+    ///
+    /// Specialized fast path for the common 2-qubit case (Toffoli controls).
+    /// Avoids loop overhead entirely with direct bit extraction.
+    ///
+    /// - Parameters:
+    ///   - index: Basis state index
+    ///   - qubit0: First qubit position (becomes bit 0 of result)
+    ///   - qubit1: Second qubit position (becomes bit 1 of result)
+    /// - Returns: Integer 0-3 formed from the two extracted bits
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func getTwoBits(_ index: Int, qubit0: Int, qubit1: Int) -> Int {
+        ((index >> qubit0) & 1) | (((index >> qubit1) & 1) << 1)
     }
 }

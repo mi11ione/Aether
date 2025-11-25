@@ -19,18 +19,22 @@ public struct UnitaryPartition: Sendable {
     /// Number of qubits
     public let numQubits: Int
 
-    /// Measurement basis after unitary transformation (computational basis)
-    @inlinable
-    @_eagerMove
-    public var measurementBasis: MeasurementBasis {
-        // After U†, measure in computational (Z) basis
+    /// Cached measurement basis (computed once at init)
+    public let measurementBasis: MeasurementBasis
+
+    /// Initialize with precomputed measurement basis
+    public init(terms: PauliTerms, unitaryMatrix: GateMatrix, numQubits: Int) {
+        self.terms = terms
+        self.unitaryMatrix = unitaryMatrix
+        self.numQubits = numQubits
+
         var basis: MeasurementBasis = [:]
         for term in terms {
             for op in term.pauliString.operators {
                 basis[op.qubit] = .z
             }
         }
-        return basis
+        measurementBasis = basis
     }
 
     /// Total weight (sum of absolute coefficients)
@@ -54,7 +58,7 @@ public struct UnitaryPartition: Sendable {
 /// 4. Minimize: C(U) = Σᵢ wᵢ ||off-diagonal(U†PᵢU)||²
 /// 5. Use L-BFGS-B for optimization
 ///
-/// This can reduce 2000 terms → 50 QWC groups → 10-20 unitary partitions.
+/// This can reduce 2000 terms -> 50 QWC groups -> 10-20 unitary partitions.
 @frozen
 public struct UnitaryPartitioner {
     // MARK: - Configuration
@@ -88,6 +92,30 @@ public struct UnitaryPartitioner {
     public let config: Config
 
     public init(config: Config = .default) { self.config = config }
+
+    // MARK: - Target Operator Construction
+
+    /// Build target operator matrix from Pauli terms: H = Σᵢ cᵢ Pᵢ
+    @_optimize(speed)
+    @_eagerMove
+    private func buildTargetOperator(
+        terms: PauliTerms,
+        numQubits: Int
+    ) -> GateMatrix {
+        let dimension = 1 << numQubits
+        var targetOperator = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
+
+        for (coeff, pauliString) in terms {
+            let pauliMatrix = pauliString.toMatrix(numQubits: numQubits)
+            for i in 0 ..< dimension {
+                for j in 0 ..< dimension {
+                    targetOperator[i][j] += Complex(coeff) * pauliMatrix[i][j]
+                }
+            }
+        }
+
+        return targetOperator
+    }
 
     // MARK: - Main Partitioning Algorithm
 
@@ -173,17 +201,7 @@ public struct UnitaryPartitioner {
         terms: PauliTerms,
         numQubits: Int
     ) -> GateMatrix? {
-        let dimension = 1 << numQubits
-        var targetOperator = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
-
-        for (coeff, pauliString) in terms {
-            let pauliMatrix = pauliString.toMatrix(numQubits: numQubits)
-            for i in 0 ..< dimension {
-                for j in 0 ..< dimension {
-                    targetOperator[i][j] += Complex(coeff) * pauliMatrix[i][j]
-                }
-            }
-        }
+        let targetOperator = buildTargetOperator(terms: terms, numQubits: numQubits)
 
         if let (_, eigenvectors) = eigendecompose(targetOperator) {
             let offDiagNorm: Double = computeOffDiagonalNorm(
@@ -209,10 +227,11 @@ public struct UnitaryPartitioner {
         let pauliMatrices: [GateMatrix] = terms.map { $0.pauliString.toMatrix(numQubits: numQubits) }
 
         let numParams: Int = variationalParameterCount(numQubits: numQubits, depth: config.ansatzDepth)
-        var parameters: [Double] = Array(repeating: 0.0, count: numParams)
-
-        for i in 0 ..< numParams {
-            parameters[i] = Double.random(in: -Double.pi ... Double.pi)
+        let parameters = [Double](unsafeUninitializedCapacity: numParams) { buffer, count in
+            for i in 0 ..< numParams {
+                buffer[i] = Double.random(in: -Double.pi ... Double.pi)
+            }
+            count = numParams
         }
 
         let result: OptimizationResult = lbfgsb(
@@ -243,17 +262,7 @@ public struct UnitaryPartitioner {
             depth: config.ansatzDepth
         )
 
-        let dimension = 1 << numQubits
-        var targetOperator = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
-
-        for (coeff, pauliString) in terms {
-            let pauliMatrix = pauliString.toMatrix(numQubits: numQubits)
-            for i in 0 ..< dimension {
-                for j in 0 ..< dimension {
-                    targetOperator[i][j] += Complex(coeff) * pauliMatrix[i][j]
-                }
-            }
-        }
+        let targetOperator = buildTargetOperator(terms: terms, numQubits: numQubits)
 
         let offDiagNorm: Double = computeOffDiagonalNorm(operator: targetOperator, unitary: unitary)
 
@@ -282,11 +291,29 @@ public struct UnitaryPartitioner {
             let pauliMatrix = pauliMatrices[index]
             let conjugated = conjugateByUnitary(pauliMatrix, unitary: unitary)
 
-            for i in 0 ..< dimension {
-                for j in 0 ..< dimension where i != j {
-                    cost += abs(term.coefficient) * conjugated[i][j].magnitude() * conjugated[i][j].magnitude()
+            let coeffWeight = abs(term.coefficient)
+
+            let interleaved = [Double](unsafeUninitializedCapacity: dimension * dimension * 2) { buffer, count in
+                var idx = 0
+                for i in 0 ..< dimension {
+                    for j in 0 ..< dimension {
+                        buffer[idx] = conjugated[i][j].real
+                        buffer[idx + 1] = conjugated[i][j].imaginary
+                        idx += 2
+                    }
                 }
+                count = dimension * dimension * 2
             }
+
+            var totalSumSq = 0.0
+            vDSP_svesqD(interleaved, 1, &totalSumSq, vDSP_Length(interleaved.count))
+
+            var diagSumSq = 0.0
+            for i in 0 ..< dimension {
+                diagSumSq += conjugated[i][i].magnitudeSquared
+            }
+
+            cost += coeffWeight * (totalSumSq - diagSumSq)
         }
 
         return cost
@@ -301,7 +328,7 @@ public struct UnitaryPartitioner {
         numQubits: Int
     ) -> [Double] {
         let epsilon = 1e-7
-        var gradient = Array(repeating: 0.0, count: parameters.count)
+        let paramCount = parameters.count
 
         let f0 = costFunctionCached(
             parameters: parameters,
@@ -310,17 +337,20 @@ public struct UnitaryPartitioner {
             numQubits: numQubits
         )
 
-        for i in 0 ..< parameters.count {
-            var paramsPlus = parameters
-            paramsPlus[i] += epsilon
+        let gradient = [Double](unsafeUninitializedCapacity: paramCount) { buffer, count in
+            for i in 0 ..< paramCount {
+                var paramsPlus = parameters
+                paramsPlus[i] += epsilon
 
-            let fPlus = costFunctionCached(
-                parameters: paramsPlus,
-                terms: terms,
-                pauliMatrices: pauliMatrices,
-                numQubits: numQubits
-            )
-            gradient[i] = (fPlus - f0) / epsilon
+                let fPlus = costFunctionCached(
+                    parameters: paramsPlus,
+                    terms: terms,
+                    pauliMatrices: pauliMatrices,
+                    numQubits: numQubits
+                )
+                buffer[i] = (fPlus - f0) / epsilon
+            }
+            count = paramCount
         }
 
         return gradient
@@ -337,6 +367,7 @@ public struct UnitaryPartitioner {
     }
 
     /// Build unitary from variational parameters.
+    /// Precomputes CNOT matrices (constant per qubit pair) to avoid redundant construction.
     @_optimize(speed)
     @_eagerMove
     private func buildVariationalUnitary(
@@ -346,6 +377,10 @@ public struct UnitaryPartitioner {
     ) -> GateMatrix {
         let dimension = 1 << numQubits
         var unitary: GateMatrix = MatrixUtilities.identityMatrix(dimension: dimension)
+
+        let cnotMatrices: [GateMatrix] = (0 ..< (numQubits - 1)).map { qubit in
+            cnotMatrix(control: qubit, target: qubit + 1, numQubits: numQubits)
+        }
 
         var paramIndex = 0
 
@@ -367,8 +402,7 @@ public struct UnitaryPartitioner {
                 unitary = MatrixUtilities.matrixMultiply(rotation, unitary)
             }
 
-            for qubit in 0 ..< (numQubits - 1) {
-                let cnot: GateMatrix = cnotMatrix(control: qubit, target: qubit + 1, numQubits: numQubits)
+            for (index, cnot) in cnotMatrices.enumerated() where index < numQubits - 1 {
                 unitary = MatrixUtilities.matrixMultiply(cnot, unitary)
             }
         }
@@ -398,14 +432,14 @@ public struct UnitaryPartitioner {
         let conjugated: GateMatrix = conjugateByUnitary(matrix, unitary: unitary)
         let n: Int = conjugated.count
 
-        var norm = 0.0
+        var normSquared = 0.0
         for i in 0 ..< n {
             for j in 0 ..< n where i != j {
-                norm += conjugated[i][j].magnitude() * conjugated[i][j].magnitude()
+                normSquared += conjugated[i][j].magnitudeSquared
             }
         }
 
-        return sqrt(norm)
+        return sqrt(normSquared)
     }
 
     @_optimize(speed)
@@ -486,17 +520,19 @@ public struct UnitaryPartitioner {
     private func eigendecompose(_ matrix: GateMatrix) -> (eigenvalues: [Double], eigenvectors: GateMatrix)? {
         let n: Int = matrix.count
 
-        var a = [Double]()
-        a.reserveCapacity(2 * n * n)
-
-        for col in 0 ..< n {
-            for row in 0 ..< n {
-                a.append(matrix[row][col].real)
-                a.append(matrix[row][col].imaginary)
+        var a = [Double](unsafeUninitializedCapacity: 2 * n * n) { buffer, count in
+            for col in 0 ..< n {
+                let colOffset = 2 * col * n
+                for row in 0 ..< n {
+                    let idx = colOffset + 2 * row
+                    buffer[idx] = matrix[row][col].real
+                    buffer[idx + 1] = matrix[row][col].imaginary
+                }
             }
+            count = 2 * n * n
         }
 
-        var w = [Double](repeating: 0.0, count: n)
+        var w = [Double](unsafeUninitializedCapacity: n) { _, count in count = n }
 
         var jobz = CChar(Character("V").asciiValue!) // Compute eigenvectors
         var uplo = CChar(Character("U").asciiValue!) // Upper triangle
@@ -559,16 +595,17 @@ public struct UnitaryPartitioner {
 
         guard computeResult == 0 else { return nil }
 
-        var eigenvectors = Array(
-            repeating: Array(repeating: Complex<Double>.zero, count: n),
-            count: n
-        )
-
-        for col in 0 ..< n {
+        let eigenvectors = [[Complex<Double>]](unsafeUninitializedCapacity: n) { rowBuffer, rowCount in
             for row in 0 ..< n {
-                let idx = 2 * (col * n + row)
-                eigenvectors[row][col] = Complex(a[idx], a[idx + 1])
+                rowBuffer[row] = [Complex<Double>](unsafeUninitializedCapacity: n) { colBuffer, colCount in
+                    for col in 0 ..< n {
+                        let idx = 2 * (col * n + row)
+                        colBuffer[col] = Complex(a[idx], a[idx + 1])
+                    }
+                    colCount = n
+                }
             }
+            rowCount = n
         }
 
         return (eigenvalues: w, eigenvectors: eigenvectors)
@@ -621,7 +658,9 @@ public struct UnitaryPartitioner {
         var converged = false
 
         while iteration < maxIterations {
-            let gradNorm: Double = sqrt(gradient.reduce(0.0) { $0 + $1 * $1 })
+            var gradNormSq = 0.0
+            vDSP_svesqD(gradient, 1, &gradNormSq, vDSP_Length(gradient.count))
+            let gradNorm = sqrt(gradNormSq)
 
             /// This convergence check is standard L-BFGS stopping criterion.
             /// In practice, eigendecomposition succeeds for most Hamiltonians,
@@ -651,14 +690,26 @@ public struct UnitaryPartitioner {
                 c2: c2
             ) else { break }
 
-            let newParams: [Double] = zip(params, direction).map { $0 + alpha * $1 }
+            let n = params.count
+            let newParams = [Double](unsafeUninitializedCapacity: n) { buffer, count in
+                var alphaVar = alpha
+                vDSP_vsmaD(direction, 1, &alphaVar, params, 1, buffer.baseAddress!, 1, vDSP_Length(n))
+                count = n
+            }
             let newGradient: [Double] = gradientFunction(newParams)
             let newCost: Double = costFunction(newParams)
 
-            let s: [Double] = zip(newParams, params).map { $0 - $1 }
-            let y: [Double] = zip(newGradient, gradient).map { $0 - $1 }
+            let s = [Double](unsafeUninitializedCapacity: n) { buffer, count in
+                vDSP_vsubD(params, 1, newParams, 1, buffer.baseAddress!, 1, vDSP_Length(n))
+                count = n
+            }
+            let y = [Double](unsafeUninitializedCapacity: n) { buffer, count in
+                vDSP_vsubD(gradient, 1, newGradient, 1, buffer.baseAddress!, 1, vDSP_Length(n))
+                count = n
+            }
 
-            let ys: Double = zip(y, s).reduce(0.0) { $0 + $1.0 * $1.1 }
+            var ys = 0.0
+            vDSP_dotprD(y, 1, s, 1, &ys, vDSP_Length(n))
 
             if ys > 1e-10 {
                 let rho = 1.0 / ys
@@ -697,18 +748,25 @@ public struct UnitaryPartitioner {
         var alpha = 1.0
         let maxBacktrack = 20
         let rho = 0.5
+        let n = params.count
 
-        let dirGrad: Double = zip(direction, gradient).reduce(0.0) { $0 + $1.0 * $1.1 }
+        var dirGrad = 0.0
+        vDSP_dotprD(direction, 1, gradient, 1, &dirGrad, vDSP_Length(n))
 
         guard dirGrad < 0 else { return nil }
 
         for _ in 0 ..< maxBacktrack {
-            let newParams: [Double] = zip(params, direction).map { $0 + alpha * $1 }
+            let newParams = [Double](unsafeUninitializedCapacity: n) { buffer, count in
+                var alphaVar = alpha
+                vDSP_vsmaD(direction, 1, &alphaVar, params, 1, buffer.baseAddress!, 1, vDSP_Length(n))
+                count = n
+            }
             let newCost: Double = costFunction(newParams)
 
             if newCost <= cost + c1 * alpha * dirGrad {
                 let newGradient: [Double] = gradientFunction(newParams)
-                let newDirGrad: Double = zip(direction, newGradient).reduce(0.0) { $0 + $1.0 * $1.1 }
+                var newDirGrad = 0.0
+                vDSP_dotprD(direction, 1, newGradient, 1, &newDirGrad, vDSP_Length(n))
 
                 if abs(newDirGrad) <= -c2 * dirGrad { return alpha }
             }
@@ -731,10 +789,10 @@ public extension PauliString {
     /// and dense matrix conversion (UnitaryPartitioning).
     ///
     /// **Pauli action on computational basis**:
-    /// - **X**: Bit flip → `col ^= (1 << qubit)`
-    /// - **Y**: Bit flip + phase → `col ^= (1 << qubit)`, `phase *= (bit==0 ? -i : i)`
-    /// - **Z**: Phase only → `phase *= (bit==0 ? +1 : -1)`
-    /// - **I** (identity): No-op → unchanged `col` and `phase`
+    /// - **X**: Bit flip -> `col ^= (1 << qubit)`
+    /// - **Y**: Bit flip + phase -> `col ^= (1 << qubit)`, `phase *= (bit==0 ? -i : i)`
+    /// - **Z**: Phase only -> `phase *= (bit==0 ? +1 : -1)`
+    /// - **I** (identity): No-op -> unchanged `col` and `phase`
     ///
     /// **Phase conventions**:
     /// - Y operator: Y|0⟩ = i|1⟩, Y|1⟩ = -i|0⟩
@@ -745,7 +803,7 @@ public extension PauliString {
     /// ```swift
     /// let yPauli = PauliString(operators: [(qubit: 0, basis: .y)])
     /// let (col, phase) = yPauli.applyToRow(row: 0, numQubits: 1)
-    /// // Y|0⟩ = i|1⟩ → col = 1, phase = i
+    /// // Y|0⟩ = i|1⟩ -> col = 1, phase = i
     /// ```
     ///
     /// - Parameters:
@@ -754,30 +812,25 @@ public extension PauliString {
     /// - Returns: (column index, phase factor) representing P|row⟩ = phase * |col⟩
     @_optimize(speed)
     @inlinable
-    func applyToRow(row: Int, numQubits: Int) -> (col: Int, phase: Complex<Double>) {
-        var operatorMap: MeasurementBasis = [:]
-        for op in operators {
-            operatorMap[op.qubit] = op.basis
-        }
-
+    func applyToRow(row: Int, numQubits _: Int) -> (col: Int, phase: Complex<Double>) {
         var col: Int = row
         var phase = Complex<Double>.one
 
-        for qubit in 0 ..< numQubits {
+        for op in operators {
+            let qubit = op.qubit
             let rowBit: Int = (row >> qubit) & 1
+            let mask = BitUtilities.bitMask(qubit: qubit)
 
-            if let basis = operatorMap[qubit] {
-                switch basis {
-                case .x:
-                    col ^= (BitUtilities.bitMask(qubit: qubit))
+            switch op.basis {
+            case .x:
+                col ^= mask
 
-                case .y:
-                    col ^= (BitUtilities.bitMask(qubit: qubit))
-                    phase *= rowBit == 0 ? -Complex<Double>.i : Complex<Double>.i
+            case .y:
+                col ^= mask
+                phase *= rowBit == 0 ? -Complex<Double>.i : Complex<Double>.i
 
-                case .z:
-                    phase *= rowBit == 0 ? .one : -.one
-                }
+            case .z:
+                phase *= rowBit == 0 ? .one : -.one
             }
         }
 

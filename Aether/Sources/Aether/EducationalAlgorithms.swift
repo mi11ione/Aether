@@ -31,7 +31,7 @@ public extension QuantumCircuit {
 
     /// Deutsch-Jozsa algorithm: Determine if function is constant or balanced
     ///
-    /// **Problem**: Given f:{0,1}^n → {0,1} that is either:
+    /// **Problem**: Given f:{0,1}^n -> {0,1} that is either:
     /// - Constant: f(x) = 0 for all x, or f(x) = 1 for all x
     /// - Balanced: f(x) = 0 for exactly 2^(n-1) inputs, 1 for the rest
     ///
@@ -41,9 +41,9 @@ public extension QuantumCircuit {
     ///
     /// **Algorithm**:
     /// 1. Prepare |+⟩^⊗n|−⟩ using Hadamard gates
-    /// 2. Apply oracle Uf: |x⟩|y⟩ → |x⟩|y⊕f(x)⟩
+    /// 2. Apply oracle Uf: |x⟩|y⟩ -> |x⟩|y⊕f(x)⟩
     /// 3. Apply Hadamard to input qubits
-    /// 4. Measure input qubits: all |0⟩ → constant, any |1⟩ → balanced
+    /// 4. Measure input qubits: all |0⟩ -> constant, any |1⟩ -> balanced
     ///
     /// - Parameters:
     ///   - numInputQubits: Number of input qubits (n)
@@ -64,7 +64,7 @@ public extension QuantumCircuit {
     ///
     /// let circuit = QuantumCircuit.deutschJozsa(numInputQubits: 3, oracle: balancedOracle)
     /// let state = circuit.execute()
-    /// // Measure input qubits: all |0⟩ → constant, any |1⟩ → balanced
+    /// // Measure input qubits: all |0⟩ -> constant, any |1⟩ -> balanced
     /// ```
     @_effects(readonly)
     @inlinable
@@ -110,7 +110,7 @@ public extension QuantumCircuit {
     ///
     /// **Algorithm**:
     /// 1. Prepare |+⟩^⊗n|−⟩
-    /// 2. Apply oracle Uf: |x⟩|y⟩ → |x⟩|y⊕(a·x)⟩
+    /// 2. Apply oracle Uf: |x⟩|y⟩ -> |x⟩|y⊕(a·x)⟩
     /// 3. Apply Hadamard to input qubits
     /// 4. Measure: Result is hidden string a
     ///
@@ -168,7 +168,7 @@ public extension QuantumCircuit {
 
     /// Simon's algorithm: Find period of XOR function
     ///
-    /// **Problem**: Given f:{0,1}^n → {0,1}^n such that f(x) = f(x⊕s) for all x
+    /// **Problem**: Given f:{0,1}^n -> {0,1}^n such that f(x) = f(x⊕s) for all x
     /// (where s ≠ 0^n is hidden period), find s.
     ///
     /// **Quantum advantage**:
@@ -177,7 +177,7 @@ public extension QuantumCircuit {
     ///
     /// **Algorithm** (single query iteration):
     /// 1. Prepare |+⟩^⊗n|0⟩^⊗n
-    /// 2. Apply oracle Uf: |x⟩|0^n⟩ → |x⟩|f(x)⟩
+    /// 2. Apply oracle Uf: |x⟩|0^n⟩ -> |x⟩|f(x)⟩
     /// 3. Apply Hadamard to first n qubits
     /// 4. Measure first n qubits: Get y such that y·s = 0 (mod 2)
     /// 5. Repeat O(n) times to collect n-1 linearly independent equations
@@ -242,7 +242,7 @@ public extension QuantumCircuit {
     @inlinable
     static func constantZeroOracle() -> Oracle {
         { _, _, _ in
-            // Do nothing: |y⟩ remains unchanged → f(x) = 0
+            // Do nothing: |y⟩ remains unchanged -> f(x) = 0
         }
     }
 
@@ -349,24 +349,29 @@ public extension QuantumState {
     @inlinable
     func measureQubits(_ qubits: [Int]) -> [Int] {
         ValidationUtilities.validateOperationQubits(qubits, numQubits: numQubits)
+        let (maxIndex, _) = mostProbableBasisState()
 
-        let probs: [Double] = probabilities()
-        // Safe to force unwrap: probabilities() always returns 2^n elements
-        // for valid quantum states, so max(by:) can never return nil.
-        let maxIndex: Int = probs.indices.max(by: { probs[$0] < probs[$1] })!
-
-        return qubits.map { qubit in
-            BitUtilities.getBit(maxIndex, qubit: qubit)
+        return [Int](unsafeUninitializedCapacity: qubits.count) { buffer, count in
+            for i in 0 ..< qubits.count {
+                buffer[i] = BitUtilities.getBit(maxIndex, qubit: qubits[i])
+            }
+            count = qubits.count
         }
     }
 
     /// Check if all specified qubits are measured as |0⟩
     /// - Parameter qubits: Indices of qubits to check
     /// - Returns: True if all qubits are in |0⟩ state (within threshold)
+    @_optimize(speed)
     @_effects(readonly)
     @inlinable
     func allQubitsAreZero(_ qubits: [Int]) -> Bool {
-        let measurements: [Int] = measureQubits(qubits)
-        return measurements.allSatisfy { $0 == 0 }
+        ValidationUtilities.validateOperationQubits(qubits, numQubits: numQubits)
+        let (maxIndex, _) = mostProbableBasisState()
+
+        for qubit in qubits {
+            if BitUtilities.getBit(maxIndex, qubit: qubit) != 0 { return false }
+        }
+        return true
     }
 }

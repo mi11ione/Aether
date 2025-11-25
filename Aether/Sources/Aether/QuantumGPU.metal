@@ -68,11 +68,11 @@ inline ComplexFloat complexAdd(ComplexFloat a, ComplexFloat b) {
 }
 
 /// Complex multiplication: (a + bi)(c + di) = (ac - bd) + (ad + bc)i
-/// Implements standard complex multiplication formula from complex analysis
+/// Uses fma() for better precision (single rounding) and potential speedup on FMA-capable GPUs
 inline ComplexFloat complexMultiply(ComplexFloat a, ComplexFloat b) {
     return ComplexFloat{
-        a.real * b.real - a.imaginary * b.imaginary,
-        a.real * b.imaginary + a.imaginary * b.real
+        fma(a.real, b.real, -a.imaginary * b.imaginary),
+        fma(a.real, b.imaginary, a.imaginary * b.real)
     };
 }
 
@@ -91,12 +91,18 @@ inline ComplexFloat complexScale(ComplexFloat a, float scalar) {
 /// in the target qubit bit.
 ///
 /// **Algorithm**:
-/// - Thread gid processes indices i=gid (target bit=0) and j=i|(1<<target) (target bit=1)
+/// - Launch 2^(n-1) threads (half of state size)
+/// - Thread gid computes index pair by "inserting" a 0 bit at targetQubit position
 /// - Applies matrix: [cᵢ', cⱼ'] = U · [cᵢ, cⱼ] where U = [[g00, g01], [g10, g11]]
 /// - Writes results back in-place (no race conditions - unique indices per thread)
 ///
+/// **Index computation** (insert 0 bit at position targetQubit):
+/// - lowMask = (1 << targetQubit) - 1 extracts bits below targetQubit
+/// - i = (gid & lowMask) | ((gid & ~lowMask) << 1) shifts upper bits left, keeps lower bits
+/// - j = i | (1 << targetQubit) sets the targetQubit bit to 1
+///
 /// **Parallelization**:
-/// - Threads: 2^n total, but only 2^(n-1) active (those with target bit = 0)
+/// - Threads: 2^(n-1)
 /// - Memory access: Each thread reads 2 amplitudes, writes 2 amplitudes
 /// - Coalescing: Adjacent threads access nearby memory for optimal bandwidth
 ///
@@ -105,13 +111,13 @@ inline ComplexFloat complexScale(ComplexFloat a, float scalar) {
 /// - targetQubit: Qubit index to apply gate to (0 to n-1)
 /// - gateMatrix: 2×2 unitary matrix [g00, g01, g10, g11] in row-major order
 /// - numQubits: Total number of qubits (n)
-/// - gid: Thread ID in grid (0 to 2^n - 1)
+/// - gid: Thread ID in grid (0 to 2^(n-1) - 1)
 ///
-/// Example: Hadamard on qubit 0 of 2-qubit state
-/// - State: [c00, c01, c10, c11]
-/// - Thread 0: Processes (c00, c01) → applies H matrix
-/// - Thread 2: Processes (c10, c11) → applies H matrix
-/// - Threads 1,3: Inactive (target bit already set)
+/// Example: Hadamard on qubit 1 of 3-qubit state (stateSize=8, launch 4 threads)
+/// - Thread 0: lowMask=1, i=(0&1)|((0&~1)<<1)=0, j=0|2=2 -> processes (c000, c010)
+/// - Thread 1: i=(1&1)|((1&~1)<<1)=1, j=1|2=3 -> processes (c001, c011)
+/// - Thread 2: i=(2&1)|((2&~1)<<1)=4, j=4|2=6 -> processes (c100, c110)
+/// - Thread 3: i=(3&1)|((3&~1)<<1)=5, j=5|2=7 -> processes (c101, c111)
 kernel void applySingleQubitGate(
     device ComplexFloat *amplitudes [[buffer(0)]],
     constant uint &targetQubit [[buffer(1)]],
@@ -119,12 +125,12 @@ kernel void applySingleQubitGate(
     constant uint &numQubits [[buffer(3)]],
     uint gid [[thread_position_in_grid]]
 ) {
-    const uint stateSize = 1 << numQubits;
-    const uint bitMask = 1 << targetQubit;
+    const uint numPairs = 1 << (numQubits - 1);
     
-    if ((gid & bitMask) == 0 && gid < stateSize) {
-        const uint i = gid;
-        const uint j = gid | bitMask;
+    if (gid < numPairs) {
+        const uint lowMask = (1 << targetQubit) - 1;
+        const uint i = (gid & lowMask) | ((gid & ~lowMask) << 1);
+        const uint j = i | (1 << targetQubit);
         
         ComplexFloat ci = amplitudes[i];
         ComplexFloat cj = amplitudes[j];
@@ -137,7 +143,6 @@ kernel void applySingleQubitGate(
         ComplexFloat newCi = complexAdd(complexMultiply(g00, ci), complexMultiply(g01, cj));
         ComplexFloat newCj = complexAdd(complexMultiply(g10, ci), complexMultiply(g11, cj));
         
-        // Write back (no race conditions - each thread writes to unique indices)
         amplitudes[i] = newCi;
         amplitudes[j] = newCj;
     }
@@ -147,7 +152,7 @@ kernel void applySingleQubitGate(
 
 /// Apply CNOT gate: optimized controlled-NOT implementation
 ///
-/// Implements CNOT(control→target) gate with conditional amplitude swap.
+/// Implements CNOT(control->target) gate with conditional amplitude swap.
 /// Much faster than general two-qubit gate matrix multiplication since
 /// CNOT only swaps amplitudes when control=1, no complex arithmetic needed.
 ///
@@ -170,12 +175,12 @@ kernel void applySingleQubitGate(
 /// - outputAmplitudes: Output state vector (write-only)
 /// - gid: Thread ID in grid (0 to 2^n - 1)
 ///
-/// Example: CNOT(0→1) on 2-qubit state
+/// Example: CNOT(0->1) on 2-qubit state
 /// - Input: [c00, c01, c10, c11]
-/// - Thread 0: control=0 → output[0] = input[0] (c00 unchanged)
-/// - Thread 1: control=1 → output[3] = input[1] (c01 → c11)
-/// - Thread 2: control=0 → output[2] = input[2] (c10 unchanged)
-/// - Thread 3: control=1 → output[1] = input[3] (c11 → c01)
+/// - Thread 0: control=0 -> output[0] = input[0] (c00 unchanged)
+/// - Thread 1: control=1 -> output[3] = input[1] (c01 -> c11)
+/// - Thread 2: control=0 -> output[2] = input[2] (c10 unchanged)
+/// - Thread 3: control=1 -> output[1] = input[3] (c11 -> c01)
 /// - Output: [c00, c11, c10, c01]
 kernel void applyCNOT(
     device ComplexFloat *amplitudes [[buffer(0)]],
@@ -209,13 +214,20 @@ kernel void applyCNOT(
 /// differ only in the control and target qubit bits.
 ///
 /// **Algorithm**:
-/// - Thread gid processes indices where both control and target bits are 0
-/// - Computes i00=gid, i01=gid|targetMask, i10=gid|controlMask, i11=gid|bothMask
+/// - Launch 2^(n-2) threads (quarter of state size)
+/// - Thread gid computes index quartet by "inserting" two 0 bits at qubit positions
 /// - Applies 4×4 matrix: [c'00, c'01, c'10, c'11]ᵀ = U · [c00, c01, c10, c11]ᵀ
 /// - Writes results back in-place (each thread owns 4 unique indices)
 ///
+/// **Index computation** (insert two 0 bits at control and target positions):
+/// - Sort qubit positions: lo = min(control, target), hi = max(control, target)
+/// - loMask = (1 << lo) - 1 extracts bits below lo
+/// - midMask = ((1 << (hi - lo - 1)) - 1) << lo extracts bits between lo and hi
+/// - Insert 0 at lo, then 0 at hi to get base index i00
+/// - Set control/target bits to get i01, i10, i11
+///
 /// **Parallelization**:
-/// - Threads: 2^n total, but only 2^(n-2) active (those with both bits = 0)
+/// - Threads: 2^(n-2)
 /// - Memory access: Each thread reads 4 amplitudes, writes 4 amplitudes
 /// - Computation: 16 complex multiplications + 12 complex additions per thread
 ///
@@ -225,12 +237,11 @@ kernel void applyCNOT(
 /// - targetQubit: Target qubit index (0 to n-1, ≠ control)
 /// - gateMatrix: 4×4 unitary matrix (16 elements, row-major order)
 /// - numQubits: Total number of qubits (n)
-/// - gid: Thread ID in grid (0 to 2^n - 1)
+/// - gid: Thread ID in grid (0 to 2^(n-2) - 1)
 ///
-/// Example: CZ gate on qubits (0,1) of 3-qubit state
-/// - Thread 0: Processes indices [0,1,2,3] (qubits 0,1 in all 4 combinations)
-/// - Thread 4: Processes indices [4,5,6,7] (qubit 2=1, qubits 0,1 vary)
-/// - Threads 1,2,3,5,6,7: Inactive (at least one target bit already set)
+/// Example: CZ gate on qubits (0,1) of 3-qubit state (stateSize=8, launch 2 threads)
+/// - Thread 0: i00=0, i01=1, i10=2, i11=3 -> processes quartet [c000,c001,c010,c011]
+/// - Thread 1: i00=4, i01=5, i10=6, i11=7 -> processes quartet [c100,c101,c110,c111]
 kernel void applyTwoQubitGate(
     device ComplexFloat *amplitudes [[buffer(0)]],
     constant uint &controlQubit [[buffer(1)]],
@@ -239,16 +250,24 @@ kernel void applyTwoQubitGate(
     constant uint &numQubits [[buffer(4)]],
     uint gid [[thread_position_in_grid]]
 ) {
-    const uint stateSize = 1 << numQubits;
-    const uint controlMask = 1 << controlQubit;
-    const uint targetMask = 1 << targetQubit;
-    const uint bothMask = controlMask | targetMask;
+    const uint numQuartets = 1 << (numQubits - 2);
     
-    if ((gid & bothMask) == 0 && gid < stateSize) {
-        const uint i00 = gid;
-        const uint i01 = gid | targetMask;
-        const uint i10 = gid | controlMask;
-        const uint i11 = gid | bothMask;
+    if (gid < numQuartets) {
+        const uint lo = min(controlQubit, targetQubit);
+        const uint hi = max(controlQubit, targetQubit);
+        
+        const uint loMask = (1 << lo) - 1;
+        const uint temp = (gid & loMask) | ((gid & ~loMask) << 1);
+        
+        const uint hiMask = (1 << hi) - 1;
+        const uint i00 = (temp & hiMask) | ((temp & ~hiMask) << 1);
+        
+        const uint controlMask = 1 << controlQubit;
+        const uint targetMask = 1 << targetQubit;
+        
+        const uint i01 = i00 | targetMask;
+        const uint i10 = i00 | controlMask;
+        const uint i11 = i00 | controlMask | targetMask;
         
         ComplexFloat c00 = amplitudes[i00];
         ComplexFloat c01 = amplitudes[i01];
@@ -274,7 +293,6 @@ kernel void applyTwoQubitGate(
             complexAdd(complexMultiply(gateMatrix[14], c10), complexMultiply(gateMatrix[15], c11))
         );
         
-        // Write back
         amplitudes[i00] = new00;
         amplitudes[i01] = new01;
         amplitudes[i10] = new10;
@@ -310,10 +328,10 @@ kernel void applyTwoQubitGate(
 /// - outputAmplitudes: Output state vector (write-only)
 /// - gid: Thread ID in grid (0 to 2^n - 1)
 ///
-/// Example: Toffoli(0,1→2) on 3-qubit state
+/// Example: Toffoli(0,1->2) on 3-qubit state
 /// - Input: [c000, c001, c010, c011, c100, c101, c110, c111]
-/// - Thread 6 (0b110): Both controls=1, target=0 → output[7] = input[6]
-/// - Thread 7 (0b111): Both controls=1, target=1 → output[6] = input[7]
+/// - Thread 6 (0b110): Both controls=1, target=0 -> output[7] = input[6]
+/// - Thread 7 (0b111): Both controls=1, target=1 -> output[6] = input[7]
 /// - Other threads: Write unchanged (controls not both 1)
 /// - Output: [c000, c001, c010, c011, c100, c101, c111, c110] (swap c110↔c111)
 kernel void applyToffoli(
@@ -375,9 +393,9 @@ kernel void applyToffoli(
 ///   columnIndices = [0, 2, 1, 0, 2]
 ///   values = [1+i, 2+0i, 3+0i, 4-i, 5+0i]
 ///
-/// Row 0: start=0, end=2 → H[0,0]*input[0] + H[0,2]*input[2]
-/// Row 1: start=2, end=3 → H[1,1]*input[1]
-/// Row 2: start=3, end=5 → H[2,0]*input[0] + H[2,2]*input[2]
+/// Row 0: start=0, end=2 -> H[0,0]*input[0] + H[0,2]*input[2]
+/// Row 1: start=2, end=3 -> H[1,1]*input[1]
+/// Row 2: start=3, end=5 -> H[2,0]*input[0] + H[2,2]*input[2]
 /// ```
 ///
 /// **Parameters:**

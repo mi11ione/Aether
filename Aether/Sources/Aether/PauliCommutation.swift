@@ -61,31 +61,21 @@ public enum PauliCommutation {
     /// - X₀Y₁ and X₀Z₁ don't commute (1 difference: position 1)
     /// - X₀I₁ and I₀Y₁ commute (0 differences)
     @_optimize(speed)
+    @inlinable
     @_effects(readonly)
     public static func commute(_ ps1: PauliString, _ ps2: PauliString) -> Bool {
-        var ops1: MeasurementBasis = [:]
-        var ops2: MeasurementBasis = [:]
-
-        for op in ps1.operators {
-            ops1[op.qubit] = op.basis
-        }
-        for op in ps2.operators {
-            ops2[op.qubit] = op.basis
-        }
-
-        let allQubits: Set<Int> = Set(ops1.keys).union(ops2.keys)
-
         var anticommutingCount = 0
 
-        for qubit in allQubits {
-            let basis1: PauliBasis? = ops1[qubit]
-            let basis2: PauliBasis? = ops2[qubit]
-
-            if !commute(basis1, basis2) { anticommutingCount += 1 }
+        for op1 in ps1.operators {
+            for op2 in ps2.operators {
+                if op1.qubit == op2.qubit, op1.basis != op2.basis {
+                    anticommutingCount += 1
+                    break
+                }
+            }
         }
 
-        // Strings commute if even number of anticommuting positions
-        return anticommutingCount % 2 == 0
+        return anticommutingCount & 1 == 0
     }
 
     // MARK: - Qubit-wise Commutation
@@ -107,30 +97,16 @@ public enum PauliCommutation {
     /// - X₀Y₁ and Y₀X₁ are NOT QWC (qubit 0: X vs Y, qubit 1: Y vs X)
     /// - X₀I₁ and I₀Y₁ are QWC (no conflicts)
     @_optimize(speed)
+    @inlinable
     @_effects(readonly)
     public static func qubitWiseCommute(_ ps1: PauliString, _ ps2: PauliString) -> Bool {
-        var ops1: MeasurementBasis = [:]
-        var ops2: MeasurementBasis = [:]
-
-        for op in ps1.operators {
-            ops1[op.qubit] = op.basis
+        for op1 in ps1.operators {
+            for op2 in ps2.operators {
+                if op1.qubit == op2.qubit, op1.basis != op2.basis {
+                    return false
+                }
+            }
         }
-        for op in ps2.operators {
-            ops2[op.qubit] = op.basis
-        }
-
-        let allQubits: Set<Int> = Set(ops1.keys).union(ops2.keys)
-
-        for qubit in allQubits {
-            let basis1: PauliBasis? = ops1[qubit]
-            let basis2: PauliBasis? = ops2[qubit]
-
-            if basis1 == nil || basis2 == nil { continue }
-            if basis1 == basis2 { continue }
-
-            return false
-        }
-
         return true
     }
 
@@ -148,22 +124,15 @@ public enum PauliCommutation {
     public static func measurementBasis(for strings: [PauliString]) -> MeasurementBasis? {
         guard !strings.isEmpty else { return [:] }
 
-        for i in 0 ..< strings.count {
-            for j in (i + 1) ..< strings.count {
-                if !qubitWiseCommute(strings[i], strings[j]) {
-                    return nil
-                }
-            }
-        }
-
         var basis: MeasurementBasis = [:]
 
         for string in strings {
             for op in string.operators {
-                if basis[op.qubit] == nil {
+                if let existing = basis[op.qubit] {
+                    if existing != op.basis { return nil }
+                } else {
                     basis[op.qubit] = op.basis
                 }
-                // QWC validation (lines 144-149) guarantees basis consistency
             }
         }
 

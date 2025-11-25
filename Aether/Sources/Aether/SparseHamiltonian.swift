@@ -20,7 +20,7 @@ import Accelerate
 /// - Convert H = Σᵢ cᵢ Pᵢ to sparse matrix format
 /// - Molecular Hamiltonians are 0.01%-1% non-zero
 /// - Example: 10-qubit H₂O has ~8000 non-zeros out of 1M elements
-/// - Store only (row, col, value) triplets → massive memory savings
+/// - Store only (row, col, value) triplets -> massive memory savings
 /// - Use custom Metal kernel for GPU-accelerated H|ψ⟩
 /// - Compute ⟨ψ|H|ψ⟩ = ⟨ψ|(H|ψ⟩) as inner product
 ///
@@ -33,7 +33,7 @@ import Accelerate
 /// 2. **Accelerate Sparse (AMX)**: Apple's optimized sparse BLAS
 ///    - Used when: Metal unavailable OR numQubits < 8 (GPU overhead too high)
 ///    - Hardware-accelerated via AMX coprocessor
-///    - Complex arithmetic: H = A + iB → 4 real SpMV operations
+///    - Complex arithmetic: H = A + iB -> 4 real SpMV operations
 ///    - Automatic vectorization, cache blocking, and AMX acceleration
 ///
 /// 3. **Observable** (baseline): Existing term-by-term measurement
@@ -181,7 +181,7 @@ public actor SparseHamiltonian {
     /// **Sparsity:**
     /// - Single Pauli string: at most 2ⁿ non-zeros
     /// - Molecular Hamiltonians: 0.01%-1% non-zero after cancellation
-    /// - Example: H₂O (10 qubits) → 8K non-zeros out of 1M elements
+    /// - Example: H₂O (10 qubits) -> 8K non-zeros out of 1M elements
     ///
     /// - Parameters:
     ///   - observable: Observable with Pauli decomposition
@@ -194,9 +194,9 @@ public actor SparseHamiltonian {
         dimension: Int
     ) -> [COOElement] {
         var elements: [MatrixIndex: Complex<Double>] = [:]
+        elements.reserveCapacity(observable.terms.count * dimension)
 
         for (coefficient, pauliString) in observable.terms {
-            // Convert Pauli string to sparse matrix
             let pauliMatrix = pauliStringToSparseMatrix(
                 pauliString,
                 dimension: dimension
@@ -204,11 +204,7 @@ public actor SparseHamiltonian {
 
             for element in pauliMatrix {
                 let index = MatrixIndex(row: element.row, col: element.col)
-                if let existing = elements[index] {
-                    elements[index] = existing + coefficient * element.value
-                } else {
-                    elements[index] = coefficient * element.value
-                }
+                elements[index, default: .zero] += coefficient * element.value
             }
         }
 
@@ -280,7 +276,7 @@ public actor SparseHamiltonian {
     /// **Native Complex Support:**
     /// - Uses Metal's ComplexFloat (float2: real, imaginary)
     /// - Converts Swift's Complex<Double> to Float32 for GPU
-    /// - Acceptable precision loss: 64-bit → 32-bit (~7 digits)
+    /// - Acceptable precision loss: 64-bit -> 32-bit (~7 digits)
     ///
     /// - Parameters:
     ///   - cooMatrix: Sparse matrix in COO format
@@ -304,9 +300,21 @@ public actor SparseHamiltonian {
             numRows: dimension
         )
 
-        var float32Values: [GPUComplex] = []
-        for value in values {
-            float32Values.append((Float(value.real), Float(value.imaginary)))
+        let float32Values: [GPUComplex] = values.withUnsafeBufferPointer { complexBuffer in
+            let doublePtr = UnsafeRawPointer(complexBuffer.baseAddress!)
+                .assumingMemoryBound(to: Double.self)
+            let doubleCount = values.count * 2
+
+            var floatBuffer = [Float](unsafeUninitializedCapacity: doubleCount) { buffer, count in
+                vDSP_vdpsp(doublePtr, 1, buffer.baseAddress!, 1, vDSP_Length(doubleCount))
+                count = doubleCount
+            }
+
+            return floatBuffer.withUnsafeMutableBufferPointer { floatPtr in
+                let gpuPtr = UnsafeRawPointer(floatPtr.baseAddress!)
+                    .assumingMemoryBound(to: GPUComplex.self)
+                return Array(UnsafeBufferPointer(start: gpuPtr, count: values.count))
+            }
         }
 
         // Use .storageModeShared for Apple Silicon zero-copy
@@ -365,9 +373,17 @@ public actor SparseHamiltonian {
         cooMatrix: [COOElement],
         numRows: Int
     ) -> (rowPointers: [UInt32], columnIndices: [UInt32], values: AmplitudeVector) {
-        var rowPointers = [UInt32](repeating: 0, count: numRows + 1)
-        var columnIndices: [UInt32] = []
-        var values: AmplitudeVector = []
+        let nnz = cooMatrix.count
+
+        var rowPointers = [UInt32](unsafeUninitializedCapacity: numRows + 1) { buffer, count in
+            buffer.initialize(repeating: 0)
+            count = numRows + 1
+        }
+
+        var columnIndices = [UInt32]()
+        columnIndices.reserveCapacity(nnz)
+        var values = AmplitudeVector()
+        values.reserveCapacity(nnz)
 
         for element in cooMatrix {
             rowPointers[element.row + 1] += 1
@@ -456,6 +472,8 @@ public actor SparseHamiltonian {
             dimension: dimension
         )
 
+        // Safe force-unwrap: buildAccelerateSparseMatrix always returns a value
+        // (handles empty case by creating dummy matrix with single zero element)
         return .accelerateSparse(
             realMatrix: realMatrix!,
             imagMatrix: imagMatrix!,
@@ -499,14 +517,14 @@ public actor SparseHamiltonian {
                 emptyCols.withUnsafeMutableBufferPointer { colPtr in
                     emptyVals.withUnsafeMutableBufferPointer { valPtr in
                         SparseConvertFromCoordinate(
-                            Int32(dimension), // rowCount
-                            Int32(dimension), // columnCount
-                            1, // blockCount
-                            1, // blockSize (UInt8)
-                            SparseAttributes_t(), // attributes
-                            rowPtr.baseAddress!, // rowIndices
-                            colPtr.baseAddress!, // columnIndices
-                            valPtr.baseAddress! // data
+                            Int32(dimension),
+                            Int32(dimension),
+                            1,
+                            1,
+                            SparseAttributes_t(),
+                            rowPtr.baseAddress!,
+                            colPtr.baseAddress!,
+                            valPtr.baseAddress!
                         )
                     }
                 }
@@ -521,14 +539,14 @@ public actor SparseHamiltonian {
             mutableCols.withUnsafeMutableBufferPointer { colPtr in
                 mutableVals.withUnsafeMutableBufferPointer { valPtr in
                     SparseConvertFromCoordinate(
-                        Int32(dimension), // rowCount
-                        Int32(dimension), // columnCount
-                        nnz, // blockCount
-                        1, // blockSize (UInt8)
-                        SparseAttributes_t(), // attributes
-                        rowPtr.baseAddress!, // rowIndices
-                        colPtr.baseAddress!, // columnIndices
-                        valPtr.baseAddress! // data
+                        Int32(dimension),
+                        Int32(dimension),
+                        nnz,
+                        1,
+                        SparseAttributes_t(),
+                        rowPtr.baseAddress!,
+                        colPtr.baseAddress!,
+                        valPtr.baseAddress!
                     )
                 }
             }
@@ -610,11 +628,21 @@ public actor SparseHamiltonian {
         values: MTLBuffer,
         nnz _: Int
     ) -> Double {
-        let float32State = [GPUComplex](unsafeUninitializedCapacity: dimension) { buffer, count in
-            for i in 0 ..< dimension {
-                buffer[i] = (Float(state.amplitudes[i].real), Float(state.amplitudes[i].imaginary))
+        let float32State: [GPUComplex] = state.amplitudes.withUnsafeBufferPointer { complexBuffer in
+            let doublePtr = UnsafeRawPointer(complexBuffer.baseAddress!)
+                .assumingMemoryBound(to: Double.self)
+            let doubleCount = dimension * 2
+
+            var floatBuffer = [Float](unsafeUninitializedCapacity: doubleCount) { buffer, count in
+                vDSP_vdpsp(doublePtr, 1, buffer.baseAddress!, 1, vDSP_Length(doubleCount))
+                count = doubleCount
             }
-            count = dimension
+
+            return floatBuffer.withUnsafeMutableBufferPointer { floatPtr in
+                let gpuPtr = UnsafeRawPointer(floatPtr.baseAddress!)
+                    .assumingMemoryBound(to: GPUComplex.self)
+                return Array(UnsafeBufferPointer(start: gpuPtr, count: dimension))
+            }
         }
 
         guard let inputBuffer = device.makeBuffer(
@@ -658,16 +686,40 @@ public actor SparseHamiltonian {
             capacity: dimension
         )
 
-        var result = Complex<Double>.zero
-        for i in 0 ..< dimension {
-            let hPsiElement = Complex<Double>(
-                Double(outputPointer[i].0),
-                Double(outputPointer[i].1)
-            )
-            result = result + state.amplitudes[i].conjugate() * hPsiElement
+        let gpuOutput = Array(UnsafeBufferPointer(start: outputPointer, count: dimension))
+
+        let hPsiReal = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
+            for i in 0 ..< dimension {
+                buffer[i] = Double(gpuOutput[i].0)
+            }
+            count = dimension
+        }
+        let hPsiImag = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
+            for i in 0 ..< dimension {
+                buffer[i] = Double(gpuOutput[i].1)
+            }
+            count = dimension
         }
 
-        return result.real
+        let stateReal = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
+            for i in 0 ..< dimension {
+                buffer[i] = state.amplitudes[i].real
+            }
+            count = dimension
+        }
+        let stateImag = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
+            for i in 0 ..< dimension {
+                buffer[i] = state.amplitudes[i].imaginary
+            }
+            count = dimension
+        }
+
+        var realDot1 = 0.0
+        var realDot2 = 0.0
+        vDSP_dotprD(stateReal, 1, hPsiReal, 1, &realDot1, vDSP_Length(dimension))
+        vDSP_dotprD(stateImag, 1, hPsiImag, 1, &realDot2, vDSP_Length(dimension))
+
+        return realDot1 + realDot2
     }
 
     /// Compute expectation value using Accelerate sparse backend with AMX optimization
@@ -714,13 +766,13 @@ public actor SparseHamiltonian {
             count = dimension
         }
 
-        var resultReal = [Double](repeating: 0.0, count: dimension)
-        var resultImag = [Double](repeating: 0.0, count: dimension)
+        var resultReal = [Double](unsafeUninitializedCapacity: dimension) { _, count in count = dimension }
+        var resultImag = [Double](unsafeUninitializedCapacity: dimension) { _, count in count = dimension }
 
-        var ax = [Double](repeating: 0.0, count: dimension)
-        var ay = [Double](repeating: 0.0, count: dimension)
-        var bx = [Double](repeating: 0.0, count: dimension)
-        var by = [Double](repeating: 0.0, count: dimension)
+        var ax = [Double](unsafeUninitializedCapacity: dimension) { _, count in count = dimension }
+        var ay = [Double](unsafeUninitializedCapacity: dimension) { _, count in count = dimension }
+        var bx = [Double](unsafeUninitializedCapacity: dimension) { _, count in count = dimension }
+        var by = [Double](unsafeUninitializedCapacity: dimension) { _, count in count = dimension }
 
         stateReal.withUnsafeMutableBufferPointer { xPtr in
             ax.withUnsafeMutableBufferPointer { axPtr in

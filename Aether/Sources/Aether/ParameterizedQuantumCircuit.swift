@@ -180,6 +180,12 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
         parameterSet = Set(parameters.map(\.name))
     }
 
+    /// Reserve capacity for operations array to avoid reallocations
+    /// - Parameter minimumCapacity: Minimum number of operations to reserve space for
+    public mutating func reserveCapacity(_ minimumCapacity: Int) {
+        operations.reserveCapacity(minimumCapacity)
+    }
+
     // MARK: - Building Methods
 
     /// Append parameterized gate to circuit
@@ -397,17 +403,20 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     @_optimize(speed)
     @_eagerMove
     public func bind(parameters bindings: [String: Double]) throws -> QuantumCircuit {
-        let requiredParams = Set(parameters.map(\.name))
-        let providedParams = Set(bindings.keys)
-
-        let missingParams = requiredParams.subtracting(providedParams)
-        if let firstMissing = missingParams.first {
-            throw ParameterError.unboundParameter(firstMissing)
+        for param in parameters {
+            if bindings[param.name] == nil {
+                throw ParameterError.unboundParameter(param.name)
+            }
         }
 
-        let extraParams = providedParams.subtracting(requiredParams)
+        var extraParams: [String] = []
+        for key in bindings.keys {
+            if !parameterSet.contains(key) {
+                extraParams.append(key)
+            }
+        }
         if !extraParams.isEmpty {
-            throw ParameterError.extraParameters(Array(extraParams))
+            throw ParameterError.extraParameters(extraParams)
         }
 
         var concreteCircuit = QuantumCircuit(numQubits: numQubits)
@@ -464,14 +473,14 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     @_optimize(speed)
     @_eagerMove
     public func bind(parameterVector: [Double]) throws -> QuantumCircuit {
-        guard parameterVector.count == parameters.count else {
-            throw ParameterError.invalidVectorLength(expected: parameters.count, got: parameterVector.count)
+        let paramCount: Int = parameters.count
+        guard parameterVector.count == paramCount else {
+            throw ParameterError.invalidVectorLength(expected: paramCount, got: parameterVector.count)
         }
 
-        var bindings = [String: Double]()
-        for (param, value) in zip(parameters, parameterVector) {
-            bindings[param.name] = value
-        }
+        let bindings = Dictionary(
+            uniqueKeysWithValues: zip(parameters.lazy.map(\.name), parameterVector)
+        )
 
         return try bind(parameters: bindings)
     }
@@ -522,16 +531,16 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
         baseBindings: [String: Double],
         shift: Double = .pi / 2
     ) throws -> (plus: QuantumCircuit, minus: QuantumCircuit) {
-        guard parameters.contains(where: { $0.name == parameterName }) else {
+        guard parameterSet.contains(parameterName) else {
             throw ParameterError.parameterNotFound(parameterName)
         }
-
-        var plusBindings = baseBindings
-        var minusBindings = baseBindings
 
         guard let baseValue = baseBindings[parameterName] else {
             throw ParameterError.unboundParameter(parameterName)
         }
+
+        var plusBindings = baseBindings
+        var minusBindings = baseBindings
 
         plusBindings[parameterName] = baseValue + shift
         minusBindings[parameterName] = baseValue - shift
@@ -576,18 +585,18 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
         baseVector: [Double],
         shift: Double = .pi / 2
     ) throws -> (plus: QuantumCircuit, minus: QuantumCircuit) {
-        guard parameterIndex >= 0, parameterIndex < parameters.count else {
-            throw ParameterError.parameterIndexOutOfBounds(index: parameterIndex, count: parameters.count)
+        let paramCount: Int = parameters.count
+        guard parameterIndex >= 0, parameterIndex < paramCount else {
+            throw ParameterError.parameterIndexOutOfBounds(index: parameterIndex, count: paramCount)
         }
 
-        guard baseVector.count == parameters.count else {
-            throw ParameterError.invalidVectorLength(expected: parameters.count, got: baseVector.count)
+        guard baseVector.count == paramCount else {
+            throw ParameterError.invalidVectorLength(expected: paramCount, got: baseVector.count)
         }
 
-        var baseBindings = [String: Double]()
-        for (param, value) in zip(parameters, baseVector) {
-            baseBindings[param.name] = value
-        }
+        let baseBindings = Dictionary(
+            uniqueKeysWithValues: zip(parameters.lazy.map(\.name), baseVector)
+        )
 
         let paramName = parameters[parameterIndex].name
         return try generateShiftedCircuits(parameterName: paramName, baseBindings: baseBindings, shift: shift)
@@ -596,20 +605,30 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     // MARK: - CustomStringConvertible
 
     /// String representation of parameterized circuit
-    @inlinable
     public var description: String {
         if operations.isEmpty {
-            return "ParameterizedQuantumCircuit(\(numQubits) qubits, \(parameterCount()) params, empty)"
+            return "ParameterizedQuantumCircuit(\(numQubits) qubits, \(parameters.count) params, empty)"
         }
 
-        let gateList = operations.prefix(3).map(\.description).joined(separator: ", ")
+        var gateList = ""
+        let gateLimit: Int = min(operations.count, 3)
+        for i in 0 ..< gateLimit {
+            if i > 0 { gateList += ", " }
+            gateList += operations[i].description
+        }
         let suffix = operations.count > 3 ? ", ..." : ""
-        let paramList = parameters.prefix(3).map(\.name).joined(separator: ", ")
+
+        var paramList = ""
+        let paramLimit: Int = min(parameters.count, 3)
+        for i in 0 ..< paramLimit {
+            if i > 0 { paramList += ", " }
+            paramList += parameters[i].name
+        }
         let paramSuffix = parameters.count > 3 ? ", ..." : ""
 
         return """
         ParameterizedQuantumCircuit(\(numQubits) qubits, \(operations.count) gates, \
-        \(parameterCount()) params: [\(paramList)\(paramSuffix)]): \(gateList)\(suffix)
+        \(parameters.count) params: [\(paramList)\(paramSuffix)]): \(gateList)\(suffix)
         """
     }
 }

@@ -118,9 +118,13 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         self.numQubits = numQubits
         let size = 1 << numQubits
 
-        var amps = AmplitudeVector(repeating: .zero, count: size)
-        amps[0] = .one
-        amplitudes = amps
+        amplitudes = AmplitudeVector(unsafeUninitializedCapacity: size) { buffer, count in
+            buffer[0] = .one
+            for i in 1 ..< size {
+                buffer[i] = .zero
+            }
+            count = size
+        }
     }
 
     /// Initialize custom quantum state from amplitude vector
@@ -172,15 +176,28 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         ValidationUtilities.validateAmplitudeCount(amplitudes, numQubits: numQubits)
 
         self.numQubits = numQubits
-        self.amplitudes = amplitudes
 
-        // Auto-normalize if needed (within reasonable tolerance)
-        let sumSquared: Double = amplitudes.reduce(0.0) { $0 + $1.magnitudeSquared }
-        if abs(sumSquared - 1.0) > 1e-10,
-           sumSquared > 1e-15
-        {
-            let norm: Double = sqrt(sumSquared)
-            self.amplitudes = amplitudes.map { $0 / norm }
+        let sumSquared: Double
+        if amplitudes.count >= 64 {
+            var sum = 0.0
+            for amp in amplitudes {
+                sum += amp.magnitudeSquared
+            }
+            sumSquared = sum
+        } else {
+            sumSquared = amplitudes.reduce(0.0) { $0 + $1.magnitudeSquared }
+        }
+
+        if abs(sumSquared - 1.0) > 1e-10, sumSquared > 1e-15 {
+            let invNorm = 1.0 / sqrt(sumSquared)
+            self.amplitudes = AmplitudeVector(unsafeUninitializedCapacity: amplitudes.count) { buffer, count in
+                for i in amplitudes.indices {
+                    buffer[i] = amplitudes[i] * invNorm
+                }
+                count = amplitudes.count
+            }
+        } else {
+            self.amplitudes = amplitudes
         }
     }
 
@@ -203,9 +220,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         ValidationUtilities.validateBinaryValue(state, name: "Single qubit state")
 
         numQubits = 1
-        var amps = AmplitudeVector(repeating: .zero, count: 2)
-        amps[state] = .one
-        amplitudes = amps
+        if state == 0 { amplitudes = [.one, .zero] } else { amplitudes = [.zero, .one] }
     }
 
     /// Internal test-only initializer that bypasses validation
@@ -226,28 +241,25 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     @inlinable
     @_eagerMove
     func computeMagnitudesSquaredVectorized() -> [Double] {
-        let interleavedAmps = [Double](unsafeUninitializedCapacity: amplitudes.count * 2) { buffer, count in
-            for i in amplitudes.indices {
+        let n: Int = amplitudes.count
+        let interleavedAmps = [Double](unsafeUninitializedCapacity: n * 2) { buffer, count in
+            for i in 0 ..< n {
                 buffer[i * 2] = amplitudes[i].real
                 buffer[i * 2 + 1] = amplitudes[i].imaginary
             }
-            count = amplitudes.count * 2
+            count = n * 2
         }
 
-        var magnitudesSquared = [Double](repeating: 0.0, count: amplitudes.count)
-
-        interleavedAmps.withUnsafeBufferPointer { interleavedPtr in
-            magnitudesSquared.withUnsafeMutableBufferPointer { magPtr in
+        return [Double](unsafeUninitializedCapacity: n) { magPtr, count in
+            interleavedAmps.withUnsafeBufferPointer { interleavedPtr in
                 var splitComplex = DSPDoubleSplitComplex(
                     realp: UnsafeMutablePointer(mutating: interleavedPtr.baseAddress!),
                     imagp: UnsafeMutablePointer(mutating: interleavedPtr.baseAddress! + 1)
                 )
-
-                vDSP_zvmagsD(&splitComplex, 2, magPtr.baseAddress!, 1, vDSP_Length(amplitudes.count))
+                vDSP_zvmagsD(&splitComplex, 2, magPtr.baseAddress!, 1, vDSP_Length(n))
             }
+            count = n
         }
-
-        return magnitudesSquared
     }
 
     /// Calculate probability of measuring specific basis state (Born rule)
@@ -317,15 +329,54 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let ghzProbs = ghz.probabilities()
     /// // [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5]
     /// ```
+    @_optimize(speed)
     @_effects(readonly)
     @inlinable
     @_eagerMove
     public func probabilities() -> [Double] {
-        if amplitudes.count >= 64 {
-            computeMagnitudesSquaredVectorized()
+        let n: Int = amplitudes.count
+        if n >= 64 {
+            return computeMagnitudesSquaredVectorized()
         } else {
-            amplitudes.map(\.magnitudeSquared)
+            return [Double](unsafeUninitializedCapacity: n) { buffer, count in
+                for i in 0 ..< n {
+                    buffer[i] = amplitudes[i].magnitudeSquared
+                }
+                count = n
+            }
         }
+    }
+
+    /// Find basis state index with highest probability in single O(2^n) pass
+    ///
+    /// Avoids allocating full probability array by computing max during iteration.
+    /// Returns both the index and probability of the most likely measurement outcome.
+    ///
+    /// - Returns: Tuple of (basisStateIndex, probability) for most probable state
+    ///
+    /// Example:
+    /// ```swift
+    /// // GHZ state: (|000⟩ + |111⟩)/√2
+    /// let ghz = QuantumState(numQubits: 3, amplitudes: [...])
+    /// let (index, prob) = ghz.mostProbableBasisState()
+    /// // index = 0 (|000⟩) or 7 (|111⟩), prob = 0.5
+    /// ```
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    public func mostProbableBasisState() -> (index: Int, probability: Double) {
+        var maxIndex = 0
+        var maxProb = amplitudes[0].magnitudeSquared
+
+        for i in 1 ..< stateSpaceSize {
+            let prob = amplitudes[i].magnitudeSquared
+            if prob > maxProb {
+                maxProb = prob
+                maxIndex = i
+            }
+        }
+
+        return (maxIndex, maxProb)
     }
 
     /// Calculate marginal probability distribution for single qubit
@@ -365,6 +416,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// let (p0, p1) = product.singleQubitProbabilities(qubit: 0)
     /// // p0 = 0.0, p1 = 1.0
     /// ```
+    @_optimize(speed)
     @_effects(readonly)
     @inlinable
     public func singleQubitProbabilities(qubit: Int) -> (p0: Double, p1: Double) {
@@ -373,13 +425,18 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         var p0 = 0.0
         var p1 = 0.0
 
-        for i in 0 ..< stateSpaceSize {
-            let prob = amplitudes[i].magnitudeSquared
-            if getBit(index: i, qubit: qubit) == 0 {
-                p0 += prob
-            } else {
-                p1 += prob
+        let blockSize = 1 << qubit
+        let doubleBlock: Int = blockSize << 1
+        var baseIndex = 0
+
+        while baseIndex < stateSpaceSize {
+            for i in baseIndex ..< (baseIndex + blockSize) {
+                p0 += amplitudes[i].magnitudeSquared
             }
+            for i in (baseIndex + blockSize) ..< (baseIndex + doubleBlock) {
+                p1 += amplitudes[i].magnitudeSquared
+            }
+            baseIndex += doubleBlock
         }
 
         return (p0, p1)
@@ -403,7 +460,11 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     func computeNormSquared() -> Double {
         if amplitudes.count >= 64 {
             let magnitudesSquared: [Double] = computeMagnitudesSquaredVectorized()
-            return magnitudesSquared.reduce(0.0, +)
+            var sum = 0.0
+            magnitudesSquared.withUnsafeBufferPointer { ptr in
+                vDSP_sveD(ptr.baseAddress!, 1, &sum, vDSP_Length(magnitudesSquared.count))
+            }
+            return sum
         } else {
             return amplitudes.reduce(0.0) { $0 + $1.magnitudeSquared }
         }
@@ -471,8 +532,14 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
             throw QuantumStateError.cannotNormalizeZeroState
         }
 
-        let norm: Double = sqrt(sumSquared)
-        amplitudes = amplitudes.map { $0 / norm }
+        let invNorm = 1.0 / sqrt(sumSquared)
+        let n: Int = amplitudes.count
+        amplitudes = AmplitudeVector(unsafeUninitializedCapacity: n) { buffer, count in
+            for i in 0 ..< n {
+                buffer[i] = amplitudes[i] * invNorm
+            }
+            count = n
+        }
     }
 
     // MARK: - State Access
@@ -596,15 +663,18 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
 
     /// String representation showing significant amplitudes
     public var description: String {
-        // Show only non-negligible amplitudes
         let threshold = 1e-6
         var terms: [String] = []
+        terms.reserveCapacity(min(amplitudes.count, 16))
 
-        for (i, amp) in amplitudes.enumerated() {
-            if amp.magnitudeSquared > threshold {
-                let ampStr = String(format: "%.4f", amp.magnitude())
-                let basisState = String(i, radix: 2)
-                    .padding(toLength: numQubits, withPad: "0", startingAt: 0)
+        for i in 0 ..< amplitudes.count {
+            let magSq: Double = amplitudes[i].magnitudeSquared
+            if magSq > threshold {
+                let ampStr = String(format: "%.4f", sqrt(magSq))
+                var basisState = String(i, radix: 2)
+                if basisState.count < numQubits {
+                    basisState = String(repeating: "0", count: numQubits - basisState.count) + basisState
+                }
                 terms.append("\(ampStr)|\(basisState)⟩")
             }
         }

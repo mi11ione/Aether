@@ -88,12 +88,11 @@ public struct MixerHamiltonian {
         ValidationUtilities.validatePositiveQubits(numQubits)
         ValidationUtilities.validateMemoryLimit(numQubits)
 
-        var terms: PauliTerms = []
-        terms.reserveCapacity(numQubits)
-
-        for qubit in 0 ..< numQubits {
-            let pauliString = PauliString(operators: [(qubit: qubit, basis: .x)])
-            terms.append((coefficient: 1.0, pauliString: pauliString))
+        let terms = PauliTerms(unsafeUninitializedCapacity: numQubits) { buffer, count in
+            for qubit in 0 ..< numQubits {
+                buffer[qubit] = (coefficient: 1.0, pauliString: PauliString(qubit: qubit, basis: .x))
+            }
+            count = numQubits
         }
 
         return Observable(terms: terms)

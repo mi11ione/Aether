@@ -10,7 +10,7 @@ public struct QWCGroup: Sendable {
     public let terms: PauliTerms
 
     /// Measurement basis for each qubit
-    /// Maps qubit index → Pauli basis to measure in
+    /// Maps qubit index -> Pauli basis to measure in
     public let measurementBasis: MeasurementBasis
 
     /// Total weight of this group (sum of absolute coefficients)
@@ -63,9 +63,9 @@ public enum QWCGrouper {
         guard !terms.isEmpty else { return [] }
 
         let graph: [[Int]] = buildConflictGraph(terms: terms)
-        let coloring: [Int] = colorGraphDSATUR(graph: graph)
+        let (coloring, numColors) = colorGraphDSATUR(graph: graph)
 
-        return buildGroups(terms: terms, coloring: coloring)
+        return buildGroups(terms: terms, coloring: coloring, numColors: numColors)
     }
 
     // MARK: - Graph Construction
@@ -91,56 +91,158 @@ public enum QWCGrouper {
 
     // MARK: - Graph Coloring (DSATUR Algorithm)
 
-    /// Color graph using DSATUR (Degree of Saturation) algorithm.
+    /// Color graph using DSATUR (Degree of Saturation) algorithm with priority queue.
     ///
     /// - Parameter graph: Adjacency list representation
-    /// - Returns: Array mapping vertex index to color
+    /// - Returns: Tuple of (colors array, number of colors used)
     ///
     /// DSATUR provides better coloring than simple greedy for most graphs.
-    /// Time complexity: O(n²) where n = number of vertices
+    /// Time complexity: O(n log n) using priority queue for vertex selection
     @_optimize(speed)
     @_eagerMove
-    private static func colorGraphDSATUR(graph: [[Int]]) -> [Int] {
+    private static func colorGraphDSATUR(graph: [[Int]]) -> (colors: [Int], numColors: Int) {
         let n: Int = graph.count
         var colors: [Int] = Array(repeating: -1, count: n)
         var saturationDegree: [Int] = Array(repeating: 0, count: n)
-        var neighborColors: [Set<Int>] = Array(repeating: Set<Int>(), count: n)
+        var neighborColorBits: [UInt64] = Array(repeating: 0, count: n)
+        var maxColorUsed: Int = -1
 
-        for _ in 0 ..< n {
-            var selectedVertex: Int = -1
-            var maxSaturation: Int = -1
-            var maxDegree: Int = -1
+        var heap = DSATURHeap(capacity: n)
 
-            for v in 0 ..< n where colors[v] == -1 {
-                let saturation: Int = saturationDegree[v]
-                let degree: Int = graph[v].count
+        for v in 0 ..< n {
+            heap.insert(saturation: 0, degree: graph[v].count, vertex: v)
+        }
 
-                if saturation > maxSaturation ||
-                    (saturation == maxSaturation && degree > maxDegree)
-                {
-                    selectedVertex = v
-                    maxSaturation = saturation
-                    maxDegree = degree
-                }
-            }
-
-            let forbiddenColors: Set<Int> = neighborColors[selectedVertex]
-            var color = 0
-            while forbiddenColors.contains(color) {
-                color += 1
-            }
+        while let selectedVertex = heap.extractMax() {
+            let forbiddenBits: UInt64 = neighborColorBits[selectedVertex]
+            let color: Int = forbiddenBits == UInt64.max ? 64 : (~forbiddenBits).trailingZeroBitCount
 
             colors[selectedVertex] = color
+            if color > maxColorUsed { maxColorUsed = color }
+
+            let colorBit: UInt64 = color < 64 ? (1 << color) : 0
 
             for neighbor in graph[selectedVertex] where colors[neighbor] == -1 {
-                if !neighborColors[neighbor].contains(color) {
-                    neighborColors[neighbor].insert(color)
+                if color < 64, neighborColorBits[neighbor] & colorBit == 0 {
+                    neighborColorBits[neighbor] |= colorBit
                     saturationDegree[neighbor] += 1
+                    heap.updatePriority(vertex: neighbor, newSaturation: saturationDegree[neighbor])
                 }
             }
         }
 
-        return colors
+        return (colors: colors, numColors: maxColorUsed + 1)
+    }
+
+    // MARK: - Priority Queue for DSATUR
+
+    /// Max-heap for DSATUR vertex selection with O(log n) operations
+    private struct DSATURHeap {
+        private var heap: [(saturation: Int, degree: Int, vertex: Int)]
+        private var vertexToIndex: [Int]
+        private var removed: [Bool]
+
+        init(capacity: Int) {
+            heap = []
+            heap.reserveCapacity(capacity)
+            vertexToIndex = Array(repeating: -1, count: capacity)
+            removed = Array(repeating: false, count: capacity)
+        }
+
+        @inline(__always)
+        private func compare(_ a: (saturation: Int, degree: Int, vertex: Int),
+                             _ b: (saturation: Int, degree: Int, vertex: Int)) -> Bool
+        {
+            if a.saturation != b.saturation { return a.saturation > b.saturation }
+            return a.degree > b.degree
+        }
+
+        mutating func insert(saturation: Int, degree: Int, vertex: Int) {
+            let index = heap.count
+            heap.append((saturation: saturation, degree: degree, vertex: vertex))
+            vertexToIndex[vertex] = index
+            siftUp(index)
+        }
+
+        mutating func extractMax() -> Int? {
+            while !heap.isEmpty {
+                let top = heap[0]
+                if removed[top.vertex] {
+                    removeTop()
+                    continue
+                }
+                removed[top.vertex] = true
+                removeTop()
+                return top.vertex
+            }
+            return nil
+        }
+
+        mutating func updatePriority(vertex: Int, newSaturation: Int) {
+            let index = vertexToIndex[vertex]
+            guard index >= 0, index < heap.count, heap[index].vertex == vertex else { return }
+
+            heap[index].saturation = newSaturation
+            siftUp(index)
+        }
+
+        @inline(__always)
+        private mutating func removeTop() {
+            guard !heap.isEmpty else { return }
+            let lastIndex = heap.count - 1
+            if lastIndex > 0 {
+                heap.swapAt(0, lastIndex)
+                vertexToIndex[heap[0].vertex] = 0
+            }
+            vertexToIndex[heap[lastIndex].vertex] = -1
+            heap.removeLast()
+            if !heap.isEmpty {
+                siftDown(0)
+            }
+        }
+
+        @inline(__always)
+        private mutating func siftUp(_ index: Int) {
+            var i = index
+            while i > 0 {
+                let parent = (i - 1) / 2
+                if compare(heap[i], heap[parent]) {
+                    heap.swapAt(i, parent)
+                    vertexToIndex[heap[i].vertex] = i
+                    vertexToIndex[heap[parent].vertex] = parent
+                    i = parent
+                } else {
+                    break
+                }
+            }
+        }
+
+        @inline(__always)
+        private mutating func siftDown(_ index: Int) {
+            var i = index
+            let count = heap.count
+            while true {
+                let left = 2 * i + 1
+                let right = 2 * i + 2
+                var largest = i
+
+                if left < count, compare(heap[left], heap[largest]) {
+                    largest = left
+                }
+                if right < count, compare(heap[right], heap[largest]) {
+                    largest = right
+                }
+
+                if largest != i {
+                    heap.swapAt(i, largest)
+                    vertexToIndex[heap[i].vertex] = i
+                    vertexToIndex[heap[largest].vertex] = largest
+                    i = largest
+                } else {
+                    break
+                }
+            }
+        }
     }
 
     // MARK: - Group Building
@@ -150,17 +252,19 @@ public enum QWCGrouper {
     @_eagerMove
     private static func buildGroups(
         terms: PauliTerms,
-        coloring: [Int]
+        coloring: [Int],
+        numColors: Int
     ) -> [QWCGroup] {
-        var colorToTerms: [Int: PauliTerms] = [:]
+        var colorToTerms: [PauliTerms] = Array(repeating: [], count: numColors)
 
         for (index, color) in coloring.enumerated() {
-            colorToTerms[color, default: []].append(terms[index])
+            colorToTerms[color].append(terms[index])
         }
 
         var groups: [QWCGroup] = []
+        groups.reserveCapacity(numColors)
 
-        for (_, groupTerms) in colorToTerms.sorted(by: { $0.key < $1.key }) {
+        for groupTerms in colorToTerms where !groupTerms.isEmpty {
             let pauliStrings: [PauliString] = groupTerms.map(\.pauliString)
 
             // Safe: Graph coloring guarantees all strings in same color are QWC,
@@ -217,11 +321,34 @@ public enum QWCGrouper {
     @_eagerMove
     public static func statistics(for groups: [QWCGroup]) -> GroupingStats {
         let numGroups: Int = groups.count
-        let groupSizes: [Int] = groups.map(\.terms.count)
-        let numTerms: Int = groupSizes.reduce(0, +)
-        let largestGroupSize: Int = groupSizes.max() ?? 0
-        let averageGroupSize: Double = numGroups > 0 ? Double(numTerms) / Double(numGroups) : 0.0
-        let reductionFactor: Double = numGroups > 0 ? Double(numTerms) / Double(numGroups) : 1.0
+
+        guard numGroups > 0 else {
+            return GroupingStats(
+                numTerms: 0,
+                numGroups: 0,
+                reductionFactor: 1.0,
+                largestGroupSize: 0,
+                averageGroupSize: 0.0,
+                groupSizes: []
+            )
+        }
+
+        let groupSizes = [Int](unsafeUninitializedCapacity: numGroups) { buffer, count in
+            count = numGroups
+            for i in 0 ..< numGroups {
+                buffer[i] = groups[i].terms.count
+            }
+        }
+
+        var numTerms = 0
+        var largestGroupSize = 0
+        for size in groupSizes {
+            numTerms += size
+            if size > largestGroupSize { largestGroupSize = size }
+        }
+
+        let averageGroupSize = Double(numTerms) / Double(numGroups)
+        let reductionFactor = Double(numTerms) / Double(numGroups)
 
         return GroupingStats(
             numTerms: numTerms,

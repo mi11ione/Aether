@@ -13,7 +13,7 @@
 /// - **Shot allocation**: Variance-weighted distribution of measurement shots
 ///
 /// **Performance improvements**:
-/// - Typical Hamiltonian (2000 terms) → 50-200 QWC groups → 10-20 unitary partitions
+/// - Typical Hamiltonian (2000 terms) -> 50-200 QWC groups -> 10-20 unitary partitions
 /// - Reduces number of quantum circuits required for expectation values
 /// - Thread-safe caching: Actor-based isolation prevents redundant computation
 ///
@@ -101,9 +101,9 @@ public extension Observable {
             _ rhs: PauliTerms
         ) -> Bool {
             guard lhs.count == rhs.count else { return false }
-            for (l, r) in zip(lhs, rhs) {
-                if l.coefficient != r.coefficient { return false }
-                if l.pauliString != r.pauliString { return false }
+            for i in 0 ..< lhs.count {
+                if lhs[i].coefficient != rhs[i].coefficient { return false }
+                if lhs[i].pauliString != rhs[i].pauliString { return false }
             }
             return true
         }
@@ -115,20 +115,16 @@ public extension Observable {
 
     /// Compute stable hash for terms array.
     ///
-    /// Used as cache key for Observable (struct, not class).
+    /// Used as cache key for Observable.
     /// Combines coefficient and Pauli operator hashes.
     @inlinable
     @_effects(readonly)
     func termsHash() -> Int {
         var hasher = 0
-        for (coefficient, pauliString) in terms {
-            let bits = coefficient.bitPattern
+        for i in 0 ..< terms.count {
+            let bits = terms[i].coefficient.bitPattern
             hasher ^= Int(truncatingIfNeeded: bits) &* 31
-
-            for op in pauliString.operators {
-                hasher ^= op.qubit &* 17
-                hasher ^= op.basis.hashValue &* 13
-            }
+            hasher ^= terms[i].pauliString.hashValue &* 17
         }
         return hasher
     }
@@ -184,7 +180,7 @@ public extension Observable {
     /// ```
     @_eagerMove
     func unitaryPartitions(numQubits: Int, config: UnitaryPartitioner.Config = .default) async -> [UnitaryPartition] {
-        let hash: Int = termsHash() ^ numQubits
+        let hash = termsHash() &* 31 &+ numQubits
 
         if let cached = await Self.cache.getUnitaryPartitions(hash: hash, terms: terms) {
             return cached

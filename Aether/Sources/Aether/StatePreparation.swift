@@ -92,8 +92,12 @@ public extension QuantumState {
         let stateSpaceSize = 1 << numQubits
         ValidationUtilities.validateIndexInBounds(basisStateIndex, bound: stateSpaceSize, name: "Basis state index")
 
-        var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
-        amplitudes[basisStateIndex] = .one
+        let amplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+            for i in 0 ..< stateSpaceSize {
+                buffer[i] = i == basisStateIndex ? .one : .zero
+            }
+            count = stateSpaceSize
+        }
 
         return QuantumState(numQubits: numQubits, amplitudes: amplitudes)
     }
@@ -112,7 +116,7 @@ public extension QuantumCircuit {
     ///
     /// **Properties**:
     /// - Maximal entanglement (entanglement entropy = 1 bit)
-    /// - Perfect correlations: measuring qubit 0 → qubit 1 same result
+    /// - Perfect correlations: measuring qubit 0 -> qubit 1 same result
     /// - CHSH inequality violation: demonstrates quantum nonlocality
     ///
     /// - Returns: 2-qubit circuit that creates |Φ⁺⟩ from ground state
@@ -228,7 +232,7 @@ public extension QuantumCircuit {
     ///
     /// **Properties**:
     /// - Symmetric under qubit permutation
-    /// - Measuring one qubit → others remain entangled (unlike GHZ)
+    /// - Measuring one qubit -> others remain entangled (unlike GHZ)
     /// - Hamming weight = 1 (exactly one qubit in |1⟩)
     /// - Different entanglement class than Bell/GHZ states
     ///
@@ -268,15 +272,13 @@ public extension QuantumCircuit {
         ValidationUtilities.validateAlgorithmQubitLimit(numQubits, max: 20, algorithmName: "W state")
 
         let stateSpaceSize = 1 << numQubits
-        var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
+        let amplitude = Complex<Double>(1.0 / sqrt(Double(numQubits)), 0.0)
 
-        // W state is equal superposition over all states with exactly one |1⟩
-        // These are states with Hamming weight 1: |100...0⟩, |010...0⟩, etc.
-        // Direct calculation: only n states need to be set (powers of 2)
-        let amplitude: Complex<Double> = Complex(1.0 / sqrt(Double(numQubits)), 0.0)
-
-        for qubit in 0 ..< numQubits {
-            amplitudes[BitUtilities.bitMask(qubit: qubit)] = amplitude
+        let amplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+            for i in 0 ..< stateSpaceSize {
+                buffer[i] = i.nonzeroBitCount == 1 ? amplitude : .zero
+            }
+            count = stateSpaceSize
         }
 
         return QuantumState(numQubits: numQubits, amplitudes: amplitudes)
@@ -291,12 +293,12 @@ public extension QuantumCircuit {
     private static func binomialCoefficient(_ n: Int, _ k: Int) -> Int {
         guard k > 0, k < n else { return 1 }
 
-        // Use symmetry: C(n,k) = C(n,n-k), choose smaller k
         let kOpt = min(k, n - k)
 
         var result = 1
         for i in 0 ..< kOpt {
-            result = result * (n - i) / (i + 1)
+            result *= (n - i)
+            result /= (i + 1)
         }
 
         return result
@@ -358,25 +360,56 @@ public extension QuantumCircuit {
         ValidationUtilities.validateDickeParameters(numOnes, numQubits: numQubits)
 
         let stateSpaceSize = 1 << numQubits
-        var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
-
         let count = binomialCoefficient(numQubits, numOnes)
-        let amplitude: Complex<Double> = Complex(1.0 / sqrt(Double(count)), 0.0)
+        let amplitude = Complex<Double>(1.0 / sqrt(Double(count)), 0.0)
 
-        for i in 0 ..< stateSpaceSize {
-            if i.nonzeroBitCount == numOnes {
-                amplitudes[i] = amplitude
+        let useEnumeration = count < stateSpaceSize / 2
+
+        if useEnumeration {
+            var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
+            enumerateCombinations(n: numQubits, k: numOnes) { state in
+                amplitudes[state] = amplitude
             }
+            return QuantumState(numQubits: numQubits, amplitudes: amplitudes)
+        } else {
+            let amplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+                for i in 0 ..< stateSpaceSize {
+                    buffer[i] = i.nonzeroBitCount == numOnes ? amplitude : .zero
+                }
+                count = stateSpaceSize
+            }
+            return QuantumState(numQubits: numQubits, amplitudes: amplitudes)
         }
+    }
 
-        return QuantumState(numQubits: numQubits, amplitudes: amplitudes)
+    /// Enumerate all n-bit integers with exactly k bits set
+    /// Calls closure for each combination in lexicographic order
+    /// Uses Gosper's hack for O(1) per combination
+    @_optimize(speed)
+    private static func enumerateCombinations(n: Int, k: Int, body: (Int) -> Void) {
+        guard k > 0 else {
+            body(0)
+            return
+        }
+        guard k <= n else { return }
+
+        var x = (1 << k) - 1
+        let limit = 1 << n
+
+        while x < limit {
+            body(x)
+
+            let u = x & -x
+            let v = x + u
+            x = v | (((v ^ x) >> u.trailingZeroBitCount) >> 2)
+        }
     }
 
     // MARK: - Basis State Preparation Circuit
 
     /// Create circuit for computational basis state |i⟩ (hardware-compatible)
     ///
-    /// Generates gate sequence that transforms |00...0⟩ → |i⟩ using only X gates.
+    /// Generates gate sequence that transforms |00...0⟩ -> |i⟩ using only X gates.
     /// More hardware-compatible than direct statevector construction. Uses binary
     /// representation: apply X to qubit k if bit k of i is 1.
     ///
