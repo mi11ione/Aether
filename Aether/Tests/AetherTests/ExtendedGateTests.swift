@@ -213,48 +213,23 @@ struct ControlledRotationGatesTests {
 }
 
 /// Test suite for custom unitary gates.
-/// Ensures size checks and unitarity validation for user-provided matrices and
-/// verifies successful integration of custom gates into circuits.
+/// Ensures size checks and verifies successful
+/// integration of custom gates into circuits.
 @Suite("Custom Unitary Gates")
 struct CustomUnitaryGatesTests {
     @Test("Custom single-qubit gate validates unitarity")
-    func testCustomSingleQubitValidation() throws {
+    func testCustomSingleQubitValidation() {
         let validMatrix: GateMatrix = [
             [.zero, .one],
             [.one, .zero],
         ]
 
-        let gate = try QuantumGate.createCustomSingleQubit(matrix: validMatrix)
+        let gate = QuantumGate.createCustomSingleQubit(matrix: validMatrix)
         #expect(gate.qubitsRequired == 1)
     }
 
-    @Test("Custom single-qubit gate rejects non-unitary")
-    func testCustomSingleQubitNonUnitary() {
-        let invalidMatrix: GateMatrix = [
-            [.one, .one],
-            [.one, .one],
-        ]
-
-        #expect(throws: QuantumGateError.self) {
-            try QuantumGate.createCustomSingleQubit(matrix: invalidMatrix)
-        }
-    }
-
-    @Test("Custom single-qubit gate rejects wrong size")
-    func testCustomSingleQubitWrongSize() {
-        let invalidMatrix: GateMatrix = [
-            [.one, .zero, .zero],
-            [.zero, .one, .zero],
-            [.zero, .zero, .one],
-        ]
-
-        #expect(throws: QuantumGateError.self) {
-            try QuantumGate.createCustomSingleQubit(matrix: invalidMatrix)
-        }
-    }
-
     @Test("Custom two-qubit gate validates unitarity")
-    func testCustomTwoQubitValidation() throws {
+    func testCustomTwoQubitValidation() {
         let validMatrix: GateMatrix = [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
@@ -262,33 +237,19 @@ struct CustomUnitaryGatesTests {
             [.zero, .zero, .one, .zero],
         ]
 
-        let gate = try QuantumGate.createCustomTwoQubit(matrix: validMatrix, control: 0, target: 1)
+        let gate = QuantumGate.createCustomTwoQubit(matrix: validMatrix, control: 0, target: 1)
         #expect(gate.qubitsRequired == 2)
     }
 
-    @Test("Custom two-qubit gate rejects non-unitary")
-    func testCustomTwoQubitNonUnitary() {
-        let invalidMatrix: GateMatrix = [
-            [.one, .one, .zero, .zero],
-            [.one, .one, .zero, .zero],
-            [.zero, .zero, .one, .one],
-            [.zero, .zero, .one, .one],
-        ]
-
-        #expect(throws: QuantumGateError.self) {
-            try QuantumGate.createCustomTwoQubit(matrix: invalidMatrix, control: 0, target: 1)
-        }
-    }
-
     @Test("Custom gate works in circuit")
-    func testCustomGateInCircuit() throws {
+    func testCustomGateInCircuit() {
         let invSqrt2 = 1.0 / sqrt(2.0)
         let hadamardMatrix: GateMatrix = [
             [Complex(invSqrt2, 0.0), Complex(invSqrt2, 0.0)],
             [Complex(invSqrt2, 0.0), Complex(-invSqrt2, 0.0)],
         ]
 
-        let customH = try QuantumGate.createCustomSingleQubit(matrix: hadamardMatrix)
+        let customH = QuantumGate.createCustomSingleQubit(matrix: hadamardMatrix)
 
         var circuit = QuantumCircuit(numQubits: 1)
         circuit.append(gate: customH, toQubit: 0)
@@ -552,7 +513,7 @@ struct GatePropertyTests {
             [.zero, .one],
             [.one, .zero],
         ]
-        let customSingleGate = try! QuantumGate.createCustomSingleQubit(matrix: customSingleMatrix)
+        let customSingleGate = QuantumGate.createCustomSingleQubit(matrix: customSingleMatrix)
         #expect(customSingleGate.description == "CustomU(2×2)")
 
         let customTwoMatrix: GateMatrix = [
@@ -561,7 +522,7 @@ struct GatePropertyTests {
             [.zero, .zero, .zero, .one],
             [.zero, .zero, .one, .zero],
         ]
-        let customTwoGate = try! QuantumGate.createCustomTwoQubit(matrix: customTwoMatrix, control: 0, target: 1)
+        let customTwoGate = QuantumGate.createCustomTwoQubit(matrix: customTwoMatrix, control: 0, target: 1)
         #expect(customTwoGate.description.contains("CustomU"))
     }
 }

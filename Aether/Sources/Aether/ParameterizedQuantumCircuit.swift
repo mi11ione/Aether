@@ -474,9 +474,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     @_eagerMove
     public func bind(parameterVector: [Double]) throws -> QuantumCircuit {
         let paramCount: Int = parameters.count
-        guard parameterVector.count == paramCount else {
-            throw ParameterError.invalidVectorLength(expected: paramCount, got: parameterVector.count)
-        }
+        ValidationUtilities.validateParameterVectorLength(parameterVector.count, expected: paramCount)
 
         let bindings = Dictionary(
             uniqueKeysWithValues: zip(parameters.lazy.map(\.name), parameterVector)
@@ -531,9 +529,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
         baseBindings: [String: Double],
         shift: Double = .pi / 2
     ) throws -> (plus: QuantumCircuit, minus: QuantumCircuit) {
-        guard parameterSet.contains(parameterName) else {
-            throw ParameterError.parameterNotFound(parameterName)
-        }
+        ValidationUtilities.validateParameterExists(parameterName, in: parameterSet)
 
         guard let baseValue = baseBindings[parameterName] else {
             throw ParameterError.unboundParameter(parameterName)
@@ -586,13 +582,8 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
         shift: Double = .pi / 2
     ) throws -> (plus: QuantumCircuit, minus: QuantumCircuit) {
         let paramCount: Int = parameters.count
-        guard parameterIndex >= 0, parameterIndex < paramCount else {
-            throw ParameterError.parameterIndexOutOfBounds(index: parameterIndex, count: paramCount)
-        }
-
-        guard baseVector.count == paramCount else {
-            throw ParameterError.invalidVectorLength(expected: paramCount, got: baseVector.count)
-        }
+        ValidationUtilities.validateIndexInBounds(parameterIndex, bound: paramCount, name: "parameterIndex")
+        ValidationUtilities.validateParameterVectorLength(baseVector.count, expected: paramCount)
 
         let baseBindings = Dictionary(
             uniqueKeysWithValues: zip(parameters.lazy.map(\.name), baseVector)

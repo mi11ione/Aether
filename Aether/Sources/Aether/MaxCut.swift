@@ -94,7 +94,6 @@ public struct MaxCut {
     ///
     /// **Validation:**
     /// - Edges must reference valid qubit indices (≥ 0, < 30 memory limit)
-    /// - Self-loops (i,i) are invalid (caught by precondition)
     /// - Duplicate edges allowed (combined into single term automatically)
     /// - Edge order doesn't matter: (i,j) ≡ (j,i)
     ///

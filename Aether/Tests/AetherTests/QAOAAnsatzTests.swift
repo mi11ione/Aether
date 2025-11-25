@@ -75,19 +75,7 @@ struct QAOAAnsatzTests {
             mixerHamiltonian: mixer
         )
 
-        var bindings: [String: Double] = [:]
-        for param in ansatz.parameters where param.name.contains("_c_") {
-            let components = param.name.components(separatedBy: "_c_")
-            guard components.count == 2, let coefficient = Double(components[1]) else { continue }
-            let baseName = components[0]
-            let baseComponents = baseName.components(separatedBy: "_")
-            guard baseComponents.count == 2 else { continue }
-            let isGamma = baseComponents[0] == "gamma"
-            let baseValue = isGamma ? 0.5 : 0.5
-            bindings[param.name] = baseValue * coefficient
-        }
-
-        let circuit = try ansatz.bind(parameters: bindings)
+        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.5])
         #expect(circuit.operations.count > 2)
     }
 }
@@ -109,19 +97,7 @@ struct PauliStringExponentiationTests {
             mixerHamiltonian: mixer
         )
 
-        var bindings: [String: Double] = [:]
-        for param in ansatz.parameters where param.name.contains("_c_") {
-            let components = param.name.components(separatedBy: "_c_")
-            guard components.count == 2, let coefficient = Double(components[1]) else { continue }
-            let baseName = components[0]
-            let baseComponents = baseName.components(separatedBy: "_")
-            guard baseComponents.count == 2 else { continue }
-            let isGamma = baseComponents[0] == "gamma"
-            let baseValue = isGamma ? 0.5 : 0.3
-            bindings[param.name] = baseValue * coefficient
-        }
-
-        let circuit = try ansatz.bind(parameters: bindings)
+        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
         let hasCNOT = circuit.operations.contains { op in
             if case .cnot = op.gate { return true }
@@ -148,19 +124,7 @@ struct PauliStringExponentiationTests {
             mixerHamiltonian: mixer
         )
 
-        var bindings: [String: Double] = [:]
-        for param in ansatz.parameters where param.name.contains("_c_") {
-            let components = param.name.components(separatedBy: "_c_")
-            guard components.count == 2, let coefficient = Double(components[1]) else { continue }
-            let baseName = components[0]
-            let baseComponents = baseName.components(separatedBy: "_")
-            guard baseComponents.count == 2 else { continue }
-            let isGamma = baseComponents[0] == "gamma"
-            let baseValue = isGamma ? 0.5 : 0.3
-            bindings[param.name] = baseValue * coefficient
-        }
-
-        let circuit = try ansatz.bind(parameters: bindings)
+        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
         let cnotCount = circuit.operations.filter { op in
             if case .cnot = op.gate { return true }
@@ -182,19 +146,7 @@ struct PauliStringExponentiationTests {
             mixerHamiltonian: mixer
         )
 
-        var bindings: [String: Double] = [:]
-        for param in ansatz.parameters where param.name.contains("_c_") {
-            let components = param.name.components(separatedBy: "_c_")
-            guard components.count == 2, let coefficient = Double(components[1]) else { continue }
-            let baseName = components[0]
-            let baseComponents = baseName.components(separatedBy: "_")
-            guard baseComponents.count == 2 else { continue }
-            let isGamma = baseComponents[0] == "gamma"
-            let baseValue = isGamma ? 0.5 : 0.3
-            bindings[param.name] = baseValue * coefficient
-        }
-
-        let circuit = try ansatz.bind(parameters: bindings)
+        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
         let rxGates = circuit.operations.filter { op in
             if case .rotationX = op.gate { return true }
@@ -221,19 +173,7 @@ struct PauliStringExponentiationTests {
             mixerHamiltonian: mixer
         )
 
-        var bindings: [String: Double] = [:]
-        for param in ansatz.parameters where param.name.contains("_c_") {
-            let components = param.name.components(separatedBy: "_c_")
-            guard components.count == 2, let coefficient = Double(components[1]) else { continue }
-            let baseName = components[0]
-            let baseComponents = baseName.components(separatedBy: "_")
-            guard baseComponents.count == 2 else { continue }
-            let isGamma = baseComponents[0] == "gamma"
-            let baseValue = isGamma ? 0.5 : 0.3
-            bindings[param.name] = baseValue * coefficient
-        }
-
-        let circuit = try ansatz.bind(parameters: bindings)
+        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
         let hadamardGates = circuit.operations.filter { op in
             if case .hadamard = op.gate { return true }
@@ -295,19 +235,7 @@ struct CoefficientScalingTests {
             mixerHamiltonian: mixer
         )
 
-        var bindings: [String: Double] = [:]
-        for param in ansatz.parameters where param.name.contains("_c_") {
-            let components = param.name.components(separatedBy: "_c_")
-            guard components.count == 2, let coefficient = Double(components[1]) else { continue }
-            let baseName = components[0]
-            let baseComponents = baseName.components(separatedBy: "_")
-            guard baseComponents.count == 2 else { continue }
-            let isGamma = baseComponents[0] == "gamma"
-            let baseValue = isGamma ? 0.5 : 0.3
-            bindings[param.name] = baseValue * coefficient
-        }
-
-        let circuit = try ansatz.bind(parameters: bindings)
+        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
         #expect(!circuit.operations.isEmpty)
     }
 }
@@ -365,19 +293,7 @@ struct CompleteQAOAWorkflowsTests {
             mixerHamiltonian: mixer
         )
 
-        var bindings: [String: Double] = [:]
-        for param in ansatz.parameters where param.name.contains("_c_") {
-            let components = param.name.components(separatedBy: "_c_")
-            guard components.count == 2, let coefficient = Double(components[1]) else { continue }
-            let baseName = components[0]
-            let baseComponents = baseName.components(separatedBy: "_")
-            guard baseComponents.count == 2 else { continue }
-            let isGamma = baseComponents[0] == "gamma"
-            let baseValue = isGamma ? 0.5 : 0.3
-            bindings[param.name] = baseValue * coefficient
-        }
-
-        let circuit = try ansatz.bind(parameters: bindings)
+        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
         #expect(!circuit.operations.isEmpty)
         #expect(circuit.numQubits == 2)

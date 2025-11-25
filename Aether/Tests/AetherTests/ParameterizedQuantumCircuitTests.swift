@@ -493,36 +493,6 @@ struct ParameterBindingVectorTests {
         #expect(concrete.operation(at: 1).gate == .rotationZ(theta: 1.0))
     }
 
-    @Test("Bind throws on wrong vector length")
-    func bindThrowsOnWrongVectorLength() {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 2)
-        let theta = Parameter(name: "theta")
-        let phi = Parameter(name: "phi")
-
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-        circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
-
-        let params = [0.5]
-
-        #expect(throws: ParameterError.invalidVectorLength(expected: 2, got: 1)) {
-            try circuit.bind(parameterVector: params)
-        }
-    }
-
-    @Test("Bind throws on too many parameters")
-    func bindThrowsOnTooManyParameters() {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 1)
-        let theta = Parameter(name: "theta")
-
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-
-        let params: [Double] = [0.5, 1.0, 1.5]
-
-        #expect(throws: ParameterError.self) {
-            try circuit.bind(parameterVector: params)
-        }
-    }
-
     @Test("Bind vector with hardware-efficient ansatz")
     func bindVectorWithHardwareEfficientAnsatz() throws {
         var circuit = ParameterizedQuantumCircuit(numQubits: 4)
@@ -633,23 +603,6 @@ struct GradientComputationTests {
         #expect(minus.operation(at: 1).gate == .rotationZ(theta: 1.0))
     }
 
-    @Test("Generate shifted circuits throws on parameter not found")
-    func generateShiftedCircuitsThrowsParameterNotFound() {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 1)
-        let theta = Parameter(name: "theta")
-
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-
-        let baseBindings = ["theta": 0.5]
-
-        #expect(throws: ParameterError.parameterNotFound("phi")) {
-            try circuit.generateShiftedCircuits(
-                parameterName: "phi",
-                baseBindings: baseBindings
-            )
-        }
-    }
-
     @Test("Generate shifted circuits throws on unbound parameter")
     func generateShiftedCircuitsThrowsUnboundParameter() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
@@ -663,42 +616,6 @@ struct GradientComputationTests {
             try circuit.generateShiftedCircuits(
                 parameterName: "theta",
                 baseBindings: baseBindings
-            )
-        }
-    }
-
-    @Test("Generate shifted circuits throws on index out of bounds")
-    func generateShiftedCircuitsThrowsIndexOutOfBounds() {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 2)
-        let theta = Parameter(name: "theta")
-
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-
-        let baseVector = [0.5]
-
-        #expect(throws: ParameterError.parameterIndexOutOfBounds(index: 5, count: 1)) {
-            try circuit.generateShiftedCircuits(
-                parameterIndex: 5,
-                baseVector: baseVector
-            )
-        }
-    }
-
-    @Test("Generate shifted circuits with vector throws on wrong length")
-    func generateShiftedCircuitsVectorThrowsWrongLength() {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 2)
-
-        for i in 0 ..< 2 {
-            let param = Parameter(name: "theta_\(i)")
-            circuit.append(gate: .rotationY(theta: .parameter(param)), toQubit: i)
-        }
-
-        let baseVector = [0.5]
-
-        #expect(throws: ParameterError.invalidVectorLength(expected: 2, got: 1)) {
-            try circuit.generateShiftedCircuits(
-                parameterIndex: 0,
-                baseVector: baseVector
             )
         }
     }

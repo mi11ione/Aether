@@ -147,7 +147,6 @@ public enum CircuitUnitary {
     ///
     /// - Parameter circuit: Quantum circuit to convert
     /// - Returns: Dense unitary matrix (2ⁿ × 2ⁿ complex matrix)
-    /// - Throws: Never (preconditions for programmer errors)
     ///
     /// Example:
     /// ```swift
@@ -416,7 +415,8 @@ public enum CircuitUnitary {
     @_effects(readonly)
     @inlinable
     public static func isFeasible(numQubits: Int) -> Bool {
-        guard numQubits > 0, numQubits <= 30 else { return false }
+        ValidationUtilities.validateMemoryLimit(numQubits)
+        ValidationUtilities.validatePositiveQubits(numQubits)
 
         let memoryBytes: Int = estimateMemoryUsage(numQubits: numQubits)
         let availableMemory: UInt64 = ProcessInfo.processInfo.physicalMemory

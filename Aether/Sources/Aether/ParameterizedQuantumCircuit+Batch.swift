@@ -86,14 +86,8 @@ public extension ParameterizedQuantumCircuit {
 
         let expectedCount: Int = parameterCount()
 
-        for (index, vector) in parameterVectors.enumerated() {
-            guard vector.count == expectedCount else {
-                throw ParameterError.invalidVectorLengthInBatch(
-                    batchIndex: index,
-                    expected: expectedCount,
-                    got: vector.count
-                )
-            }
+        for vector in parameterVectors {
+            ValidationUtilities.validateParameterVectorLength(vector.count, expected: expectedCount)
         }
 
         var circuits: [QuantumCircuit] = []
@@ -167,12 +161,9 @@ public extension ParameterizedQuantumCircuit {
     func generateGradientParameterVectors(
         baseParameters: [Double],
         shift: Double = .pi / 2
-    ) throws -> (plusVectors: [[Double]], minusVectors: [[Double]]) {
+    ) -> (plusVectors: [[Double]], minusVectors: [[Double]]) {
         let numParams: Int = parameterCount()
-
-        guard baseParameters.count == numParams else {
-            throw ParameterError.invalidVectorLength(expected: numParams, got: baseParameters.count)
-        }
+        ValidationUtilities.validateParameterVectorLength(baseParameters.count, expected: numParams)
 
         var plusVectors: [[Double]] = []
         var minusVectors: [[Double]] = []
@@ -247,22 +238,15 @@ public extension ParameterizedQuantumCircuit {
     /// ```
     @_optimize(speed)
     @_eagerMove
-    func generateGridSearchVectors(ranges: [[Double]]) throws -> [[Double]] {
+    func generateGridSearchVectors(ranges: [[Double]]) -> [[Double]] {
         let numParams: Int = parameterCount()
 
-        guard ranges.count == numParams else {
-            throw ParameterError.gridSearchRangeMismatch(
-                expected: numParams,
-                got: ranges.count
-            )
-        }
+        ValidationUtilities.validateArrayCount(ranges, expected: numParams, name: "ranges")
 
         var totalCombinations = 1
         for index in 0 ..< numParams {
             let rangeCount: Int = ranges[index].count
-            guard rangeCount > 0 else {
-                throw ParameterError.emptyGridSearchRange(parameterIndex: index)
-            }
+            ValidationUtilities.validatePositiveInt(rangeCount, name: "ranges[\(index)].count")
             totalCombinations *= rangeCount
         }
 
@@ -308,24 +292,5 @@ public extension ParameterizedQuantumCircuit {
         }
 
         return parameterVectors
-    }
-}
-
-// MARK: - Extended Error Cases
-
-public extension ParameterError {
-    /// Parameter vector has wrong length in batch binding
-    static func invalidVectorLengthInBatch(batchIndex _: Int, expected: Int, got: Int) -> ParameterError {
-        .invalidVectorLength(expected: expected, got: got)
-    }
-
-    /// Grid search range count doesn't match parameter count
-    static func gridSearchRangeMismatch(expected: Int, got: Int) -> ParameterError {
-        .invalidVectorLength(expected: expected, got: got)
-    }
-
-    /// Grid search range is empty for parameter
-    static func emptyGridSearchRange(parameterIndex: Int) -> ParameterError {
-        .unboundParameter("parameter_\(parameterIndex)")
     }
 }

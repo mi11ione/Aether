@@ -185,7 +185,7 @@ extension String {
     }
 }
 
-func measureTime(_: String, block: () throws -> Void) rethrows {
+func measureTime(block: () throws -> Void) rethrows {
     let start = Date()
     try block()
     let elapsed = Date().timeIntervalSince(start)

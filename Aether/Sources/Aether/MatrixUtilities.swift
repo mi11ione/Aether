@@ -41,7 +41,6 @@ public enum MatrixUtilities {
     ///   - a: Left matrix (n×n)
     ///   - b: Right matrix (n×n)
     /// - Returns: Product matrix C = A × B (n×n)
-    /// - Precondition: Both matrices must be square with same dimensions
     @_optimize(speed)
     @inlinable
     @_eagerMove
@@ -142,7 +141,6 @@ public enum MatrixUtilities {
     ///
     /// - Parameter matrix: Square complex matrix (n×n)
     /// - Returns: Hermitian conjugate M† (n×n)
-    /// - Precondition: Matrix must be square
     @_effects(readonly)
     @inlinable
     @_eagerMove
@@ -173,7 +171,6 @@ public enum MatrixUtilities {
     ///
     /// - Parameter dimension: Size of identity matrix (n×n)
     /// - Returns: Identity matrix I_n
-    /// - Precondition: Dimension must be positive
     @_effects(readonly)
     @inlinable
     @_eagerMove

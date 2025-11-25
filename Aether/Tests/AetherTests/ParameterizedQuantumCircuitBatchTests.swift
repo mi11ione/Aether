@@ -53,30 +53,14 @@ struct ParameterizedQuantumCircuitBatchTests {
         #expect(results[2].numQubits == 2)
     }
 
-    @Test("Bind batch rejects wrong parameter count")
-    func bindBatchRejectsWrongCount() throws {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 2)
-        let theta = Parameter(name: "theta")
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-
-        let parameterSets: [[Double]] = [
-            [0.1],
-            [0.2, 0.3],
-        ]
-
-        #expect(throws: ParameterError.self) {
-            try circuit.bindBatch(parameterVectors: parameterSets)
-        }
-    }
-
     @Test("Generate gradient parameter vectors for single parameter")
-    func generateGradientSingleParameter() throws {
+    func generateGradientSingleParameter() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
 
         let baseParams = [0.5]
-        let (plus, minus) = try circuit.generateGradientParameterVectors(baseParameters: baseParams)
+        let (plus, minus) = circuit.generateGradientParameterVectors(baseParameters: baseParams)
 
         #expect(plus.count == 1)
         #expect(minus.count == 1)
@@ -85,7 +69,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Generate gradient parameter vectors for multiple parameters")
-    func generateGradientMultipleParameters() throws {
+    func generateGradientMultipleParameters() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
@@ -94,7 +78,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
 
         let baseParams: [Double] = [0.1, 0.2]
-        let (plus, minus) = try circuit.generateGradientParameterVectors(baseParameters: baseParams)
+        let (plus, minus) = circuit.generateGradientParameterVectors(baseParameters: baseParams)
 
         #expect(plus.count == 2)
         #expect(minus.count == 2)
@@ -113,36 +97,20 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Generate gradient with custom shift")
-    func generateGradientCustomShift() throws {
+    func generateGradientCustomShift() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
 
         let baseParams = [1.0]
         let customShift = Double.pi / 4
-        let (plus, minus) = try circuit.generateGradientParameterVectors(
+        let (plus, minus) = circuit.generateGradientParameterVectors(
             baseParameters: baseParams,
             shift: customShift
         )
 
         #expect(abs(plus[0][0] - (1.0 + customShift)) < 1e-10)
         #expect(abs(minus[0][0] - (1.0 - customShift)) < 1e-10)
-    }
-
-    @Test("Generate gradient rejects wrong parameter count")
-    func generateGradientRejectsWrongCount() throws {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 2)
-        let theta = Parameter(name: "theta")
-        let phi = Parameter(name: "phi")
-
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-        circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
-
-        let wrongParams = [0.1]
-
-        #expect(throws: ParameterError.invalidVectorLength(expected: 2, got: 1)) {
-            try circuit.generateGradientParameterVectors(baseParameters: wrongParams)
-        }
     }
 
     @Test("Generate grid search vectors for single parameter")
@@ -152,7 +120,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
 
         let range = [0.0, 0.5, 1.0]
-        let vectors = try circuit.generateGridSearchVectors(ranges: [range])
+        let vectors = circuit.generateGridSearchVectors(ranges: [range])
 
         #expect(vectors.count == 3)
         #expect(vectors[0][0] == 0.0)
@@ -171,7 +139,7 @@ struct ParameterizedQuantumCircuitBatchTests {
 
         let range1 = [0.0, 1.0]
         let range2 = [0.0, 0.5, 1.0]
-        let vectors = try circuit.generateGridSearchVectors(ranges: [range1, range2])
+        let vectors = circuit.generateGridSearchVectors(ranges: [range1, range2])
 
         #expect(vectors.count == 6)
 
@@ -194,41 +162,12 @@ struct ParameterizedQuantumCircuitBatchTests {
         let range1 = [0.0, 1.0]
         let range2 = [0.0, 1.0]
         let range3 = [0.0, 1.0]
-        let vectors = try circuit.generateGridSearchVectors(ranges: [range1, range2, range3])
+        let vectors = circuit.generateGridSearchVectors(ranges: [range1, range2, range3])
 
         #expect(vectors.count == 8)
 
         #expect(vectors[0] == [0.0, 0.0, 0.0])
         #expect(vectors[7] == [1.0, 1.0, 1.0])
-    }
-
-    @Test("Grid search rejects wrong range count")
-    func gridSearchRejectsWrongRangeCount() throws {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 2)
-        let theta = Parameter(name: "theta")
-        let phi = Parameter(name: "phi")
-
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-        circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
-
-        let wrongRanges = [[0.0, 1.0]]
-
-        #expect(throws: ParameterError.self) {
-            try circuit.generateGridSearchVectors(ranges: wrongRanges)
-        }
-    }
-
-    @Test("Grid search rejects empty range")
-    func gridSearchRejectsEmptyRange() throws {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 1)
-        let theta = Parameter(name: "theta")
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-
-        let emptyRange: [[Double]] = [[]]
-
-        #expect(throws: ParameterError.self) {
-            try circuit.generateGridSearchVectors(ranges: emptyRange)
-        }
     }
 
     @Test("Batch bind with gradient vectors")
@@ -241,7 +180,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
 
         let baseParams: [Double] = [0.1, 0.2]
-        let (plus, minus) = try circuit.generateGradientParameterVectors(baseParameters: baseParams)
+        let (plus, minus) = circuit.generateGradientParameterVectors(baseParameters: baseParams)
 
         let plusCircuits = try circuit.bindBatch(parameterVectors: plus)
         let minusCircuits = try circuit.bindBatch(parameterVectors: minus)
@@ -262,7 +201,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         let range1 = stride(from: 0.0, through: .pi, by: .pi / 2)
         let range2 = stride(from: 0.0, through: .pi, by: .pi / 2)
 
-        let vectors = try circuit.generateGridSearchVectors(
+        let vectors = circuit.generateGridSearchVectors(
             ranges: [Array(range1), Array(range2)]
         )
 
@@ -276,7 +215,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1)
         let baseParams: [Double] = [0.1, 0.2]
 
-        let (plus, minus) = try ansatz.generateGradientParameterVectors(baseParameters: baseParams)
+        let (plus, minus) = ansatz.generateGradientParameterVectors(baseParameters: baseParams)
 
         let plusCircuits = try ansatz.bindBatch(parameterVectors: plus)
         let minusCircuits = try ansatz.bindBatch(parameterVectors: minus)
@@ -306,7 +245,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         let gammaRange = stride(from: 0.0, to: .pi, by: .pi / 4)
         let betaRange = stride(from: 0.0, to: .pi, by: .pi / 4)
 
-        let vectors = try qaoa.generateGridSearchVectors(
+        let vectors = qaoa.generateGridSearchVectors(
             ranges: [Array(gammaRange), Array(betaRange)]
         )
 
@@ -317,12 +256,12 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Gradient vectors have correct length")
-    func gradientVectorsCorrectLength() throws {
+    func gradientVectorsCorrectLength() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 3, depth: 2)
         let paramCount = ansatz.parameterCount()
         let baseParams = Array(repeating: 0.1, count: paramCount)
 
-        let (plus, minus) = try ansatz.generateGradientParameterVectors(baseParameters: baseParams)
+        let (plus, minus) = ansatz.generateGradientParameterVectors(baseParameters: baseParams)
 
         #expect(plus.count == paramCount)
         #expect(minus.count == paramCount)
@@ -332,22 +271,6 @@ struct ParameterizedQuantumCircuitBatchTests {
         }
         for vector in minus {
             #expect(vector.count == paramCount)
-        }
-    }
-
-    @Test("Bind batch validates all vectors before binding")
-    func bindBatchValidatesUpfront() throws {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 2)
-        let theta = Parameter(name: "theta")
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-
-        let mixedVectors: [[Double]] = [
-            [0.1],
-            [0.2, 0.3],
-        ]
-
-        #expect(throws: ParameterError.self) {
-            try circuit.bindBatch(parameterVectors: mixedVectors)
         }
     }
 
@@ -363,7 +286,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         let range1 = [1.0, 2.0, 3.0]
         let range2 = [4.0, 5.0]
 
-        let vectors = try circuit.generateGridSearchVectors(ranges: [range1, range2])
+        let vectors = circuit.generateGridSearchVectors(ranges: [range1, range2])
 
         #expect(vectors.count == 6)
 
@@ -392,7 +315,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         let range = stride(from: 0.0, through: .pi, by: .pi / 5)
         let rangeArray = Array(range)
 
-        let vectors = try circuit.generateGridSearchVectors(
+        let vectors = circuit.generateGridSearchVectors(
             ranges: [rangeArray, rangeArray, rangeArray]
         )
 
@@ -401,7 +324,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Gradient generation preserves other parameters")
-    func gradientPreservesOtherParams() throws {
+    func gradientPreservesOtherParams() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 4)
         for i in 0 ..< 4 {
             let param = Parameter(name: "theta_\(i)")
@@ -409,7 +332,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         }
 
         let baseParams: [Double] = [0.1, 0.2, 0.3, 0.4]
-        let (plus, minus) = try circuit.generateGradientParameterVectors(baseParameters: baseParams)
+        let (plus, minus) = circuit.generateGradientParameterVectors(baseParameters: baseParams)
 
         for i in 0 ..< 4 {
             for j in 0 ..< 4 {
@@ -461,7 +384,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
 
         let singleRange = [0.0]
-        let vectors = try circuit.generateGridSearchVectors(ranges: [singleRange])
+        let vectors = circuit.generateGridSearchVectors(ranges: [singleRange])
 
         #expect(vectors.count == 1)
         #expect(vectors[0] == [0.0])

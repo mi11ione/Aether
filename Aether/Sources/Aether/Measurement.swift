@@ -695,9 +695,7 @@ public struct Measurement {
             [-c1, c0],
         ]
 
-        // Safety: rotationMatrix is unitary by construction (columns are orthonormal basis vectors)
-        // c0*c0 + c1*c1 = 1 (normalized input), and columns are orthogonal
-        let rotationGate = try! QuantumGate.createCustomSingleQubit(matrix: rotationMatrix)
+        let rotationGate = QuantumGate.createCustomSingleQubit(matrix: rotationMatrix)
 
         let rotatedState = GateApplication.apply(gate: rotationGate, to: [qubit], state: state)
 
@@ -705,8 +703,7 @@ public struct Measurement {
 
         let adjointMatrix = MatrixUtilities.hermitianConjugate(rotationMatrix)
 
-        // Safety: Hermitian conjugate of unitary matrix is also unitary
-        let inverseGate = try! QuantumGate.createCustomSingleQubit(matrix: adjointMatrix)
+        let inverseGate = QuantumGate.createCustomSingleQubit(matrix: adjointMatrix)
 
         let finalState = GateApplication.apply(gate: inverseGate, to: [qubit], state: collapsedRotated)
 

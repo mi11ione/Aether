@@ -799,6 +799,45 @@ struct GroverCircuitTests {
         #expect(finalState.isNormalized())
     }
 
+    @Test("Ising problem from dictionary with local fields")
+    func isingProblemFromDictionaryWithLocalFields() {
+        let dictionary: [String: Double] = [
+            "0": 0.5,
+            "1": -0.3,
+            "2": 0.8,
+            "0-1": 0.2,
+            "12": 0.4,
+        ]
+
+        let problem = QuantumCircuit.IsingProblem(fromDictionary: dictionary, numQubits: 3)
+
+        #expect(problem.localFields[0] == 0.5)
+        #expect(problem.localFields[1] == -0.3)
+        #expect(problem.localFields[2] == 0.8)
+
+        #expect(problem.couplings[0][1] == 0.2)
+        #expect(problem.couplings[1][0] == 0.2)
+        #expect(problem.couplings[1][2] == 0.4)
+        #expect(problem.couplings[2][1] == 0.4)
+
+        #expect(problem.transverseField.allSatisfy { $0 == 1.0 })
+    }
+
+    @Test("Ising problem dictionary supports multiple key formats")
+    func isingProblemDictionaryKeyFormats() {
+        let dictionary: [String: Double] = [
+            "01": 0.1,
+            "1-2": 0.2,
+            "0,2": 0.3,
+        ]
+
+        let problem = QuantumCircuit.IsingProblem(fromDictionary: dictionary, numQubits: 3)
+
+        #expect(problem.couplings[0][1] == 0.1)
+        #expect(problem.couplings[1][2] == 0.2)
+        #expect(problem.couplings[0][2] == 0.3)
+    }
+
     @Test("Ising problem creation")
     func createIsingProblem() {
         let localFields = [1.0, -0.5, 0.0]
@@ -814,21 +853,6 @@ struct GroverCircuitTests {
         #expect(problem.couplings == couplings)
         #expect(problem.transverseField.count == 3)
         #expect(problem.transverseField.allSatisfy { $0 == 1.0 })
-    }
-
-    @Test("Random Ising problem")
-    func createRandomIsingProblem() {
-        let problem = QuantumCircuit.IsingProblem.random(numQubits: 3, maxCoupling: 2.0)
-
-        #expect(problem.localFields.count == 3)
-        #expect(problem.couplings.count == 3)
-        #expect(problem.couplings.allSatisfy { $0.count == 3 })
-
-        for i in 0 ..< 3 {
-            for j in 0 ..< 3 {
-                #expect(problem.couplings[i][j] == problem.couplings[j][i])
-            }
-        }
     }
 
     @Test("Quadratic minimum problem")

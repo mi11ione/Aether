@@ -67,8 +67,7 @@ public actor SparseHamiltonian {
             pipelineState: MTLComputePipelineState,
             rowPointers: MTLBuffer,
             columnIndices: MTLBuffer,
-            values: MTLBuffer,
-            nnz: Int
+            values: MTLBuffer
         )
 
         /// CPU sparse backend: Accelerate-optimized sparse operations with AMX acceleration
@@ -148,8 +147,7 @@ public actor SparseHamiltonian {
 
         if self.numQubits >= 8, let metalBackend = Self.tryMetalGPUBackend(
             cooMatrix: cooMatrix,
-            dimension: dimension,
-            numQubits: self.numQubits
+            dimension: dimension
         ) {
             backend = metalBackend
         } else if let accelerateBackend = Self.tryAccelerateSparseBackend(
@@ -247,12 +245,11 @@ public actor SparseHamiltonian {
         _ pauliString: PauliString,
         dimension: Int
     ) -> [COOElement] {
-        let numQubits = Int(log2(Double(dimension)))
         var elements: [COOElement] = []
         elements.reserveCapacity(dimension)
 
         for row in 0 ..< dimension {
-            let (col, phase) = pauliString.applyToRow(row: row, numQubits: numQubits)
+            let (col, phase) = pauliString.applyToRow(row: row)
             elements.append(COOElement(row: row, col: col, value: phase))
         }
 
@@ -281,12 +278,10 @@ public actor SparseHamiltonian {
     /// - Parameters:
     ///   - cooMatrix: Sparse matrix in COO format
     ///   - dimension: Hilbert space dimension
-    ///   - numQubits: Number of qubits
     /// - Returns: Metal GPU backend or nil if unavailable
     private static func tryMetalGPUBackend(
         cooMatrix: [COOElement],
-        dimension: Int,
-        numQubits _: Int
+        dimension: Int
     ) -> Backend? {
         guard !cooMatrix.isEmpty else { return nil }
         guard let device = MTLCreateSystemDefaultDevice() else { return nil }
@@ -344,8 +339,7 @@ public actor SparseHamiltonian {
             pipelineState: pipelineState,
             rowPointers: rowPointerBuffer,
             columnIndices: columnIndexBuffer,
-            values: valueBuffer,
-            nnz: values.count
+            values: valueBuffer
         )
     }
 
@@ -573,7 +567,7 @@ public actor SparseHamiltonian {
         ValidationUtilities.validateNormalizedState(state)
 
         switch backend {
-        case let .metalGPU(device, commandQueue, pipelineState, rowPointers, columnIndices, values, nnz):
+        case let .metalGPU(device, commandQueue, pipelineState, rowPointers, columnIndices, values):
             return computeMetalGPU(
                 state: state,
                 device: device,
@@ -581,8 +575,7 @@ public actor SparseHamiltonian {
                 pipelineState: pipelineState,
                 rowPointers: rowPointers,
                 columnIndices: columnIndices,
-                values: values,
-                nnz: nnz
+                values: values
             )
 
         case let .accelerateSparse(realMatrix, imagMatrix, dimension):
@@ -615,7 +608,6 @@ public actor SparseHamiltonian {
     ///   - rowPointers: CSR row pointers buffer
     ///   - columnIndices: CSR column indices buffer
     ///   - values: CSR complex values buffer
-    ///   - nnz: Number of non-zeros
     /// - Returns: Expectation value
     @_optimize(speed)
     private func computeMetalGPU(
@@ -625,8 +617,7 @@ public actor SparseHamiltonian {
         pipelineState: MTLComputePipelineState,
         rowPointers: MTLBuffer,
         columnIndices: MTLBuffer,
-        values: MTLBuffer,
-        nnz _: Int
+        values: MTLBuffer
     ) -> Double {
         let float32State: [GPUComplex] = state.amplitudes.withUnsafeBufferPointer { complexBuffer in
             let doublePtr = UnsafeRawPointer(complexBuffer.baseAddress!)

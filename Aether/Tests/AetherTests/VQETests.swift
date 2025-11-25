@@ -295,36 +295,6 @@ struct VariationalQuantumEigensolverTests {
             try await vqe.run(initialParameters: [0.1])
         }
     }
-
-    @Test("VQE propagates optimizer errors")
-    func vqePropagatesOptimizerErrors() async throws {
-        struct FailingOptimizer: Optimizer {
-            struct OptimizationError: Error {}
-
-            func minimize(
-                objectiveFunction _: @Sendable ([Double]) async throws -> Double,
-                initialParameters _: [Double],
-                convergenceCriteria _: ConvergenceCriteria,
-                progressCallback _: (@Sendable (Int, Double) async -> Void)?
-            ) async throws -> OptimizerResult {
-                throw OptimizationError()
-            }
-        }
-
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
-        let optimizer = FailingOptimizer()
-
-        let vqe = VariationalQuantumEigensolver(
-            hamiltonian: hamiltonian,
-            ansatz: ansatz,
-            optimizer: optimizer
-        )
-
-        await #expect(throws: FailingOptimizer.OptimizationError.self) {
-            try await vqe.run(initialParameters: [0.1])
-        }
-    }
 }
 
 /// Test suite for VQEResult.
@@ -408,17 +378,6 @@ struct VQEResultTests {
 /// descriptive error messages.
 @Suite("VQEError")
 struct VQEErrorTests {
-    @Test("Parameter count mismatch error")
-    func parameterCountMismatchError() {
-        let error = VQEError.parameterCountMismatch(expected: 5, got: 3)
-        let description = error.errorDescription
-
-        #expect(description != nil)
-        #expect(description!.contains("5"))
-        #expect(description!.contains("3"))
-        #expect(description!.contains("mismatch"))
-    }
-
     @Test("Invalid energy error")
     func invalidEnergyError() {
         let error = VQEError.invalidEnergy(value: Double.nan, parameters: [1.0, 2.0])

@@ -130,71 +130,6 @@ struct QAOAAlgorithmTests {
     }
 }
 
-/// Test suite for QAOA parameter validation.
-/// Verifies error handling for mismatched parameter counts, empty arrays,
-/// and invalid parameter values.
-@Suite("QAOA Parameter Validation")
-struct QAOAParameterValidationTests {
-    @Test("Too few parameters throws error")
-    func tooFewParameters() async throws {
-        let cost = MaxCut.hamiltonian(edges: [(0, 1)])
-
-        let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
-            depth: 2
-        )
-
-        await #expect(throws: QAOAError.self) {
-            try await qaoa.run(initialParameters: [0.5, 0.5])
-        }
-    }
-
-    @Test("Too many parameters throws error")
-    func tooManyParameters() async throws {
-        let cost = MaxCut.hamiltonian(edges: [(0, 1)])
-
-        let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
-            depth: 1
-        )
-
-        await #expect(throws: QAOAError.self) {
-            try await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
-        }
-    }
-
-    @Test("Empty parameters throws error")
-    func emptyParameters() async throws {
-        let cost = MaxCut.hamiltonian(edges: [(0, 1)])
-
-        let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
-            depth: 1
-        )
-
-        await #expect(throws: QAOAError.self) {
-            try await qaoa.run(initialParameters: [])
-        }
-    }
-
-    @Test("Error description is actionable")
-    func errorDescriptions() {
-        let paramError = QAOAError.parameterCountMismatch(expected: 4, got: 2)
-        #expect(paramError.errorDescription != nil)
-        #expect(paramError.errorDescription!.contains("mismatch"))
-        #expect(paramError.errorDescription!.contains("4"))
-        #expect(paramError.errorDescription!.contains("2"))
-
-        let costError = QAOAError.invalidCost(value: Double.nan, parameters: [0.5, 0.5])
-        #expect(costError.errorDescription != nil)
-        #expect(costError.errorDescription!.contains("invalid"))
-        #expect(costError.errorDescription!.contains("nan"))
-    }
-}
-
 /// Test suite for QAOA progress tracking.
 /// Validates callback invocation, progress state updates, and iteration
 /// counting during optimization.
@@ -629,5 +564,13 @@ struct QAOAResultRepresentationTests {
 
         #expect(!description.contains(", ..."), "Description should not truncate when parameter count <= 4")
         #expect(result.optimalParameters.count == 4, "Result should contain all 4 parameters")
+    }
+
+    @Test("Error description is actionable")
+    func errorDescriptions() {
+        let costError = QAOAError.invalidCost(value: Double.nan, parameters: [0.5, 0.5])
+        #expect(costError.errorDescription != nil)
+        #expect(costError.errorDescription!.contains("invalid"))
+        #expect(costError.errorDescription!.contains("nan"))
     }
 }

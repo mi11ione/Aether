@@ -388,6 +388,25 @@ public enum ValidationUtilities {
         precondition(dimension > 0, "Matrix dimension must be positive (got \(dimension))")
     }
 
+    /// Validate that square matrix has expected dimension
+    ///
+    /// Used for batch unitary validation where all matrices must match state space size.
+    ///
+    /// - Parameters:
+    ///   - matrix: Square matrix to validate
+    ///   - expected: Expected dimension (rows and columns)
+    ///   - name: Matrix name for error message
+    /// - Precondition: matrix.count == expected
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateMatrixDimensionEquals(_ matrix: [[some Any]], expected: Int, name: String) {
+        precondition(
+            matrix.count == expected,
+            "\(name) dimension must be \(expected)×\(expected) (got \(matrix.count)×\(matrix.count))"
+        )
+    }
+
     // MARK: - Probability Validations
 
     /// Validate that probability array sums to 1.0 (within tolerance)
@@ -690,5 +709,99 @@ public enum ValidationUtilities {
     @inline(__always)
     static func validateBypassEnabled(_ bypass: Bool) {
         precondition(bypass, "This initializer is for testing only")
+    }
+
+    /// Validates that a coupling dictionary key specifies exactly 1 or 2 qubits
+    ///
+    /// - Parameters:
+    ///   - count: Number of qubit indices parsed from the key
+    ///   - key: Original key string for error message
+    /// - Precondition: count == 1 || count == 2
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateCouplingKeyFormat(_ count: Int, key: String) {
+        precondition(
+            count == 1 || count == 2,
+            "Invalid coupling key '\(key)': must specify 1-2 qubits (e.g., '0' for local field, '01' or '0-1' for coupling)"
+        )
+    }
+
+    // MARK: - Parameter Vector Validations
+
+    /// Validate parameter vector length matches expected count
+    ///
+    /// Used for VQE/QAOA parameter binding where vector length must match
+    /// the number of parameters in the parameterized circuit.
+    ///
+    /// - Parameters:
+    ///   - actual: Actual vector length
+    ///   - expected: Expected vector length
+    ///   - name: Parameter name for error message (default: "Parameter vector")
+    /// - Precondition: actual == expected
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateParameterVectorLength(_ actual: Int, expected: Int, name: String = "Parameter vector") {
+        precondition(
+            actual == expected,
+            "\(name) length must be \(expected) (got \(actual))"
+        )
+    }
+
+    // MARK: - Matrix Size Validations
+
+    /// Validate that parameter exists in circuit's parameter set
+    ///
+    /// - Parameters:
+    ///   - parameterName: Name of parameter to check
+    ///   - parameterSet: Set of valid parameter names in circuit
+    /// - Precondition: parameterSet.contains(parameterName)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateParameterExists(_ parameterName: String, in parameterSet: Set<String>) {
+        precondition(parameterSet.contains(parameterName), "Parameter '\(parameterName)' not found in circuit")
+    }
+
+    /// Validate that matrix is 2×2 for single-qubit gates
+    ///
+    /// - Parameter matrix: Matrix to validate
+    /// - Precondition: matrix is 2×2
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validate2x2Matrix(_ matrix: GateMatrix) {
+        precondition(matrix.count == 2, "Single-qubit gate requires 2×2 matrix (got \(matrix.count) rows)")
+        precondition(matrix[0].count == 2, "Single-qubit gate requires 2×2 matrix (row 0 has \(matrix[0].count) columns)")
+        precondition(matrix[1].count == 2, "Single-qubit gate requires 2×2 matrix (row 1 has \(matrix[1].count) columns)")
+    }
+
+    /// Validate that matrix is 4×4 for two-qubit gates
+    ///
+    /// - Parameter matrix: Matrix to validate
+    /// - Precondition: matrix is 4×4
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validate4x4Matrix(_ matrix: GateMatrix) {
+        precondition(matrix.count == 4, "Two-qubit gate requires 4×4 matrix (got \(matrix.count) rows)")
+        precondition(matrix[0].count == 4, "Two-qubit gate requires 4×4 matrix (row 0 has \(matrix[0].count) columns)")
+        precondition(matrix[1].count == 4, "Two-qubit gate requires 4×4 matrix (row 1 has \(matrix[1].count) columns)")
+        precondition(matrix[2].count == 4, "Two-qubit gate requires 4×4 matrix (row 2 has \(matrix[2].count) columns)")
+        precondition(matrix[3].count == 4, "Two-qubit gate requires 4×4 matrix (row 3 has \(matrix[3].count) columns)")
+    }
+
+    /// Validate that matrix is unitary (U†U = I)
+    ///
+    /// Custom quantum gates must be unitary to preserve quantum state normalization.
+    ///
+    /// - Parameter matrix: Matrix to validate
+    /// - Precondition: matrix must be unitary within tolerance (1e-10)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateUnitary(_ matrix: GateMatrix) {
+        precondition(QuantumGate.isUnitary(matrix), "Matrix is not unitary (U†U ≠ I)")
     }
 }

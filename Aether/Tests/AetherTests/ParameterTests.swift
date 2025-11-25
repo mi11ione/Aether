@@ -252,17 +252,6 @@ struct ParameterErrorTests {
         #expect(description!.contains("not found"))
     }
 
-    @Test("Parameter index out of bounds error")
-    func parameterIndexOutOfBoundsError() {
-        let error = ParameterError.parameterIndexOutOfBounds(index: 5, count: 3)
-        let description = error.errorDescription
-
-        #expect(description != nil)
-        #expect(description!.contains("5"))
-        #expect(description!.contains("3"))
-        #expect(description!.contains("out of bounds"))
-    }
-
     @Test("ParameterError is Equatable")
     func parameterErrorIsEquatable() {
         let error1 = ParameterError.unboundParameter("theta")

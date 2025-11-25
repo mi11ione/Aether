@@ -223,21 +223,6 @@ struct CircuitUnitaryTests {
         #expect(CircuitUnitary.isFeasible(numQubits: 14))
     }
 
-    @Test("Feasibility check rejects zero qubits")
-    func feasibilityRejectsZero() {
-        #expect(!CircuitUnitary.isFeasible(numQubits: 0))
-    }
-
-    @Test("Feasibility check rejects negative qubits")
-    func feasibilityRejectsNegative() {
-        #expect(!CircuitUnitary.isFeasible(numQubits: -1))
-    }
-
-    @Test("Feasibility check rejects too many qubits")
-    func feasibilityRejectsTooMany() {
-        #expect(!CircuitUnitary.isFeasible(numQubits: 31))
-    }
-
     @Test("Unitarity preserved after gate composition")
     func unitarityPreserved() {
         var circuit = QuantumCircuit(numQubits: 2)

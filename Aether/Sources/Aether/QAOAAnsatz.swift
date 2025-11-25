@@ -374,3 +374,76 @@ public struct QAOAAnsatz {
         return Parameter(name: "\(base.name)_c_\(scaledCoeff)")
     }
 }
+
+/// Pre-computed QAOA parameter binding information for fast repeated binding
+///
+/// Parses parameter names once at construction, enabling O(n) binding without
+/// string parsing in hot optimization loops.
+///
+/// **Usage:**
+/// ```swift
+/// let ansatz = QAOAAnsatz.create(...)
+/// let binder = QAOAParameterBinder(ansatz: ansatz)
+///
+/// // Fast repeated binding in optimization loop
+/// for params in parameterSweep {
+///     let circuit = try binder.bind(baseParameters: params)
+/// }
+/// ```
+@frozen
+public struct QAOAParameterBinder: Sendable {
+    /// Pre-parsed parameter info: (name, baseParameterIndex, coefficient)
+    private let parameterInfo: [(name: String, baseIndex: Int, coefficient: Double)]
+    private let ansatz: ParameterizedQuantumCircuit
+
+    /// Create binder with pre-computed parameter info
+    ///
+    /// - Parameter ansatz: QAOA ansatz circuit to bind
+    @_optimize(speed)
+    public init(ansatz: ParameterizedQuantumCircuit) {
+        self.ansatz = ansatz
+
+        var info: [(name: String, baseIndex: Int, coefficient: Double)] = []
+        info.reserveCapacity(ansatz.parameterCount())
+
+        for param in ansatz.parameters {
+            let paramName = param.name
+
+            guard let coeffSeparatorRange = paramName.range(of: "_c_") else { continue }
+
+            let baseName = String(paramName[..<coeffSeparatorRange.lowerBound])
+            let coeffStr = String(paramName[coeffSeparatorRange.upperBound...])
+            guard let coefficient = Double(coeffStr) else { continue }
+
+            guard let underscoreRange = baseName.range(of: "_", options: .backwards) else { continue }
+            let typeStr = String(baseName[..<underscoreRange.lowerBound])
+            let layerStr = String(baseName[underscoreRange.upperBound...])
+            guard let layer = Int(layerStr) else { continue }
+
+            let isGamma = typeStr == "gamma"
+            let baseIndex = isGamma ? (2 * layer) : (2 * layer + 1)
+            info.append((name: paramName, baseIndex: baseIndex, coefficient: coefficient))
+        }
+
+        parameterInfo = info
+    }
+
+    /// Bind base parameters to ansatz with coefficient scaling
+    ///
+    /// **Complexity:** O(n) where n = number of parameters (no string parsing)
+    ///
+    /// - Parameter baseParameters: Array of [γ₀, β₀, γ₁, β₁, ..., γₚ₋₁, βₚ₋₁]
+    /// - Returns: Concrete quantum circuit with all parameters bound
+    /// - Throws: ParameterError if binding fails
+    @_optimize(speed)
+    @_eagerMove
+    public func bind(baseParameters: [Double]) throws -> QuantumCircuit {
+        var bindings: [String: Double] = Dictionary(minimumCapacity: parameterInfo.count)
+
+        for info in parameterInfo {
+            bindings[info.name] = baseParameters[info.baseIndex] * info.coefficient
+        }
+
+        return try ansatz.bind(parameters: bindings)
+    }
+}

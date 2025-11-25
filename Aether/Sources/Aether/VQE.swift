@@ -392,17 +392,11 @@ public struct VQEResult: Sendable, CustomStringConvertible {
 
 @frozen
 public enum VQEError: Error, LocalizedError {
-    /// Parameter count mismatch between initialParameters and ansatz
-    case parameterCountMismatch(expected: Int, got: Int)
-
     /// Energy evaluation returned invalid value (NaN or Inf)
     case invalidEnergy(value: Double, parameters: [Double])
 
     public var errorDescription: String? {
         switch self {
-        case let .parameterCountMismatch(expected, got):
-            "Parameter count mismatch: ansatz has \(expected) parameters but got \(got) initial values. Check ansatz.parameterCount()."
-
         case let .invalidEnergy(value, _):
             "Energy evaluation returned invalid value: \(value). Check Hamiltonian and circuit validity."
         }

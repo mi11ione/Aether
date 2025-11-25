@@ -802,17 +802,15 @@ public extension PauliString {
     /// **Example**:
     /// ```swift
     /// let yPauli = PauliString(operators: [(qubit: 0, basis: .y)])
-    /// let (col, phase) = yPauli.applyToRow(row: 0, numQubits: 1)
+    /// let (col, phase) = yPauli.applyToRow(row: 0)
     /// // Y|0⟩ = i|1⟩ -> col = 1, phase = i
     /// ```
     ///
-    /// - Parameters:
-    ///   - row: Input basis state index (0 to 2^numQubits - 1)
-    ///   - numQubits: Total number of qubits in system
+    /// - Parameter row: Input basis state index (0 to 2^numQubits - 1)
     /// - Returns: (column index, phase factor) representing P|row⟩ = phase * |col⟩
     @_optimize(speed)
     @inlinable
-    func applyToRow(row: Int, numQubits _: Int) -> (col: Int, phase: Complex<Double>) {
+    func applyToRow(row: Int) -> (col: Int, phase: Complex<Double>) {
         var col: Int = row
         var phase = Complex<Double>.one
 
@@ -845,7 +843,7 @@ public extension PauliString {
         var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
 
         for row in 0 ..< dimension {
-            let (col, phase) = applyToRow(row: row, numQubits: numQubits)
+            let (col, phase) = applyToRow(row: row)
             result[row][col] += phase
         }
 

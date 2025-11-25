@@ -146,31 +146,6 @@ struct MPSBatchEvaluatorTests {
         #expect(abs(energies[1] - expected2) < 1e-5)
     }
 
-    @Test("Empty batch throws error")
-    func emptyBatchError() async throws {
-        let evaluator = MPSBatchEvaluator()
-        let initialState = QuantumState(numQubits: 2)
-
-        await #expect(throws: MPSBatchError.emptyBatch) {
-            try await evaluator.evaluateBatch(unitaries: [], initialState: initialState)
-        }
-    }
-
-    @Test("Dimension mismatch throws error")
-    func dimensionMismatchError() async throws {
-        var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .hadamard, toQubit: 0)
-
-        let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
-        let initialState = QuantumState(numQubits: 2)
-
-        let evaluator = MPSBatchEvaluator()
-
-        await #expect(throws: MPSBatchError.dimensionMismatch(expected: 4, got: 8)) {
-            try await evaluator.evaluateBatch(unitaries: [unitary], initialState: initialState)
-        }
-    }
-
     @Test("Three-qubit circuit batch evaluation")
     func threeQubitBatch() async throws {
         var circuit = QuantumCircuit(numQubits: 3)
@@ -220,7 +195,7 @@ struct MPSBatchEvaluatorTests {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1)
         let baseParams: [Double] = [0.1, 0.2]
 
-        let (plusVectors, minusVectors) = try ansatz.generateGradientParameterVectors(
+        let (plusVectors, minusVectors) = ansatz.generateGradientParameterVectors(
             baseParameters: baseParams
         )
 
@@ -535,25 +510,6 @@ struct MPSBatchEvaluatorTests {
         }
     }
 
-    @Test("MPSBatchError.emptyBatch description is informative")
-    func emptyBatchErrorDescription() {
-        let error = MPSBatchError.emptyBatch
-        let description = error.errorDescription!
-
-        #expect(description.contains("at least one unitary"), "Error should explain requirement")
-        #expect(description.contains("non-empty array"), "Error should suggest fix")
-    }
-
-    @Test("MPSBatchError.dimensionMismatch description is informative")
-    func dimensionMismatchErrorDescription() {
-        let error = MPSBatchError.dimensionMismatch(expected: 4, got: 8)
-        let description = error.errorDescription!
-
-        #expect(description.contains("4×4"), "Error should show expected dimension")
-        #expect(description.contains("8×8"), "Error should show actual dimension")
-        #expect(description.contains("qubit count"), "Error should explain cause")
-    }
-
     @Test("MPSBatchError.metalUnavailable description is informative")
     func metalUnavailableErrorDescription() {
         let error = MPSBatchError.metalUnavailable
@@ -585,17 +541,10 @@ struct MPSBatchEvaluatorTests {
 
     @Test("MPSBatchError equality works correctly")
     func batchErrorEquality() {
-        #expect(MPSBatchError.emptyBatch == MPSBatchError.emptyBatch)
         #expect(MPSBatchError.metalUnavailable == MPSBatchError.metalUnavailable)
-        #expect(
-            MPSBatchError.dimensionMismatch(expected: 4, got: 8) ==
-                MPSBatchError.dimensionMismatch(expected: 4, got: 8)
-        )
-        #expect(
-            MPSBatchError.dimensionMismatch(expected: 4, got: 8) !=
-                MPSBatchError.dimensionMismatch(expected: 4, got: 16)
-        )
-        #expect(MPSBatchError.emptyBatch != MPSBatchError.metalUnavailable)
+        #expect(MPSBatchError.bufferAllocationFailed == MPSBatchError.bufferAllocationFailed)
+        #expect(MPSBatchError.commandBufferFailed == MPSBatchError.commandBufferFailed)
+        #expect(MPSBatchError.metalUnavailable != MPSBatchError.bufferAllocationFailed)
     }
 
     @Test("BatchEvaluatorStatistics description formats correctly")
@@ -674,29 +623,5 @@ struct MPSBatchEvaluatorTests {
         #expect(batch2 >= batch4, "Smaller circuits should allow larger batches")
         #expect(batch4 >= batch6, "Batch size should decrease with qubit count")
         #expect(batch6 >= batch8, "Batch size monotonically decreases")
-    }
-
-    @Test("Dimension mismatch with partial batch validates all unitaries")
-    func dimensionMismatchPartialBatch() async throws {
-        var circuit2 = QuantumCircuit(numQubits: 2)
-        circuit2.append(gate: .hadamard, toQubit: 0)
-
-        var circuit3 = QuantumCircuit(numQubits: 3)
-        circuit3.append(gate: .hadamard, toQubit: 0)
-
-        let unitary2 = CircuitUnitary.computeUnitary(circuit: circuit2)
-        let unitary3 = CircuitUnitary.computeUnitary(circuit: circuit3)
-
-        let mixedUnitaries = [unitary2, unitary3]
-        let initialState = QuantumState(numQubits: 2)
-
-        let evaluator = MPSBatchEvaluator()
-
-        await #expect(throws: MPSBatchError.self) {
-            try await evaluator.evaluateBatch(
-                unitaries: mixedUnitaries,
-                initialState: initialState
-            )
-        }
     }
 }

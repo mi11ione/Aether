@@ -928,14 +928,9 @@ public extension QuantumGate {
     /// }
     /// ```
     @_eagerMove
-    static func createCustomSingleQubit(matrix: GateMatrix) throws -> QuantumGate {
-        guard matrix.count == 2, matrix.allSatisfy({ $0.count == 2 }) else {
-            throw QuantumGateError.invalidMatrixSize("Custom single-qubit gate requires 2×2 matrix")
-        }
-
-        guard isUnitary(matrix) else {
-            throw QuantumGateError.notUnitary("Matrix is not unitary (U†U ≠ I)")
-        }
+    static func createCustomSingleQubit(matrix: GateMatrix) -> QuantumGate {
+        ValidationUtilities.validate2x2Matrix(matrix)
+        ValidationUtilities.validateUnitary(matrix)
 
         return .customSingleQubit(matrix: matrix)
     }
@@ -992,29 +987,10 @@ public extension QuantumGate {
         matrix: GateMatrix,
         control: Int,
         target: Int
-    ) throws -> QuantumGate {
-        guard matrix.count == 4, matrix.allSatisfy({ $0.count == 4 }) else {
-            throw QuantumGateError.invalidMatrixSize("Custom two-qubit gate requires 4×4 matrix")
-        }
-
-        guard isUnitary(matrix) else {
-            throw QuantumGateError.notUnitary("Matrix is not unitary (U†U ≠ I)")
-        }
+    ) -> QuantumGate {
+        ValidationUtilities.validate4x4Matrix(matrix)
+        ValidationUtilities.validateUnitary(matrix)
 
         return .customTwoQubit(matrix: matrix, control: control, target: target)
-    }
-}
-
-/// Errors that can occur when creating or validating quantum gates
-@frozen
-public enum QuantumGateError: Error, LocalizedError {
-    case invalidMatrixSize(String)
-    case notUnitary(String)
-
-    public var errorDescription: String? {
-        switch self {
-        case let .invalidMatrixSize(message): message
-        case let .notUnitary(message): message
-        }
     }
 }

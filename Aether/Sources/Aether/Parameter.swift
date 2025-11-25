@@ -170,9 +170,6 @@ public enum ParameterError: Error, LocalizedError, Equatable {
     /// Attempted parameter shift on non-existent parameter
     case parameterNotFound(String)
 
-    /// Parameter index out of bounds for vector interface
-    case parameterIndexOutOfBounds(index: Int, count: Int)
-
     public var errorDescription: String? {
         switch self {
         case let .unboundParameter(name):
@@ -190,9 +187,6 @@ public enum ParameterError: Error, LocalizedError, Equatable {
 
         case let .parameterNotFound(name):
             return "Parameter '\(name)' not found in circuit. Available parameters can be queried via circuit.parameters property."
-
-        case let .parameterIndexOutOfBounds(index, count):
-            return "Parameter index \(index) out of bounds. Circuit has \(count) parameters (valid indices: 0-\(count - 1))."
         }
     }
 }

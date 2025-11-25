@@ -864,14 +864,35 @@ public extension QuantumCircuit {
     }
 
     /// Convenience method for creating annealing circuit with simple coupling dictionary
+    ///
+    /// The couplings dictionary uses string keys to specify interactions:
+    /// - Single qubit keys (e.g., "0", "1") specify local fields on individual qubits
+    /// - Two qubit keys (e.g., "01", "0-1", "0,1") specify ZZ couplings between qubit pairs
+    ///
+    /// ```swift
+    /// // Create MaxCut problem on 3-qubit triangle graph
+    /// let circuit = QuantumCircuit.annealing(
+    ///     numQubits: 3,
+    ///     couplings: ["0-1": 0.5, "1-2": 0.5, "0-2": 0.5],
+    ///     annealingSteps: 20
+    /// )
+    ///
+    /// // Include local fields (compact notation also works)
+    /// let circuit2 = QuantumCircuit.annealing(
+    ///     numQubits: 3,
+    ///     couplings: ["0": -0.3, "1": 0.2, "01": 0.5, "12": 0.5],
+    ///     annealingSteps: 20
+    /// )
+    /// ```
+    ///
     /// - Parameters:
     ///   - numQubits: Number of qubits
-    ///   - couplings: Dictionary of qubit pairs to coupling strengths (ignored for simplicity)
+    ///   - couplings: Dictionary mapping qubit indices (single) or pairs to coupling strengths
     ///   - annealingSteps: Number of annealing steps
-    /// - Returns: Annealing circuit with random problem
+    /// - Returns: Annealing circuit for the specified Ising problem
     @_eagerMove
-    static func annealing(numQubits: Int, couplings _: [String: Double], annealingSteps: Int = 20) -> QuantumCircuit {
-        let problem = IsingProblem.random(numQubits: numQubits, maxCoupling: 1.0)
+    static func annealing(numQubits: Int, couplings: [String: Double], annealingSteps: Int = 20) -> QuantumCircuit {
+        let problem = IsingProblem(fromDictionary: couplings, numQubits: numQubits)
         return annealing(numQubits: numQubits, problem: problem, annealingSteps: annealingSteps)
     }
 
@@ -896,33 +917,80 @@ public extension QuantumCircuit {
             self.transverseField = transverseField ?? [Double](repeating: 1.0, count: n)
         }
 
-        /// Create random Ising problem for demonstration
-        public static func random(numQubits: Int, maxCoupling: Double = 1.0) -> IsingProblem {
-            var couplings: [[Double]] = []
-            couplings.reserveCapacity(numQubits)
+        /// Create Ising model from dictionary specification
+        ///
+        /// Parses a dictionary where keys specify qubit interactions:
+        /// - Single qubit keys ("0", "1", ...) specify local fields h_i
+        /// - Two qubit keys ("01", "0-1", "0,1", ...) specify couplings J_ij
+        ///
+        /// The Ising Hamiltonian is: H = Σ_i h_i Z_i + Σ_{i<j} J_ij Z_i Z_j
+        ///
+        /// - Parameters:
+        ///   - dictionary: Mapping of qubit indices/pairs to coupling strengths
+        ///   - numQubits: Total number of qubits in the system
+        public init(fromDictionary dictionary: [String: Double], numQubits: Int) {
+            ValidationUtilities.validatePositiveQubits(numQubits)
 
-            let localFields = [Double](unsafeUninitializedCapacity: numQubits) { buffer, count in
+            var localFieldsBuffer = [Double](unsafeUninitializedCapacity: numQubits) { buffer, count in
+                buffer.initialize(repeating: 0.0)
+                count = numQubits
+            }
+
+            var couplingsBuffer = [[Double]](unsafeUninitializedCapacity: numQubits) { buffer, count in
                 for i in 0 ..< numQubits {
-                    buffer[i] = Double.random(in: -1.0 ... 1.0) * maxCoupling
+                    buffer[i] = [Double](unsafeUninitializedCapacity: numQubits) { innerBuffer, innerCount in
+                        innerBuffer.initialize(repeating: 0.0)
+                        innerCount = numQubits
+                    }
                 }
                 count = numQubits
             }
 
-            for i in 0 ..< numQubits {
-                var row = [Double](repeating: 0.0, count: numQubits)
-                for j in (i + 1) ..< numQubits {
-                    row[j] = Double.random(in: -1.0 ... 1.0) * maxCoupling
+            for (key, value) in dictionary {
+                let qubits = Self.parseQubitIndices(from: key)
+                ValidationUtilities.validateCouplingKeyFormat(qubits.count, key: key)
+
+                if qubits.count == 1 {
+                    let qubit = qubits[0]
+                    ValidationUtilities.validateQubitIndex(qubit, numQubits: numQubits)
+                    localFieldsBuffer[qubit] = value
+                } else {
+                    let qubit1 = qubits[0]
+                    let qubit2 = qubits[1]
+                    ValidationUtilities.validateQubitIndex(qubit1, numQubits: numQubits)
+                    ValidationUtilities.validateQubitIndex(qubit2, numQubits: numQubits)
+                    ValidationUtilities.validateDistinctVertices(qubit1, qubit2)
+                    couplingsBuffer[qubit1][qubit2] = value
+                    couplingsBuffer[qubit2][qubit1] = value
                 }
-                couplings.append(row)
             }
 
-            for i in 0 ..< numQubits {
-                for j in (i + 1) ..< numQubits {
-                    couplings[j][i] = couplings[i][j]
-                }
+            localFields = localFieldsBuffer
+            couplings = couplingsBuffer
+            transverseField = [Double](unsafeUninitializedCapacity: numQubits) { buffer, count in
+                buffer.initialize(repeating: 1.0)
+                count = numQubits
             }
+        }
 
-            return IsingProblem(localFields: localFields, couplings: couplings)
+        /// Parse qubit indices from a coupling key string
+        ///
+        /// Handles multiple formats:
+        /// - Single digit: "0", "1" -> [0], [1] (local fields)
+        /// - Two adjacent digits: "01", "12" -> [0, 1], [1, 2] (couplings)
+        /// - Separated: "0-1", "1,2", "10-12" -> [0, 1], [1, 2], [10, 12]
+        private static func parseQubitIndices(from key: String) -> [Int] {
+            ValidationUtilities.validateNonEmptyString(key, name: "Coupling key")
+
+            let hasSeparator = key.contains { !$0.isNumber }
+
+            if hasSeparator {
+                return key.split { !$0.isNumber }.compactMap { Int($0) }
+            } else if key.count == 2 {
+                return key.compactMap(\.wholeNumberValue)
+            } else {
+                return [Int(key)!]
+            }
         }
 
         /// Create simple quadratic optimization problem: minimize x² - 2x

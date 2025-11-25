@@ -251,20 +251,14 @@ public actor MPSBatchEvaluator {
         unitaries: [GateMatrix],
         initialState: QuantumState
     ) async throws -> [QuantumState] {
-        guard !unitaries.isEmpty else {
-            throw MPSBatchError.emptyBatch
-        }
+        ValidationUtilities.validateNonEmpty(unitaries, name: "unitaries")
 
         let dimension: Int = initialState.stateSpaceSize
         let numQubits: Int = initialState.numQubits
 
         for unitary in unitaries {
-            if unitary.count != dimension || !unitary.allSatisfy({ $0.count == dimension }) {
-                throw MPSBatchError.dimensionMismatch(
-                    expected: dimension,
-                    got: unitary.count
-                )
-            }
+            ValidationUtilities.validateSquareMatrix(unitary, name: "unitary")
+            ValidationUtilities.validateMatrixDimensionEquals(unitary, expected: dimension, name: "unitary")
         }
 
         guard isMetalAvailable else {
@@ -741,20 +735,12 @@ public actor MPSBatchEvaluator {
 /// Batch evaluator error conditions
 @frozen
 public enum MPSBatchError: Error, LocalizedError, Equatable {
-    case emptyBatch
-    case dimensionMismatch(expected: Int, got: Int)
     case metalUnavailable
     case bufferAllocationFailed
     case commandBufferFailed
 
     public var errorDescription: String? {
         switch self {
-        case .emptyBatch:
-            "Batch evaluation requires at least one unitary matrix. Provide non-empty array."
-
-        case let .dimensionMismatch(expected, got):
-            "Unitary dimension mismatch: expected \(expected)×\(expected) matrix, got \(got)×\(got). Check circuit qubit count matches initial state."
-
         case .metalUnavailable:
             "Metal GPU acceleration unavailable. Falling back to CPU sequential evaluation. Performance will be reduced."
 

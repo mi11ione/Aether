@@ -116,8 +116,8 @@ public actor QAOA {
     /// Parameterized QAOA ansatz circuit
     private let ansatz: ParameterizedQuantumCircuit
 
-    /// Precomputed parameter binding structure: [(paramName, layerIndex, coefficient, isGamma)]
-    private let parameterBindingInfo: [(name: String, layerIndex: Int, coefficient: Double, isGamma: Bool)]
+    /// Pre-computed parameter binder for fast repeated binding
+    private let parameterBinder: QAOAParameterBinder
 
     // MARK: - State
 
@@ -177,36 +177,7 @@ public actor QAOA {
             mixerHamiltonian: self.mixerHamiltonian
         )
 
-        parameterBindingInfo = Self.buildParameterBindingInfo(ansatz: ansatz)
-    }
-
-    /// Build parameter binding info at init time (avoids string parsing in hot loop)
-    @_optimize(speed)
-    private static func buildParameterBindingInfo(
-        ansatz: ParameterizedQuantumCircuit
-    ) -> [(name: String, layerIndex: Int, coefficient: Double, isGamma: Bool)] {
-        var info: [(name: String, layerIndex: Int, coefficient: Double, isGamma: Bool)] = []
-        info.reserveCapacity(ansatz.parameterCount())
-
-        for param in ansatz.parameters {
-            let paramName = param.name
-
-            guard let coeffSeparatorRange = paramName.range(of: "_c_") else { continue }
-
-            let baseName = String(paramName[..<coeffSeparatorRange.lowerBound])
-            let coeffStr = String(paramName[coeffSeparatorRange.upperBound...])
-            guard let coefficient = Double(coeffStr) else { continue }
-
-            guard let underscoreRange = baseName.range(of: "_", options: .backwards) else { continue }
-            let typeStr = String(baseName[..<underscoreRange.lowerBound])
-            let layerStr = String(baseName[underscoreRange.upperBound...])
-            guard let layer = Int(layerStr) else { continue }
-
-            let isGamma = typeStr == "gamma"
-            info.append((name: paramName, layerIndex: layer, coefficient: coefficient, isGamma: isGamma))
-        }
-
-        return info
+        parameterBinder = QAOAParameterBinder(ansatz: ansatz)
     }
 
     // MARK: - Execution
@@ -281,12 +252,11 @@ public actor QAOA {
         progressCallback: (@Sendable (Int, Double) async -> Void)?
     ) async throws -> QAOAResult {
         let expectedParamCount = 2 * depth
-        guard initialParameters.count == expectedParamCount else {
-            throw QAOAError.parameterCountMismatch(
-                expected: expectedParamCount,
-                got: initialParameters.count
-            )
-        }
+        ValidationUtilities.validateParameterVectorLength(
+            initialParameters.count,
+            expected: expectedParamCount,
+            name: "QAOA initialParameters (requires 2 × depth)"
+        )
 
         currentIteration = 0
         currentCost = 0.0
@@ -351,26 +321,11 @@ public actor QAOA {
     // MARK: - Parameter Binding
 
     /// Bind QAOA parameters to ansatz with coefficient scaling
-    ///
-    /// Handles special QAOA parameter binding where:
-    /// - Base parameters: gamma_0, beta_0, ..., gamma_{depth-1}, beta_{depth-1}
-    /// - Scaled parameters: gamma_i_c_{coeff} for each Hamiltonian term
-    /// - Binding: gamma_0 = v -> {gamma_0_c_1.0: v, gamma_0_c_-0.5: -0.5v, ...}
-    ///
-    /// - Parameter parameters: Array of 2·depth values (γ₀,β₀,...,γₚ₋₁,βₚ₋₁)
-    /// - Returns: Concrete quantum circuit with bound parameters
-    /// - Throws: ParameterError if binding fails
     @_optimize(speed)
     @_eagerMove
+    @inline(__always)
     private func bindQAOAParameters(parameters: [Double]) throws -> QuantumCircuit {
-        var bindings: [String: Double] = Dictionary(minimumCapacity: parameterBindingInfo.count)
-
-        for info in parameterBindingInfo {
-            let paramIndex = info.isGamma ? (2 * info.layerIndex) : (2 * info.layerIndex + 1)
-            bindings[info.name] = parameters[paramIndex] * info.coefficient
-        }
-
-        return try ansatz.bind(parameters: bindings)
+        try parameterBinder.bind(baseParameters: parameters)
     }
 
     /// Extract solution probabilities from final state
@@ -579,17 +534,11 @@ public struct QAOAResult: Sendable, CustomStringConvertible {
 
 @frozen
 public enum QAOAError: Error, LocalizedError {
-    /// Parameter count mismatch between initialParameters and QAOA depth
-    case parameterCountMismatch(expected: Int, got: Int)
-
     /// Cost evaluation returned invalid value (NaN or Inf)
     case invalidCost(value: Double, parameters: [Double])
 
     public var errorDescription: String? {
         switch self {
-        case let .parameterCountMismatch(expected, got):
-            "Parameter count mismatch: QAOA with depth p requires 2p parameters but got \(got) values (expected \(expected)). Check that initialParameters.count == 2 * depth."
-
         case let .invalidCost(value, _):
             "Cost evaluation returned invalid value: \(value). Check Hamiltonian and circuit validity."
         }
