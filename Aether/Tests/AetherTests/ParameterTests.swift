@@ -96,43 +96,21 @@ struct ParameterExpressionTests {
     }
 
     @Test("Evaluate concrete expression")
-    func evaluateConcreteExpression() throws {
+    func evaluateConcreteExpression() {
         let expr = ParameterExpression.value(1.5)
-        let result = try expr.evaluate(with: [:])
+        let result = expr.evaluate(with: [:])
 
         #expect(abs(result - 1.5) < 1e-10)
     }
 
     @Test("Evaluate symbolic expression with binding")
-    func evaluateSymbolicExpressionWithBinding() throws {
+    func evaluateSymbolicExpressionWithBinding() {
         let param = Parameter(name: "theta")
         let expr = ParameterExpression.parameter(param)
         let bindings = ["theta": 0.5]
 
-        let result = try expr.evaluate(with: bindings)
+        let result = expr.evaluate(with: bindings)
         #expect(abs(result - 0.5) < 1e-10)
-    }
-
-    @Test("Evaluate symbolic expression throws without binding")
-    func evaluateSymbolicExpressionThrowsWithoutBinding() {
-        let param = Parameter(name: "theta")
-        let expr = ParameterExpression.parameter(param)
-        let bindings: [String: Double] = [:]
-
-        #expect(throws: ParameterError.self) {
-            try expr.evaluate(with: bindings)
-        }
-    }
-
-    @Test("Evaluate symbolic expression throws with wrong binding")
-    func evaluateSymbolicExpressionThrowsWrongBinding() {
-        let param = Parameter(name: "theta")
-        let expr = ParameterExpression.parameter(param)
-        let bindings = ["phi": 0.5]
-
-        #expect(throws: ParameterError.self) {
-            try expr.evaluate(with: bindings)
-        }
     }
 
     @Test("Extract parameter from symbolic expression")
@@ -195,78 +173,5 @@ struct ParameterExpressionTests {
         set.insert(expr2)
 
         #expect(set.count == 2)
-    }
-}
-
-/// Test suite for ParameterError type.
-/// Validates all error cases with descriptive error messages
-/// for robust error handling in variational quantum circuits.
-@Suite("ParameterError")
-struct ParameterErrorTests {
-    @Test("Unbound parameter error")
-    func unboundParameterError() {
-        let error = ParameterError.unboundParameter("theta")
-        let description = error.errorDescription
-
-        #expect(description != nil)
-        #expect(description!.contains("theta"))
-        #expect(description!.contains("not bound"))
-    }
-
-    @Test("Extra parameters error")
-    func extraParametersError() {
-        let error = ParameterError.extraParameters(["gamma", "delta"])
-        let description = error.errorDescription
-
-        #expect(description != nil)
-        #expect(description!.contains("Extra parameters"))
-    }
-
-    @Test("Invalid vector length error")
-    func invalidVectorLengthError() {
-        let error = ParameterError.invalidVectorLength(expected: 3, got: 2)
-        let description = error.errorDescription
-
-        #expect(description != nil)
-        #expect(description!.contains("3"))
-        #expect(description!.contains("2"))
-        #expect(description!.contains("mismatch"))
-    }
-
-    @Test("Empty parameter name error")
-    func emptyParameterNameError() {
-        let error = ParameterError.emptyParameterName
-        let description = error.errorDescription
-
-        #expect(description != nil)
-        #expect(description!.contains("empty"))
-    }
-
-    @Test("Parameter not found error")
-    func parameterNotFoundError() {
-        let error = ParameterError.parameterNotFound("theta")
-        let description = error.errorDescription
-
-        #expect(description != nil)
-        #expect(description!.contains("theta"))
-        #expect(description!.contains("not found"))
-    }
-
-    @Test("ParameterError is Equatable")
-    func parameterErrorIsEquatable() {
-        let error1 = ParameterError.unboundParameter("theta")
-        let error2 = ParameterError.unboundParameter("theta")
-        let error3 = ParameterError.unboundParameter("phi")
-
-        #expect(error1 == error2)
-        #expect(error1 != error3)
-    }
-
-    @Test("Different error types are not equal")
-    func differentErrorTypesNotEqual() {
-        let error1 = ParameterError.unboundParameter("theta")
-        let error2 = ParameterError.emptyParameterName
-
-        #expect(error1 != error2)
     }
 }

@@ -59,7 +59,7 @@ private let invSqrt2: Double = 1.0 / 2.0.squareRoot()
 ///     [Complex(0.5, 0.5), Complex(0.5, -0.5)],
 ///     [Complex(0.5, -0.5), Complex(0.5, 0.5)]
 /// ]
-/// let customGate = try QuantumGate.createCustomSingleQubit(matrix: customMatrix)
+/// let customGate = QuantumGate.createCustomSingleQubit(matrix: customMatrix)
 ///
 /// // Gate properties
 /// print(cnot.qubitsRequired)  // 2
@@ -892,7 +892,6 @@ public extension QuantumGate {
     ///
     /// - Parameter matrix: 2×2 complex matrix (must be unitary)
     /// - Returns: Custom single-qubit gate
-    /// - Throws: QuantumGateError if matrix invalid or non-unitary
     ///
     /// Example:
     /// ```swift
@@ -902,31 +901,11 @@ public extension QuantumGate {
     ///     [Complex(cos(angle), 0), Complex(-sin(angle), 0)],
     ///     [Complex(sin(angle), 0), Complex(cos(angle), 0)]
     /// ]
-    /// let gate = try QuantumGate.createCustomSingleQubit(matrix: customMatrix)
+    /// let gate = QuantumGate.createCustomSingleQubit(matrix: customMatrix)
     ///
     /// // Use in circuit
     /// var circuit = QuantumCircuit(numQubits: 1)
     /// circuit.append(gate: gate, toQubit: 0)
-    ///
-    /// // Invalid: wrong size
-    /// let wrongSize = [[Complex(1, 0)]]
-    /// do {
-    ///     let _ = try QuantumGate.createCustomSingleQubit(matrix: wrongSize)
-    /// } catch QuantumGateError.invalidMatrixSize(let msg) {
-    ///     print(msg)  // "Custom single-qubit gate requires 2×2 matrix"
-    /// }
-    ///
-    /// // Invalid: not unitary
-    /// let notUnitary = [
-    ///     [Complex(2, 0), Complex(0, 0)],
-    ///     [Complex(0, 0), Complex(1, 0)]
-    /// ]
-    /// do {
-    ///     let _ = try QuantumGate.createCustomSingleQubit(matrix: notUnitary)
-    /// } catch QuantumGateError.notUnitary(let msg) {
-    ///     print(msg)  // "Matrix is not unitary (U†U ≠ I)"
-    /// }
-    /// ```
     @_eagerMove
     static func createCustomSingleQubit(matrix: GateMatrix) -> QuantumGate {
         ValidationUtilities.validate2x2Matrix(matrix)
@@ -946,7 +925,6 @@ public extension QuantumGate {
     ///   - control: Control qubit index
     ///   - target: Target qubit index
     /// - Returns: Custom two-qubit gate
-    /// - Throws: QuantumGateError if matrix invalid or non-unitary
     ///
     /// Example:
     /// ```swift
@@ -960,7 +938,7 @@ public extension QuantumGate {
     ///     [Complex(0, 0), Complex(0, 0), Complex(c, 0), Complex(-s, 0)],
     ///     [Complex(0, 0), Complex(0, 0), Complex(s, 0), Complex(c, 0)]
     /// ]
-    /// let gate = try QuantumGate.createCustomTwoQubit(
+    /// let gate = QuantumGate.createCustomTwoQubit(
     ///     matrix: customMatrix,
     ///     control: 0,
     ///     target: 1
@@ -969,19 +947,6 @@ public extension QuantumGate {
     /// // Use in circuit
     /// var circuit = QuantumCircuit(numQubits: 2)
     /// circuit.append(gate: gate, qubits: [])
-    ///
-    /// // Invalid: wrong size
-    /// let wrongSize = [[Complex(1, 0)]]
-    /// do {
-    ///     let _ = try QuantumGate.createCustomTwoQubit(
-    ///         matrix: wrongSize,
-    ///         control: 0,
-    ///         target: 1
-    ///     )
-    /// } catch QuantumGateError.invalidMatrixSize(let msg) {
-    ///     print(msg)  // "Custom two-qubit gate requires 4×4 matrix"
-    /// }
-    /// ```
     @_eagerMove
     static func createCustomTwoQubit(
         matrix: GateMatrix,

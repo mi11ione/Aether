@@ -118,11 +118,11 @@ struct HardwareEfficientAnsatzTests {
     }
 
     @Test("Can bind and execute ansatz")
-    func canBindAndExecuteAnsatz() throws {
+    func canBindAndExecuteAnsatz() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1)
 
         let params: [Double] = [0.1, 0.2]
-        let boundCircuit = try ansatz.bind(parameterVector: params)
+        let boundCircuit = ansatz.bind(parameterVector: params)
 
         #expect(boundCircuit.numQubits == 2)
         #expect(boundCircuit.gateCount > 0)
@@ -171,19 +171,6 @@ struct HardwareEfficientAnsatzTests {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1, entanglingPattern: .circular)
 
         #expect(ansatz.gateCount() == 4)
-    }
-
-    @Test("All rotation gate types produce valid circuits")
-    func allRotationGateTypesValid() throws {
-        let ry = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1, rotationGates: .ry)
-        let rx = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1, rotationGates: .rx)
-        let rz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1, rotationGates: .rz)
-        let full = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1, rotationGates: .full)
-
-        _ = try ry.bind(parameterVector: [0.1, 0.2])
-        _ = try rx.bind(parameterVector: [0.1, 0.2])
-        _ = try rz.bind(parameterVector: [0.1, 0.2])
-        _ = try full.bind(parameterVector: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
     }
 
     @Test("RotationGateSet parameters per qubit")

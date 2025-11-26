@@ -19,7 +19,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Single circuit batch evaluation")
-    func singleCircuitBatch() async throws {
+    func singleCircuitBatch() async {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
 
@@ -27,7 +27,7 @@ struct MPSBatchEvaluatorTests {
         let initialState = QuantumState(numQubits: 2)
 
         let evaluator = MPSBatchEvaluator()
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: [unitary],
             initialState: initialState
         )
@@ -43,7 +43,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Multiple circuits batch evaluation")
-    func multipleCircuitsBatch() async throws {
+    func multipleCircuitsBatch() async {
         var circuit1 = QuantumCircuit(numQubits: 2)
         circuit1.append(gate: .hadamard, toQubit: 0)
 
@@ -61,7 +61,7 @@ struct MPSBatchEvaluatorTests {
 
         let initialState = QuantumState(numQubits: 2)
         let evaluator = MPSBatchEvaluator()
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: unitaries,
             initialState: initialState
         )
@@ -80,7 +80,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Batch evaluation with expectation values using Observable")
-    func batchExpectationValuesObservable() async throws {
+    func batchExpectationValuesObservable() async {
         let hamiltonian = Observable(
             coefficient: 1.0,
             pauliString: PauliString(operators: [(0, .z)])
@@ -97,7 +97,7 @@ struct MPSBatchEvaluatorTests {
 
         let initialState = QuantumState(numQubits: 2)
         let evaluator = MPSBatchEvaluator()
-        let energies = try await evaluator.evaluateExpectationValues(
+        let energies = await evaluator.evaluateExpectationValues(
             unitaries: unitaries,
             initialState: initialState,
             hamiltonian: hamiltonian
@@ -113,7 +113,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Batch evaluation with SparseHamiltonian")
-    func batchExpectationValuesSparse() async throws {
+    func batchExpectationValuesSparse() async {
         let observable = Observable(
             coefficient: 1.0,
             pauliString: PauliString(operators: [(0, .z)])
@@ -131,7 +131,7 @@ struct MPSBatchEvaluatorTests {
 
         let initialState = QuantumState(numQubits: 2)
         let evaluator = MPSBatchEvaluator()
-        let energies = try await evaluator.evaluateExpectationValues(
+        let energies = await evaluator.evaluateExpectationValues(
             unitaries: unitaries,
             initialState: initialState,
             sparseHamiltonian: sparseH
@@ -147,7 +147,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Three-qubit circuit batch evaluation")
-    func threeQubitBatch() async throws {
+    func threeQubitBatch() async {
         var circuit = QuantumCircuit(numQubits: 3)
         circuit.append(gate: .hadamard, toQubit: 0)
         circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
@@ -156,7 +156,7 @@ struct MPSBatchEvaluatorTests {
         let initialState = QuantumState(numQubits: 3)
 
         let evaluator = MPSBatchEvaluator()
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: [unitary],
             initialState: initialState
         )
@@ -191,7 +191,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("VQE gradient parameter set batch evaluation")
-    func vqeGradientBatch() async throws {
+    func vqeGradientBatch() async {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1)
         let baseParams: [Double] = [0.1, 0.2]
 
@@ -201,10 +201,10 @@ struct MPSBatchEvaluatorTests {
 
         var allCircuits: [QuantumCircuit] = []
         for params in plusVectors {
-            try allCircuits.append(ansatz.bind(parameterVector: params))
+            allCircuits.append(ansatz.bind(parameterVector: params))
         }
         for params in minusVectors {
-            try allCircuits.append(ansatz.bind(parameterVector: params))
+            allCircuits.append(ansatz.bind(parameterVector: params))
         }
 
         let unitaries = allCircuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
@@ -215,7 +215,7 @@ struct MPSBatchEvaluatorTests {
         )
 
         let evaluator = MPSBatchEvaluator()
-        let energies = try await evaluator.evaluateExpectationValues(
+        let energies = await evaluator.evaluateExpectationValues(
             unitaries: unitaries,
             initialState: QuantumState(numQubits: 2),
             hamiltonian: hamiltonian
@@ -225,7 +225,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Bell state preparation batch")
-    func bellStateBatch() async throws {
+    func bellStateBatch() async {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
         circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
@@ -234,7 +234,7 @@ struct MPSBatchEvaluatorTests {
         let initialState = QuantumState(numQubits: 2)
 
         let evaluator = MPSBatchEvaluator()
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: [unitary],
             initialState: initialState
         )
@@ -247,7 +247,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Rotation sweep batch evaluation")
-    func rotationSweep() async throws {
+    func rotationSweep() async {
         let angles = stride(from: 0.0, through: .pi, by: .pi / 4)
         var circuits: [QuantumCircuit] = []
 
@@ -259,7 +259,7 @@ struct MPSBatchEvaluatorTests {
 
         let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
         let evaluator = MPSBatchEvaluator()
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: unitaries,
             initialState: QuantumState(numQubits: 2)
         )
@@ -275,7 +275,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Four-qubit batch evaluation")
-    func fourQubitBatch() async throws {
+    func fourQubitBatch() async {
         var circuit = QuantumCircuit(numQubits: 4)
         circuit.append(gate: .hadamard, toQubit: 0)
 
@@ -283,7 +283,7 @@ struct MPSBatchEvaluatorTests {
         let initialState = QuantumState(numQubits: 4)
 
         let evaluator = MPSBatchEvaluator()
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: [unitary],
             initialState: initialState
         )
@@ -293,7 +293,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Batch with identity circuits")
-    func identityCircuits() async throws {
+    func identityCircuits() async {
         let circuit1 = QuantumCircuit(numQubits: 2)
         let circuit2 = QuantumCircuit(numQubits: 2)
 
@@ -304,7 +304,7 @@ struct MPSBatchEvaluatorTests {
 
         let initialState = QuantumState(numQubits: 2)
         let evaluator = MPSBatchEvaluator()
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: unitaries,
             initialState: initialState
         )
@@ -318,7 +318,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Batch evaluation preserves normalization")
-    func preservesNormalization() async throws {
+    func preservesNormalization() async {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
         circuit.append(gate: .rotationY(theta: .pi / 4), toQubit: 1)
@@ -327,7 +327,7 @@ struct MPSBatchEvaluatorTests {
         let initialState = QuantumState(numQubits: 2)
 
         let evaluator = MPSBatchEvaluator()
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: [unitary],
             initialState: initialState
         )
@@ -341,7 +341,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Multiple Hamiltonian measurements in batch")
-    func multipleHamiltonianMeasurements() async throws {
+    func multipleHamiltonianMeasurements() async {
         let hamiltonian1 = Observable(
             coefficient: 1.0,
             pauliString: PauliString(operators: [(0, .z)])
@@ -360,13 +360,13 @@ struct MPSBatchEvaluatorTests {
 
         let evaluator = MPSBatchEvaluator()
 
-        let energies1 = try await evaluator.evaluateExpectationValues(
+        let energies1 = await evaluator.evaluateExpectationValues(
             unitaries: [unitary],
             initialState: initialState,
             hamiltonian: hamiltonian1
         )
 
-        let energies2 = try await evaluator.evaluateExpectationValues(
+        let energies2 = await evaluator.evaluateExpectationValues(
             unitaries: [unitary],
             initialState: initialState,
             hamiltonian: hamiltonian2
@@ -384,7 +384,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Batch with Toffoli gate")
-    func batchWithToffoli() async throws {
+    func batchWithToffoli() async {
         var circuit = QuantumCircuit(numQubits: 3)
         circuit.append(gate: .pauliX, toQubit: 0)
         circuit.append(gate: .pauliX, toQubit: 1)
@@ -394,7 +394,7 @@ struct MPSBatchEvaluatorTests {
         let initialState = QuantumState(numQubits: 3)
 
         let evaluator = MPSBatchEvaluator()
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: [unitary],
             initialState: initialState
         )
@@ -406,7 +406,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Batch evaluation with custom initial state")
-    func customInitialState() async throws {
+    func customInitialState() async {
         var prepCircuit = QuantumCircuit(numQubits: 2)
         prepCircuit.append(gate: .pauliX, toQubit: 0)
         let initialState = prepCircuit.execute()
@@ -417,7 +417,7 @@ struct MPSBatchEvaluatorTests {
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         let evaluator = MPSBatchEvaluator()
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: [unitary],
             initialState: initialState
         )
@@ -431,7 +431,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Large angle rotation batch")
-    func largeAngleRotation() async throws {
+    func largeAngleRotation() async {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .rotationX(theta: 2 * .pi), toQubit: 0)
 
@@ -439,7 +439,7 @@ struct MPSBatchEvaluatorTests {
         let initialState = QuantumState(numQubits: 2)
 
         let evaluator = MPSBatchEvaluator()
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: [unitary],
             initialState: initialState
         )
@@ -448,7 +448,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Batch evaluation correctness vs sequential")
-    func batchVsSequential() async throws {
+    func batchVsSequential() async {
         var circuits: [QuantumCircuit] = []
         for i in 0 ..< 5 {
             var circuit = QuantumCircuit(numQubits: 2)
@@ -460,7 +460,7 @@ struct MPSBatchEvaluatorTests {
         let initialState = QuantumState(numQubits: 2)
 
         let evaluator = MPSBatchEvaluator()
-        let batchResults = try await evaluator.evaluateBatch(
+        let batchResults = await evaluator.evaluateBatch(
             unitaries: unitaries,
             initialState: initialState
         )
@@ -477,7 +477,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Batch exceeding 1000 circuits triggers chunking")
-    func largeAutomaticChunking() async throws {
+    func largeAutomaticChunking() async {
         let evaluator = MPSBatchEvaluator()
         let batchSize = 1050
 
@@ -493,7 +493,7 @@ struct MPSBatchEvaluatorTests {
         let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
         let initialState = QuantumState(numQubits: 2)
 
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: unitaries,
             initialState: initialState
         )
@@ -508,43 +508,6 @@ struct MPSBatchEvaluatorTests {
                 #expect(abs(results[index].amplitudes[i].imaginary - expected.amplitudes[i].imaginary) < 1e-5)
             }
         }
-    }
-
-    @Test("MPSBatchError.metalUnavailable description is informative")
-    func metalUnavailableErrorDescription() {
-        let error = MPSBatchError.metalUnavailable
-        let description = error.errorDescription!
-
-        #expect(description.contains("Metal"), "Error should mention Metal")
-        #expect(description.contains("CPU"), "Error should mention fallback")
-        #expect(description.contains("Performance"), "Error should warn about performance impact")
-    }
-
-    @Test("MPSBatchError.bufferAllocationFailed description is informative")
-    func bufferAllocationFailedErrorDescription() {
-        let error = MPSBatchError.bufferAllocationFailed
-        let description = error.errorDescription!
-
-        #expect(description.contains("buffer"), "Error should mention buffer allocation")
-        #expect(description.contains("Reduce"), "Error should suggest solution")
-        #expect(description.contains("batch size"), "Error should suggest reducing batch size")
-    }
-
-    @Test("MPSBatchError.commandBufferFailed description is informative")
-    func commandBufferFailedErrorDescription() {
-        let error = MPSBatchError.commandBufferFailed
-        let description = error.errorDescription!
-
-        #expect(description.contains("command buffer"), "Error should mention command buffer")
-        #expect(description.contains("GPU"), "Error should mention GPU")
-    }
-
-    @Test("MPSBatchError equality works correctly")
-    func batchErrorEquality() {
-        #expect(MPSBatchError.metalUnavailable == MPSBatchError.metalUnavailable)
-        #expect(MPSBatchError.bufferAllocationFailed == MPSBatchError.bufferAllocationFailed)
-        #expect(MPSBatchError.commandBufferFailed == MPSBatchError.commandBufferFailed)
-        #expect(MPSBatchError.metalUnavailable != MPSBatchError.bufferAllocationFailed)
     }
 
     @Test("BatchEvaluatorStatistics description formats correctly")
@@ -573,7 +536,7 @@ struct MPSBatchEvaluatorTests {
     }
 
     @Test("Batch evaluation with many small circuits tests chunking path")
-    func manySmallCircuitsChunking() async throws {
+    func manySmallCircuitsChunking() async {
         let evaluator = MPSBatchEvaluator()
 
         var circuits: [QuantumCircuit] = []
@@ -587,7 +550,7 @@ struct MPSBatchEvaluatorTests {
         let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
         let initialState = QuantumState(numQubits: 2)
 
-        let results = try await evaluator.evaluateBatch(
+        let results = await evaluator.evaluateBatch(
             unitaries: unitaries,
             initialState: initialState
         )

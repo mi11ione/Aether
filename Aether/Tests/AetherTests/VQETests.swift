@@ -27,7 +27,7 @@ struct VariationalQuantumEigensolverTests {
     }
 
     @Test("VQE finds ground state of simple Hamiltonian")
-    func findGroundStateSimpleHamiltonian() async throws {
+    func findGroundStateSimpleHamiltonian() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
@@ -39,7 +39,7 @@ struct VariationalQuantumEigensolverTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100)
         )
 
-        let result = try await vqe.run(initialParameters: [0.1])
+        let result = await vqe.run(initialParameters: [0.1])
 
         #expect(result.optimalEnergy < 0.0)
         #expect(result.optimalEnergy > -1.1)
@@ -47,7 +47,7 @@ struct VariationalQuantumEigensolverTests {
     }
 
     @Test("VQE with progress callback")
-    func vqeWithProgressCallback() async throws {
+    func vqeWithProgressCallback() async {
         actor CallbackState {
             var count = 0
             var lastEnergy: Double = 0.0
@@ -73,7 +73,7 @@ struct VariationalQuantumEigensolverTests {
 
         let state = CallbackState()
 
-        let result = try await vqe.runWithProgress(initialParameters: [0.1]) { _, energy in
+        let result = await vqe.runWithProgress(initialParameters: [0.1]) { _, energy in
             await state.recordCallback(energy: energy)
         }
 
@@ -85,7 +85,7 @@ struct VariationalQuantumEigensolverTests {
     }
 
     @Test("VQE tracks progress")
-    func vqeTracksProgress() async throws {
+    func vqeTracksProgress() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
@@ -97,7 +97,7 @@ struct VariationalQuantumEigensolverTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50)
         )
 
-        _ = try await vqe.runWithProgress(initialParameters: [0.1]) { iteration, energy in
+        _ = await vqe.runWithProgress(initialParameters: [0.1]) { iteration, energy in
             let (currentIter, currentEnergy) = await vqe.getProgress()
             #expect(currentIter == iteration)
             #expect(abs(currentEnergy - energy) < 1e-10)
@@ -105,7 +105,7 @@ struct VariationalQuantumEigensolverTests {
     }
 
     @Test("VQE with two-qubit Hamiltonian")
-    func twoQubitHamiltonian() async throws {
+    func twoQubitHamiltonian() async {
         let hamiltonian = Observable(terms: [
             (1.0, PauliString(operators: [(0, .z)])),
             (1.0, PauliString(operators: [(1, .z)])),
@@ -121,14 +121,14 @@ struct VariationalQuantumEigensolverTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100)
         )
 
-        let result = try await vqe.run(initialParameters: [0.1, 0.1])
+        let result = await vqe.run(initialParameters: [0.1, 0.1])
 
         #expect(result.optimalEnergy < -1.5)
         #expect(result.optimalEnergy > -2.1)
     }
 
     @Test("VQE convergence via energy tolerance")
-    func convergenceViaEnergyTolerance() async throws {
+    func convergenceViaEnergyTolerance() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
@@ -140,13 +140,13 @@ struct VariationalQuantumEigensolverTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100)
         )
 
-        let result = try await vqe.run(initialParameters: [0.1])
+        let result = await vqe.run(initialParameters: [0.1])
 
         #expect(result.convergenceReason == .energyTolerance)
     }
 
     @Test("VQE with gradient descent optimizer")
-    func vqeWithGradientDescent() async throws {
+    func vqeWithGradientDescent() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = GradientDescentOptimizer(learningRate: 0.5)
@@ -161,13 +161,13 @@ struct VariationalQuantumEigensolverTests {
             )
         )
 
-        let result = try await vqe.run(initialParameters: [2.0])
+        let result = await vqe.run(initialParameters: [2.0])
 
         #expect(result.optimalEnergy < 0.0)
     }
 
     @Test("VQE with L-BFGS-B optimizer")
-    func vqeWithLBFGSB() async throws {
+    func vqeWithLBFGSB() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = LBFGSBOptimizer(tolerance: 1e-3)
@@ -182,13 +182,13 @@ struct VariationalQuantumEigensolverTests {
             )
         )
 
-        let result = try await vqe.run(initialParameters: [2.0])
+        let result = await vqe.run(initialParameters: [2.0])
 
         #expect(result.optimalEnergy < 0.0)
     }
 
     @Test("VQE with SPSA optimizer")
-    func vqeWithSPSA() async throws {
+    func vqeWithSPSA() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = SPSAOptimizer(initialStepSize: 0.1)
@@ -200,7 +200,7 @@ struct VariationalQuantumEigensolverTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 0.05, maxIterations: 100)
         )
 
-        let result = try await vqe.run(initialParameters: [2.0])
+        let result = await vqe.run(initialParameters: [2.0])
 
         #expect(result.optimalEnergy < 0.0)
     }
@@ -241,7 +241,7 @@ struct VariationalQuantumEigensolverTests {
     }
 
     @Test("VQE without Metal acceleration")
-    func vqeWithoutMetalAcceleration() async throws {
+    func vqeWithoutMetalAcceleration() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
@@ -254,13 +254,13 @@ struct VariationalQuantumEigensolverTests {
             useMetalAcceleration: false
         )
 
-        let result = try await vqe.run(initialParameters: [0.1])
+        let result = await vqe.run(initialParameters: [0.1])
 
         #expect(result.optimalEnergy < 0.0)
     }
 
     @Test("VQE tracks function evaluations")
-    func vqeTracksFunctionEvaluations() async throws {
+    func vqeTracksFunctionEvaluations() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
@@ -272,28 +272,9 @@ struct VariationalQuantumEigensolverTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50)
         )
 
-        let result = try await vqe.run(initialParameters: [0.1])
+        let result = await vqe.run(initialParameters: [0.1])
 
         #expect(result.functionEvaluations > result.iterations)
-    }
-
-    @Test("VQE throws invalidEnergy when Hamiltonian produces infinite energy")
-    func throwsInvalidEnergyForInfiniteHamiltonian() async throws {
-        let hamiltonian = Observable(coefficient: Double.infinity, pauliString: PauliString(operators: [(0, .z)]))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
-        let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
-
-        let vqe = VariationalQuantumEigensolver(
-            hamiltonian: hamiltonian,
-            ansatz: ansatz,
-            optimizer: optimizer,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 10),
-            useSparseBackend: false
-        )
-
-        await #expect(throws: VQEError.self) {
-            try await vqe.run(initialParameters: [0.1])
-        }
     }
 }
 
@@ -370,20 +351,5 @@ struct VQEResultTests {
 
         #expect(result.convergenceReason == .gradientNorm)
         #expect(result.description.contains("Gradient"))
-    }
-}
-
-/// Test suite for VQEError.
-/// Validates VQE error cases and
-/// descriptive error messages.
-@Suite("VQEError")
-struct VQEErrorTests {
-    @Test("Invalid energy error")
-    func invalidEnergyError() {
-        let error = VQEError.invalidEnergy(value: Double.nan, parameters: [1.0, 2.0])
-        let description = error.errorDescription
-
-        #expect(description != nil)
-        #expect(description!.contains("invalid"))
     }
 }

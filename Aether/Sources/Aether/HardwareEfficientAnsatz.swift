@@ -145,7 +145,7 @@ public struct HardwareEfficientAnsatz {
     ///     ansatz: ansatz,
     ///     optimizer: NelderMeadOptimizer()
     /// )
-    /// let result = try await vqe.run(initialParameters: initialParams)
+    /// let result = await vqe.run(initialParameters: initialParams)
     /// ```
     @_optimize(speed)
     @_eagerMove

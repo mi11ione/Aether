@@ -119,8 +119,8 @@ public struct QAOAAnsatz {
     /// )
     ///
     /// // Bind parameters and execute
-    /// let circuit = try ansatz.bind(parameterVector: [0.5, 0.5])  // γ=0.5, β=0.5
-    /// let state = try await simulator.execute(circuit)
+    /// let circuit = ansatz.bind(parameterVector: [0.5, 0.5])  // γ=0.5, β=0.5
+    /// let state = await simulator.execute(circuit)
     /// let energy = cost.expectationValue(state: state)
     /// ```
     @_optimize(speed)
@@ -387,7 +387,7 @@ public struct QAOAAnsatz {
 ///
 /// // Fast repeated binding in optimization loop
 /// for params in parameterSweep {
-///     let circuit = try binder.bind(baseParameters: params)
+///     let circuit = binder.bind(baseParameters: params)
 /// }
 /// ```
 @frozen
@@ -434,16 +434,15 @@ public struct QAOAParameterBinder: Sendable {
     ///
     /// - Parameter baseParameters: Array of [γ₀, β₀, γ₁, β₁, ..., γₚ₋₁, βₚ₋₁]
     /// - Returns: Concrete quantum circuit with all parameters bound
-    /// - Throws: ParameterError if binding fails
     @_optimize(speed)
     @_eagerMove
-    public func bind(baseParameters: [Double]) throws -> QuantumCircuit {
+    public func bind(baseParameters: [Double]) -> QuantumCircuit {
         var bindings: [String: Double] = Dictionary(minimumCapacity: parameterInfo.count)
 
         for info in parameterInfo {
             bindings[info.name] = baseParameters[info.baseIndex] * info.coefficient
         }
 
-        return try ansatz.bind(parameters: bindings)
+        return ansatz.bind(parameters: bindings)
     }
 }

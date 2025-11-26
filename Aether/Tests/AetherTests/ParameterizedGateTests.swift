@@ -157,7 +157,7 @@ struct ParameterizedGatePropertiesTests {
 @Suite("ParameterizedGate Binding")
 struct ParameterizedGateBindingTests {
     @Test("Bind single-qubit rotation gates")
-    func bindSingleQubitRotations() throws {
+    func bindSingleQubitRotations() {
         let param = Parameter(name: "theta")
         let expr = ParameterExpression.parameter(param)
         let bindings = ["theta": Double.pi / 4.0]
@@ -166,9 +166,9 @@ struct ParameterizedGateBindingTests {
         let ry = ParameterizedGate.rotationY(theta: expr)
         let rz = ParameterizedGate.rotationZ(theta: expr)
 
-        let boundRx = try rx.bind(with: bindings)
-        let boundRy = try ry.bind(with: bindings)
-        let boundRz = try rz.bind(with: bindings)
+        let boundRx = rx.bind(with: bindings)
+        let boundRy = ry.bind(with: bindings)
+        let boundRz = rz.bind(with: bindings)
 
         #expect(boundRx == .rotationX(theta: Double.pi / 4.0))
         #expect(boundRy == .rotationY(theta: Double.pi / 4.0))
@@ -176,22 +176,22 @@ struct ParameterizedGateBindingTests {
     }
 
     @Test("Bind phase gates")
-    func bindPhaseGates() throws {
+    func bindPhaseGates() {
         let param = Parameter(name: "theta")
         let bindings = ["theta": 0.5]
 
         let phase = ParameterizedGate.phase(theta: .parameter(param))
         let u1 = ParameterizedGate.u1(lambda: .parameter(param))
 
-        let boundPhase = try phase.bind(with: bindings)
-        let boundU1 = try u1.bind(with: bindings)
+        let boundPhase = phase.bind(with: bindings)
+        let boundU1 = u1.bind(with: bindings)
 
         #expect(boundPhase == .phase(theta: 0.5))
         #expect(boundU1 == .u1(lambda: 0.5))
     }
 
     @Test("Bind U2 gate")
-    func bindU2Gate() throws {
+    func bindU2Gate() {
         let phi = Parameter(name: "phi")
         let lambda = Parameter(name: "lambda")
         let bindings = ["phi": 0.5, "lambda": 1.0]
@@ -201,12 +201,12 @@ struct ParameterizedGateBindingTests {
             lambda: .parameter(lambda)
         )
 
-        let bound = try u2.bind(with: bindings)
+        let bound = u2.bind(with: bindings)
         #expect(bound == .u2(phi: 0.5, lambda: 1.0))
     }
 
     @Test("Bind U3 gate")
-    func bindU3Gate() throws {
+    func bindU3Gate() {
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
         let lambda = Parameter(name: "lambda")
@@ -218,12 +218,12 @@ struct ParameterizedGateBindingTests {
             lambda: .parameter(lambda)
         )
 
-        let bound = try u3.bind(with: bindings)
+        let bound = u3.bind(with: bindings)
         #expect(bound == .u3(theta: 0.5, phi: 1.0, lambda: 1.5))
     }
 
     @Test("Bind controlled rotation gates")
-    func bindControlledRotations() throws {
+    func bindControlledRotations() {
         let param = Parameter(name: "theta")
         let bindings = ["theta": Double.pi / 2.0]
 
@@ -231,9 +231,9 @@ struct ParameterizedGateBindingTests {
         let cry = ParameterizedGate.controlledRotationY(theta: .parameter(param), control: 0, target: 1)
         let crz = ParameterizedGate.controlledRotationZ(theta: .parameter(param), control: 0, target: 1)
 
-        let boundCrx = try crx.bind(with: bindings)
-        let boundCry = try cry.bind(with: bindings)
-        let boundCrz = try crz.bind(with: bindings)
+        let boundCrx = crx.bind(with: bindings)
+        let boundCry = cry.bind(with: bindings)
+        let boundCrz = crz.bind(with: bindings)
 
         #expect(boundCrx == .controlledRotationX(theta: Double.pi / 2.0, control: 0, target: 1))
         #expect(boundCry == .controlledRotationY(theta: Double.pi / 2.0, control: 0, target: 1))
@@ -241,50 +241,39 @@ struct ParameterizedGateBindingTests {
     }
 
     @Test("Bind controlled phase gate")
-    func bindControlledPhase() throws {
+    func bindControlledPhase() {
         let param = Parameter(name: "theta")
         let bindings = ["theta": Double.pi]
 
         let cphase = ParameterizedGate.controlledPhase(theta: .parameter(param), control: 0, target: 1)
-        let bound = try cphase.bind(with: bindings)
+        let bound = cphase.bind(with: bindings)
 
         #expect(bound == .controlledPhase(theta: Double.pi, control: 0, target: 1))
     }
 
     @Test("Bind concrete gate returns same gate")
-    func bindConcreteGateReturnsSame() throws {
+    func bindConcreteGateReturnsSame() {
         let gate = ParameterizedGate.concrete(.hadamard)
-        let bound = try gate.bind(with: [:])
+        let bound = gate.bind(with: [:])
 
         #expect(bound == .hadamard)
     }
 
-    @Test("Bind with missing parameter throws")
-    func bindWithMissingParameterThrows() {
-        let param = Parameter(name: "theta")
-        let gate = ParameterizedGate.rotationY(theta: .parameter(param))
-        let bindings: [String: Double] = [:]
-
-        #expect(throws: ParameterError.self) {
-            try gate.bind(with: bindings)
-        }
-    }
-
     @Test("Bind with concrete value succeeds without bindings")
-    func bindConcreteValueWithoutBindings() throws {
+    func bindConcreteValueWithoutBindings() {
         let gate = ParameterizedGate.rotationY(theta: .value(0.5))
-        let bound = try gate.bind(with: [:])
+        let bound = gate.bind(with: [:])
 
         #expect(bound == .rotationY(theta: 0.5))
     }
 
     @Test("Bind preserves qubit indices in controlled gates")
-    func bindPreservesQubitIndices() throws {
+    func bindPreservesQubitIndices() {
         let param = Parameter(name: "theta")
         let gate = ParameterizedGate.controlledRotationX(theta: .parameter(param), control: 2, target: 5)
         let bindings = ["theta": 1.0]
 
-        let bound = try gate.bind(with: bindings)
+        let bound = gate.bind(with: bindings)
         #expect(bound == .controlledRotationX(theta: 1.0, control: 2, target: 5))
     }
 }

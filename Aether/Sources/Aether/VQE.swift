@@ -60,7 +60,7 @@ import Foundation
 /// )
 ///
 /// // 4. Run optimization with progress tracking
-/// let result = try await vqe.runWithProgress(
+/// let result = await vqe.runWithProgress(
 ///     initialParameters: Array(repeating: 0.01, count: ansatz.parameterCount())
 /// ) { iteration, energy in
 ///     print("Iteration \(iteration): E = \(energy) Hartree")
@@ -75,7 +75,7 @@ import Foundation
 /// ```swift
 /// let vqe = await VariationalQuantumEigensolver(...)
 ///
-/// let result = try await vqe.runWithProgress(initialParameters: initialGuess) { iteration, energy in
+/// let result = await vqe.runWithProgress(initialParameters: initialGuess) { iteration, energy in
 ///     await MainActor.run {
 ///         progressLabel.text = "Iteration \(iteration): E = \(String(format: "%.6f", energy))"
 ///         energyChart.addDataPoint(x: iteration, y: energy)
@@ -172,18 +172,13 @@ public actor VariationalQuantumEigensolver {
     /// - Per iteration: O(d·2^n + nnz) where d = circuit depth, nnz = Hamiltonian non-zeros
     /// - Total: O(iters × (d·2^n + nnz)) where iters = optimizer iterations
     ///
-    /// **Thread Safety:**
-    /// - Actor isolation ensures thread-safe execution
-    /// - Prevents concurrent VQE runs (throws if already running)
-    ///
     /// - Parameter initialParameters: Starting point in parameter space
     /// - Returns: VQE result with optimal energy and parameters
-    /// - Throws: VQEError if optimization fails, CancellationError if cancelled
     ///
     /// Example:
     /// ```swift
     /// let initialGuess = Array(repeating: 0.01, count: ansatz.parameterCount())
-    /// let result = try await vqe.run(initialParameters: initialGuess)
+    /// let result = await vqe.run(initialParameters: initialGuess)
     ///
     /// print("Ground state: \(result.optimalEnergy) Hartree")
     /// print("Parameters: \(result.optimalParameters)")
@@ -191,8 +186,8 @@ public actor VariationalQuantumEigensolver {
     /// ```
     @_optimize(speed)
     @_eagerMove
-    public func run(initialParameters: [Double]) async throws -> VQEResult {
-        try await runWithProgress(initialParameters: initialParameters, progressCallback: nil)
+    public func run(initialParameters: [Double]) async -> VQEResult {
+        await runWithProgress(initialParameters: initialParameters, progressCallback: nil)
     }
 
     /// Run VQE with progress updates
@@ -210,11 +205,10 @@ public actor VariationalQuantumEigensolver {
     ///   - initialParameters: Starting parameters
     ///   - progressCallback: Called with (iteration, energy) after each iteration
     /// - Returns: VQE result
-    /// - Throws: VQEError or CancellationError
     ///
     /// Example:
     /// ```swift
-    /// let result = try await vqe.runWithProgress(initialParameters: initialGuess) { iter, E in
+    /// let result = await vqe.runWithProgress(initialParameters: initialGuess) { iter, E in
     ///     print("[\(iter)] E = \(String(format: "%.8f", E)) Hartree")
     ///
     ///     // Update UI on main thread
@@ -229,25 +223,21 @@ public actor VariationalQuantumEigensolver {
     public func runWithProgress(
         initialParameters: [Double],
         progressCallback: (@Sendable (Int, Double) async -> Void)?
-    ) async throws -> VQEResult {
+    ) async -> VQEResult {
         ValidationUtilities.validateArrayCount(initialParameters, expected: ansatz.parameterCount(), name: "initialParameters")
 
         currentIteration = 0
         currentEnergy = 0.0
 
-        let energyFunction: @Sendable ([Double]) async throws -> Double = { parameters in
-            let concreteCircuit: QuantumCircuit = try self.ansatz.bind(parameterVector: parameters)
+        let energyFunction: @Sendable ([Double]) async -> Double = { parameters in
+            let concreteCircuit: QuantumCircuit = self.ansatz.bind(parameterVector: parameters)
 
-            let state: QuantumState = try await self.simulator.execute(concreteCircuit)
+            let state: QuantumState = await self.simulator.execute(concreteCircuit)
 
             let energy: Double = if let sparseH = self.sparseHamiltonian {
                 await sparseH.expectationValue(state: state)
             } else {
                 self.hamiltonian.expectationValue(state: state)
-            }
-
-            guard energy.isFinite else {
-                throw VQEError.invalidEnergy(value: energy, parameters: parameters)
             }
 
             return energy
@@ -258,7 +248,7 @@ public actor VariationalQuantumEigensolver {
             await progressCallback?(iteration, energy)
         }
 
-        let optimizerResult: OptimizerResult = try await optimizer.minimize(
+        let optimizerResult: OptimizerResult = await optimizer.minimize(
             objectiveFunction: energyFunction,
             initialParameters: initialParameters,
             convergenceCriteria: convergenceCriteria,
@@ -312,7 +302,7 @@ public actor VariationalQuantumEigensolver {
 ///
 /// **Usage:**
 /// ```swift
-/// let result = try await vqe.run(initialParameters: initialGuess)
+/// let result = await vqe.run(initialParameters: initialGuess)
 ///
 /// // Ground state information
 /// print("E₀ = \(result.optimalEnergy) Hartree")
@@ -385,20 +375,5 @@ public struct VQEResult: Sendable, CustomStringConvertible {
           Function Evaluations: \(functionEvaluations)
           Convergence: \(convergenceReason)
         """
-    }
-}
-
-// MARK: - VQE Error
-
-@frozen
-public enum VQEError: Error, LocalizedError {
-    /// Energy evaluation returned invalid value (NaN or Inf)
-    case invalidEnergy(value: Double, parameters: [Double])
-
-    public var errorDescription: String? {
-        switch self {
-        case let .invalidEnergy(value, _):
-            "Energy evaluation returned invalid value: \(value). Check Hamiltonian and circuit validity."
-        }
     }
 }

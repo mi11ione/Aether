@@ -28,13 +28,13 @@ import Foundation
 /// // Basic async execution
 /// let circuit = QuantumCircuit.bellPhiPlus()
 /// let simulator = await QuantumSimulator()
-/// let state = try await simulator.execute(circuit)
+/// let state = await simulator.execute(circuit)
 ///
 /// // With progress updates (for UI)
 /// let largeCircuit = QuantumCircuit(numQubits: 15)
 /// // ... add many gates ...
 ///
-/// let finalState = try await simulator.execute(largeCircuit, progressHandler: { progress in
+/// let finalState = await simulator.execute(largeCircuit, progressHandler: { progress in
 ///     print("Progress: \(Int(progress * 100))%")
 ///     // Update UI progress bar on main thread
 ///     await MainActor.run {
@@ -43,12 +43,12 @@ import Foundation
 /// })
 ///
 /// // Convenience: execute directly on circuit
-/// let state2 = try await circuit.executeAsync()
+/// let state2 = await circuit.executeAsync()
 ///
 /// // GPU acceleration (automatic)
 /// let gpuSimulator = await QuantumSimulator(useMetalAcceleration: true)
 /// let bigCircuit = QuantumCircuit(numQubits: 12)  // Will use GPU
-/// let result = try await gpuSimulator.execute(bigCircuit)
+/// let result = await gpuSimulator.execute(bigCircuit)
 /// ```
 public actor QuantumSimulator {
     /// Current quantum state
@@ -86,7 +86,7 @@ public actor QuantumSimulator {
         _ circuit: QuantumCircuit,
         from initialState: QuantumState? = nil,
         progressHandler: (@isolated(any) @Sendable (Double) async -> Void)? = nil
-    ) async throws -> QuantumState {
+    ) async -> QuantumState {
         let operationCount: Int = circuit.gateCount
         totalGates = operationCount
         executedGates = 0
@@ -145,23 +145,6 @@ public actor QuantumSimulator {
     public func getCurrentState() -> QuantumState? { currentState }
 }
 
-// MARK: - Simulator Error
-
-@frozen
-public enum SimulatorError: Error, LocalizedError {
-    case invalidCircuit
-    case metalNotAvailable
-
-    public var errorDescription: String? {
-        switch self {
-        case .invalidCircuit:
-            "Circuit is invalid or incompatible"
-        case .metalNotAvailable:
-            "Metal acceleration is not available on this device"
-        }
-    }
-}
-
 // MARK: - Convenience Extensions
 
 public extension QuantumCircuit {
@@ -171,8 +154,8 @@ public extension QuantumCircuit {
     @_eagerMove
     func executeAsync(
         progressHandler: (@isolated(any) @Sendable (Double) async -> Void)? = nil
-    ) async throws -> QuantumState {
+    ) async -> QuantumState {
         let simulator = QuantumSimulator()
-        return try await simulator.execute(self, progressHandler: progressHandler)
+        return await simulator.execute(self, progressHandler: progressHandler)
     }
 }

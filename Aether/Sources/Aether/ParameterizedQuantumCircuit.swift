@@ -87,7 +87,7 @@ public struct ParameterizedGateOperation: Equatable, Sendable, CustomStringConve
 /// // 3. VQE optimization loop
 /// for iteration in 0..<100 {
 ///     // Bind parameters and execute
-///     let concreteCircuit = try circuit.bind(parameterVector: params)
+///     let concreteCircuit = circuit.bind(parameterVector: params)
 ///     let state = concreteCircuit.execute()
 ///
 ///     // Measure energy expectation ⟨ψ|H|ψ⟩
@@ -96,7 +96,7 @@ public struct ParameterizedGateOperation: Equatable, Sendable, CustomStringConve
 ///     // Compute gradients via parameter shift
 ///     var gradients = [Double](repeating: 0, count: params.count)
 ///     for i in 0..<params.count {
-///         let (plus, minus) = try circuit.generateShiftedCircuits(parameterIndex: i)
+///         let (plus, minus) = circuit.generateShiftedCircuits(parameterIndex: i)
 ///         let statePlus = plus.execute()
 ///         let stateMinus = minus.execute()
 ///         let energyPlus = hamiltonian.expectation(in: statePlus)
@@ -140,7 +140,7 @@ public struct ParameterizedGateOperation: Equatable, Sendable, CustomStringConve
 ///
 /// // Optimize (γ, β) to maximize cut value
 /// let bindings = ["gamma": 0.5, "beta": 1.2]
-/// let concrete = try circuit.bind(parameters: bindings)
+/// let concrete = circuit.bind(parameters: bindings)
 /// ```
 @frozen
 public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConvertible {
@@ -369,7 +369,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///
     /// - Parameter bindings: Dictionary mapping parameter names to values
     /// - Returns: Concrete quantum circuit with all parameters bound
-    /// - Throws: ParameterError if parameters missing, extra, or validation fails
+    /// - Precondition: All circuit parameters must have bindings, no extra parameters allowed
     ///
     /// Example:
     /// ```swift
@@ -379,50 +379,20 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///
     /// // Bind all parameters
     /// let bindings = ["theta": Double.pi / 4, "phi": Double.pi / 8]
-    /// let concrete = try circuit.bind(parameters: bindings)
+    /// let concrete = circuit.bind(parameters: bindings)
     ///
     /// // Execute concrete circuit
     /// let state = concrete.execute()
-    ///
-    /// // Missing parameter throws error
-    /// do {
-    ///     let _ = try circuit.bind(parameters: ["theta": 0.5])
-    /// } catch ParameterError.unboundParameter(let name) {
-    ///     print("Missing: \(name)")  // "Missing: phi"
-    /// }
-    ///
-    /// // Extra parameters throw error (fail-fast)
-    /// do {
-    ///     let _ = try circuit.bind(parameters: [
-    ///         "theta": 0.5, "phi": 1.0, "gamma": 2.0
-    ///     ])
-    /// } catch ParameterError.extraParameters(let names) {
-    ///     print("Extra: \(names)")  // "Extra: [gamma]"
-    /// }
     /// ```
     @_optimize(speed)
     @_eagerMove
-    public func bind(parameters bindings: [String: Double]) throws -> QuantumCircuit {
-        for param in parameters {
-            if bindings[param.name] == nil {
-                throw ParameterError.unboundParameter(param.name)
-            }
-        }
-
-        var extraParams: [String] = []
-        for key in bindings.keys {
-            if !parameterSet.contains(key) {
-                extraParams.append(key)
-            }
-        }
-        if !extraParams.isEmpty {
-            throw ParameterError.extraParameters(extraParams)
-        }
+    public func bind(parameters bindings: [String: Double]) -> QuantumCircuit {
+        ValidationUtilities.validateCompleteParameterBindings(bindings, parameters: parameters, parameterSet: parameterSet)
 
         var concreteCircuit = QuantumCircuit(numQubits: numQubits)
 
         for operation in operations {
-            let concreteGate = try operation.gate.bind(with: bindings)
+            let concreteGate = operation.gate.bind(with: bindings)
             concreteCircuit.append(gate: concreteGate, qubits: operation.qubits, timestamp: operation.timestamp)
         }
 
@@ -439,7 +409,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///
     /// - Parameter parameterVector: Array of parameter values (length must match parameter count)
     /// - Returns: Concrete quantum circuit with all parameters bound
-    /// - Throws: ParameterError.invalidVectorLength if length mismatch
+    /// - Precondition: Vector length must match parameter count
     ///
     /// Example:
     /// ```swift
@@ -453,26 +423,19 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///
     /// // Bind using vector (NumPy-style)
     /// let params: [Double] = [0.1, 0.2, 0.3]
-    /// let concrete = try circuit.bind(parameterVector: params)
-    ///
-    /// // Wrong length throws error
-    /// do {
-    ///     let _ = try circuit.bind(parameterVector: [0.1, 0.2])
-    /// } catch ParameterError.invalidVectorLength(let expected, let got) {
-    ///     print("Expected \(expected), got \(got)")  // "Expected 3, got 2"
-    /// }
+    /// let concrete = circuit.bind(parameterVector: params)
     ///
     /// // Usage with optimizer
-    /// func objectiveFunction(_ params: [Double]) throws -> Double {
-    ///     let circuit = try buildAnsatz()
-    ///     let concrete = try circuit.bind(parameterVector: params)
+    /// func objectiveFunction(_ params: [Double]) -> Double {
+    ///     let circuit = buildAnsatz()
+    ///     let concrete = circuit.bind(parameterVector: params)
     ///     let state = concrete.execute()
     ///     return hamiltonian.expectation(in: state)
     /// }
     /// ```
     @_optimize(speed)
     @_eagerMove
-    public func bind(parameterVector: [Double]) throws -> QuantumCircuit {
+    public func bind(parameterVector: [Double]) -> QuantumCircuit {
         let paramCount: Int = parameters.count
         ValidationUtilities.validateParameterVectorLength(parameterVector.count, expected: paramCount)
 
@@ -480,7 +443,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
             uniqueKeysWithValues: zip(parameters.lazy.map(\.name), parameterVector)
         )
 
-        return try bind(parameters: bindings)
+        return bind(parameters: bindings)
     }
 
     // MARK: - Gradient Computation Support
@@ -499,7 +462,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///   - baseBindings: Base parameter values (all parameters must be present)
     ///   - shift: Shift amount (default: π/2 for standard parameter shift rule)
     /// - Returns: Tuple of (plus, minus) concrete circuits with parameter shifted
-    /// - Throws: ParameterError if parameter not found or bindings invalid
+    /// - Precondition: Parameter must exist in circuit and have binding in baseBindings
     ///
     /// Example:
     /// ```swift
@@ -510,7 +473,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     /// let baseParams = ["theta": 0.5, "phi": 1.0]
     ///
     /// // Compute gradient ∂⟨H⟩/∂theta
-    /// let (plus, minus) = try circuit.generateShiftedCircuits(
+    /// let (plus, minus) = circuit.generateShiftedCircuits(
     ///     parameterName: "theta",
     ///     baseBindings: baseParams
     /// )
@@ -528,12 +491,11 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
         parameterName: String,
         baseBindings: [String: Double],
         shift: Double = .pi / 2
-    ) throws -> (plus: QuantumCircuit, minus: QuantumCircuit) {
+    ) -> (plus: QuantumCircuit, minus: QuantumCircuit) {
         ValidationUtilities.validateParameterExists(parameterName, in: parameterSet)
+        ValidationUtilities.validateParameterBinding(parameterName, in: baseBindings)
 
-        guard let baseValue = baseBindings[parameterName] else {
-            throw ParameterError.unboundParameter(parameterName)
-        }
+        let baseValue = baseBindings[parameterName]!
 
         var plusBindings = baseBindings
         var minusBindings = baseBindings
@@ -541,8 +503,8 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
         plusBindings[parameterName] = baseValue + shift
         minusBindings[parameterName] = baseValue - shift
 
-        let plusCircuit = try bind(parameters: plusBindings)
-        let minusCircuit = try bind(parameters: minusBindings)
+        let plusCircuit = bind(parameters: plusBindings)
+        let minusCircuit = bind(parameters: minusBindings)
 
         return (plus: plusCircuit, minus: minusCircuit)
     }
@@ -556,7 +518,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///   - baseVector: Base parameter values (length must match parameter count)
     ///   - shift: Shift amount (default: π/2)
     /// - Returns: Tuple of (plus, minus) concrete circuits
-    /// - Throws: ParameterError if index invalid or vector length wrong
+    /// - Precondition: Index in bounds and vector length matches parameter count
     ///
     /// Example:
     /// ```swift
@@ -569,7 +531,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     /// let baseParams: [Double] = [0.5, 1.0]
     ///
     /// // Compute gradient for parameter 0
-    /// let (plus, minus) = try circuit.generateShiftedCircuits(
+    /// let (plus, minus) = circuit.generateShiftedCircuits(
     ///     parameterIndex: 0,
     ///     baseVector: baseParams
     /// )
@@ -580,7 +542,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
         parameterIndex: Int,
         baseVector: [Double],
         shift: Double = .pi / 2
-    ) throws -> (plus: QuantumCircuit, minus: QuantumCircuit) {
+    ) -> (plus: QuantumCircuit, minus: QuantumCircuit) {
         let paramCount: Int = parameters.count
         ValidationUtilities.validateIndexInBounds(parameterIndex, bound: paramCount, name: "parameterIndex")
         ValidationUtilities.validateParameterVectorLength(baseVector.count, expected: paramCount)
@@ -590,7 +552,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
         )
 
         let paramName = parameters[parameterIndex].name
-        return try generateShiftedCircuits(parameterName: paramName, baseBindings: baseBindings, shift: shift)
+        return generateShiftedCircuits(parameterName: paramName, baseBindings: baseBindings, shift: shift)
     }
 
     // MARK: - CustomStringConvertible

@@ -10,7 +10,7 @@ import Testing
 @Suite("MaxCut Problem Hamiltonians")
 struct MaxCutTests {
     @Test("Single edge produces correct ZZ term")
-    func singleEdge() throws {
+    func singleEdge() {
         let hamiltonian = MaxCut.hamiltonian(edges: [(0, 1)])
 
         #expect(hamiltonian.terms.count == 1)
@@ -25,7 +25,7 @@ struct MaxCutTests {
     }
 
     @Test("Multiple edges create multiple ZZ terms")
-    func multipleEdges() throws {
+    func multipleEdges() {
         let hamiltonian = MaxCut.hamiltonian(edges: [(0, 1), (1, 2), (2, 3)])
 
         #expect(hamiltonian.terms.count == 3)
@@ -38,7 +38,7 @@ struct MaxCutTests {
     }
 
     @Test("Edge order normalization produces identical terms")
-    func edgeOrderNormalization() throws {
+    func edgeOrderNormalization() {
         let hamiltonian1 = MaxCut.hamiltonian(edges: [(0, 1)])
         let hamiltonian2 = MaxCut.hamiltonian(edges: [(1, 0)])
 
@@ -50,7 +50,7 @@ struct MaxCutTests {
     }
 
     @Test("Duplicate edges create multiple terms")
-    func duplicateEdges() throws {
+    func duplicateEdges() {
         let hamiltonian = MaxCut.hamiltonian(edges: [(0, 1), (1, 0), (0, 1)])
 
         #expect(hamiltonian.terms.count == 3)
@@ -67,7 +67,7 @@ struct MaxCutTests {
 @Suite("Example Graph MaxCut")
 struct MaxCutExampleGraphsTests {
     @Test("Triangle graph has 3 edges")
-    func triangleGraph() throws {
+    func triangleGraph() {
         let edges = MaxCut.Examples.triangle()
         let hamiltonian = MaxCut.hamiltonian(edges: edges)
 
@@ -80,7 +80,7 @@ struct MaxCutExampleGraphsTests {
     }
 
     @Test("Square graph has 4 edges forming cycle")
-    func squareGraph() throws {
+    func squareGraph() {
         let edges = MaxCut.Examples.square()
         let hamiltonian = MaxCut.hamiltonian(edges: edges)
 
@@ -89,7 +89,7 @@ struct MaxCutExampleGraphsTests {
     }
 
     @Test("Pentagon graph has 5 edges forming cycle")
-    func pentagonGraph() throws {
+    func pentagonGraph() {
         let edges = MaxCut.Examples.pentagon()
         let hamiltonian = MaxCut.hamiltonian(edges: edges)
 
@@ -98,7 +98,7 @@ struct MaxCutExampleGraphsTests {
     }
 
     @Test("Complete K₄ graph has 6 edges")
-    func completeK4Graph() throws {
+    func completeK4Graph() {
         let edges = MaxCut.Examples.completeK4()
         let hamiltonian = MaxCut.hamiltonian(edges: edges)
 
@@ -107,7 +107,7 @@ struct MaxCutExampleGraphsTests {
     }
 
     @Test("Linear chain has n-1 edges")
-    func linearChain() throws {
+    func linearChain() {
         let edges = MaxCut.Examples.linearChain(numVertices: 6)
         let hamiltonian = MaxCut.hamiltonian(edges: edges)
 
@@ -120,7 +120,7 @@ struct MaxCutExampleGraphsTests {
     }
 
     @Test("Linear chain with minimum vertices")
-    func linearChainMinimum() throws {
+    func linearChainMinimum() {
         let edges = MaxCut.Examples.linearChain(numVertices: 2)
 
         #expect(edges.count == 1)
@@ -128,7 +128,7 @@ struct MaxCutExampleGraphsTests {
     }
 
     @Test("Star graph has n-1 edges from center")
-    func starGraph() throws {
+    func starGraph() {
         let edges = MaxCut.Examples.star(numVertices: 5)
         let hamiltonian = MaxCut.hamiltonian(edges: edges)
 
@@ -141,7 +141,7 @@ struct MaxCutExampleGraphsTests {
     }
 
     @Test("Star graph with minimum vertices")
-    func starGraphMinimum() throws {
+    func starGraphMinimum() {
         let edges = MaxCut.Examples.star(numVertices: 2)
 
         #expect(edges.count == 1)
@@ -155,7 +155,7 @@ struct MaxCutExampleGraphsTests {
 @Suite("MaxCut Edge Cases")
 struct MaxCutEdgeCasesTests {
     @Test("Complete K₁₀ graph has 45 edges")
-    func completeK10() throws {
+    func completeK10() {
         var edges: [(Int, Int)] = []
         for i in 0 ..< 10 {
             for j in (i + 1) ..< 10 {
@@ -174,7 +174,7 @@ struct MaxCutEdgeCasesTests {
     }
 
     @Test("Disconnected graph preserves all qubits")
-    func disconnectedGraph() throws {
+    func disconnectedGraph() {
         let hamiltonian = MaxCut.hamiltonian(edges: [(0, 1), (2, 3)])
 
         #expect(hamiltonian.terms.count == 2)
@@ -184,7 +184,7 @@ struct MaxCutEdgeCasesTests {
     }
 
     @Test("Hamiltonian coefficients are real and finite")
-    func coefficientsAreFinite() throws {
+    func coefficientsAreFinite() {
         let hamiltonian = MaxCut.hamiltonian(edges: [(0, 1), (1, 2), (2, 0)])
 
         for (coefficient, _) in hamiltonian.terms {
@@ -194,7 +194,7 @@ struct MaxCutEdgeCasesTests {
     }
 
     @Test("All operators use Z basis")
-    func allOperatorsZ() throws {
+    func allOperatorsZ() {
         let hamiltonian = MaxCut.hamiltonian(edges: [(0, 1), (1, 2), (2, 0)])
 
         for (_, pauliString) in hamiltonian.terms {
@@ -205,7 +205,7 @@ struct MaxCutEdgeCasesTests {
     }
 
     @Test("Normalized edges create identical Pauli strings")
-    func normalizedEdges() throws {
+    func normalizedEdges() {
         let hamiltonian = MaxCut.hamiltonian(edges: [(0, 1), (1, 0)])
 
         #expect(hamiltonian.terms.count == 2)

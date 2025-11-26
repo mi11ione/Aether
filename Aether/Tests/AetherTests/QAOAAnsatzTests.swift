@@ -10,7 +10,7 @@ import Testing
 @Suite("QAOA Ansatz Circuits")
 struct QAOAAnsatzTests {
     @Test("Depth-1 has scaled parameters")
-    func depth1Parameters() throws {
+    func depth1Parameters() {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
         let mixer = MixerHamiltonian.xMixer(numQubits: 2)
 
@@ -27,7 +27,7 @@ struct QAOAAnsatzTests {
     }
 
     @Test("Depth-2 has scaled parameters for both layers")
-    func depth2Parameters() throws {
+    func depth2Parameters() {
         let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2)])
         let mixer = MixerHamiltonian.xMixer(numQubits: 3)
 
@@ -48,7 +48,7 @@ struct QAOAAnsatzTests {
     }
 
     @Test("Depth-5 has scaled parameters for all layers")
-    func depth5Parameters() throws {
+    func depth5Parameters() {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
         let mixer = MixerHamiltonian.xMixer(numQubits: 2)
 
@@ -64,7 +64,7 @@ struct QAOAAnsatzTests {
     }
 
     @Test("Circuit starts with Hadamard gates")
-    func initialSuperposition() throws {
+    func initialSuperposition() {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
         let mixer = MixerHamiltonian.xMixer(numQubits: 2)
 
@@ -75,7 +75,7 @@ struct QAOAAnsatzTests {
             mixerHamiltonian: mixer
         )
 
-        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.5])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.5])
         #expect(circuit.operations.count > 2)
     }
 }
@@ -86,7 +86,7 @@ struct QAOAAnsatzTests {
 @Suite("Pauli String Exponentiation")
 struct PauliStringExponentiationTests {
     @Test("Two-qubit ZZ uses CNOT ladder")
-    func twoQubitZZ() throws {
+    func twoQubitZZ() {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
         let mixer = MixerHamiltonian.xMixer(numQubits: 2)
 
@@ -97,7 +97,7 @@ struct PauliStringExponentiationTests {
             mixerHamiltonian: mixer
         )
 
-        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
         let hasCNOT = circuit.operations.contains { op in
             if case .cnot = op.gate { return true }
@@ -108,7 +108,7 @@ struct PauliStringExponentiationTests {
     }
 
     @Test("Three-qubit ZZZ uses extended ladder")
-    func threeQubitZZZ() throws {
+    func threeQubitZZZ() {
         let pauliString = PauliString(operators: [
             (qubit: 0, basis: .z),
             (qubit: 1, basis: .z),
@@ -124,7 +124,7 @@ struct PauliStringExponentiationTests {
             mixerHamiltonian: mixer
         )
 
-        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
         let cnotCount = circuit.operations.filter { op in
             if case .cnot = op.gate { return true }
@@ -135,7 +135,7 @@ struct PauliStringExponentiationTests {
     }
 
     @Test("Y operator requires Rx basis rotation")
-    func yOperatorBasisRotation() throws {
+    func yOperatorBasisRotation() {
         let cost = Observable(terms: [(coefficient: 1.0, pauliString: PauliString(operators: [(qubit: 0, basis: .y)]))])
         let mixer = MixerHamiltonian.xMixer(numQubits: 1)
 
@@ -146,7 +146,7 @@ struct PauliStringExponentiationTests {
             mixerHamiltonian: mixer
         )
 
-        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
         let rxGates = circuit.operations.filter { op in
             if case .rotationX = op.gate { return true }
@@ -157,7 +157,7 @@ struct PauliStringExponentiationTests {
     }
 
     @Test("Mixed XYZ string has multiple basis rotations")
-    func mixedPauliString() throws {
+    func mixedPauliString() {
         let pauliString = PauliString(operators: [
             (qubit: 0, basis: .x),
             (qubit: 1, basis: .y),
@@ -173,7 +173,7 @@ struct PauliStringExponentiationTests {
             mixerHamiltonian: mixer
         )
 
-        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
         let hadamardGates = circuit.operations.filter { op in
             if case .hadamard = op.gate { return true }
@@ -196,7 +196,7 @@ struct PauliStringExponentiationTests {
 @Suite("Coefficient Scaling")
 struct CoefficientScalingTests {
     @Test("Scaled parameters encode coefficients")
-    func scaledParameterNaming() throws {
+    func scaledParameterNaming() {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
         let mixer = MixerHamiltonian.xMixer(numQubits: 2)
 
@@ -221,7 +221,7 @@ struct CoefficientScalingTests {
     }
 
     @Test("Near-zero coefficients are filtered")
-    func nearZeroFiltering() throws {
+    func nearZeroFiltering() {
         let cost = Observable(terms: [
             (coefficient: 1e-16, pauliString: PauliString(operators: [(qubit: 0, basis: .z)])),
             (coefficient: 0.5, pauliString: PauliString(operators: [(qubit: 1, basis: .z)])),
@@ -235,7 +235,7 @@ struct CoefficientScalingTests {
             mixerHamiltonian: mixer
         )
 
-        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
         #expect(!circuit.operations.isEmpty)
     }
 }
@@ -246,7 +246,7 @@ struct CoefficientScalingTests {
 @Suite("Complete QAOA Workflows")
 struct CompleteQAOAWorkflowsTests {
     @Test("Triangle MaxCut ansatz binds successfully")
-    func triangleMaxCut() throws {
+    func triangleMaxCut() {
         let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.triangle())
         let mixer = MixerHamiltonian.xMixer(numQubits: 3)
 
@@ -264,7 +264,7 @@ struct CompleteQAOAWorkflowsTests {
     }
 
     @Test("Square MaxCut ansatz binds successfully")
-    func squareMaxCut() throws {
+    func squareMaxCut() {
         let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.square())
         let mixer = MixerHamiltonian.xMixer(numQubits: 4)
 
@@ -282,7 +282,7 @@ struct CompleteQAOAWorkflowsTests {
     }
 
     @Test("Parameter binding produces valid circuit")
-    func parameterBinding() throws {
+    func parameterBinding() {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
         let mixer = MixerHamiltonian.xMixer(numQubits: 2)
 
@@ -293,7 +293,7 @@ struct CompleteQAOAWorkflowsTests {
             mixerHamiltonian: mixer
         )
 
-        let circuit = try QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
         #expect(!circuit.operations.isEmpty)
         #expect(circuit.numQubits == 2)

@@ -70,10 +70,10 @@ public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible 
 ///
 /// // Evaluate with bindings
 /// let bindings = ["theta": 1.57, "phi": 0.785]
-/// let result = try symbolic.evaluate(with: bindings)  // 1.57
+/// let result = symbolic.evaluate(with: bindings)  // 1.57
 ///
 /// // Concrete values evaluate to themselves
-/// let concreteResult = try concrete.evaluate(with: [:])  // π/4
+/// let concreteResult = concrete.evaluate(with: [:])  // π/4
 /// ```
 @frozen
 public enum ParameterExpression: Equatable, Hashable, Sendable, CustomStringConvertible {
@@ -103,33 +103,23 @@ public enum ParameterExpression: Equatable, Hashable, Sendable, CustomStringConv
     ///
     /// - Parameter bindings: Dictionary mapping parameter names to values
     /// - Returns: Evaluated numerical value
-    /// - Throws: ParameterError.unboundParameter if symbolic parameter not in bindings
+    /// - Precondition: Symbolic parameters must have binding in dictionary
     ///
     /// Example:
     /// ```swift
     /// let expr = ParameterExpression.parameter(Parameter(name: "theta"))
     /// let bindings = ["theta": Double.pi / 2, "phi": 0.5]
     ///
-    /// let value = try expr.evaluate(with: bindings)  // π/2
-    ///
-    /// // Missing parameter throws error
-    /// let unbound = ParameterExpression.parameter(Parameter(name: "gamma"))
-    /// do {
-    ///     let _ = try unbound.evaluate(with: bindings)
-    /// } catch ParameterError.unboundParameter(let name) {
-    ///     print("Missing: \(name)")  // "Missing: gamma"
-    /// }
+    /// let value = expr.evaluate(with: bindings)  // π/2
     /// ```
     @_optimize(speed)
     @inlinable
-    public func evaluate(with bindings: [String: Double]) throws -> Double {
+    public func evaluate(with bindings: [String: Double]) -> Double {
         switch self {
         case let .value(v): return v
         case let .parameter(p):
-            guard let value = bindings[p.name] else {
-                throw ParameterError.unboundParameter(p.name)
-            }
-            return value
+            ValidationUtilities.validateParameterBinding(p.name, in: bindings)
+            return bindings[p.name]!
         }
     }
 
@@ -148,45 +138,6 @@ public enum ParameterExpression: Equatable, Hashable, Sendable, CustomStringConv
         switch self {
         case let .parameter(p): p.name
         case let .value(v): String(format: "%.3f", v)
-        }
-    }
-}
-
-/// Errors that occur during parameter operations
-@frozen
-public enum ParameterError: Error, LocalizedError, Equatable {
-    /// Parameter referenced in circuit but not provided in bindings
-    case unboundParameter(String)
-
-    /// Extra parameters provided in bindings that are not used in circuit
-    case extraParameters([String])
-
-    /// Parameter vector length does not match circuit parameter count
-    case invalidVectorLength(expected: Int, got: Int)
-
-    /// Parameter name is empty string
-    case emptyParameterName
-
-    /// Attempted parameter shift on non-existent parameter
-    case parameterNotFound(String)
-
-    public var errorDescription: String? {
-        switch self {
-        case let .unboundParameter(name):
-            return "Parameter '\(name)' is not bound. Provide a value in the bindings dictionary or parameter vector."
-
-        case let .extraParameters(names):
-            let joined = names.sorted().joined(separator: ", ")
-            return "Extra parameters provided: \(joined). These parameters are not used in the circuit. Check for typos or remove unused parameters."
-
-        case let .invalidVectorLength(expected, got):
-            return "Parameter vector length mismatch: circuit has \(expected) parameters but got \(got) values. Ensure vector length matches parameter count."
-
-        case .emptyParameterName:
-            return "Parameter name cannot be empty. Use descriptive names like 'theta', 'phi', 'gamma_0'."
-
-        case let .parameterNotFound(name):
-            return "Parameter '\(name)' not found in circuit. Available parameters can be queried via circuit.parameters property."
         }
     }
 }

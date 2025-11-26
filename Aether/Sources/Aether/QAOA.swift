@@ -53,7 +53,7 @@ import Foundation
 /// )
 ///
 /// // Optimize starting from random parameters
-/// let result = try await qaoa.run(
+/// let result = await qaoa.run(
 ///     initialParameters: [0.5, 0.5, 0.5, 0.5]  // (γ₀,β₀,γ₁,β₁)
 /// )
 ///
@@ -73,7 +73,7 @@ import Foundation
 /// ```swift
 /// let qaoa = await QAOA(...)
 ///
-/// let result = try await qaoa.runWithProgress(
+/// let result = await qaoa.runWithProgress(
 ///     initialParameters: [0.5, 0.5]
 /// ) { iteration, cost in
 ///     print("Iteration \(iteration): cost = \(String(format: "%.6f", cost))")
@@ -201,12 +201,11 @@ public actor QAOA {
     ///
     /// - Parameter initialParameters: Starting point (γ₀,β₀,...,γₚ₋₁,βₚ₋₁)
     /// - Returns: QAOA result with optimal cost and solution bitstrings
-    /// - Throws: QAOAError if optimization fails, CancellationError if cancelled
     ///
     /// Example:
     /// ```swift
     /// let initialGuess = [0.5, 0.5, 0.5, 0.5]  // depth=2
-    /// let result = try await qaoa.run(initialParameters: initialGuess)
+    /// let result = await qaoa.run(initialParameters: initialGuess)
     ///
     /// print("Optimal cost: \(result.optimalCost)")
     /// print("Parameters: \(result.optimalParameters)")
@@ -214,8 +213,8 @@ public actor QAOA {
     /// ```
     @_optimize(speed)
     @_eagerMove
-    public func run(initialParameters: [Double]) async throws -> QAOAResult {
-        try await runWithProgress(initialParameters: initialParameters, progressCallback: nil)
+    public func run(initialParameters: [Double]) async -> QAOAResult {
+        await runWithProgress(initialParameters: initialParameters, progressCallback: nil)
     }
 
     /// Run QAOA with progress updates
@@ -232,11 +231,10 @@ public actor QAOA {
     ///   - initialParameters: Starting parameters (length = 2·depth)
     ///   - progressCallback: Optional progress updates (iteration, cost)
     /// - Returns: QAOA result
-    /// - Throws: QAOAError or CancellationError
     ///
     /// Example:
     /// ```swift
-    /// let result = try await qaoa.runWithProgress(initialParameters: [0.5, 0.5]) { iter, cost in
+    /// let result = await qaoa.runWithProgress(initialParameters: [0.5, 0.5]) { iter, cost in
     ///     print("[\(iter)] Cost = \(String(format: "%.6f", cost))")
     ///
     ///     await MainActor.run {
@@ -250,7 +248,7 @@ public actor QAOA {
     public func runWithProgress(
         initialParameters: [Double],
         progressCallback: (@Sendable (Int, Double) async -> Void)?
-    ) async throws -> QAOAResult {
+    ) async -> QAOAResult {
         let expectedParamCount = 2 * depth
         ValidationUtilities.validateParameterVectorLength(
             initialParameters.count,
@@ -262,13 +260,13 @@ public actor QAOA {
         currentCost = 0.0
 
         // Objective function: evaluate cost for given (γ⃗,β⃗)
-        let costFunction: @Sendable ([Double]) async throws -> Double = { parameters in
+        let costFunction: @Sendable ([Double]) async -> Double = { parameters in
             // Bind parameters to ansatz circuit
             // Special binding handles coefficient scaling for QAOA
-            let concreteCircuit: QuantumCircuit = try await self.bindQAOAParameters(parameters: parameters)
+            let concreteCircuit: QuantumCircuit = self.parameterBinder.bind(baseParameters: parameters)
 
             // Execute circuit
-            let state: QuantumState = try await self.simulator.execute(concreteCircuit)
+            let state: QuantumState = await self.simulator.execute(concreteCircuit)
 
             // Compute cost: ⟨ψ|H_p|ψ⟩
             let cost: Double = if let sparseH = self.sparseHamiltonian {
@@ -276,8 +274,6 @@ public actor QAOA {
             } else {
                 self.costHamiltonian.expectationValue(state: state)
             }
-
-            guard cost.isFinite else { throw QAOAError.invalidCost(value: cost, parameters: parameters) }
 
             return cost
         }
@@ -295,7 +291,7 @@ public actor QAOA {
         }
 
         // Run classical optimization
-        let optimizerResult: OptimizerResult = try await optimizer.minimize(
+        let optimizerResult: OptimizerResult = await optimizer.minimize(
             objectiveFunction: costFunction,
             initialParameters: initialParameters,
             convergenceCriteria: convergenceCriteria,
@@ -303,8 +299,8 @@ public actor QAOA {
         )
 
         // Compute final solution probabilities
-        let finalCircuit: QuantumCircuit = try bindQAOAParameters(parameters: optimizerResult.optimalParameters)
-        let finalState: QuantumState = try await simulator.execute(finalCircuit)
+        let finalCircuit: QuantumCircuit = parameterBinder.bind(baseParameters: optimizerResult.optimalParameters)
+        let finalState: QuantumState = await simulator.execute(finalCircuit)
         let solutionProbabilities: [Int: Double] = extractSolutionProbabilities(state: finalState)
 
         return QAOAResult(
@@ -319,14 +315,6 @@ public actor QAOA {
     }
 
     // MARK: - Parameter Binding
-
-    /// Bind QAOA parameters to ansatz with coefficient scaling
-    @_optimize(speed)
-    @_eagerMove
-    @inline(__always)
-    private func bindQAOAParameters(parameters: [Double]) throws -> QuantumCircuit {
-        try parameterBinder.bind(baseParameters: parameters)
-    }
 
     /// Extract solution probabilities from final state
     ///
@@ -389,7 +377,7 @@ public actor QAOA {
 ///
 /// **Usage:**
 /// ```swift
-/// let result = try await qaoa.run(initialParameters: initialGuess)
+/// let result = await qaoa.run(initialParameters: initialGuess)
 ///
 /// // Cost information
 /// print("Optimal cost: \(result.optimalCost)")
@@ -526,21 +514,6 @@ public struct QAOAResult: Sendable, CustomStringConvertible {
             if smallest == i { break }
             heap.swapAt(i, smallest)
             i = smallest
-        }
-    }
-}
-
-// MARK: - QAOA Error
-
-@frozen
-public enum QAOAError: Error, LocalizedError {
-    /// Cost evaluation returned invalid value (NaN or Inf)
-    case invalidCost(value: Double, parameters: [Double])
-
-    public var errorDescription: String? {
-        switch self {
-        case let .invalidCost(value, _):
-            "Cost evaluation returned invalid value: \(value). Check Hamiltonian and circuit validity."
         }
     }
 }

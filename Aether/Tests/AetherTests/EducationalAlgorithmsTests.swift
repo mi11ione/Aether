@@ -10,7 +10,7 @@ import Testing
 @Suite("Deutsch-Jozsa Algorithm")
 struct DeutschJozsaTests {
     @Test("Constant-0 oracle: All inputs measured as |0⟩")
-    func testConstantZeroOracle() throws {
+    func testConstantZeroOracle() {
         let oracle = QuantumCircuit.constantZeroOracle()
         let circuit = QuantumCircuit.deutschJozsa(numInputQubits: 3, oracle: oracle)
         let state = circuit.execute()
@@ -21,7 +21,7 @@ struct DeutschJozsaTests {
     }
 
     @Test("Constant-1 oracle: All inputs measured as |0⟩")
-    func testConstantOneOracle() throws {
+    func testConstantOneOracle() {
         let oracle = QuantumCircuit.constantOneOracle()
         let circuit = QuantumCircuit.deutschJozsa(numInputQubits: 3, oracle: oracle)
         let state = circuit.execute()
@@ -32,7 +32,7 @@ struct DeutschJozsaTests {
     }
 
     @Test("Balanced parity oracle: At least one input is |1⟩")
-    func testBalancedParityOracle() throws {
+    func testBalancedParityOracle() {
         let oracle = QuantumCircuit.balancedParityOracle()
         let circuit = QuantumCircuit.deutschJozsa(numInputQubits: 3, oracle: oracle)
         let state = circuit.execute()
@@ -44,7 +44,7 @@ struct DeutschJozsaTests {
     }
 
     @Test("Balanced first-bit oracle: At least one input is |1⟩")
-    func testBalancedFirstBitOracle() throws {
+    func testBalancedFirstBitOracle() {
         let oracle = QuantumCircuit.balancedFirstBitOracle()
         let circuit = QuantumCircuit.deutschJozsa(numInputQubits: 3, oracle: oracle)
         let state = circuit.execute()
@@ -56,7 +56,7 @@ struct DeutschJozsaTests {
     }
 
     @Test("Single qubit Deutsch-Jozsa with constant oracle")
-    func testSingleQubitConstant() throws {
+    func testSingleQubitConstant() {
         let oracle = QuantumCircuit.constantZeroOracle()
         let circuit = QuantumCircuit.deutschJozsa(numInputQubits: 1, oracle: oracle)
         let state = circuit.execute()
@@ -66,7 +66,7 @@ struct DeutschJozsaTests {
     }
 
     @Test("Deutsch-Jozsa with 5 input qubits")
-    func testLargerInput() throws {
+    func testLargerInput() {
         let oracle = QuantumCircuit.constantZeroOracle()
         let circuit = QuantumCircuit.deutschJozsa(numInputQubits: 5, oracle: oracle)
         let state = circuit.execute()
@@ -77,7 +77,7 @@ struct DeutschJozsaTests {
     }
 
     @Test("Balanced vs constant oracles produce different results")
-    func testBalancedVsConstant() throws {
+    func testBalancedVsConstant() {
         let constantOracle = QuantumCircuit.constantZeroOracle()
         let constantCircuit = QuantumCircuit.deutschJozsa(
             numInputQubits: 3,
@@ -107,7 +107,7 @@ struct DeutschJozsaTests {
 @Suite("Bernstein-Vazirani Algorithm")
 struct BernsteinVaziraniTests {
     @Test("Hidden string [1]: Single bit recovery")
-    func testSingleBitHiddenString() throws {
+    func testSingleBitHiddenString() {
         let hiddenString = [1]
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: hiddenString)
         let circuit = QuantumCircuit.bernsteinVazirani(numQubits: 1, oracle: oracle)
@@ -119,7 +119,7 @@ struct BernsteinVaziraniTests {
     }
 
     @Test("Hidden string [0]: Zero string recovery")
-    func testZeroHiddenString() throws {
+    func testZeroHiddenString() {
         let hiddenString = [0]
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: hiddenString)
         let circuit = QuantumCircuit.bernsteinVazirani(numQubits: 1, oracle: oracle)
@@ -131,7 +131,7 @@ struct BernsteinVaziraniTests {
     }
 
     @Test("Hidden string [1,0,1]: 3-bit recovery")
-    func testThreeBitHiddenString() throws {
+    func testThreeBitHiddenString() {
         let hiddenString = [1, 0, 1]
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: hiddenString)
         let circuit = QuantumCircuit.bernsteinVazirani(numQubits: 3, oracle: oracle)
@@ -144,7 +144,7 @@ struct BernsteinVaziraniTests {
     }
 
     @Test("Hidden string [1,1,1,1]: All ones")
-    func testAllOnesHiddenString() throws {
+    func testAllOnesHiddenString() {
         let hiddenString = [1, 1, 1, 1]
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: hiddenString)
         let circuit = QuantumCircuit.bernsteinVazirani(numQubits: 4, oracle: oracle)
@@ -157,7 +157,7 @@ struct BernsteinVaziraniTests {
     }
 
     @Test("Hidden string [0,0,0,0]: All zeros")
-    func testAllZerosHiddenString() throws {
+    func testAllZerosHiddenString() {
         let hiddenString = [0, 0, 0, 0]
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: hiddenString)
         let circuit = QuantumCircuit.bernsteinVazirani(numQubits: 4, oracle: oracle)
@@ -170,7 +170,7 @@ struct BernsteinVaziraniTests {
     }
 
     @Test("Hidden string [1,0,1,0,1]: Alternating pattern")
-    func testAlternatingHiddenString() throws {
+    func testAlternatingHiddenString() {
         let hiddenString = [1, 0, 1, 0, 1]
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: hiddenString)
         let circuit = QuantumCircuit.bernsteinVazirani(numQubits: 5, oracle: oracle)
@@ -183,7 +183,7 @@ struct BernsteinVaziraniTests {
     }
 
     @Test("Hidden string [0,1,1,0,1,0]: 6-bit recovery")
-    func testSixBitHiddenString() throws {
+    func testSixBitHiddenString() {
         let hiddenString = [0, 1, 1, 0, 1, 0]
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: hiddenString)
         let circuit = QuantumCircuit.bernsteinVazirani(numQubits: 6, oracle: oracle)
@@ -196,7 +196,7 @@ struct BernsteinVaziraniTests {
     }
 
     @Test("Hidden string: Random 8-bit pattern")
-    func testEightBitHiddenString() throws {
+    func testEightBitHiddenString() {
         let hiddenString = [1, 0, 0, 1, 1, 0, 1, 1]
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: hiddenString)
         let circuit = QuantumCircuit.bernsteinVazirani(numQubits: 8, oracle: oracle)
@@ -215,7 +215,7 @@ struct BernsteinVaziraniTests {
 @Suite("Simon's Algorithm")
 struct SimonTests {
     @Test("Period [1,1]: Orthogonality constraint y·s = 0")
-    func testPeriod11() throws {
+    func testPeriod11() {
         let period = [1, 1]
         let oracle = QuantumCircuit.simonOracle(period: period)
         let circuit = QuantumCircuit.simonIteration(numQubits: 2, oracle: oracle)
@@ -229,7 +229,7 @@ struct SimonTests {
     }
 
     @Test("Period [1,0]: Orthogonality y·s = 0")
-    func testPeriod10() throws {
+    func testPeriod10() {
         let period = [1, 0]
         let oracle = QuantumCircuit.simonOracle(period: period)
         let circuit = QuantumCircuit.simonIteration(numQubits: 2, oracle: oracle)
@@ -242,7 +242,7 @@ struct SimonTests {
     }
 
     @Test("Period [0,1]: Orthogonality y·s = 0")
-    func testPeriod01() throws {
+    func testPeriod01() {
         let period = [0, 1]
         let oracle = QuantumCircuit.simonOracle(period: period)
         let circuit = QuantumCircuit.simonIteration(numQubits: 2, oracle: oracle)
@@ -255,7 +255,7 @@ struct SimonTests {
     }
 
     @Test("Period [1,0,1]: Three-qubit orthogonality")
-    func testPeriod101() throws {
+    func testPeriod101() {
         let period = [1, 0, 1]
         let oracle = QuantumCircuit.simonOracle(period: period)
         let circuit = QuantumCircuit.simonIteration(numQubits: 3, oracle: oracle)
@@ -269,7 +269,7 @@ struct SimonTests {
     }
 
     @Test("Period [1,1,0]: Three-qubit orthogonality")
-    func testPeriod110() throws {
+    func testPeriod110() {
         let period = [1, 1, 0]
         let oracle = QuantumCircuit.simonOracle(period: period)
         let circuit = QuantumCircuit.simonIteration(numQubits: 3, oracle: oracle)
@@ -283,7 +283,7 @@ struct SimonTests {
     }
 
     @Test("Period [1,1,1,1]: Four-qubit all-ones")
-    func testPeriod1111() throws {
+    func testPeriod1111() {
         let period = [1, 1, 1, 1]
         let oracle = QuantumCircuit.simonOracle(period: period)
         let circuit = QuantumCircuit.simonIteration(numQubits: 4, oracle: oracle)
@@ -297,7 +297,7 @@ struct SimonTests {
     }
 
     @Test("Simon iteration produces normalized state")
-    func testSimonProducesValidState() throws {
+    func testSimonProducesValidState() {
         let period = [1, 0, 1]
         let oracle = QuantumCircuit.simonOracle(period: period)
         let circuit = QuantumCircuit.simonIteration(numQubits: 3, oracle: oracle)
@@ -314,7 +314,7 @@ struct SimonTests {
 @Suite("Oracle Builder")
 struct OracleBuilderTests {
     @Test("Constant-zero oracle leaves output unchanged")
-    func testConstantZeroOracleIdentity() throws {
+    func testConstantZeroOracleIdentity() {
         var circuit = QuantumCircuit(numQubits: 2)
         let oracle = QuantumCircuit.constantZeroOracle()
 
@@ -326,7 +326,7 @@ struct OracleBuilderTests {
     }
 
     @Test("Constant-one oracle flips output")
-    func testConstantOneOracleFlips() throws {
+    func testConstantOneOracleFlips() {
         var circuit = QuantumCircuit(numQubits: 2)
         let oracle = QuantumCircuit.constantOneOracle()
 
@@ -338,7 +338,7 @@ struct OracleBuilderTests {
     }
 
     @Test("Parity oracle computes XOR correctly")
-    func testParityOracleXOR() throws {
+    func testParityOracleXOR() {
         var circuit = QuantumCircuit(numQubits: 3)
         circuit.append(gate: .pauliX, toQubit: 0)
         circuit.append(gate: .pauliX, toQubit: 1)
@@ -353,7 +353,7 @@ struct OracleBuilderTests {
     }
 
     @Test("BV oracle [1,0] computes dot product")
-    func testBVOracleComputesDotProduct() throws {
+    func testBVOracleComputesDotProduct() {
         var circuit = QuantumCircuit(numQubits: 3)
         circuit.append(gate: .pauliX, toQubit: 0)
 
@@ -367,7 +367,7 @@ struct OracleBuilderTests {
     }
 
     @Test("Simon oracle satisfies periodicity")
-    func testSimonOraclePeriodicProperty() throws {
+    func testSimonOraclePeriodicProperty() {
         let period = [1, 0]
         let oracle = QuantumCircuit.simonOracle(period: period)
 
@@ -394,7 +394,7 @@ struct OracleBuilderTests {
 @Suite("Algorithms Edge Cases and Validation")
 struct AlgorithmsEdgeCasesTests {
     @Test("measureQubits returns valid 0/1 values")
-    func testMeasureQubitValidation() throws {
+    func testMeasureQubitValidation() {
         let state = QuantumState(numQubits: 3)
         let measured = state.measureQubits([0, 1, 2])
 
@@ -404,7 +404,7 @@ struct AlgorithmsEdgeCasesTests {
     }
 
     @Test("measureQubits handles empty qubit array")
-    func testMeasureEmptyQubitArray() throws {
+    func testMeasureEmptyQubitArray() {
         let state = QuantumState(numQubits: 3)
         let measured = state.measureQubits([])
 
@@ -412,7 +412,7 @@ struct AlgorithmsEdgeCasesTests {
     }
 
     @Test("allQubitsAreZero detects non-zero qubits")
-    func testAllQubitsAreZeroDetection() throws {
+    func testAllQubitsAreZeroDetection() {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .pauliX, toQubit: 0)
         let state = circuit.execute()
@@ -424,7 +424,7 @@ struct AlgorithmsEdgeCasesTests {
     }
 
     @Test("DJ algorithm preserves normalization")
-    func testDJPreservesNormalization() throws {
+    func testDJPreservesNormalization() {
         let oracle = QuantumCircuit.balancedParityOracle()
         let circuit = QuantumCircuit.deutschJozsa(numInputQubits: 4, oracle: oracle)
         let state = circuit.execute()
@@ -434,7 +434,7 @@ struct AlgorithmsEdgeCasesTests {
     }
 
     @Test("BV algorithm preserves normalization")
-    func testBVPreservesNormalization() throws {
+    func testBVPreservesNormalization() {
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: [1, 0, 1, 1])
         let circuit = QuantumCircuit.bernsteinVazirani(numQubits: 4, oracle: oracle)
         let state = circuit.execute()
@@ -444,7 +444,7 @@ struct AlgorithmsEdgeCasesTests {
     }
 
     @Test("Simon algorithm preserves normalization")
-    func testSimonPreservesNormalization() throws {
+    func testSimonPreservesNormalization() {
         let oracle = QuantumCircuit.simonOracle(period: [1, 1, 0])
         let circuit = QuantumCircuit.simonIteration(numQubits: 3, oracle: oracle)
         let state = circuit.execute()
@@ -454,7 +454,7 @@ struct AlgorithmsEdgeCasesTests {
     }
 
     @Test("Balanced first-bit oracle handles empty input qubits")
-    func testBalancedFirstBitOracleEmptyInput() throws {
+    func testBalancedFirstBitOracleEmptyInput() {
         let oracle = QuantumCircuit.balancedFirstBitOracle()
         var circuit = QuantumCircuit(numQubits: 1)
 

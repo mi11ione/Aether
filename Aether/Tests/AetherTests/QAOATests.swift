@@ -10,7 +10,7 @@ import Testing
 @Suite("QAOA Algorithm")
 struct QAOAAlgorithmTests {
     @Test("Triangle graph optimization")
-    func triangleGraph() async throws {
+    func triangleGraph() async {
         let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.triangle())
 
         let qaoa = QAOA(
@@ -21,7 +21,7 @@ struct QAOAAlgorithmTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 200)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
 
         #expect(result.optimalCost < -0.7)
         #expect(result.optimalCost.isFinite)
@@ -33,7 +33,7 @@ struct QAOAAlgorithmTests {
     }
 
     @Test("Square graph optimization")
-    func squareGraph() async throws {
+    func squareGraph() async {
         let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.square())
 
         let qaoa = QAOA(
@@ -44,7 +44,7 @@ struct QAOAAlgorithmTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
 
         #expect(result.optimalCost < -1.5)
         #expect(result.optimalCost.isFinite)
@@ -60,7 +60,7 @@ struct QAOAAlgorithmTests {
     }
 
     @Test("Single edge depth-1 optimization")
-    func singleEdge() async throws {
+    func singleEdge() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -71,7 +71,7 @@ struct QAOAAlgorithmTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5])
 
         #expect(result.optimalCost < -0.3)
         #expect(result.optimalParameters.count == 2)
@@ -79,7 +79,7 @@ struct QAOAAlgorithmTests {
     }
 
     @Test("Pentagon graph optimization")
-    func pentagonGraph() async throws {
+    func pentagonGraph() async {
         let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.pentagon())
 
         let qaoa = QAOA(
@@ -89,14 +89,14 @@ struct QAOAAlgorithmTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
 
         #expect(result.optimalCost < -1.5)
         #expect(result.optimalCost.isFinite)
     }
 
     @Test("Complete K₄ optimization")
-    func completeK4() async throws {
+    func completeK4() async {
         let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.completeK4())
 
         let qaoa = QAOA(
@@ -106,14 +106,14 @@ struct QAOAAlgorithmTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 400)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
 
         #expect(result.optimalCost < -1.5)
         #expect(result.optimalCost.isFinite)
     }
 
     @Test("Star graph optimization")
-    func starGraph() async throws {
+    func starGraph() async {
         let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.star(numVertices: 5))
 
         let qaoa = QAOA(
@@ -123,7 +123,7 @@ struct QAOAAlgorithmTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
 
         #expect(result.optimalCost < -1.5)
         #expect(result.optimalCost.isFinite)
@@ -136,7 +136,7 @@ struct QAOAAlgorithmTests {
 @Suite("QAOA Progress Tracking")
 struct QAOAProgressTrackingTests {
     @Test("Progress state is queryable")
-    func progressState() async throws {
+    func progressState() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -152,7 +152,7 @@ struct QAOAProgressTrackingTests {
     }
 
     @Test("Progress callback is invoked during optimization")
-    func progressCallback() async throws {
+    func progressCallback() async {
         actor ProgressTracker {
             var callbackInvocations = 0
             var lastIteration = 0
@@ -180,7 +180,7 @@ struct QAOAProgressTrackingTests {
 
         let tracker = ProgressTracker()
 
-        let result = try await qaoa.runWithProgress(initialParameters: [0.5, 0.5]) { iteration, cost in
+        let result = await qaoa.runWithProgress(initialParameters: [0.5, 0.5]) { iteration, cost in
             await tracker.recordCallback(iteration: iteration, cost: cost)
         }
 
@@ -193,7 +193,7 @@ struct QAOAProgressTrackingTests {
     }
 
     @Test("Progress updates are tracked internally")
-    func internalProgressTracking() async throws {
+    func internalProgressTracking() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -203,7 +203,7 @@ struct QAOAProgressTrackingTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 20)
         )
 
-        _ = try await qaoa.runWithProgress(initialParameters: [0.5, 0.5]) { iteration, cost in
+        _ = await qaoa.runWithProgress(initialParameters: [0.5, 0.5]) { iteration, cost in
             let progress = await qaoa.getProgress()
             #expect(progress.iteration == iteration, "Internal progress iteration should match callback iteration")
             #expect(abs(progress.cost - cost) < 1e-10, "Internal progress cost should match callback cost")
@@ -217,7 +217,7 @@ struct QAOAProgressTrackingTests {
 @Suite("QAOA Backend Selection")
 struct QAOABackendSelectionTests {
     @Test("SparseHamiltonian backend is default")
-    func sparseBackendDefault() async throws {
+    func sparseBackendDefault() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2)])
 
         let qaoa = QAOA(
@@ -232,7 +232,7 @@ struct QAOABackendSelectionTests {
     }
 
     @Test("Observable backend explicit selection")
-    func observableBackend() async throws {
+    func observableBackend() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -247,7 +247,7 @@ struct QAOABackendSelectionTests {
     }
 
     @Test("Backends produce consistent results")
-    func backendConsistency() async throws {
+    func backendConsistency() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2)])
         let initialParams = [0.5, 0.5]
 
@@ -267,8 +267,8 @@ struct QAOABackendSelectionTests {
             useSparseBackend: false
         )
 
-        let resultSparse = try await qaoaSparse.run(initialParameters: initialParams)
-        let resultObservable = try await qaoaObservable.run(initialParameters: initialParams)
+        let resultSparse = await qaoaSparse.run(initialParameters: initialParams)
+        let resultObservable = await qaoaObservable.run(initialParameters: initialParams)
 
         let costDifference = abs(resultSparse.optimalCost - resultObservable.optimalCost)
         #expect(costDifference < 1e-3)
@@ -281,7 +281,7 @@ struct QAOABackendSelectionTests {
 @Suite("QAOA Optimizer Integration")
 struct QAOAOptimizerIntegrationTests {
     @Test("COBYLA optimizer produces finite cost")
-    func cobylaOptimizer() async throws {
+    func cobylaOptimizer() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -292,12 +292,12 @@ struct QAOAOptimizerIntegrationTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5])
         #expect(result.optimalCost.isFinite)
     }
 
     @Test("Nelder-Mead optimizer produces finite cost")
-    func nelderMeadOptimizer() async throws {
+    func nelderMeadOptimizer() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -308,12 +308,12 @@ struct QAOAOptimizerIntegrationTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5])
         #expect(result.optimalCost.isFinite)
     }
 
     @Test("Gradient Descent optimizer produces finite cost")
-    func gradientDescentOptimizer() async throws {
+    func gradientDescentOptimizer() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -324,12 +324,12 @@ struct QAOAOptimizerIntegrationTests {
             convergenceCriteria: ConvergenceCriteria(gradientNormTolerance: 1e-3, maxIterations: 100)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5])
         #expect(result.optimalCost.isFinite)
     }
 
     @Test("L-BFGS-B optimizer produces finite cost")
-    func lbfgsbOptimizer() async throws {
+    func lbfgsbOptimizer() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -340,7 +340,7 @@ struct QAOAOptimizerIntegrationTests {
             convergenceCriteria: ConvergenceCriteria(gradientNormTolerance: 1e-3, maxIterations: 100)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5])
         #expect(result.optimalCost.isFinite)
     }
 }
@@ -351,7 +351,7 @@ struct QAOAOptimizerIntegrationTests {
 @Suite("QAOA Convergence")
 struct QAOAConvergenceTests {
     @Test("Max iterations limit respected")
-    func maxIterations() async throws {
+    func maxIterations() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
         let maxIter = 10
 
@@ -363,7 +363,7 @@ struct QAOAConvergenceTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-10, maxIterations: maxIter)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5])
 
         #expect(result.iterations <= maxIter)
 
@@ -379,7 +379,7 @@ struct QAOAConvergenceTests {
 @Suite("QAOA Solution Probabilities")
 struct QAOASolutionProbabilitiesTests {
     @Test("Probabilities sum near 1.0")
-    func probabilitySumNormalization() async throws {
+    func probabilitySumNormalization() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -389,7 +389,7 @@ struct QAOASolutionProbabilitiesTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5])
 
         let totalProbability = result.solutionProbabilities.values.reduce(0.0, +)
 
@@ -398,7 +398,7 @@ struct QAOASolutionProbabilitiesTests {
     }
 
     @Test("Probabilities are above filtering threshold")
-    func probabilityFiltering() async throws {
+    func probabilityFiltering() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -408,7 +408,7 @@ struct QAOASolutionProbabilitiesTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5])
 
         for (_, probability) in result.solutionProbabilities {
             #expect(probability > 1e-6)
@@ -417,7 +417,7 @@ struct QAOASolutionProbabilitiesTests {
     }
 
     @Test("Top solutions sorted by probability")
-    func solutionSorting() async throws {
+    func solutionSorting() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -427,7 +427,7 @@ struct QAOASolutionProbabilitiesTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 200)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
 
         let sortedSolutions = result.solutionProbabilities.sorted { $0.value > $1.value }
 
@@ -451,7 +451,7 @@ struct QAOASolutionProbabilitiesTests {
 @Suite("QAOA Depth Variations")
 struct QAOADepthVariationsTests {
     @Test("Depth-1 has 2 parameters")
-    func depth1() async throws {
+    func depth1() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2)])
 
         let qaoa = QAOA(
@@ -461,14 +461,14 @@ struct QAOADepthVariationsTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5])
 
         #expect(result.optimalParameters.count == 2)
         #expect(result.optimalCost.isFinite)
     }
 
     @Test("Depth-3 has 6 parameters")
-    func depth3() async throws {
+    func depth3() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -478,14 +478,14 @@ struct QAOADepthVariationsTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 200)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
 
         #expect(result.optimalParameters.count == 6)
         #expect(result.optimalCost.isFinite)
     }
 
     @Test("Depth-5 has 10 parameters")
-    func depth5() async throws {
+    func depth5() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -495,7 +495,7 @@ struct QAOADepthVariationsTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300)
         )
 
-        let result = try await qaoa.run(initialParameters: Array(repeating: 0.5, count: 10))
+        let result = await qaoa.run(initialParameters: Array(repeating: 0.5, count: 10))
 
         #expect(result.optimalParameters.count == 10)
         #expect(result.optimalCost.isFinite)
@@ -507,7 +507,7 @@ struct QAOADepthVariationsTests {
 @Suite("QAOA Result Representation")
 struct QAOAResultRepresentationTests {
     @Test("Result description is readable")
-    func resultDescription() async throws {
+    func resultDescription() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -517,7 +517,7 @@ struct QAOAResultRepresentationTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 50)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5])
 
         let description = result.description
 
@@ -529,7 +529,7 @@ struct QAOAResultRepresentationTests {
     }
 
     @Test("Result description truncates parameters beyond 4")
-    func descriptionTruncation() async throws {
+    func descriptionTruncation() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2)])
 
         let qaoa = QAOA(
@@ -539,7 +539,7 @@ struct QAOAResultRepresentationTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
 
         let description = result.description
 
@@ -548,7 +548,7 @@ struct QAOAResultRepresentationTests {
     }
 
     @Test("Result description shows all parameters when count is 4 or less")
-    func descriptionNoTruncation() async throws {
+    func descriptionNoTruncation() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
@@ -558,19 +558,11 @@ struct QAOAResultRepresentationTests {
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
         )
 
-        let result = try await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
 
         let description = result.description
 
         #expect(!description.contains(", ..."), "Description should not truncate when parameter count <= 4")
         #expect(result.optimalParameters.count == 4, "Result should contain all 4 parameters")
-    }
-
-    @Test("Error description is actionable")
-    func errorDescriptions() {
-        let costError = QAOAError.invalidCost(value: Double.nan, parameters: [0.5, 0.5])
-        #expect(costError.errorDescription != nil)
-        #expect(costError.errorDescription!.contains("invalid"))
-        #expect(costError.errorDescription!.contains("nan"))
     }
 }

@@ -46,12 +46,12 @@ import Accelerate
 ///
 /// // Bind parameter values
 /// let baseParams: [Double] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
-/// let baseCircuit = try ansatz.bind(parameterVector: baseParams)
+/// let baseCircuit = ansatz.bind(parameterVector: baseParams)
 ///
 /// // Generate shifted circuits for gradient (2 × 8 = 16 circuits)
 /// var shiftedCircuits: [QuantumCircuit] = []
 /// for i in 0..<baseParams.count {
-///     let (plus, minus) = try ansatz.generateShiftedCircuits(
+///     let (plus, minus) = ansatz.generateShiftedCircuits(
 ///         parameterIndex: i,
 ///         baseVector: baseParams
 ///     )
@@ -60,11 +60,11 @@ import Accelerate
 /// }
 ///
 /// // Convert all to unitaries once (expensive but one-time)
-/// let unitaries = try shiftedCircuits.map { try CircuitUnitary.computeUnitary(circuit: $0) }
+/// let unitaries = shiftedCircuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
 ///
 /// // Batch evaluate on GPU (50-100× faster than sequential)
 /// let batchEvaluator = await MPSBatchEvaluator()
-/// let energies = try await batchEvaluator.evaluateExpectationValues(
+/// let energies = await batchEvaluator.evaluateExpectationValues(
 ///     unitaries: unitaries,
 ///     initialState: QuantumState(numQubits: 8),
 ///     hamiltonian: molecularHamiltonian
@@ -89,17 +89,17 @@ import Accelerate
 /// var circuits: [QuantumCircuit] = []
 /// for gamma in gammaRange {
 ///     for beta in betaRange {
-///         let circuit = try qaoaAnsatz.bind(parameterVector: [gamma, beta])
+///         let circuit = qaoaAnsatz.bind(parameterVector: [gamma, beta])
 ///         circuits.append(circuit)
 ///     }
 /// }
 /// // 11 × 11 = 121 circuits
 ///
 /// // Convert to unitaries (one-time cost)
-/// let unitaries = try circuits.map { try CircuitUnitary.computeUnitary(circuit: $0) }
+/// let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
 ///
 /// // Batch evaluate all grid points in parallel
-/// let energies = try await batchEvaluator.evaluateExpectationValues(
+/// let energies = await batchEvaluator.evaluateExpectationValues(
 ///     unitaries: unitaries,
 ///     initialState: initialState,
 ///     hamiltonian: maxCutHamiltonian
@@ -156,7 +156,7 @@ public enum CircuitUnitary {
     /// circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
     ///
     /// // Convert to unitary
-    /// let unitary = try CircuitUnitary.computeUnitary(circuit: circuit)
+    /// let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
     /// // unitary is 4×4 matrix representing H₀ · CNOT₀₁
     ///
     /// // Verify: applying unitary to |00⟩ gives (|00⟩ + |11⟩)/√2

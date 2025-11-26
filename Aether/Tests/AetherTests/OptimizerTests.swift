@@ -108,16 +108,16 @@ struct NelderMeadOptimizerTests {
     }
 
     @Test("Optimize quadratic function")
-    func optimizeQuadraticFunction() async throws {
+    func optimizeQuadraticFunction() async {
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             return x * x + y * y
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0, 1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
@@ -141,7 +141,7 @@ struct NelderMeadOptimizerTests {
     }
 
     @Test("Progress callback is called")
-    func progressCallbackCalled() async throws {
+    func progressCallbackCalled() async {
         actor Counter {
             var count = 0
             func increment() { count += 1 }
@@ -151,7 +151,7 @@ struct NelderMeadOptimizerTests {
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
         let counter = Counter()
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0]
         }
 
@@ -159,7 +159,7 @@ struct NelderMeadOptimizerTests {
             await counter.increment()
         }
 
-        _ = try await optimizer.minimize(
+        _ = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
@@ -171,14 +171,14 @@ struct NelderMeadOptimizerTests {
     }
 
     @Test("Max iterations reached")
-    func maxIterationsReached() async throws {
+    func maxIterationsReached() async {
         let optimizer = NelderMeadOptimizer()
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0] + params[1] * params[1]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [10.0, 10.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-12, maxIterations: 5),
@@ -190,16 +190,16 @@ struct NelderMeadOptimizerTests {
     }
 
     @Test("Simplex shrink operation")
-    func simplexShrinkOperation() async throws {
+    func simplexShrinkOperation() async {
         let optimizer = NelderMeadOptimizer(tolerance: 1e-6, initialSimplexSize: 2.0)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             return abs(x - 3.0) + abs(y - 3.0)
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.0, 0.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
@@ -211,10 +211,10 @@ struct NelderMeadOptimizerTests {
     }
 
     @Test("Simplex shrink on Rosenbrock function")
-    func simplexShrinkOnRosenbrock() async throws {
+    func simplexShrinkOnRosenbrock() async {
         let optimizer = NelderMeadOptimizer(tolerance: 1e-6, initialSimplexSize: 5.0)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             let a = 1.0
@@ -222,7 +222,7 @@ struct NelderMeadOptimizerTests {
             return (a - x) * (a - x) + b * (y - x * x) * (y - x * x)
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [-2.0, 2.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 1000),
@@ -234,16 +234,16 @@ struct NelderMeadOptimizerTests {
     }
 
     @Test("Simplex outside contraction succeeds")
-    func simplexOutsideContractionSucceeds() async throws {
+    func simplexOutsideContractionSucceeds() async {
         let optimizer = NelderMeadOptimizer(tolerance: 1e-4, initialSimplexSize: 1.0)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             return (y - x * x / 4.0) * (y - x * x / 4.0) + x * x / 100.0
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [2.0, -1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 200),
@@ -255,17 +255,17 @@ struct NelderMeadOptimizerTests {
     }
 
     @Test("Simplex forced to shrink on rugged landscape")
-    func simplexForcedToShrink() async throws {
+    func simplexForcedToShrink() async {
         let optimizer = NelderMeadOptimizer(tolerance: 1e-5, initialSimplexSize: 10.0)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             let a = 10.0
             return 2.0 * a + (x * x - a * cos(2.0 * .pi * x)) + (y * y - a * cos(2.0 * .pi * y))
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [4.5, 4.5],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 500),
@@ -306,14 +306,14 @@ struct GradientDescentOptimizerTests {
     }
 
     @Test("Optimize quadratic function")
-    func optimizeQuadraticFunction() async throws {
+    func optimizeQuadraticFunction() async {
         let optimizer = GradientDescentOptimizer(learningRate: 0.1, momentum: 0.0)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0],
             convergenceCriteria: ConvergenceCriteria(
@@ -329,14 +329,14 @@ struct GradientDescentOptimizerTests {
     }
 
     @Test("Gradient norm convergence")
-    func gradientNormConvergence() async throws {
+    func gradientNormConvergence() async {
         let optimizer = GradientDescentOptimizer(learningRate: 0.1)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.1],
             convergenceCriteria: ConvergenceCriteria(
@@ -351,14 +351,14 @@ struct GradientDescentOptimizerTests {
     }
 
     @Test("Adaptive learning rate decreases")
-    func adaptiveLearningRateDecreases() async throws {
+    func adaptiveLearningRateDecreases() async {
         let optimizer = GradientDescentOptimizer(learningRate: 0.1, useAdaptiveLearningRate: true)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0] * 0.001
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 20),
@@ -370,14 +370,14 @@ struct GradientDescentOptimizerTests {
     }
 
     @Test("Max iterations reached")
-    func maxIterationsReached() async throws {
+    func maxIterationsReached() async {
         let optimizer = GradientDescentOptimizer(learningRate: 0.001)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0] + params[1] * params[1]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [10.0, 10.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-12, maxIterations: 3),
@@ -389,14 +389,14 @@ struct GradientDescentOptimizerTests {
     }
 
     @Test("No improvement triggers adaptive learning rate")
-    func noImprovementTriggersAdaptiveLearningRate() async throws {
+    func noImprovementTriggersAdaptiveLearningRate() async {
         let optimizer = GradientDescentOptimizer(learningRate: 0.5, useAdaptiveLearningRate: true)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0] * 0.00001
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-8, maxIterations: 50),
@@ -408,15 +408,15 @@ struct GradientDescentOptimizerTests {
     }
 
     @Test("Stagnation without adaptive learning rate")
-    func stagnationWithoutAdaptiveLearningRate() async throws {
+    func stagnationWithoutAdaptiveLearningRate() async {
         let optimizer = GradientDescentOptimizer(learningRate: 0.001, useAdaptiveLearningRate: false)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             return x * x * x * x
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.1],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-12, gradientNormTolerance: 1e-15, maxIterations: 100),
@@ -427,16 +427,16 @@ struct GradientDescentOptimizerTests {
     }
 
     @Test("Stagnation with adaptive learning rate decreases rate")
-    func stagnationWithAdaptiveLearningRateDecreasesRate() async throws {
+    func stagnationWithAdaptiveLearningRateDecreasesRate() async {
         let optimizer = GradientDescentOptimizer(learningRate: 0.01, useAdaptiveLearningRate: true)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             return (x * x + y - 11.0) * (x * x + y - 11.0) + (x + y * y - 7.0) * (x + y * y - 7.0)
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.0, 0.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, gradientNormTolerance: 1e-8, maxIterations: 100),
@@ -477,10 +477,10 @@ struct LBFGSBOptimizerTests {
     }
 
     @Test("Optimize Rosenbrock function")
-    func optimizeRosenbrockFunction() async throws {
+    func optimizeRosenbrockFunction() async {
         let optimizer = LBFGSBOptimizer(tolerance: 1e-3)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             let a = 1.0 - x
@@ -488,7 +488,7 @@ struct LBFGSBOptimizerTests {
             return a * a + 100.0 * b * b
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.0, 0.0],
             convergenceCriteria: ConvergenceCriteria(
@@ -535,14 +535,14 @@ struct LBFGSBOptimizerTests {
     }
 
     @Test("Gradient norm convergence")
-    func gradientNormConvergence() async throws {
+    func gradientNormConvergence() async {
         let optimizer = LBFGSBOptimizer()
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.1],
             convergenceCriteria: ConvergenceCriteria(
@@ -557,14 +557,14 @@ struct LBFGSBOptimizerTests {
     }
 
     @Test("Energy tolerance convergence")
-    func energyToleranceConvergence() async throws {
+    func energyToleranceConvergence() async {
         let optimizer = LBFGSBOptimizer()
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.1],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 50),
@@ -575,14 +575,14 @@ struct LBFGSBOptimizerTests {
     }
 
     @Test("Max iterations reached")
-    func maxIterationsReached() async throws {
+    func maxIterationsReached() async {
         let optimizer = LBFGSBOptimizer(tolerance: 1e-10)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0] + params[1] * params[1]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [5.0, 5.0],
             convergenceCriteria: ConvergenceCriteria(
@@ -598,10 +598,10 @@ struct LBFGSBOptimizerTests {
     }
 
     @Test("Line search failure with discontinuous function")
-    func lineSearchFailureWithDiscontinuousFunction() async throws {
+    func lineSearchFailureWithDiscontinuousFunction() async {
         let optimizer = LBFGSBOptimizer(maxLineSearchSteps: 40)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             if x > 0.5 {
                 return 1000.0
@@ -610,7 +610,7 @@ struct LBFGSBOptimizerTests {
             }
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.4],
             convergenceCriteria: ConvergenceCriteria(
@@ -658,14 +658,14 @@ struct SPSAOptimizerTests {
     }
 
     @Test("Optimize quadratic function")
-    func optimizeQuadraticFunction() async throws {
+    func optimizeQuadraticFunction() async {
         let optimizer = SPSAOptimizer(initialStepSize: 0.1, initialPerturbation: 0.1)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 0.01, maxIterations: 200),
@@ -677,7 +677,7 @@ struct SPSAOptimizerTests {
     }
 
     @Test("SPSA uses only 2 evaluations per iteration")
-    func usesOnly2EvaluationsPerIteration() async throws {
+    func usesOnly2EvaluationsPerIteration() async {
         actor Counter {
             var count = 0
             func increment() { count += 1 }
@@ -687,12 +687,12 @@ struct SPSAOptimizerTests {
         let optimizer = SPSAOptimizer()
         let counter = Counter()
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             await counter.increment()
             return params[0] * params[0]
         }
 
-        _ = try await optimizer.minimize(
+        _ = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 10),
@@ -704,14 +704,14 @@ struct SPSAOptimizerTests {
     }
 
     @Test("Max iterations reached")
-    func maxIterationsReached() async throws {
+    func maxIterationsReached() async {
         let optimizer = SPSAOptimizer()
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [10.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-12, maxIterations: 5),
@@ -723,14 +723,14 @@ struct SPSAOptimizerTests {
     }
 
     @Test("No improvement increments iteration counter")
-    func noImprovementIncrementsIterationCounter() async throws {
+    func noImprovementIncrementsIterationCounter() async {
         let optimizer = SPSAOptimizer(initialStepSize: 0.01)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0] * 0.00001
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-8, maxIterations: 100),
@@ -793,16 +793,16 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Optimize quadratic function")
-    func optimizeQuadraticFunction() async throws {
+    func optimizeQuadraticFunction() async {
         let optimizer = COBYLAOptimizer(initialTrustRadius: 0.5, minTrustRadius: 1e-6)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             return x * x + y * y
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0, 1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
@@ -816,18 +816,18 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Trust region expansion on good steps")
-    func trustRegionExpansionOnGoodSteps() async throws {
+    func trustRegionExpansionOnGoodSteps() async {
         let optimizer = COBYLAOptimizer(
             initialTrustRadius: 0.1,
             maxTrustRadius: 2.0,
             expandFactor: 2.0
         )
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [5.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
@@ -839,7 +839,7 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Trust region shrinkage on poor steps")
-    func trustRegionShrinkageOnPoorSteps() async throws {
+    func trustRegionShrinkageOnPoorSteps() async {
         let optimizer = COBYLAOptimizer(
             initialTrustRadius: 5.0,
             minTrustRadius: 1e-6,
@@ -847,13 +847,13 @@ struct COBYLAOptimizerTests {
             shrinkFactor: 0.5
         )
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             return abs(x - 1.0) + abs(y - 1.0)
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.0, 0.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
@@ -865,10 +865,10 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Optimize Rosenbrock function")
-    func optimizeRosenbrockFunction() async throws {
+    func optimizeRosenbrockFunction() async {
         let optimizer = COBYLAOptimizer(initialTrustRadius: 1.0, minTrustRadius: 1e-4)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             let a = 1.0 - x
@@ -876,7 +876,7 @@ struct COBYLAOptimizerTests {
             return a * a + 100.0 * b * b
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.0, 0.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 300),
@@ -888,7 +888,7 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Progress callback is called")
-    func progressCallbackCalled() async throws {
+    func progressCallbackCalled() async {
         actor Counter {
             var count = 0
             func increment() { count += 1 }
@@ -898,7 +898,7 @@ struct COBYLAOptimizerTests {
         let optimizer = COBYLAOptimizer(minTrustRadius: 1e-3)
         let counter = Counter()
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0]
         }
 
@@ -906,7 +906,7 @@ struct COBYLAOptimizerTests {
             await counter.increment()
         }
 
-        _ = try await optimizer.minimize(
+        _ = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
@@ -918,14 +918,14 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Max iterations reached")
-    func maxIterationsReached() async throws {
+    func maxIterationsReached() async {
         let optimizer = COBYLAOptimizer()
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0] + params[1] * params[1]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [10.0, 10.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-12, maxIterations: 3),
@@ -937,7 +937,7 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Simplex regeneration on trust region shrinkage")
-    func simplexRegenerationOnTrustRegionShrinkage() async throws {
+    func simplexRegenerationOnTrustRegionShrinkage() async {
         let optimizer = COBYLAOptimizer(
             initialTrustRadius: 10.0,
             minTrustRadius: 1e-5,
@@ -945,13 +945,13 @@ struct COBYLAOptimizerTests {
             shrinkFactor: 0.25
         )
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             return x * x * x * x + y * y * y * y
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [2.0, 2.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 150),
@@ -963,17 +963,17 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Convergence by trust region radius")
-    func convergenceByTrustRegionRadius() async throws {
+    func convergenceByTrustRegionRadius() async {
         let optimizer = COBYLAOptimizer(
             initialTrustRadius: 0.5,
             minTrustRadius: 1e-4
         )
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.5],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
@@ -985,14 +985,14 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Convergence by function value change")
-    func convergenceByFunctionValueChange() async throws {
+    func convergenceByFunctionValueChange() async {
         let optimizer = COBYLAOptimizer(minTrustRadius: 1e-8)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.1],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 100),
@@ -1004,16 +1004,16 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Linear model gradient estimation")
-    func linearModelGradientEstimation() async throws {
+    func linearModelGradientEstimation() async {
         let optimizer = COBYLAOptimizer(initialTrustRadius: 0.5)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             return 2.0 * x + 3.0 * y + 1.0
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0, 1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
@@ -1024,17 +1024,17 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Step acceptance with good ratio")
-    func stepAcceptanceWithGoodRatio() async throws {
+    func stepAcceptanceWithGoodRatio() async {
         let optimizer = COBYLAOptimizer(
             initialTrustRadius: 1.0,
             acceptRatio: 0.1
         )
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             params[0] * params[0] + params[1] * params[1]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0, 1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
@@ -1046,7 +1046,7 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Step rejection with poor ratio")
-    func stepRejectionWithPoorRatio() async throws {
+    func stepRejectionWithPoorRatio() async {
         let optimizer = COBYLAOptimizer(
             initialTrustRadius: 5.0,
             maxTrustRadius: 10.0,
@@ -1054,7 +1054,7 @@ struct COBYLAOptimizerTests {
             acceptRatio: 0.1
         )
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             if abs(x) > 3.0 {
                 return 1000.0
@@ -1062,7 +1062,7 @@ struct COBYLAOptimizerTests {
             return x * x
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.5],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
@@ -1074,10 +1074,10 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Optimize multidimensional quadratic")
-    func optimizeMultidimensionalQuadratic() async throws {
+    func optimizeMultidimensionalQuadratic() async {
         let optimizer = COBYLAOptimizer(initialTrustRadius: 0.5)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             var sum = 0.0
             for i in 0 ..< params.count {
                 sum += params[i] * params[i]
@@ -1085,7 +1085,7 @@ struct COBYLAOptimizerTests {
             return sum
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0, 2.0, 3.0, 4.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 200),
@@ -1099,16 +1099,16 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Optimize Himmelblau function")
-    func optimizeHimmelblauFunction() async throws {
+    func optimizeHimmelblauFunction() async {
         let optimizer = COBYLAOptimizer(initialTrustRadius: 1.0, minTrustRadius: 1e-4)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             return (x * x + y - 11.0) * (x * x + y - 11.0) + (x + y * y - 7.0) * (x + y * y - 7.0)
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [0.0, 0.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 200),
@@ -1120,7 +1120,7 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Function evaluations count is accurate")
-    func functionEvaluationsCountIsAccurate() async throws {
+    func functionEvaluationsCountIsAccurate() async {
         actor Counter {
             var count = 0
             func increment() { count += 1 }
@@ -1130,12 +1130,12 @@ struct COBYLAOptimizerTests {
         let optimizer = COBYLAOptimizer(initialTrustRadius: 0.5, minTrustRadius: 1e-3)
         let counter = Counter()
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             await counter.increment()
             return params[0] * params[0]
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
@@ -1170,12 +1170,12 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Zero gradient handled correctly")
-    func zeroGradientHandledCorrectly() async throws {
+    func zeroGradientHandledCorrectly() async {
         let optimizer = COBYLAOptimizer(initialTrustRadius: 0.1)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { _ in 5.0 }
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { _ in 5.0 }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 20),
@@ -1187,16 +1187,16 @@ struct COBYLAOptimizerTests {
     }
 
     @Test("Asymmetric quadratic optimization")
-    func asymmetricQuadraticOptimization() async throws {
+    func asymmetricQuadraticOptimization() async {
         let optimizer = COBYLAOptimizer(initialTrustRadius: 1.0)
 
-        let objectiveFunction: @Sendable ([Double]) async throws -> Double = { params in
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
             let x = params[0]
             let y = params[1]
             return 2.0 * x * x + y * y + x * y
         }
 
-        let result = try await optimizer.minimize(
+        let result = await optimizer.minimize(
             objectiveFunction: objectiveFunction,
             initialParameters: [1.0, 1.0],
             convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
@@ -1206,30 +1206,5 @@ struct COBYLAOptimizerTests {
         #expect(result.optimalValue < 0.1)
         #expect(abs(result.optimalParameters[0]) < 0.2)
         #expect(abs(result.optimalParameters[1]) < 0.2)
-    }
-}
-
-/// Test suite for OptimizerError.
-/// Validates optimizer error cases and descriptive messages.
-@Suite("OptimizerError")
-struct OptimizerErrorTests {
-    @Test("Invalid objective value error")
-    func invalidObjectiveValueError() {
-        let error = OptimizerError.invalidObjectiveValue(iteration: 5, value: Double.nan)
-        let description = error.errorDescription
-
-        #expect(description != nil)
-        #expect(description!.contains("5"))
-        #expect(description!.contains("invalid"))
-    }
-
-    @Test("Optimization failed error")
-    func optimizationFailedError() {
-        let error = OptimizerError.optimizationFailed(reason: "test failure")
-        let description = error.errorDescription
-
-        #expect(description != nil)
-        #expect(description!.contains("test failure"))
-        #expect(description!.contains("failed"))
     }
 }

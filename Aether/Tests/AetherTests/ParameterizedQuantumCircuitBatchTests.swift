@@ -10,28 +10,28 @@ import Testing
 @Suite("ParameterizedQuantumCircuit Batch Extensions")
 struct ParameterizedQuantumCircuitBatchTests {
     @Test("Bind empty batch returns empty array")
-    func bindEmptyBatch() throws {
+    func bindEmptyBatch() {
         let circuit = ParameterizedQuantumCircuit(numQubits: 2)
-        let results = try circuit.bindBatch(parameterVectors: [])
+        let results = circuit.bindBatch(parameterVectors: [])
 
         #expect(results.isEmpty)
     }
 
     @Test("Bind single parameter set")
-    func bindSingleParameterSet() throws {
+    func bindSingleParameterSet() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
 
         let parameterSets = [[0.5]]
-        let results = try circuit.bindBatch(parameterVectors: parameterSets)
+        let results = circuit.bindBatch(parameterVectors: parameterSets)
 
         #expect(results.count == 1)
         #expect(results[0].numQubits == 1)
     }
 
     @Test("Bind multiple parameter sets")
-    func bindMultipleParameterSets() throws {
+    func bindMultipleParameterSets() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
@@ -45,7 +45,7 @@ struct ParameterizedQuantumCircuitBatchTests {
             [0.5, 0.6],
         ]
 
-        let results = try circuit.bindBatch(parameterVectors: parameterSets)
+        let results = circuit.bindBatch(parameterVectors: parameterSets)
 
         #expect(results.count == 3)
         #expect(results[0].numQubits == 2)
@@ -114,7 +114,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Generate grid search vectors for single parameter")
-    func generateGridSearchSingleParameter() throws {
+    func generateGridSearchSingleParameter() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
@@ -129,7 +129,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Generate grid search vectors for two parameters")
-    func generateGridSearchTwoParameters() throws {
+    func generateGridSearchTwoParameters() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
@@ -152,7 +152,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Generate grid search with three parameters")
-    func generateGridSearchThreeParameters() throws {
+    func generateGridSearchThreeParameters() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 3)
         for i in 0 ..< 3 {
             let param = Parameter(name: "theta_\(i)")
@@ -171,7 +171,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Batch bind with gradient vectors")
-    func batchBindWithGradient() throws {
+    func batchBindWithGradient() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
@@ -182,15 +182,15 @@ struct ParameterizedQuantumCircuitBatchTests {
         let baseParams: [Double] = [0.1, 0.2]
         let (plus, minus) = circuit.generateGradientParameterVectors(baseParameters: baseParams)
 
-        let plusCircuits = try circuit.bindBatch(parameterVectors: plus)
-        let minusCircuits = try circuit.bindBatch(parameterVectors: minus)
+        let plusCircuits = circuit.bindBatch(parameterVectors: plus)
+        let minusCircuits = circuit.bindBatch(parameterVectors: minus)
 
         #expect(plusCircuits.count == 2)
         #expect(minusCircuits.count == 2)
     }
 
     @Test("Batch bind with grid search vectors")
-    func batchBindWithGridSearch() throws {
+    func batchBindWithGridSearch() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
@@ -205,20 +205,20 @@ struct ParameterizedQuantumCircuitBatchTests {
             ranges: [Array(range1), Array(range2)]
         )
 
-        let circuits = try circuit.bindBatch(parameterVectors: vectors)
+        let circuits = circuit.bindBatch(parameterVectors: vectors)
 
         #expect(circuits.count == 9)
     }
 
     @Test("Complete VQE gradient workflow")
-    func completeVQEGradientWorkflow() throws {
+    func completeVQEGradientWorkflow() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1)
         let baseParams: [Double] = [0.1, 0.2]
 
         let (plus, minus) = ansatz.generateGradientParameterVectors(baseParameters: baseParams)
 
-        let plusCircuits = try ansatz.bindBatch(parameterVectors: plus)
-        let minusCircuits = try ansatz.bindBatch(parameterVectors: minus)
+        let plusCircuits = ansatz.bindBatch(parameterVectors: plus)
+        let minusCircuits = ansatz.bindBatch(parameterVectors: minus)
 
         #expect(plusCircuits.count == 2)
         #expect(minusCircuits.count == 2)
@@ -230,7 +230,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Complete QAOA grid search workflow")
-    func completeQAOAGridSearchWorkflow() throws {
+    func completeQAOAGridSearchWorkflow() {
         var qaoa = ParameterizedQuantumCircuit(numQubits: 3)
         let gamma = Parameter(name: "gamma")
         let beta = Parameter(name: "beta")
@@ -249,7 +249,7 @@ struct ParameterizedQuantumCircuitBatchTests {
             ranges: [Array(gammaRange), Array(betaRange)]
         )
 
-        let circuits = try qaoa.bindBatch(parameterVectors: vectors)
+        let circuits = qaoa.bindBatch(parameterVectors: vectors)
 
         #expect(vectors.count == 16)
         #expect(circuits.count == 16)
@@ -275,7 +275,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Grid search cartesian product correctness")
-    func gridSearchCartesianProduct() throws {
+    func gridSearchCartesianProduct() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
@@ -305,7 +305,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Large grid search produces correct count")
-    func largeGridSearchCount() throws {
+    func largeGridSearchCount() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 3)
         for i in 0 ..< 3 {
             let param = Parameter(name: "theta_\(i)")
@@ -348,7 +348,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Batch bind with hardware efficient ansatz")
-    func batchBindHardwareEfficientAnsatz() throws {
+    func batchBindHardwareEfficientAnsatz() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 4, depth: 2)
         let paramCount = ansatz.parameterCount()
 
@@ -358,7 +358,7 @@ struct ParameterizedQuantumCircuitBatchTests {
             parameterSets.append(params)
         }
 
-        let circuits = try ansatz.bindBatch(parameterVectors: parameterSets)
+        let circuits = ansatz.bindBatch(parameterVectors: parameterSets)
 
         #expect(circuits.count == 5)
 
@@ -368,17 +368,17 @@ struct ParameterizedQuantumCircuitBatchTests {
     }
 
     @Test("Empty parameter circuit batch binding")
-    func emptyParameterCircuit() throws {
+    func emptyParameterCircuit() {
         let circuit = ParameterizedQuantumCircuit(numQubits: 2)
 
         let vectors: [[Double]] = [[], [], []]
-        let results = try circuit.bindBatch(parameterVectors: vectors)
+        let results = circuit.bindBatch(parameterVectors: vectors)
 
         #expect(results.count == 3)
     }
 
     @Test("Single range grid search")
-    func singleRangeGridSearch() throws {
+    func singleRangeGridSearch() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)

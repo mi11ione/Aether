@@ -98,13 +98,13 @@ struct QuantumStateNormalizationTests {
     }
 
     @Test("Normalization after modification")
-    func normalizeAfterModification() throws {
+    func normalizeAfterModification() {
         var state = QuantumState(numQubits: 1)
         state.setAmplitude(ofState: 0, amplitude: Complex(2.0, 0.0))
         state.setAmplitude(ofState: 1, amplitude: Complex(2.0, 0.0))
 
         #expect(!state.isNormalized())
-        try state.normalize()
+        state.normalize()
         #expect(state.isNormalized())
     }
 }
@@ -193,11 +193,11 @@ struct QuantumStateValidationTests {
     }
 
     @Test("State remains valid after normalization")
-    func validAfterNormalization() throws {
+    func validAfterNormalization() {
         var state = QuantumState(numQubits: 1)
         state.setAmplitude(ofState: 0, amplitude: Complex(1.0, 1.0))
         state.setAmplitude(ofState: 1, amplitude: Complex(1.0, 1.0))
-        try state.normalize()
+        state.normalize()
         #expect(state.validate())
     }
 }
@@ -334,7 +334,7 @@ struct QuantumStateDescriptionTests {
 @Suite("Large State Vectorized Operations")
 struct LargeStateVectorizedTests {
     @Test("Normalize large state uses vectorized path")
-    func normalizeLargeState() throws {
+    func normalizeLargeState() {
         let numQubits = 7
         let amplitudes = AmplitudeVector(repeating: Complex(1.0, 0.0), count: 128)
         var state = QuantumState(numQubits: numQubits, amplitudes: amplitudes)
@@ -345,7 +345,7 @@ struct LargeStateVectorizedTests {
         }
         #expect(!state.isNormalized())
 
-        try state.normalize()
+        state.normalize()
         #expect(state.isNormalized())
     }
 
@@ -422,45 +422,6 @@ struct StateValidationTests {
     }
 }
 
-/// Test suite for quantum state error handling.
-/// Validates error descriptions and error throwing behavior
-/// for exceptional conditions like normalizing zero states.
-@Suite("Error Handling")
-struct StateErrorHandlingTests {
-    @Test("QuantumStateError descriptions exist")
-    func errorDescriptionsExist() {
-        let error1 = QuantumStateError.cannotNormalizeZeroState
-        let error2 = QuantumStateError.invalidAmplitudes
-
-        #expect(error1.errorDescription != nil)
-        #expect(error2.errorDescription != nil)
-        #expect(error1.errorDescription?.contains("normalize") == true)
-        #expect(error2.errorDescription?.contains("invalid") == true)
-    }
-
-    @Test("Normalizing near-zero state throws error")
-    func normalizeZeroStateThrows() {
-        var state = QuantumState(numQubits: 2)
-        state.setAmplitude(ofState: 0, amplitude: Complex(1e-20, 0.0))
-        state.setAmplitude(ofState: 1, amplitude: Complex(1e-20, 0.0))
-        state.setAmplitude(ofState: 2, amplitude: Complex(1e-20, 0.0))
-        state.setAmplitude(ofState: 3, amplitude: Complex(1e-20, 0.0))
-
-        #expect(throws: QuantumStateError.self) { try state.normalize() }
-    }
-
-    @Test("Error thrown is cannotNormalizeZeroState")
-    func correctErrorThrown() {
-        var state = QuantumState(numQubits: 1)
-        state.setAmplitude(ofState: 0, amplitude: Complex.zero)
-        state.setAmplitude(ofState: 1, amplitude: Complex.zero)
-
-        #expect(throws: QuantumStateError.cannotNormalizeZeroState) {
-            try state.normalize()
-        }
-    }
-}
-
 /// Test suite for bit manipulation utilities.
 /// Validates little-endian qubit indexing operations essential for
 /// gate application and measurement algorithms.
@@ -528,7 +489,7 @@ struct AmplitudeMutationTests {
     }
 
     @Test("setAmplitude can create superposition")
-    func setAmplitudeCreatesSuperposition() throws {
+    func setAmplitudeCreatesSuperposition() {
         var state = QuantumState(numQubits: 1)
         let invSqrt2 = 1.0 / sqrt(2.0)
 

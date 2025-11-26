@@ -304,23 +304,23 @@ struct ParameterizedCircuitValidationTests {
 @Suite("Parameter Binding Dictionary Interface")
 struct ParameterBindingDictionaryTests {
     @Test("Bind empty circuit")
-    func bindEmptyCircuit() throws {
+    func bindEmptyCircuit() {
         let circuit = ParameterizedQuantumCircuit(numQubits: 2)
-        let concrete = try circuit.bind(parameters: [:])
+        let concrete = circuit.bind(parameters: [:])
 
         #expect(concrete.numQubits == 2)
         #expect(concrete.gateCount == 0)
     }
 
     @Test("Bind single parameterized gate")
-    func bindSingleParameterizedGate() throws {
+    func bindSingleParameterizedGate() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
 
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
 
         let bindings = ["theta": Double.pi / 4.0]
-        let concrete = try circuit.bind(parameters: bindings)
+        let concrete = circuit.bind(parameters: bindings)
 
         #expect(concrete.gateCount == 1)
         let op = concrete.operation(at: 0)
@@ -328,7 +328,7 @@ struct ParameterBindingDictionaryTests {
     }
 
     @Test("Bind multiple parameterized gates")
-    func bindMultipleParameterizedGates() throws {
+    func bindMultipleParameterizedGates() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
@@ -337,13 +337,13 @@ struct ParameterBindingDictionaryTests {
         circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
 
         let bindings = ["theta": 0.5, "phi": 1.0]
-        let concrete = try circuit.bind(parameters: bindings)
+        let concrete = circuit.bind(parameters: bindings)
 
         #expect(concrete.gateCount == 2)
     }
 
     @Test("Bind circuit with mixed gates")
-    func bindCircuitWithMixedGates() throws {
+    func bindCircuitWithMixedGates() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
         let theta = Parameter(name: "theta")
 
@@ -352,68 +352,38 @@ struct ParameterBindingDictionaryTests {
         circuit.append(gate: .concrete(.cnot(control: 0, target: 1)), qubits: [])
 
         let bindings = ["theta": Double.pi / 2.0]
-        let concrete = try circuit.bind(parameters: bindings)
+        let concrete = circuit.bind(parameters: bindings)
 
         #expect(concrete.gateCount == 3)
         #expect(concrete.operation(at: 0).gate == .hadamard)
         #expect(concrete.operation(at: 1).gate == .rotationY(theta: Double.pi / 2.0))
     }
 
-    @Test("Bind throws on missing parameter")
-    func bindThrowsOnMissingParameter() {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 1)
-        let theta = Parameter(name: "theta")
-        let phi = Parameter(name: "phi")
-
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-        circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 0)
-
-        let bindings = ["theta": 0.5]
-
-        #expect(throws: ParameterError.unboundParameter("phi")) {
-            try circuit.bind(parameters: bindings)
-        }
-    }
-
-    @Test("Bind throws on extra parameters")
-    func bindThrowsOnExtraParameters() {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 1)
-        let theta = Parameter(name: "theta")
-
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-
-        let bindings = ["theta": 0.5, "phi": 1.0, "gamma": 2.0]
-
-        #expect(throws: ParameterError.self) {
-            try circuit.bind(parameters: bindings)
-        }
-    }
-
     @Test("Bind circuit with no parameters succeeds with empty bindings")
-    func bindCircuitWithNoParametersSucceeds() throws {
+    func bindCircuitWithNoParametersSucceeds() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
         circuit.append(gate: .concrete(.hadamard), toQubit: 0)
         circuit.append(gate: .concrete(.cnot(control: 0, target: 1)), qubits: [])
 
-        let concrete = try circuit.bind(parameters: [:])
+        let concrete = circuit.bind(parameters: [:])
         #expect(concrete.gateCount == 2)
     }
 
     @Test("Bind preserves timestamps")
-    func bindPreservesTimestamps() throws {
+    func bindPreservesTimestamps() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
 
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0, timestamp: 1.5)
 
         let bindings = ["theta": 0.5]
-        let concrete = try circuit.bind(parameters: bindings)
+        let concrete = circuit.bind(parameters: bindings)
 
         #expect(concrete.operation(at: 0).timestamp == 1.5)
     }
 
     @Test("Bind with U3 gate")
-    func bindWithU3Gate() throws {
+    func bindWithU3Gate() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
@@ -426,7 +396,7 @@ struct ParameterBindingDictionaryTests {
         ), toQubit: 0)
 
         let bindings = ["theta": 0.5, "phi": 1.0, "lambda": 1.5]
-        let concrete = try circuit.bind(parameters: bindings)
+        let concrete = circuit.bind(parameters: bindings)
 
         #expect(concrete.gateCount == 1)
         #expect(concrete.operation(at: 0).gate == .u3(theta: 0.5, phi: 1.0, lambda: 1.5))
@@ -438,29 +408,29 @@ struct ParameterBindingDictionaryTests {
 @Suite("Parameter Binding Vector Interface")
 struct ParameterBindingVectorTests {
     @Test("Bind empty circuit with empty vector")
-    func bindEmptyCircuitEmptyVector() throws {
+    func bindEmptyCircuitEmptyVector() {
         let circuit = ParameterizedQuantumCircuit(numQubits: 2)
-        let concrete = try circuit.bind(parameterVector: [])
+        let concrete = circuit.bind(parameterVector: [])
 
         #expect(concrete.numQubits == 2)
         #expect(concrete.gateCount == 0)
     }
 
     @Test("Bind single parameter with vector")
-    func bindSingleParameterWithVector() throws {
+    func bindSingleParameterWithVector() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
 
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
 
-        let concrete = try circuit.bind(parameterVector: [0.5])
+        let concrete = circuit.bind(parameterVector: [0.5])
 
         #expect(concrete.gateCount == 1)
         #expect(concrete.operation(at: 0).gate == .rotationY(theta: 0.5))
     }
 
     @Test("Bind multiple parameters with vector")
-    func bindMultipleParametersWithVector() throws {
+    func bindMultipleParametersWithVector() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 3)
 
         for i in 0 ..< 3 {
@@ -469,7 +439,7 @@ struct ParameterBindingVectorTests {
         }
 
         let params: [Double] = [0.1, 0.2, 0.3]
-        let concrete = try circuit.bind(parameterVector: params)
+        let concrete = circuit.bind(parameterVector: params)
 
         #expect(concrete.gateCount == 3)
         #expect(concrete.operation(at: 0).gate == .rotationY(theta: 0.1))
@@ -478,7 +448,7 @@ struct ParameterBindingVectorTests {
     }
 
     @Test("Bind respects parameter registration order")
-    func bindRespectsRegistrationOrder() throws {
+    func bindRespectsRegistrationOrder() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
@@ -487,14 +457,14 @@ struct ParameterBindingVectorTests {
         circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
 
         let params: [Double] = [0.5, 1.0]
-        let concrete = try circuit.bind(parameterVector: params)
+        let concrete = circuit.bind(parameterVector: params)
 
         #expect(concrete.operation(at: 0).gate == .rotationY(theta: 0.5))
         #expect(concrete.operation(at: 1).gate == .rotationZ(theta: 1.0))
     }
 
     @Test("Bind vector with hardware-efficient ansatz")
-    func bindVectorWithHardwareEfficientAnsatz() throws {
+    func bindVectorWithHardwareEfficientAnsatz() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 4)
 
         for i in 0 ..< 4 {
@@ -507,7 +477,7 @@ struct ParameterBindingVectorTests {
         }
 
         let params: [Double] = [0.1, 0.2, 0.3, 0.4]
-        let concrete = try circuit.bind(parameterVector: params)
+        let concrete = circuit.bind(parameterVector: params)
 
         #expect(concrete.gateCount == 7)
     }
@@ -519,7 +489,7 @@ struct ParameterBindingVectorTests {
 @Suite("Gradient Computation Support")
 struct GradientComputationTests {
     @Test("Generate shifted circuits with dictionary interface")
-    func generateShiftedCircuitsDictionary() throws {
+    func generateShiftedCircuitsDictionary() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
@@ -528,7 +498,7 @@ struct GradientComputationTests {
         circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 0)
 
         let baseBindings = ["theta": 0.5, "phi": 1.0]
-        let (plus, minus) = try circuit.generateShiftedCircuits(
+        let (plus, minus) = circuit.generateShiftedCircuits(
             parameterName: "theta",
             baseBindings: baseBindings
         )
@@ -541,7 +511,7 @@ struct GradientComputationTests {
     }
 
     @Test("Generate shifted circuits with vector interface")
-    func generateShiftedCircuitsVector() throws {
+    func generateShiftedCircuitsVector() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
 
         for i in 0 ..< 2 {
@@ -550,7 +520,7 @@ struct GradientComputationTests {
         }
 
         let baseVector: [Double] = [0.5, 1.0]
-        let (plus, minus) = try circuit.generateShiftedCircuits(
+        let (plus, minus) = circuit.generateShiftedCircuits(
             parameterIndex: 0,
             baseVector: baseVector
         )
@@ -563,7 +533,7 @@ struct GradientComputationTests {
     }
 
     @Test("Generate shifted circuits with custom shift")
-    func generateShiftedCircuitsCustomShift() throws {
+    func generateShiftedCircuitsCustomShift() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
 
@@ -571,7 +541,7 @@ struct GradientComputationTests {
 
         let baseBindings = ["theta": 0.5]
         let customShift = 0.1
-        let (plus, minus) = try circuit.generateShiftedCircuits(
+        let (plus, minus) = circuit.generateShiftedCircuits(
             parameterName: "theta",
             baseBindings: baseBindings,
             shift: customShift
@@ -585,7 +555,7 @@ struct GradientComputationTests {
     }
 
     @Test("Shifted circuits preserve other parameters")
-    func shiftedCircuitsPreserveOtherParameters() throws {
+    func shiftedCircuitsPreserveOtherParameters() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
@@ -594,7 +564,7 @@ struct GradientComputationTests {
         circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
 
         let baseBindings = ["theta": 0.5, "phi": 1.0]
-        let (plus, minus) = try circuit.generateShiftedCircuits(
+        let (plus, minus) = circuit.generateShiftedCircuits(
             parameterName: "theta",
             baseBindings: baseBindings
         )
@@ -603,32 +573,15 @@ struct GradientComputationTests {
         #expect(minus.operation(at: 1).gate == .rotationZ(theta: 1.0))
     }
 
-    @Test("Generate shifted circuits throws on unbound parameter")
-    func generateShiftedCircuitsThrowsUnboundParameter() {
-        var circuit = ParameterizedQuantumCircuit(numQubits: 1)
-        let theta = Parameter(name: "theta")
-
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-
-        let baseBindings: [String: Double] = [:]
-
-        #expect(throws: ParameterError.unboundParameter("theta")) {
-            try circuit.generateShiftedCircuits(
-                parameterName: "theta",
-                baseBindings: baseBindings
-            )
-        }
-    }
-
     @Test("Shifted circuits can be executed")
-    func shiftedCircuitsCanBeExecuted() throws {
+    func shiftedCircuitsCanBeExecuted() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
 
         circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
 
         let baseBindings = ["theta": Double.pi / 4.0]
-        let (plus, minus) = try circuit.generateShiftedCircuits(
+        let (plus, minus) = circuit.generateShiftedCircuits(
             parameterName: "theta",
             baseBindings: baseBindings
         )
@@ -752,7 +705,7 @@ struct ParameterizedCircuitEqualityTests {
 @Suite("Parameterized Circuit Integration Tests")
 struct ParameterizedCircuitIntegrationTests {
     @Test("VQE hardware-efficient ansatz workflow")
-    func vqeHardwareEfficientAnsatz() throws {
+    func vqeHardwareEfficientAnsatz() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 4)
 
         for i in 0 ..< 4 {
@@ -765,7 +718,7 @@ struct ParameterizedCircuitIntegrationTests {
         }
 
         let params: [Double] = [0.1, 0.2, 0.3, 0.4]
-        let concrete = try circuit.bind(parameterVector: params)
+        let concrete = circuit.bind(parameterVector: params)
         let state = concrete.execute()
 
         #expect(state.isNormalized())
@@ -774,7 +727,7 @@ struct ParameterizedCircuitIntegrationTests {
     }
 
     @Test("QAOA MaxCut workflow")
-    func qaoaMaxCutWorkflow() throws {
+    func qaoaMaxCutWorkflow() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 4)
         let gamma = Parameter(name: "gamma")
         let beta = Parameter(name: "beta")
@@ -795,7 +748,7 @@ struct ParameterizedCircuitIntegrationTests {
         }
 
         let bindings = ["gamma": 0.5, "beta": 1.0]
-        let concrete = try circuit.bind(parameters: bindings)
+        let concrete = circuit.bind(parameters: bindings)
         let state = concrete.execute()
 
         #expect(state.isNormalized())
@@ -803,7 +756,7 @@ struct ParameterizedCircuitIntegrationTests {
     }
 
     @Test("Parameter shift gradient computation workflow")
-    func parameterShiftGradientWorkflow() throws {
+    func parameterShiftGradientWorkflow() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 2)
         let theta = Parameter(name: "theta")
 
@@ -812,7 +765,7 @@ struct ParameterizedCircuitIntegrationTests {
         circuit.append(gate: .concrete(.cnot(control: 0, target: 1)), qubits: [])
 
         let baseBindings = ["theta": Double.pi / 4.0]
-        let (plus, minus) = try circuit.generateShiftedCircuits(
+        let (plus, minus) = circuit.generateShiftedCircuits(
             parameterName: "theta",
             baseBindings: baseBindings
         )
@@ -828,7 +781,7 @@ struct ParameterizedCircuitIntegrationTests {
     }
 
     @Test("Multi-layer variational ansatz")
-    func multiLayerVariationalAnsatz() throws {
+    func multiLayerVariationalAnsatz() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 3)
         var paramIndex = 0
 
@@ -848,14 +801,14 @@ struct ParameterizedCircuitIntegrationTests {
         #expect(circuit.gateCount() == 10)
 
         let params: [Double] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
-        let concrete = try circuit.bind(parameterVector: params)
+        let concrete = circuit.bind(parameterVector: params)
         let state = concrete.execute()
 
         #expect(state.isNormalized())
     }
 
     @Test("Circuit with all gate types")
-    func circuitWithAllGateTypes() throws {
+    func circuitWithAllGateTypes() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 3)
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
@@ -870,7 +823,7 @@ struct ParameterizedCircuitIntegrationTests {
         circuit.append(gate: .u3(theta: .parameter(theta), phi: .parameter(phi), lambda: .parameter(lambda)), toQubit: 0)
 
         let bindings = ["theta": 0.5, "phi": 1.0, "lambda": 1.5]
-        let concrete = try circuit.bind(parameters: bindings)
+        let concrete = circuit.bind(parameters: bindings)
 
         #expect(concrete.gateCount == 7)
         let state = concrete.execute()
@@ -1013,7 +966,6 @@ struct ParameterizedCircuitCustomInitTests {
             ParameterizedGateOperation(gate: .rotationY(theta: .parameter(theta)), qubits: [1]),
         ]
 
-        // User provides theta only once in parameters list
         let circuit = ParameterizedQuantumCircuit(
             numQubits: 2,
             operations: ops,

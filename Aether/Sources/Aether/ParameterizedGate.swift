@@ -47,7 +47,7 @@
 ///
 /// // Bind parameters to execute
 /// let bindings = ["theta": Double.pi / 4, "phi": Double.pi / 8]
-/// let concrete = try circuit.bind(parameters: bindings)
+/// let concrete = circuit.bind(parameters: bindings)
 /// let state = concrete.execute()
 /// ```
 @frozen
@@ -173,7 +173,7 @@ public enum ParameterizedGate: Equatable, Hashable, Sendable, CustomStringConver
     ///
     /// - Parameter bindings: Dictionary mapping parameter names to values
     /// - Returns: Concrete quantum gate with all parameters bound
-    /// - Throws: ParameterError.unboundParameter if any parameter missing
+    /// - Precondition: All symbolic parameters must have bindings
     ///
     /// Example:
     /// ```swift
@@ -181,59 +181,59 @@ public enum ParameterizedGate: Equatable, Hashable, Sendable, CustomStringConver
     /// let gate = ParameterizedGate.rotationY(theta: .parameter(theta))
     ///
     /// let bindings = ["theta": Double.pi / 4]
-    /// let concrete = try gate.bind(with: bindings)
+    /// let concrete = gate.bind(with: bindings)
     /// // concrete is QuantumGate.rotationY(theta: π/4)
     /// ```
     @_optimize(speed)
     @inlinable
     @_eagerMove
-    public func bind(with bindings: [String: Double]) throws -> QuantumGate {
+    public func bind(with bindings: [String: Double]) -> QuantumGate {
         switch self {
         case let .phase(theta):
-            let value = try theta.evaluate(with: bindings)
+            let value = theta.evaluate(with: bindings)
             return .phase(theta: value)
 
         case let .rotationX(theta):
-            let value = try theta.evaluate(with: bindings)
+            let value = theta.evaluate(with: bindings)
             return .rotationX(theta: value)
 
         case let .rotationY(theta):
-            let value = try theta.evaluate(with: bindings)
+            let value = theta.evaluate(with: bindings)
             return .rotationY(theta: value)
 
         case let .rotationZ(theta):
-            let value = try theta.evaluate(with: bindings)
+            let value = theta.evaluate(with: bindings)
             return .rotationZ(theta: value)
 
         case let .u1(lambda):
-            let lambdaValue = try lambda.evaluate(with: bindings)
+            let lambdaValue = lambda.evaluate(with: bindings)
             return .u1(lambda: lambdaValue)
 
         case let .u2(phi, lambda):
-            let phiValue = try phi.evaluate(with: bindings)
-            let lambdaValue = try lambda.evaluate(with: bindings)
+            let phiValue = phi.evaluate(with: bindings)
+            let lambdaValue = lambda.evaluate(with: bindings)
             return .u2(phi: phiValue, lambda: lambdaValue)
 
         case let .u3(theta, phi, lambda):
-            let thetaValue = try theta.evaluate(with: bindings)
-            let phiValue = try phi.evaluate(with: bindings)
-            let lambdaValue = try lambda.evaluate(with: bindings)
+            let thetaValue = theta.evaluate(with: bindings)
+            let phiValue = phi.evaluate(with: bindings)
+            let lambdaValue = lambda.evaluate(with: bindings)
             return .u3(theta: thetaValue, phi: phiValue, lambda: lambdaValue)
 
         case let .controlledPhase(theta, control, target):
-            let value = try theta.evaluate(with: bindings)
+            let value = theta.evaluate(with: bindings)
             return .controlledPhase(theta: value, control: control, target: target)
 
         case let .controlledRotationX(theta, control, target):
-            let value = try theta.evaluate(with: bindings)
+            let value = theta.evaluate(with: bindings)
             return .controlledRotationX(theta: value, control: control, target: target)
 
         case let .controlledRotationY(theta, control, target):
-            let value = try theta.evaluate(with: bindings)
+            let value = theta.evaluate(with: bindings)
             return .controlledRotationY(theta: value, control: control, target: target)
 
         case let .controlledRotationZ(theta, control, target):
-            let value = try theta.evaluate(with: bindings)
+            let value = theta.evaluate(with: bindings)
             return .controlledRotationZ(theta: value, control: control, target: target)
 
         case let .concrete(gate):

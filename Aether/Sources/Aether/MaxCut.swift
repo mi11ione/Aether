@@ -45,7 +45,7 @@
 ///     optimizer: COBYLAOptimizer(tolerance: 1e-6)
 /// )
 ///
-/// let result = try await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+/// let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
 /// let maxcutValue = Int(-2.0 * result.optimalEnergy)
 /// print("MaxCut value: \(maxcutValue)")  // 4
 /// ```

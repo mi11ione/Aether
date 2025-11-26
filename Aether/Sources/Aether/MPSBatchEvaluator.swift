@@ -75,7 +75,7 @@ import MetalPerformanceShaders
 /// var allCircuits: [QuantumCircuit] = []
 ///
 /// for i in 0..<numParams {
-///     let (plus, minus) = try ansatz.generateShiftedCircuits(
+///     let (plus, minus) = ansatz.generateShiftedCircuits(
 ///         parameterIndex: i,
 ///         baseVector: baseParams,
 ///         shift: .pi / 2
@@ -86,12 +86,12 @@ import MetalPerformanceShaders
 /// // Total: 48 circuits (2 per parameter)
 ///
 /// // 3. Convert all circuits to unitaries (one-time cost)
-/// let unitaries = try allCircuits.map { try CircuitUnitary.computeUnitary(circuit: $0) }
+/// let unitaries = allCircuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
 ///
 /// // 4. Batch evaluate all expectation values in parallel
 /// let evaluator = await MPSBatchEvaluator()
 /// let hamiltonian = Observable(terms: [...])  // Molecular Hamiltonian
-/// let energies = try await evaluator.evaluateExpectationValues(
+/// let energies = await evaluator.evaluateExpectationValues(
 ///     unitaries: unitaries,
 ///     initialState: QuantumState(numQubits: 8),
 ///     hamiltonian: hamiltonian
@@ -119,17 +119,17 @@ import MetalPerformanceShaders
 /// var circuits: [QuantumCircuit] = []
 /// for gamma in gammaValues {
 ///     for beta in betaValues {
-///         let circuit = try qaoaAnsatz.bind(parameterVector: [gamma, beta])
+///         let circuit = qaoaAnsatz.bind(parameterVector: [gamma, beta])
 ///         circuits.append(circuit)
 ///     }
 /// }
 ///
 /// // 3. Convert to unitaries
-/// let unitaries = try circuits.map { try CircuitUnitary.computeUnitary(circuit: $0) }
+/// let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
 ///
 /// // 4. Batch evaluate all grid points
 /// let evaluator = await MPSBatchEvaluator()
-/// let energies = try await evaluator.evaluateExpectationValues(
+/// let energies = await evaluator.evaluateExpectationValues(
 ///     unitaries: unitaries,
 ///     initialState: QuantumState(numQubits: 6),
 ///     hamiltonian: maxCutHamiltonian
@@ -227,18 +227,17 @@ public actor MPSBatchEvaluator {
     ///   - unitaries: Array of circuit unitaries (2ⁿ × 2ⁿ each)
     ///   - initialState: Starting quantum state (same for all)
     /// - Returns: Array of output states (one per unitary)
-    /// - Throws: MPSBatchError if validation fails or Metal unavailable
     ///
     /// Example:
     /// ```swift
     /// // Batch evaluate multiple parameter sets
-    /// let circuits = try parameterSets.map { params in
-    ///     try ansatz.bind(parameterVector: params)
+    /// let circuits = parameterSets.map { params in
+    ///     ansatz.bind(parameterVector: params)
     /// }
-    /// let unitaries = try circuits.map { try CircuitUnitary.computeUnitary(circuit: $0) }
+    /// let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
     ///
     /// let evaluator = await MPSBatchEvaluator()
-    /// let states = try await evaluator.evaluateBatch(
+    /// let states = await evaluator.evaluateBatch(
     ///     unitaries: unitaries,
     ///     initialState: QuantumState(numQubits: 8)
     /// )
@@ -250,7 +249,7 @@ public actor MPSBatchEvaluator {
     public func evaluateBatch(
         unitaries: [GateMatrix],
         initialState: QuantumState
-    ) async throws -> [QuantumState] {
+    ) async -> [QuantumState] {
         ValidationUtilities.validateNonEmpty(unitaries, name: "unitaries")
 
         let dimension: Int = initialState.stateSpaceSize
@@ -262,16 +261,16 @@ public actor MPSBatchEvaluator {
         }
 
         guard isMetalAvailable else {
-            return try await evaluateBatchCPU(unitaries: unitaries, initialState: initialState)
+            return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState)
         }
 
         let batchSize: Int = unitaries.count
 
         if batchSize > maxBatchSize {
-            return try await evaluateBatchChunked(unitaries: unitaries, initialState: initialState)
+            return await evaluateBatchChunked(unitaries: unitaries, initialState: initialState)
         }
 
-        return try await evaluateBatchGPU(unitaries: unitaries, initialState: initialState, numQubits: numQubits)
+        return await evaluateBatchGPU(unitaries: unitaries, initialState: initialState, numQubits: numQubits)
     }
 
     /// Evaluate batch with expectation values (most efficient for VQE)
@@ -299,14 +298,13 @@ public actor MPSBatchEvaluator {
     ///   - initialState: Starting state
     ///   - hamiltonian: Observable for expectation values
     /// - Returns: Array of energies ⟨ψᵢ|H|ψᵢ⟩
-    /// - Throws: MPSBatchError or validation errors
     ///
     /// Example:
     /// ```swift
     /// // VQE gradient computation (most efficient path)
-    /// let unitaries = try shiftedCircuits.map { try CircuitUnitary.computeUnitary(circuit: $0) }
+    /// let unitaries = shiftedCircuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
     ///
-    /// let energies = try await evaluator.evaluateExpectationValues(
+    /// let energies = await evaluator.evaluateExpectationValues(
     ///     unitaries: unitaries,
     ///     initialState: QuantumState(numQubits: 8),
     ///     hamiltonian: molecularHamiltonian
@@ -321,8 +319,8 @@ public actor MPSBatchEvaluator {
         unitaries: [GateMatrix],
         initialState: QuantumState,
         hamiltonian: Observable
-    ) async throws -> [Double] {
-        let states: [QuantumState] = try await evaluateBatch(
+    ) async -> [Double] {
+        let states: [QuantumState] = await evaluateBatch(
             unitaries: unitaries,
             initialState: initialState
         )
@@ -343,15 +341,14 @@ public actor MPSBatchEvaluator {
     ///   - initialState: Starting state
     ///   - sparseHamiltonian: Pre-constructed sparse Hamiltonian
     /// - Returns: Array of energies
-    /// - Throws: MPSBatchError or validation errors
     @_optimize(speed)
     @_eagerMove
     public func evaluateExpectationValues(
         unitaries: [GateMatrix],
         initialState: QuantumState,
         sparseHamiltonian: SparseHamiltonian
-    ) async throws -> [Double] {
-        let states: [QuantumState] = try await evaluateBatch(
+    ) async -> [Double] {
+        let states: [QuantumState] = await evaluateBatch(
             unitaries: unitaries,
             initialState: initialState
         )
@@ -384,8 +381,10 @@ public actor MPSBatchEvaluator {
         unitaries: [GateMatrix],
         initialState: QuantumState,
         numQubits: Int
-    ) async throws -> [QuantumState] {
-        guard let device, let commandQueue else { throw MPSBatchError.metalUnavailable }
+    ) async -> [QuantumState] {
+        guard let device, let commandQueue else {
+            return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState)
+        }
 
         let batchSize: Int = unitaries.count
         let dimension = 1 << numQubits
@@ -438,38 +437,38 @@ public actor MPSBatchEvaluator {
             bytes: realMatrices,
             length: realMatrices.count * MemoryLayout<Float>.stride,
             options: .storageModeShared
-        ) else { throw MPSBatchError.bufferAllocationFailed }
+        ) else { return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
 
         guard let imagMatrixBuffer = device.makeBuffer(
             bytes: imagMatrices,
             length: imagMatrices.count * MemoryLayout<Float>.stride,
             options: .storageModeShared
-        ) else { throw MPSBatchError.bufferAllocationFailed }
+        ) else { return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
 
         guard let realStateBuffer = device.makeBuffer(
             bytes: realState,
             length: realState.count * MemoryLayout<Float>.stride,
             options: .storageModeShared
-        ) else { throw MPSBatchError.bufferAllocationFailed }
+        ) else { return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
 
         guard let imagStateBuffer = device.makeBuffer(
             bytes: imagState,
             length: imagState.count * MemoryLayout<Float>.stride,
             options: .storageModeShared
-        ) else { throw MPSBatchError.bufferAllocationFailed }
+        ) else { return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
 
         guard let resultRealBuffer = device.makeBuffer(
             length: batchSize * dimension * MemoryLayout<Float>.stride,
             options: .storageModeShared
-        ) else { throw MPSBatchError.bufferAllocationFailed }
+        ) else { return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
 
         guard let resultImagBuffer = device.makeBuffer(
             length: batchSize * dimension * MemoryLayout<Float>.stride,
             options: .storageModeShared
-        ) else { throw MPSBatchError.bufferAllocationFailed }
+        ) else { return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
 
         guard let commandBuffer = commandQueue.makeCommandBuffer() else {
-            throw MPSBatchError.commandBufferFailed
+            return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState)
         }
 
         let matVecInit = MPSMatrixVectorMultiplication(
@@ -599,7 +598,7 @@ public actor MPSBatchEvaluator {
     private func evaluateBatchCPU(
         unitaries: [GateMatrix],
         initialState: QuantumState
-    ) async throws -> [QuantumState] {
+    ) async -> [QuantumState] {
         var resultStates: [QuantumState] = []
         resultStates.reserveCapacity(unitaries.count)
 
@@ -623,14 +622,14 @@ public actor MPSBatchEvaluator {
     private func evaluateBatchChunked(
         unitaries: [GateMatrix],
         initialState: QuantumState
-    ) async throws -> [QuantumState] {
+    ) async -> [QuantumState] {
         var allResults: [QuantumState] = []
         allResults.reserveCapacity(unitaries.count)
 
         let chunks: [[GateMatrix]] = unitaries.chunked(into: maxBatchSize)
 
         for chunk in chunks {
-            let chunkResults: [QuantumState] = try await evaluateBatchGPU(
+            let chunkResults: [QuantumState] = await evaluateBatchGPU(
                 unitaries: chunk,
                 initialState: initialState,
                 numQubits: initialState.numQubits
@@ -731,27 +730,6 @@ public actor MPSBatchEvaluator {
 }
 
 // MARK: - Supporting Types
-
-/// Batch evaluator error conditions
-@frozen
-public enum MPSBatchError: Error, LocalizedError, Equatable {
-    case metalUnavailable
-    case bufferAllocationFailed
-    case commandBufferFailed
-
-    public var errorDescription: String? {
-        switch self {
-        case .metalUnavailable:
-            "Metal GPU acceleration unavailable. Falling back to CPU sequential evaluation. Performance will be reduced."
-
-        case .bufferAllocationFailed:
-            "Failed to allocate Metal buffer for batch evaluation. Reduce batch size or circuit size."
-
-        case .commandBufferFailed:
-            "Failed to create Metal command buffer. Check GPU availability and resource limits."
-        }
-    }
-}
 
 /// Batch evaluator statistics
 @frozen

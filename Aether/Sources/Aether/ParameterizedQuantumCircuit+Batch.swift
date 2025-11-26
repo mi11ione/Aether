@@ -24,15 +24,15 @@
 /// )
 ///
 /// // Bind all in batch (12 circuits total)
-/// let plusCircuits = try ansatz.bindBatch(parameterVectors: plusVectors)
-/// let minusCircuits = try ansatz.bindBatch(parameterVectors: minusVectors)
+/// let plusCircuits = ansatz.bindBatch(parameterVectors: plusVectors)
+/// let minusCircuits = ansatz.bindBatch(parameterVectors: minusVectors)
 ///
 /// // Convert to unitaries and batch evaluate
 /// let allCircuits = plusCircuits + minusCircuits
-/// let unitaries = try allCircuits.map { try CircuitUnitary.computeUnitary(circuit: $0) }
+/// let unitaries = allCircuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
 ///
 /// let evaluator = await MPSBatchEvaluator()
-/// let energies = try await evaluator.evaluateExpectationValues(
+/// let energies = await evaluator.evaluateExpectationValues(
 ///     unitaries: unitaries,
 ///     initialState: QuantumState(numQubits: 6),
 ///     hamiltonian: hamiltonian
@@ -59,7 +59,6 @@ public extension ParameterizedQuantumCircuit {
     ///
     /// - Parameter parameterVectors: Array of parameter value arrays
     /// - Returns: Array of concrete quantum circuits (one per parameter vector)
-    /// - Throws: ParameterError if any vector has wrong length
     ///
     /// Example:
     /// ```swift
@@ -72,14 +71,14 @@ public extension ParameterizedQuantumCircuit {
     ///     [0.9, 1.0, 1.1, 1.2]
     /// ]
     ///
-    /// let circuits = try ansatz.bindBatch(parameterVectors: parameterSets)
+    /// let circuits = ansatz.bindBatch(parameterVectors: parameterSets)
     /// // circuits[0] has parameters [0.1, 0.2, 0.3, 0.4]
     /// // circuits[1] has parameters [0.5, 0.6, 0.7, 0.8]
     /// // circuits[2] has parameters [0.9, 1.0, 1.1, 1.2]
     /// ```
     @_optimize(speed)
     @_eagerMove
-    func bindBatch(parameterVectors: [[Double]]) throws -> [QuantumCircuit] {
+    func bindBatch(parameterVectors: [[Double]]) -> [QuantumCircuit] {
         guard !parameterVectors.isEmpty else {
             return []
         }
@@ -94,7 +93,7 @@ public extension ParameterizedQuantumCircuit {
         circuits.reserveCapacity(parameterVectors.count)
 
         for vector in parameterVectors {
-            let circuit: QuantumCircuit = try bind(parameterVector: vector)
+            let circuit: QuantumCircuit = bind(parameterVector: vector)
             circuits.append(circuit)
         }
 
@@ -122,7 +121,6 @@ public extension ParameterizedQuantumCircuit {
     ///   - baseParameters: Base parameter values
     ///   - shift: Shift amount (default: π/2 for standard parameter shift)
     /// - Returns: Tuple of (plus vectors, minus vectors)
-    /// - Throws: ParameterError if baseParameters length wrong
     ///
     /// Example:
     /// ```swift
@@ -130,20 +128,20 @@ public extension ParameterizedQuantumCircuit {
     /// let baseParams: [Double] = Array(repeating: 0.1, count: ansatz.parameterCount())
     ///
     /// // Generate shifted parameter sets
-    /// let (plusVectors, minusVectors) = try ansatz.generateGradientParameterVectors(
+    /// let (plusVectors, minusVectors) = ansatz.generateGradientParameterVectors(
     ///     baseParameters: baseParams
     /// )
     ///
     /// // Bind all circuits (2N total)
-    /// let plusCircuits = try ansatz.bindBatch(parameterVectors: plusVectors)
-    /// let minusCircuits = try ansatz.bindBatch(parameterVectors: minusVectors)
+    /// let plusCircuits = ansatz.bindBatch(parameterVectors: plusVectors)
+    /// let minusCircuits = ansatz.bindBatch(parameterVectors: minusVectors)
     ///
     /// // Batch evaluate for gradients
     /// let allCircuits = plusCircuits + minusCircuits
-    /// let unitaries = try allCircuits.map { try CircuitUnitary.computeUnitary(circuit: $0) }
+    /// let unitaries = allCircuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
     ///
     /// let evaluator = await MPSBatchEvaluator()
-    /// let energies = try await evaluator.evaluateExpectationValues(
+    /// let energies = await evaluator.evaluateExpectationValues(
     ///     unitaries: unitaries,
     ///     initialState: QuantumState(numQubits: 4),
     ///     hamiltonian: hamiltonian
@@ -204,7 +202,6 @@ public extension ParameterizedQuantumCircuit {
     ///
     /// - Parameter ranges: Array of value arrays (one per parameter)
     /// - Returns: Array of parameter vectors (Cartesian product)
-    /// - Throws: ParameterError if ranges count doesn't match parameter count
     ///
     /// Example:
     /// ```swift
@@ -215,17 +212,17 @@ public extension ParameterizedQuantumCircuit {
     /// let gammaRange = stride(from: 0.0, through: .pi, by: .pi / 10)  // 11 values
     /// let betaRange = stride(from: 0.0, through: .pi, by: .pi / 10)   // 11 values
     ///
-    /// let parameterVectors = try qaoaAnsatz.generateGridSearchVectors(
+    /// let parameterVectors = qaoaAnsatz.generateGridSearchVectors(
     ///     ranges: [Array(gammaRange), Array(betaRange)]
     /// )
     /// // 11 × 11 = 121 parameter vectors
     ///
     /// // Bind all and evaluate
-    /// let circuits = try qaoaAnsatz.bindBatch(parameterVectors: parameterVectors)
-    /// let unitaries = try circuits.map { try CircuitUnitary.computeUnitary(circuit: $0) }
+    /// let circuits = qaoaAnsatz.bindBatch(parameterVectors: parameterVectors)
+    /// let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
     ///
     /// let evaluator = await MPSBatchEvaluator()
-    /// let energies = try await evaluator.evaluateExpectationValues(
+    /// let energies = await evaluator.evaluateExpectationValues(
     ///     unitaries: unitaries,
     ///     initialState: QuantumState(numQubits: 6),
     ///     hamiltonian: maxCutHamiltonian

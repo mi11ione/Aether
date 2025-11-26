@@ -10,14 +10,14 @@ import Testing
 @Suite("Quantum Simulator")
 struct QuantumSimulatorTests {
     @Test("Simulator executes simple circuit asynchronously")
-    func simulatorExecutesSimpleCircuit() async throws {
+    func simulatorExecutesSimpleCircuit() async {
         let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
         await circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
 
-        let finalState = try await simulator.execute(circuit)
+        let finalState = await simulator.execute(circuit)
 
         #expect(finalState.numQubits == 2)
         #expect(finalState.isNormalized())
@@ -29,20 +29,20 @@ struct QuantumSimulatorTests {
     }
 
     @Test("Simulator executes from custom initial state")
-    func simulatorExecutesFromCustomState() async throws {
+    func simulatorExecutesFromCustomState() async {
         let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 1)
         circuit.append(gate: .pauliX, toQubit: 0)
 
         let initialState = QuantumState(numQubits: 1)
-        let finalState = try await simulator.execute(circuit, from: initialState)
+        let finalState = await simulator.execute(circuit, from: initialState)
 
         #expect(abs(finalState.probability(ofState: 1) - 1.0) < 1e-10)
     }
 
     @Test("Simulator reports progress during execution")
-    func simulatorReportsProgress() async throws {
+    func simulatorReportsProgress() async {
         let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 2)
@@ -57,7 +57,7 @@ struct QuantumSimulatorTests {
 
         let accumulator = ProgressAccumulator()
 
-        _ = try await simulator.execute(circuit, progressHandler: { progress in
+        _ = await simulator.execute(circuit, progressHandler: { progress in
             await accumulator.append(progress)
         })
 
@@ -75,7 +75,7 @@ struct QuantumSimulatorTests {
     }
 
     @Test("Simulator tracks execution progress")
-    func simulatorTracksProgress() async throws {
+    func simulatorTracksProgress() async {
         let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 1)
@@ -90,7 +90,7 @@ struct QuantumSimulatorTests {
 
         let tracker = ProgressTracker()
 
-        _ = try await simulator.execute(circuit, progressHandler: { _ in
+        _ = await simulator.execute(circuit, progressHandler: { _ in
             let progress = await simulator.getProgress()
             await tracker.capture(progress)
         })
@@ -105,7 +105,7 @@ struct QuantumSimulatorTests {
     }
 
     @Test("Simulator provides current state during execution")
-    func simulatorProvidesCurrentState() async throws {
+    func simulatorProvidesCurrentState() async {
         let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 2)
@@ -120,7 +120,7 @@ struct QuantumSimulatorTests {
 
         let tracker = StateTracker()
 
-        _ = try await simulator.execute(circuit, progressHandler: { _ in
+        _ = await simulator.execute(circuit, progressHandler: { _ in
             let state = await simulator.getCurrentState()
             await tracker.capture(state)
         })
@@ -134,18 +134,18 @@ struct QuantumSimulatorTests {
     }
 
     @Test("Circuit can be executed asynchronously via convenience method")
-    func circuitExecutesAsyncConvenience() async throws {
+    func circuitExecutesAsyncConvenience() async {
         var circuit = QuantumCircuit(numQubits: 1)
         circuit.append(gate: .hadamard, toQubit: 0)
 
-        let finalState = try await circuit.executeAsync()
+        let finalState = await circuit.executeAsync()
 
         #expect(finalState.isNormalized())
         #expect(abs(finalState.probability(ofState: 0) - 0.5) < 1e-10)
     }
 
     @Test("Circuit async execution with progress handler")
-    func circuitExecutesAsyncWithProgress() async throws {
+    func circuitExecutesAsyncWithProgress() async {
         var circuit = QuantumCircuit(numQubits: 1)
         for _ in 0 ..< 15 {
             circuit.append(gate: .hadamard, toQubit: 0)
@@ -158,7 +158,7 @@ struct QuantumSimulatorTests {
 
         let flag = ProgressFlag()
 
-        _ = try await circuit.executeAsync { _ in
+        _ = await circuit.executeAsync { _ in
             await flag.mark()
         }
 
@@ -166,7 +166,7 @@ struct QuantumSimulatorTests {
     }
 
     @Test("Simulator handles empty circuit")
-    func simulatorHandlesEmptyCircuit() async throws {
+    func simulatorHandlesEmptyCircuit() async {
         let simulator = QuantumSimulator()
         let circuit = QuantumCircuit(numQubits: 2)
 
@@ -174,16 +174,16 @@ struct QuantumSimulatorTests {
         #expect(progress.total == 0)
         #expect(progress.percentage == 0.0)
 
-        let finalState = try await simulator.execute(circuit)
+        let finalState = await simulator.execute(circuit)
 
         #expect(finalState.probability(ofState: 0) == 1.0)
     }
 
     @Test("Simulator handles pre-built Bell state circuit")
-    func simulatorHandlesBellStateCircuit() async throws {
+    func simulatorHandlesBellStateCircuit() async {
         let simulator = QuantumSimulator()
         let circuit = QuantumCircuit.bellState()
-        let finalState = try await simulator.execute(circuit)
+        let finalState = await simulator.execute(circuit)
 
         #expect(finalState.isNormalized())
         #expect(abs(finalState.probability(ofState: 0) - 0.5) < 1e-10)
@@ -191,20 +191,20 @@ struct QuantumSimulatorTests {
     }
 
     @Test("Simulator handles QFT circuit")
-    func simulatorHandlesQFTCircuit() async throws {
+    func simulatorHandlesQFTCircuit() async {
         let simulator = QuantumSimulator()
         let circuit = QuantumCircuit.qft(numQubits: 3)
-        let finalState = try await simulator.execute(circuit)
+        let finalState = await simulator.execute(circuit)
 
         #expect(finalState.isNormalized())
         #expect(finalState.numQubits == 3)
     }
 
     @Test("Simulator handles Grover circuit")
-    func simulatorHandlesGroverCircuit() async throws {
+    func simulatorHandlesGroverCircuit() async {
         let simulator = QuantumSimulator()
         let circuit = QuantumCircuit.grover(numQubits: 2, target: 3)
-        let finalState = try await simulator.execute(circuit)
+        let finalState = await simulator.execute(circuit)
 
         #expect(finalState.isNormalized())
 
@@ -212,34 +212,23 @@ struct QuantumSimulatorTests {
         #expect(targetProb > 0.8)
     }
 
-    @Test("SimulatorError has correct descriptions")
-    func simulatorErrorDescriptions() {
-        let error1 = SimulatorError.invalidCircuit
-        let error2 = SimulatorError.metalNotAvailable
-
-        #expect(error1.errorDescription != nil)
-        #expect(error2.errorDescription != nil)
-        #expect(error1.errorDescription?.contains("invalid") == true)
-        #expect(error2.errorDescription?.contains("Metal") == true)
-    }
-
     @Test("Simulator with Metal disabled works correctly")
-    func simulatorWithoutMetalWorks() async throws {
+    func simulatorWithoutMetalWorks() async {
         let simulator = QuantumSimulator(useMetalAcceleration: false)
 
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(gate: .hadamard, toQubit: 0)
         await circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
 
-        let finalState = try await simulator.execute(circuit)
+        let finalState = await simulator.execute(circuit)
 
         #expect(finalState.numQubits == 2)
         #expect(finalState.isNormalized())
     }
 
     @Test("Simulator uses Metal acceleration for large circuits")
-    func simulatorUsesMetalAcceleration() async throws {
-        _ = try #require(MetalGateApplication(), "Metal not available on this device")
+    func simulatorUsesMetalAcceleration() async {
+        guard MetalGateApplication() != nil else { return }
 
         let simulator = QuantumSimulator(useMetalAcceleration: true)
 
@@ -248,15 +237,15 @@ struct QuantumSimulatorTests {
         circuit.append(gate: .pauliX, toQubit: 1)
         circuit.append(gate: .pauliZ, toQubit: 2)
 
-        let finalState = try await simulator.execute(circuit)
+        let finalState = await simulator.execute(circuit)
 
         #expect(finalState.numQubits == 12)
         #expect(finalState.isNormalized())
     }
 
     @Test("Simulator uses Metal acceleration with progress reporting")
-    func simulatorUsesMetalWithProgress() async throws {
-        _ = try #require(MetalGateApplication(), "Metal not available on this device")
+    func simulatorUsesMetalWithProgress() async {
+        guard MetalGateApplication() != nil else { return }
 
         let simulator = QuantumSimulator(useMetalAcceleration: true)
 
@@ -272,7 +261,7 @@ struct QuantumSimulatorTests {
 
         let tracker = ProgressTracker()
 
-        let finalState = try await simulator.execute(circuit, progressHandler: { progress in
+        let finalState = await simulator.execute(circuit, progressHandler: { progress in
             await tracker.append(progress)
         })
 
@@ -288,7 +277,7 @@ struct QuantumSimulatorTests {
     }
 
     @Test("Simulator executes with progress from custom initial state")
-    func simulatorExecutesWithProgressFromCustomState() async throws {
+    func simulatorExecutesWithProgressFromCustomState() async {
         let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 2)
@@ -306,7 +295,7 @@ struct QuantumSimulatorTests {
 
         let tracker = ProgressTracker()
 
-        let finalState = try await simulator.execute(circuit, from: initialState, progressHandler: { _ in
+        let finalState = await simulator.execute(circuit, from: initialState, progressHandler: { _ in
             await tracker.markCalled()
         })
 
@@ -316,7 +305,7 @@ struct QuantumSimulatorTests {
     }
 
     @Test("Simulator handles state expansion with ancilla qubits")
-    func simulatorHandlesStateExpansionWithAncilla() async throws {
+    func simulatorHandlesStateExpansionWithAncilla() async {
         let simulator = QuantumSimulator()
         var circuit = QuantumCircuit(numQubits: 4)
 
@@ -325,14 +314,14 @@ struct QuantumSimulatorTests {
         circuit.append(gate: .pauliX, toQubit: 2)
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: [0, 1, 2], target: 3)
 
-        let finalState = try await simulator.execute(circuit)
+        let finalState = await simulator.execute(circuit)
 
         #expect(finalState.isNormalized())
         #expect(finalState.probability(ofState: 0b1111) > 0.99, "Target should flip")
     }
 
     @Test("Simulator state expansion preserves amplitudes")
-    func simulatorStateExpansionPreservesAmplitudes() async throws {
+    func simulatorStateExpansionPreservesAmplitudes() async {
         let simulator = QuantumSimulator()
 
         var initialCircuit = QuantumCircuit(numQubits: 4)
@@ -343,7 +332,7 @@ struct QuantumSimulatorTests {
         var circuit = QuantumCircuit(numQubits: 4)
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: [0, 1, 2], target: 3)
 
-        let finalState = try await simulator.execute(circuit, from: initialState)
+        let finalState = await simulator.execute(circuit, from: initialState)
         #expect(finalState.isNormalized())
 
         let p0001 = finalState.probability(ofState: 0b0001)
@@ -353,7 +342,7 @@ struct QuantumSimulatorTests {
     }
 
     @Test("Simulator executeWithProgress handles ancilla expansion")
-    func simulatorExecuteWithProgressHandlesAncilla() async throws {
+    func simulatorExecuteWithProgressHandlesAncilla() async {
         let simulator = QuantumSimulator()
         var circuit = QuantumCircuit(numQubits: 5)
 
@@ -371,7 +360,7 @@ struct QuantumSimulatorTests {
 
         let tracker = ProgressTracker()
 
-        let finalState = try await simulator.execute(circuit, progressHandler: { _ in
+        let finalState = await simulator.execute(circuit, progressHandler: { _ in
             await tracker.markCalled()
         })
 
@@ -381,7 +370,7 @@ struct QuantumSimulatorTests {
     }
 
     @Test("Simulator handles multiple ancilla qubits correctly")
-    func simulatorHandlesMultipleAncilla() async throws {
+    func simulatorHandlesMultipleAncilla() async {
         let simulator = QuantumSimulator()
 
         var circuit = QuantumCircuit(numQubits: 6)
@@ -392,7 +381,7 @@ struct QuantumSimulatorTests {
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: [0, 1, 2, 3, 4], target: 5)
 
-        let finalState = try await simulator.execute(circuit)
+        let finalState = await simulator.execute(circuit)
 
         #expect(finalState.isNormalized())
         #expect(finalState.probability(ofState: 0b111111) > 0.99, "All qubits should be |1⟩")

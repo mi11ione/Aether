@@ -3,21 +3,6 @@
 
 import Accelerate
 
-/// Errors that can occur during quantum state operations
-public enum QuantumStateError: Error, LocalizedError {
-    case cannotNormalizeZeroState
-    case invalidAmplitudes
-
-    public var errorDescription: String? {
-        switch self {
-        case .cannotNormalizeZeroState:
-            "Cannot normalize quantum state with near-zero norm"
-        case .invalidAmplitudes:
-            "Quantum state contains invalid amplitudes (NaN or Inf)"
-        }
-    }
-}
-
 /// Quantum state: complex amplitude vector for n-qubit system
 ///
 /// Represents quantum superposition as a statevector in 2^n-dimensional Hilbert space.
@@ -502,35 +487,19 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Required after operations that may denormalize the state. Uses vectorized
     /// computation for large states.
     ///
-    /// - Throws: QuantumStateError.cannotNormalizeZeroState if norm < 1e-15
     ///
     /// Example:
     /// ```swift
-    /// var state = QuantumState(numQubits: 1, amplitudes: [
-    ///     Complex(0, 0),
-    ///     Complex(0, 0)
-    /// ], bypassValidation: true)
-    ///
-    /// do {
-    ///     try state.normalize()
-    /// } catch QuantumStateError.cannotNormalizeZeroState {
-    ///     print("Cannot normalize zero state")
-    /// }
-    ///
-    /// // Valid normalization
     /// var unnormalized = QuantumState(numQubits: 1, amplitudes: [
     ///     Complex(3, 0),
     ///     Complex(4, 0)
     /// ])
-    /// try unnormalized.normalize()
+    /// unnormalized.normalize()
     /// // Now: [3/5, 4/5] since √(3² + 4²) = 5
     /// ```
-    public mutating func normalize() throws {
+    public mutating func normalize() {
         let sumSquared: Double = computeNormSquared()
-
-        guard sumSquared > 1e-15 else {
-            throw QuantumStateError.cannotNormalizeZeroState
-        }
+        ValidationUtilities.validatePositiveDouble(sumSquared, name: "State norm squared")
 
         let invNorm = 1.0 / sqrt(sumSquared)
         let n: Int = amplitudes.count

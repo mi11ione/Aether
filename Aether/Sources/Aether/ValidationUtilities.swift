@@ -804,4 +804,55 @@ public enum ValidationUtilities {
     static func validateUnitary(_ matrix: GateMatrix) {
         precondition(QuantumGate.isUnitary(matrix), "Matrix is not unitary (U†U ≠ I)")
     }
+
+    /// Validate that parameter bindings contain a specific parameter
+    ///
+    /// Used for gradient computation where base bindings must include
+    /// the parameter being shifted.
+    ///
+    /// - Parameters:
+    ///   - parameterName: Name of parameter to check
+    ///   - bindings: Dictionary of parameter bindings
+    /// - Precondition: bindings[parameterName] != nil
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateParameterBinding(_ parameterName: String, in bindings: [String: Double]) {
+        precondition(
+            bindings[parameterName] != nil,
+            "Parameter '\(parameterName)' must have a binding in baseBindings"
+        )
+    }
+
+    /// Validate that parameter bindings exactly match circuit parameters
+    ///
+    /// Ensures all circuit parameters have bindings and no extra bindings exist.
+    /// This is a programmer error check - you should know which parameters your circuit has.
+    ///
+    /// - Parameters:
+    ///   - bindings: Dictionary of parameter bindings provided
+    ///   - parameters: Array of parameters in the circuit
+    ///   - parameterSet: Set of parameter names for O(1) lookup
+    /// - Precondition: bindings keys exactly match parameter names
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateCompleteParameterBindings(
+        _ bindings: [String: Double],
+        parameters: [Parameter],
+        parameterSet: Set<String>
+    ) {
+        for param in parameters {
+            precondition(
+                bindings[param.name] != nil,
+                "Missing binding for parameter '\(param.name)'"
+            )
+        }
+        for key in bindings.keys {
+            precondition(
+                parameterSet.contains(key),
+                "Extra parameter '\(key)' not in circuit"
+            )
+        }
+    }
 }

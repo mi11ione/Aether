@@ -18,7 +18,7 @@ import Foundation
 ///     ansatz: ansatz,
 ///     optimizer: optimizer
 /// )
-/// let result = try await vqe.run(initialParameters: initialGuess)
+/// let result = await vqe.run(initialParameters: initialGuess)
 /// ```
 public protocol Optimizer: Sendable {
     /// Minimize objective function over parameter space
@@ -32,13 +32,12 @@ public protocol Optimizer: Sendable {
     ///   - convergenceCriteria: Termination conditions
     ///   - progressCallback: Optional progress updates (iteration, current value)
     /// - Returns: Optimization result with optimal parameters and history
-    /// - Throws: OptimizerError if optimization fails or is cancelled
     func minimize(
-        objectiveFunction: @Sendable ([Double]) async throws -> Double,
+        objectiveFunction: @Sendable ([Double]) async -> Double,
         initialParameters: [Double],
         convergenceCriteria: ConvergenceCriteria,
         progressCallback: (@Sendable (Int, Double) async -> Void)?
-    ) async throws -> OptimizerResult
+    ) async -> OptimizerResult
 }
 
 // MARK: - Convergence Criteria
@@ -99,7 +98,7 @@ public struct ConvergenceCriteria: Sendable {
 ///
 /// **Usage:**
 /// ```swift
-/// let result = try await optimizer.minimize(...)
+/// let result = await optimizer.minimize(...)
 /// print("Optimal energy: \(result.optimalValue)")
 /// print("Converged: \(result.convergenceReason == .energyTolerance)")
 /// print("Iterations: \(result.iterations)")
@@ -203,9 +202,9 @@ public enum ConvergenceReason: Sendable, CustomStringConvertible {
 ///     initialSimplexSize: 0.1  // 10% of parameter range
 /// )
 ///
-/// let result = try await optimizer.minimize(
+/// let result = await optimizer.minimize(
 ///     objectiveFunction: { params in
-///         let state = try await computeState(params)
+///         let state = await computeState(params)
 ///         return hamiltonian.expectationValue(state: state)
 ///     },
 ///     initialParameters: initialGuess,
@@ -240,24 +239,24 @@ public struct NelderMeadOptimizer: Optimizer {
     @_optimize(speed)
     @_eagerMove
     public func minimize(
-        objectiveFunction: @Sendable ([Double]) async throws -> Double,
+        objectiveFunction: @Sendable ([Double]) async -> Double,
         initialParameters: [Double],
         convergenceCriteria: ConvergenceCriteria,
         progressCallback: (@Sendable (Int, Double) async -> Void)?
-    ) async throws -> OptimizerResult {
+    ) async -> OptimizerResult {
         let n: Int = initialParameters.count
         ValidationUtilities.validateNonEmpty(initialParameters, name: "initialParameters")
 
         var simplex: [SimplexVertex] = []
         simplex.reserveCapacity(n + 1)
 
-        let initialValue: Double = try await objectiveFunction(initialParameters)
+        let initialValue: Double = await objectiveFunction(initialParameters)
         simplex.append(SimplexVertex(parameters: initialParameters, value: initialValue))
 
         for i in 0 ..< n {
             var perturbed = initialParameters
             perturbed[i] += initialSimplexSize
-            let value: Double = try await objectiveFunction(perturbed)
+            let value: Double = await objectiveFunction(perturbed)
             simplex.append(SimplexVertex(parameters: perturbed, value: value))
         }
 
@@ -306,7 +305,7 @@ public struct NelderMeadOptimizer: Optimizer {
             var negAlpha = -alpha
             vDSP_vsmulD(centroid, 1, &onePlusAlpha, &reflected, 1, vDSP_Length(n))
             vDSP_vsmaD(simplex[n].parameters, 1, &negAlpha, reflected, 1, &reflected, 1, vDSP_Length(n))
-            let reflectedValue: Double = try await objectiveFunction(reflected)
+            let reflectedValue: Double = await objectiveFunction(reflected)
             functionEvaluations += 1
 
             if reflectedValue < simplex[0].value {
@@ -317,7 +316,7 @@ public struct NelderMeadOptimizer: Optimizer {
                 var gammaVal = gamma
                 vDSP_vsmulD(centroid, 1, &oneMinusGamma, &expanded, 1, vDSP_Length(n))
                 vDSP_vsmaD(reflected, 1, &gammaVal, expanded, 1, &expanded, 1, vDSP_Length(n))
-                let expandedValue: Double = try await objectiveFunction(expanded)
+                let expandedValue: Double = await objectiveFunction(expanded)
                 functionEvaluations += 1
 
                 if expandedValue < reflectedValue {
@@ -336,7 +335,7 @@ public struct NelderMeadOptimizer: Optimizer {
                     var rhoVal = rho
                     vDSP_vsmulD(centroid, 1, &oneMinusRho, &contracted, 1, vDSP_Length(n))
                     vDSP_vsmaD(reflected, 1, &rhoVal, contracted, 1, &contracted, 1, vDSP_Length(n))
-                    let contractedValue: Double = try await objectiveFunction(contracted)
+                    let contractedValue: Double = await objectiveFunction(contracted)
                     functionEvaluations += 1
 
                     if contractedValue < reflectedValue {
@@ -351,7 +350,7 @@ public struct NelderMeadOptimizer: Optimizer {
                     var rhoVal = rho
                     vDSP_vsmulD(centroid, 1, &oneMinusRho, &contracted, 1, vDSP_Length(n))
                     vDSP_vsmaD(simplex[n].parameters, 1, &rhoVal, contracted, 1, &contracted, 1, vDSP_Length(n))
-                    let contractedValue: Double = try await objectiveFunction(contracted)
+                    let contractedValue: Double = await objectiveFunction(contracted)
                     functionEvaluations += 1
 
                     if contractedValue < simplex[n].value {
@@ -369,7 +368,7 @@ public struct NelderMeadOptimizer: Optimizer {
                     vDSP_vsmulD(simplex[0].parameters, 1, &oneMinusSigma, &newParams, 1, vDSP_Length(n))
                     vDSP_vsmaD(simplex[i].parameters, 1, &sigmaVal, newParams, 1, &newParams, 1, vDSP_Length(n))
                     simplex[i].parameters = newParams
-                    simplex[i].value = try await objectiveFunction(simplex[i].parameters)
+                    simplex[i].value = await objectiveFunction(simplex[i].parameters)
                 }
                 functionEvaluations += n
             }
@@ -428,9 +427,9 @@ public struct NelderMeadOptimizer: Optimizer {
 ///     useAdaptiveLearningRate: true
 /// )
 ///
-/// let result = try await optimizer.minimize(
+/// let result = await optimizer.minimize(
 ///     objectiveFunction: { params in
-///         let state = try await computeState(params)
+///         let state = await computeState(params)
 ///         return hamiltonian.expectationValue(state: state)
 ///     },
 ///     initialParameters: initialGuess,
@@ -478,16 +477,16 @@ public struct GradientDescentOptimizer: Optimizer {
     @_optimize(speed)
     @_eagerMove
     public func minimize(
-        objectiveFunction: @Sendable ([Double]) async throws -> Double,
+        objectiveFunction: @Sendable ([Double]) async -> Double,
         initialParameters: [Double],
         convergenceCriteria: ConvergenceCriteria,
         progressCallback: (@Sendable (Int, Double) async -> Void)?
-    ) async throws -> OptimizerResult {
+    ) async -> OptimizerResult {
         let n: Int = initialParameters.count
         ValidationUtilities.validateNonEmpty(initialParameters, name: "initialParameters")
 
         var currentParameters = initialParameters
-        var currentValue: Double = try await objectiveFunction(currentParameters)
+        var currentValue: Double = await objectiveFunction(currentParameters)
         var valueHistory: [Double] = [currentValue]
         var functionEvaluations = 1
 
@@ -513,11 +512,11 @@ public struct GradientDescentOptimizer: Optimizer {
             for i in 0 ..< n {
                 var paramsPlus = currentParameters
                 paramsPlus[i] += parameterShift
-                let valuePlus: Double = try await objectiveFunction(paramsPlus)
+                let valuePlus: Double = await objectiveFunction(paramsPlus)
 
                 var paramsMinus = currentParameters
                 paramsMinus[i] -= parameterShift
-                let valueMinus: Double = try await objectiveFunction(paramsMinus)
+                let valueMinus: Double = await objectiveFunction(paramsMinus)
 
                 gradient[i] = (valuePlus - valueMinus) / 2.0
             }
@@ -545,7 +544,7 @@ public struct GradientDescentOptimizer: Optimizer {
                 currentParameters[i] += velocity[i]
             }
 
-            let newValue: Double = try await objectiveFunction(currentParameters)
+            let newValue: Double = await objectiveFunction(currentParameters)
             functionEvaluations += 1
 
             if abs(newValue - currentValue) < convergenceCriteria.energyTolerance {
@@ -621,9 +620,9 @@ public struct GradientDescentOptimizer: Optimizer {
 ///     maxLineSearchSteps: 20
 /// )
 ///
-/// let result = try await optimizer.minimize(
+/// let result = await optimizer.minimize(
 ///     objectiveFunction: { params in
-///         let state = try await computeState(params)
+///         let state = await computeState(params)
 ///         return hamiltonian.expectationValue(state: state)
 ///     },
 ///     initialParameters: initialGuess,
@@ -678,17 +677,17 @@ public struct LBFGSBOptimizer: Optimizer {
     @_optimize(speed)
     @_eagerMove
     public func minimize(
-        objectiveFunction: @Sendable ([Double]) async throws -> Double,
+        objectiveFunction: @Sendable ([Double]) async -> Double,
         initialParameters: [Double],
         convergenceCriteria: ConvergenceCriteria,
         progressCallback: (@Sendable (Int, Double) async -> Void)?
-    ) async throws -> OptimizerResult {
+    ) async -> OptimizerResult {
         let n: Int = initialParameters.count
         ValidationUtilities.validateNonEmpty(initialParameters, name: "initialParameters")
 
         var params = initialParameters
-        var cost: Double = try await objectiveFunction(params)
-        var gradient: [Double] = try await computeGradient(
+        var cost: Double = await objectiveFunction(params)
+        var gradient: [Double] = await computeGradient(
             params: params,
             objectiveFunction: objectiveFunction
         )
@@ -729,7 +728,7 @@ public struct LBFGSBOptimizer: Optimizer {
                 rhoHistory: rhoHistory
             )
 
-            let lineSearchResult: LineSearchResult? = try await performLineSearch(
+            let lineSearchResult: LineSearchResult? = await performLineSearch(
                 params: params,
                 direction: direction,
                 gradient: gradient,
@@ -755,8 +754,8 @@ public struct LBFGSBOptimizer: Optimizer {
             }
             var alphaVal = lsr.alpha
             vDSP_vsmaD(direction, 1, &alphaVal, params, 1, &newParams, 1, vDSP_Length(n))
-            let newCost: Double = try await objectiveFunction(newParams)
-            let newGradient: [Double] = try await computeGradient(
+            let newCost: Double = await objectiveFunction(newParams)
+            let newGradient: [Double] = await computeGradient(
                 params: newParams,
                 objectiveFunction: objectiveFunction
             )
@@ -813,8 +812,8 @@ public struct LBFGSBOptimizer: Optimizer {
     @_optimize(speed)
     private func computeGradient(
         params: [Double],
-        objectiveFunction: @Sendable ([Double]) async throws -> Double
-    ) async throws -> [Double] {
+        objectiveFunction: @Sendable ([Double]) async -> Double
+    ) async -> [Double] {
         let n: Int = params.count
         var gradient = [Double](unsafeUninitializedCapacity: n) { _, count in
             count = n
@@ -823,11 +822,11 @@ public struct LBFGSBOptimizer: Optimizer {
         for i in 0 ..< n {
             var paramsPlus = params
             paramsPlus[i] += parameterShift
-            let valuePlus: Double = try await objectiveFunction(paramsPlus)
+            let valuePlus: Double = await objectiveFunction(paramsPlus)
 
             var paramsMinus = params
             paramsMinus[i] -= parameterShift
-            let valueMinus: Double = try await objectiveFunction(paramsMinus)
+            let valueMinus: Double = await objectiveFunction(paramsMinus)
 
             gradient[i] = (valuePlus - valueMinus) / 2.0
         }
@@ -847,8 +846,8 @@ public struct LBFGSBOptimizer: Optimizer {
         direction: [Double],
         gradient: [Double],
         cost: Double,
-        objectiveFunction: @Sendable ([Double]) async throws -> Double
-    ) async throws -> LineSearchResult? {
+        objectiveFunction: @Sendable ([Double]) async -> Double
+    ) async -> LineSearchResult? {
         let n: Int = params.count
         var alpha = 1.0
         let rho = 0.5
@@ -863,11 +862,11 @@ public struct LBFGSBOptimizer: Optimizer {
             }
             var alphaVal = alpha
             vDSP_vsmaD(direction, 1, &alphaVal, params, 1, &newParams, 1, vDSP_Length(n))
-            let newCost: Double = try await objectiveFunction(newParams)
+            let newCost: Double = await objectiveFunction(newParams)
             evaluations += 1
 
             if newCost <= cost + c1 * alpha * dirGrad {
-                let newGradient: [Double] = try await computeGradient(
+                let newGradient: [Double] = await computeGradient(
                     params: newParams,
                     objectiveFunction: objectiveFunction
                 )
@@ -999,7 +998,7 @@ public struct LBFGSBOptimizer: Optimizer {
 ///     decayExponent: 0.602  // Standard SPSA value
 /// )
 ///
-/// let result = try await optimizer.minimize(
+/// let result = await optimizer.minimize(
 ///     objectiveFunction: noisyEnergyFunction,
 ///     initialParameters: initialGuess,
 ///     convergenceCriteria: ConvergenceCriteria(
@@ -1055,16 +1054,16 @@ public struct SPSAOptimizer: Optimizer {
     @_optimize(speed)
     @_eagerMove
     public func minimize(
-        objectiveFunction: @Sendable ([Double]) async throws -> Double,
+        objectiveFunction: @Sendable ([Double]) async -> Double,
         initialParameters: [Double],
         convergenceCriteria: ConvergenceCriteria,
         progressCallback: (@Sendable (Int, Double) async -> Void)?
-    ) async throws -> OptimizerResult {
+    ) async -> OptimizerResult {
         let n: Int = initialParameters.count
         ValidationUtilities.validateNonEmpty(initialParameters, name: "initialParameters")
 
         var params = initialParameters
-        var currentValue: Double = try await objectiveFunction(params)
+        var currentValue: Double = await objectiveFunction(params)
         var valueHistory: [Double] = [currentValue]
         var functionEvaluations = 1
 
@@ -1103,8 +1102,8 @@ public struct SPSAOptimizer: Optimizer {
             var negCk = -ck
             vDSP_vsmaD(delta, 1, &negCk, params, 1, &paramsMinus, 1, vDSP_Length(n))
 
-            let valuePlus: Double = try await objectiveFunction(paramsPlus)
-            let valueMinus: Double = try await objectiveFunction(paramsMinus)
+            let valuePlus: Double = await objectiveFunction(paramsPlus)
+            let valueMinus: Double = await objectiveFunction(paramsMinus)
             functionEvaluations += 2
 
             let gradientApprox: Double = (valuePlus - valueMinus) / (2.0 * ck)
@@ -1112,7 +1111,7 @@ public struct SPSAOptimizer: Optimizer {
             var negAkGrad = -ak * gradientApprox
             vDSP_vsmaD(delta, 1, &negAkGrad, params, 1, &params, 1, vDSP_Length(n))
 
-            let newValue: Double = try await objectiveFunction(params)
+            let newValue: Double = await objectiveFunction(params)
             functionEvaluations += 1
 
             if abs(newValue - currentValue) < convergenceCriteria.energyTolerance {
@@ -1188,7 +1187,7 @@ public struct SPSAOptimizer: Optimizer {
 ///     optimizer: optimizer
 /// )
 ///
-/// let result = try await vqe.run(initialParameters: [0.01, 0.01, 0.01, 0.01])
+/// let result = await vqe.run(initialParameters: [0.01, 0.01, 0.01, 0.01])
 /// // Result: Ground state energy with ~100-200 iterations for 4-parameter system
 ///
 /// // Custom trust region tuning
@@ -1285,11 +1284,11 @@ public struct COBYLAOptimizer: Optimizer {
     @_optimize(speed)
     @_eagerMove
     public func minimize(
-        objectiveFunction: @Sendable ([Double]) async throws -> Double,
+        objectiveFunction: @Sendable ([Double]) async -> Double,
         initialParameters: [Double],
         convergenceCriteria: ConvergenceCriteria,
         progressCallback: (@Sendable (Int, Double) async -> Void)?
-    ) async throws -> OptimizerResult {
+    ) async -> OptimizerResult {
         let n: Int = initialParameters.count
         ValidationUtilities.validateNonEmpty(initialParameters, name: "initialParameters")
 
@@ -1300,7 +1299,7 @@ public struct COBYLAOptimizer: Optimizer {
         var simplex: [SimplexPoint] = []
         simplex.reserveCapacity(n + 1)
 
-        let baseValue: Double = try await objectiveFunction(initialParameters)
+        let baseValue: Double = await objectiveFunction(initialParameters)
         functionEvaluations += 1
         simplex.append(SimplexPoint(parameters: initialParameters, value: baseValue))
         valueHistory.append(baseValue)
@@ -1309,7 +1308,7 @@ public struct COBYLAOptimizer: Optimizer {
         for i in 0 ..< n {
             var perturbedParams = initialParameters
             perturbedParams[i] += simplexSize
-            let value: Double = try await objectiveFunction(perturbedParams)
+            let value: Double = await objectiveFunction(perturbedParams)
             functionEvaluations += 1
             simplex.append(SimplexPoint(parameters: perturbedParams, value: value))
         }
@@ -1345,7 +1344,7 @@ public struct COBYLAOptimizer: Optimizer {
             }
             vDSP_vaddD(bestParameters, 1, step, 1, &trialParameters, 1, vDSP_Length(n))
 
-            let trialValue: Double = try await objectiveFunction(trialParameters)
+            let trialValue: Double = await objectiveFunction(trialParameters)
             functionEvaluations += 1
 
             let predictedReduction: Double = -evaluateLinearModel(
@@ -1393,7 +1392,7 @@ public struct COBYLAOptimizer: Optimizer {
                     for i in 1 ... n {
                         var perturbedParams = bestParameters
                         perturbedParams[i - 1] += newSimplexSize
-                        let value: Double = try await objectiveFunction(perturbedParams)
+                        let value: Double = await objectiveFunction(perturbedParams)
                         functionEvaluations += 1
                         simplex[i] = SimplexPoint(parameters: perturbedParams, value: value)
                     }
@@ -1611,27 +1610,6 @@ public struct COBYLAOptimizer: Optimizer {
             self.baseParameters = baseParameters
             self.baseValue = baseValue
             self.gradient = gradient
-        }
-    }
-}
-
-// MARK: - Optimizer Error
-
-@frozen
-public enum OptimizerError: Error, LocalizedError {
-    /// Objective function returned NaN or infinite value
-    case invalidObjectiveValue(iteration: Int, value: Double)
-
-    /// Optimizer-specific failure
-    case optimizationFailed(reason: String)
-
-    public var errorDescription: String? {
-        switch self {
-        case let .invalidObjectiveValue(iteration, value):
-            "Objective function returned invalid value at iteration \(iteration): \(value). Check circuit validity and Hamiltonian."
-
-        case let .optimizationFailed(reason):
-            "Optimization failed: \(reason)"
         }
     }
 }

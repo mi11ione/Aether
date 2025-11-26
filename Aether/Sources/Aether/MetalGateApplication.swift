@@ -90,7 +90,7 @@ private enum MetalResources {
 /// let largeCircuit = QuantumCircuit(numQubits: 12)  // Will use GPU
 /// largeCircuit.append(gate: .hadamard, toQubit: 0)
 /// largeCircuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
-/// let result = try await simulator.execute(largeCircuit)
+/// let result = await simulator.execute(largeCircuit)
 /// // Gates automatically run on GPU
 ///
 /// // Manual GPU application (rarely needed)

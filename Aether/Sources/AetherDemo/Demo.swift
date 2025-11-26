@@ -185,9 +185,9 @@ extension String {
     }
 }
 
-func measureTime(block: () throws -> Void) rethrows {
+func measureTime(block: () -> Void) {
     let start = Date()
-    try block()
+    block()
     let elapsed = Date().timeIntervalSince(start)
     print("⏱️  \(String(format: "%.3f", elapsed))s\n")
 }
