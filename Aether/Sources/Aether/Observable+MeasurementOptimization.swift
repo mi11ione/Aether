@@ -320,8 +320,8 @@ public extension Observable {
             Measurement Optimization Statistics:
             - Hamiltonian terms: \(numTerms)
             - QWC groups: \(numQWCGroups)
-            - QWC reduction: \(String(format: "%.1f", qwcReduction))×
-            - Estimated speedup (QWC): \(String(format: "%.1f", estimatedSpeedupQWC))×
+            - QWC reduction: \(String(format: "%.1f", qwcReduction))x
+            - Estimated speedup (QWC): \(String(format: "%.1f", estimatedSpeedupQWC))x
             """
 
             if let numPartitions = numUnitaryPartitions,
@@ -331,8 +331,8 @@ public extension Observable {
                 text += """
 
                 - Unitary partitions: \(numPartitions)
-                - Unitary reduction: \(String(format: "%.1f", unitaryRed))×
-                - Estimated speedup (Unitary): \(String(format: "%.1f", unitarySpeedup))×
+                - Unitary reduction: \(String(format: "%.1f", unitaryRed))x
+                - Estimated speedup (Unitary): \(String(format: "%.1f", unitarySpeedup))x
                 """
             }
 

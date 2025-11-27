@@ -20,14 +20,14 @@ struct CircuitUnitaryTests {
         #expect(unitary[1][1] == Complex(1, 0))
         #expect(unitary[2][2] == Complex(1, 0))
         #expect(unitary[3][3] == Complex(1, 0))
-        #expect(unitary[0][1].magnitude() < 1e-10)
-        #expect(unitary[1][0].magnitude() < 1e-10)
+        #expect(unitary[0][1].magnitude < 1e-10)
+        #expect(unitary[1][0].magnitude < 1e-10)
     }
 
     @Test("Single Hadamard gate produces correct unitary")
     func singleHadamardGate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         let expected = 1.0 / sqrt(2.0)
@@ -40,7 +40,7 @@ struct CircuitUnitaryTests {
     @Test("Pauli-X gate on single qubit")
     func pauliXGate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .pauliX, toQubit: 0)
+        circuit.append(.pauliX, to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary[0][0] == Complex(0, 0))
@@ -52,7 +52,7 @@ struct CircuitUnitaryTests {
     @Test("Pauli-Y gate on single qubit")
     func pauliYGate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .pauliY, toQubit: 0)
+        circuit.append(.pauliY, to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(abs(unitary[0][0].real) < 1e-10)
@@ -64,19 +64,19 @@ struct CircuitUnitaryTests {
     @Test("Pauli-Z gate on single qubit")
     func pauliZGate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .pauliZ, toQubit: 0)
+        circuit.append(.pauliZ, to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary[0][0] == Complex(1, 0))
         #expect(unitary[1][1] == Complex(-1, 0))
-        #expect(unitary[0][1].magnitude() < 1e-10)
-        #expect(unitary[1][0].magnitude() < 1e-10)
+        #expect(unitary[0][1].magnitude < 1e-10)
+        #expect(unitary[1][0].magnitude < 1e-10)
     }
 
     @Test("Rotation gate produces correct unitary")
     func rotationGate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .rotationX(theta: .pi / 2), toQubit: 0)
+        circuit.append(.rotationX(theta: .pi / 2), to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         let expected = 1.0 / sqrt(2.0)
@@ -89,7 +89,7 @@ struct CircuitUnitaryTests {
     @Test("CNOT gate on two qubits")
     func cnotGate() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+        circuit.append(.cnot, to: [0, 1])
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary.count == 4)
@@ -97,14 +97,14 @@ struct CircuitUnitaryTests {
         #expect(unitary[1][3] == Complex(1, 0))
         #expect(unitary[2][2] == Complex(1, 0))
         #expect(unitary[3][1] == Complex(1, 0))
-        #expect(unitary[0][1].magnitude() < 1e-10)
-        #expect(unitary[1][1].magnitude() < 1e-10)
+        #expect(unitary[0][1].magnitude < 1e-10)
+        #expect(unitary[1][1].magnitude < 1e-10)
     }
 
     @Test("CZ gate produces correct unitary")
     func czGate() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .cz(control: 0, target: 1), qubits: [])
+        circuit.append(.cz, to: [0, 1])
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary[0][0] == Complex(1, 0))
@@ -116,7 +116,7 @@ struct CircuitUnitaryTests {
     @Test("SWAP gate swaps qubit amplitudes")
     func swapGate() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .swap(qubit1: 0, qubit2: 1), qubits: [])
+        circuit.append(.swap, to: [0, 1])
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary[0][0] == Complex(1, 0))
@@ -128,7 +128,7 @@ struct CircuitUnitaryTests {
     @Test("Controlled rotation gate")
     func controlledRotation() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .controlledRotationZ(theta: .pi, control: 0, target: 1), qubits: [])
+        circuit.append(.controlledRotationZ(theta: .pi), to: [0, 1])
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary.count == 4)
@@ -141,7 +141,7 @@ struct CircuitUnitaryTests {
     @Test("Toffoli gate on three qubits")
     func toffoliGate() {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .toffoli(control1: 0, control2: 1, target: 2), qubits: [])
+        circuit.append(.toffoli, to: [0, 1, 2])
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary.count == 8)
@@ -153,8 +153,8 @@ struct CircuitUnitaryTests {
     @Test("Multiple gates compose correctly")
     func multipleGateComposition() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.cnot, to: [0, 1])
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary.count == 4)
@@ -166,7 +166,7 @@ struct CircuitUnitaryTests {
     @Test("Hadamard on second qubit of two-qubit system")
     func hadamardOnSecondQubit() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 1)
+        circuit.append(.hadamard, to: 1)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         let inv_sqrt2 = 1.0 / sqrt(2.0)
@@ -179,9 +179,9 @@ struct CircuitUnitaryTests {
     @Test("Three-qubit circuit with mixed gates")
     func threeQubitMixedGates() {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
-        circuit.append(gate: .pauliZ, toQubit: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliX, to: 1)
+        circuit.append(.pauliZ, to: 2)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary.count == 8)
@@ -189,12 +189,12 @@ struct CircuitUnitaryTests {
 
     @Test("Custom single-qubit gate")
     func customSingleQubitGate() {
-        let customMatrix: GateMatrix = [
+        let customMatrix: [[Complex<Double>]] = [
             [Complex(0.707, 0), Complex(0.707, 0)],
             [Complex(0.707, 0), Complex(-0.707, 0)],
         ]
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .customSingleQubit(matrix: customMatrix), toQubit: 0)
+        circuit.append(.customSingleQubit(matrix: customMatrix), to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(abs(unitary[0][0].real - 0.707) < 1e-3)
@@ -226,9 +226,9 @@ struct CircuitUnitaryTests {
     @Test("Unitarity preserved after gate composition")
     func unitarityPreserved() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
-        circuit.append(gate: .rotationZ(theta: .pi / 4), toQubit: 0)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.cnot, to: [0, 1])
+        circuit.append(.rotationZ(theta: .pi / 4), to: 0)
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
         let conjugateTranspose = MatrixUtilities.hermitianConjugate(unitary)
@@ -240,7 +240,7 @@ struct CircuitUnitaryTests {
                     #expect(abs(product[i][j].real - 1.0) < 1e-10)
                     #expect(abs(product[i][j].imaginary) < 1e-10)
                 } else {
-                    #expect(abs(product[i][j].magnitude()) < 1e-10)
+                    #expect(abs(product[i][j].magnitude) < 1e-10)
                 }
             }
         }
@@ -249,7 +249,7 @@ struct CircuitUnitaryTests {
     @Test("S gate produces correct phase")
     func sGatePhase() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .sGate, toQubit: 0)
+        circuit.append(.sGate, to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary[0][0] == Complex(1, 0))
@@ -260,7 +260,7 @@ struct CircuitUnitaryTests {
     @Test("T gate produces correct phase")
     func tGatePhase() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .tGate, toQubit: 0)
+        circuit.append(.tGate, to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         let expected = 1.0 / sqrt(2.0)
@@ -272,8 +272,8 @@ struct CircuitUnitaryTests {
     @Test("Sequential composition matches direct multiplication")
     func sequentialComposition() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .pauliY, toQubit: 0)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.pauliY, to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         let xGate = QuantumGate.pauliX.matrix()
@@ -291,7 +291,7 @@ struct CircuitUnitaryTests {
     @Test("Four-qubit circuit produces correct dimension")
     func fourQubitDimension() {
         var circuit = QuantumCircuit(numQubits: 4)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary.count == 16)
@@ -301,7 +301,7 @@ struct CircuitUnitaryTests {
     @Test("CH gate on two qubits")
     func controlledHadamard() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .ch(control: 0, target: 1), qubits: [])
+        circuit.append(.ch, to: [0, 1])
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary[0][0] == Complex(1, 0))
@@ -314,7 +314,7 @@ struct CircuitUnitaryTests {
     @Test("CY gate on two qubits")
     func controlledY() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .cy(control: 0, target: 1), qubits: [])
+        circuit.append(.cy, to: [0, 1])
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary[0][0] == Complex(1, 0))
@@ -326,7 +326,7 @@ struct CircuitUnitaryTests {
     @Test("Controlled phase gate")
     func controlledPhase() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .controlledPhase(theta: .pi, control: 0, target: 1), qubits: [])
+        circuit.append(.controlledPhase(theta: .pi), to: [0, 1])
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(abs(unitary[3][3].real + 1.0) < 1e-10)
@@ -335,7 +335,7 @@ struct CircuitUnitaryTests {
     @Test("sqrt-SWAP gate")
     func sqrtSwap() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .sqrtSwap(qubit1: 0, qubit2: 1), qubits: [])
+        circuit.append(.sqrtSwap, to: [0, 1])
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary.count == 4)
@@ -344,7 +344,7 @@ struct CircuitUnitaryTests {
     @Test("U1 gate produces correct phase")
     func u1Gate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .u1(lambda: .pi / 2), toQubit: 0)
+        circuit.append(.u1(lambda: .pi / 2), to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary[0][0] == Complex(1, 0))
@@ -354,7 +354,7 @@ struct CircuitUnitaryTests {
     @Test("U2 gate with phases")
     func u2Gate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .u2(phi: 0, lambda: .pi), toQubit: 0)
+        circuit.append(.u2(phi: 0, lambda: .pi), to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary.count == 2)
@@ -363,7 +363,7 @@ struct CircuitUnitaryTests {
     @Test("U3 gate with all parameters")
     func u3Gate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .u3(theta: .pi / 2, phi: 0, lambda: .pi), toQubit: 0)
+        circuit.append(.u3(theta: .pi / 2, phi: 0, lambda: .pi), to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary.count == 2)
@@ -372,7 +372,7 @@ struct CircuitUnitaryTests {
     @Test("SX gate square root of X")
     func sxGate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .sx, toQubit: 0)
+        circuit.append(.sx, to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(abs(unitary[0][0].real - 0.5) < 1e-10)
@@ -382,7 +382,7 @@ struct CircuitUnitaryTests {
     @Test("SY gate square root of Y")
     func syGate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .sy, toQubit: 0)
+        circuit.append(.sy, to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(abs(unitary[0][0].real - 0.5) < 1e-10)

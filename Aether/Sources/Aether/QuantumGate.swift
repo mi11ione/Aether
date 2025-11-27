@@ -14,9 +14,9 @@ private let invSqrt2: Double = 1.0 / 2.0.squareRoot()
 ///
 /// **Mathematical foundation**:
 /// - Unitarity: U†U = I (probability conservation, reversibility)
-/// - Single-qubit: 2×2 complex matrices operating on C²
-/// - Two-qubit: 4×4 complex matrices operating on C⁴
-/// - Multi-qubit: 2^n × 2^n matrices operating on C^(2^n)
+/// - Single-qubit: 2x2 complex matrices operating on C²
+/// - Two-qubit: 4x4 complex matrices operating on C⁴
+/// - Multi-qubit: 2^n x 2^n matrices operating on C^(2^n)
 ///
 /// **Gate categories**:
 /// - **Pauli gates**: X (bit flip), Y (bit+phase flip), Z (phase flip)
@@ -31,191 +31,70 @@ private let invSqrt2: Double = 1.0 / 2.0.squareRoot()
 /// **Usage patterns**:
 /// - Single-qubit: Apply to specific qubit in circuit
 /// - Controlled gates: Specify control and target qubits
-/// - Matrix access: Use `matrix()` to get unitary representation
+/// - Matrix access: Use ``matrix()`` to get unitary representation
 /// - Validation: Gates validate qubit indices and matrix unitarity
 ///
 /// Example:
 /// ```swift
-/// // Single-qubit gates
-/// let x = QuantumGate.pauliX
-/// let h = QuantumGate.hadamard
-/// let rz = QuantumGate.rotationZ(theta: .pi/4)
-///
-/// // Two-qubit gates
-/// let cnot = QuantumGate.cnot(control: 0, target: 1)
-/// let cphase = QuantumGate.controlledPhase(theta: .pi/2, control: 1, target: 2)
-///
-/// // Multi-qubit gates
-/// let toffoli = QuantumGate.toffoli(control1: 0, control2: 1, target: 2)
-///
-/// // Create Bell state circuit
 /// var circuit = QuantumCircuit(numQubits: 2)
-/// circuit.append(gate: .hadamard, toQubit: 0)
-/// circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+/// circuit.append(gate: .hadamard, qubit: 0)
+/// circuit.append(gate: .cnot, qubits: [0, 1])
 /// let bellState = circuit.execute()
-///
-/// // Custom gate with validation
-/// let customMatrix = [
-///     [Complex(0.5, 0.5), Complex(0.5, -0.5)],
-///     [Complex(0.5, -0.5), Complex(0.5, 0.5)]
-/// ]
-/// let customGate = QuantumGate.createCustomSingleQubit(matrix: customMatrix)
-///
-/// // Gate properties
-/// print(cnot.qubitsRequired)  // 2
-/// print(rz.isParameterized)   // true
-/// print(h.isHermitian)        // true
 /// ```
-@frozen
+///
+/// - SeeAlso: ``QuantumCircuit``, ``GateApplication``, ``ParameterizedGate``
 public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable {
     // MARK: - Single-Qubit Gates
 
-    /// Identity gate - no operation
     case identity
-
-    /// Pauli-X gate (NOT gate, bit flip)
-    /// Matrix: [[0, 1], [1, 0]]
     case pauliX
-
-    /// Pauli-Y gate (bit flip + phase flip)
-    /// Matrix: [[0, -i], [i, 0]]
     case pauliY
-
-    /// Pauli-Z gate (phase flip)
-    /// Matrix: [[1, 0], [0, -1]]
     case pauliZ
-
-    /// Hadamard gate (superposition creator)
-    /// Matrix: (1/√2)[[1, 1], [1, -1]]
-    /// Creates equal superposition from basis states
     case hadamard
-
-    /// Phase gate with rotation angle θ
-    /// Matrix: [[1, 0], [0, e^(iθ)]]
-    /// Applies relative phase rotation to |1⟩ component
-    case phase(theta: Double)
-
-    /// S gate (Phase π/2, quarter-turn phase)
-    /// Equivalent to phase(π/2)
+    case phase(angle: Double)
     case sGate
-
-    /// T gate (Phase π/4, eighth-turn phase)
-    /// Equivalent to phase(π/4)
     case tGate
-
-    /// Rotation around X-axis by angle θ
-    /// Matrix uses cos(θ/2) and sin(θ/2)
     case rotationX(theta: Double)
-
-    /// Rotation around Y-axis by angle θ
-    /// Matrix uses cos(θ/2) and sin(θ/2)
     case rotationY(theta: Double)
-
-    /// Rotation around Z-axis by angle θ
-    /// Matrix uses e^(-iθ/2) and e^(iθ/2)
     case rotationZ(theta: Double)
-
-    /// IBM U1 gate - single-parameter phase gate
-    /// U1(λ) = diag(1, e^(iλ))
-    /// Pure phase gate, equivalent to Rz(λ) up to global phase
     case u1(lambda: Double)
-
-    /// IBM U2 gate - two-parameter gate
-    /// U2(φ,λ) creates superposition with phases
-    /// Equivalent to Rz(φ)·Ry(π/2)·Rz(λ)
     case u2(phi: Double, lambda: Double)
-
-    /// IBM U3 gate - three-parameter universal single-qubit gate
-    /// U3(θ,φ,λ) is most general single-qubit rotation
-    /// Can decompose any single-qubit gate into U3
     case u3(theta: Double, phi: Double, lambda: Double)
-
-    /// Square root of X gate (SX)
-    /// SX · SX = X
-    /// Native gate on IBM hardware
-    /// Used in efficient gate decompositions
     case sx
-
-    /// Square root of Y gate (SY)
-    /// SY · SY = Y
-    /// Completes square root Pauli gates
     case sy
-
-    /// Arbitrary single-qubit unitary
-    /// User-provided 2×2 complex matrix
-    /// Validates unitarity: U†U = I
-    /// Used for custom gates and research
-    case customSingleQubit(matrix: GateMatrix)
+    case customSingleQubit(matrix: [[Complex<Double>]])
 
     // MARK: - Two-Qubit Gates
 
-    /// CNOT (Controlled-NOT) gate
-    /// Control qubit: if |1⟩, flip target qubit
-    /// Most important two-qubit gate for entanglement
-    case cnot(control: Int, target: Int)
-
-    /// Controlled-Z gate
-    /// Symmetric: CZ(a,b) = CZ(b,a)
-    /// Native to many superconducting architectures
-    /// Matrix: diag(1,1,1,-1) on computational basis
-    case cz(control: Int, target: Int)
-
-    /// Controlled-Y gate
-    /// Completes controlled Pauli set (CX, CY, CZ)
-    /// Less common but necessary for full gate library
-    case cy(control: Int, target: Int)
-
-    /// Controlled-Hadamard gate
-    /// Creates specific entangled states
-    /// Used in quantum communication protocols
-    case ch(control: Int, target: Int)
-
-    /// Controlled-Phase gate with angle θ
-    /// Applies phase e^(iθ) only when both qubits are |1⟩
-    /// Critical for QFT algorithm
-    case controlledPhase(theta: Double, control: Int, target: Int)
-
-    /// Controlled rotation around X-axis
-    /// Parameterized controlled gate
-    /// Essential for variational quantum circuits
-    case controlledRotationX(theta: Double, control: Int, target: Int)
-
-    /// Controlled rotation around Y-axis
-    /// Parameterized controlled gate
-    /// Essential for variational quantum circuits
-    case controlledRotationY(theta: Double, control: Int, target: Int)
-
-    /// Controlled rotation around Z-axis
-    /// Parameterized controlled gate
-    /// Essential for variational quantum circuits
-    case controlledRotationZ(theta: Double, control: Int, target: Int)
-
-    /// SWAP gate - exchanges two qubits
-    /// Useful for qubit routing
-    case swap(qubit1: Int, qubit2: Int)
-
-    /// Square root of SWAP gate
-    /// (√SWAP)² = SWAP
-    /// Creates entanglement more gradually than CNOT
-    /// Used in quantum communication protocols
-    case sqrtSwap(qubit1: Int, qubit2: Int)
-
-    /// Arbitrary two-qubit unitary
-    /// User-provided 4×4 complex matrix
-    /// Validates unitarity: U†U = I
-    /// Used for custom gates and research
-    case customTwoQubit(matrix: GateMatrix, control: Int, target: Int)
+    case cnot
+    case cz
+    case cy
+    case ch
+    case controlledPhase(theta: Double)
+    case controlledRotationX(theta: Double)
+    case controlledRotationY(theta: Double)
+    case controlledRotationZ(theta: Double)
+    case swap
+    case sqrtSwap
+    case customTwoQubit(matrix: [[Complex<Double>]])
 
     // MARK: - Multi-Qubit Gates
 
-    /// Toffoli gate (CCNOT - controlled-controlled-NOT)
-    /// Two control qubits, one target
-    /// Flips target only if both controls are |1⟩
-    case toffoli(control1: Int, control2: Int, target: Int)
+    case toffoli
 
     // MARK: - Gate Properties
 
     /// Number of qubits this gate operates on
+    ///
+    /// Single-qubit gates return 1, two-qubit gates return 2, Toffoli returns 3.
+    /// Used for circuit validation and gate application.
+    ///
+    /// Example:
+    /// ```swift
+    /// QuantumGate.hadamard.qubitsRequired  // 1
+    /// QuantumGate.cnot.qubitsRequired  // 2
+    /// QuantumGate.toffoli.qubitsRequired  // 3
+    /// ```
     @inlinable
     public var qubitsRequired: Int {
         switch self {
@@ -229,7 +108,18 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         }
     }
 
-    /// Whether gate has parameter(s)
+    /// Whether gate has parameter(s) that affect its matrix
+    ///
+    /// Parameterized gates include rotation gates (Rx, Ry, Rz), phase gates,
+    /// IBM universal gates (U1, U2, U3), and controlled rotations.
+    /// Used for gradient computation and circuit optimization.
+    ///
+    /// Example:
+    /// ```swift
+    /// QuantumGate.hadamard.isParameterized  // false
+    /// QuantumGate.rotationY(theta: .pi/4).isParameterized  // true
+    /// QuantumGate.controlledPhase(theta: .pi).isParameterized  // true
+    /// ```
     @inlinable
     public var isParameterized: Bool {
         switch self {
@@ -239,7 +129,17 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         }
     }
 
-    /// Whether gate is Hermitian (self-adjoint)
+    /// Whether gate is Hermitian (self-adjoint): U† = U
+    ///
+    /// Hermitian gates are their own inverse and represent observables in quantum mechanics.
+    /// Pauli gates (X, Y, Z), Hadamard, and SWAP are Hermitian.
+    ///
+    /// Example:
+    /// ```swift
+    /// QuantumGate.pauliX.isHermitian  // true (X† = X)
+    /// QuantumGate.hadamard.isHermitian  // true (H† = H)
+    /// QuantumGate.tGate.isHermitian  // false (T† ≠ T)
+    /// ```
     @inlinable
     public var isHermitian: Bool {
         switch self {
@@ -253,32 +153,23 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// Generate unitary matrix representation of gate
     ///
     /// Returns the complex matrix that represents this gate's action on quantum states.
-    /// Matrix size depends on gate type: 2×2 for single-qubit, 4×4 for two-qubit,
-    /// 8×8 for three-qubit gates. All matrices satisfy U†U = I (unitarity).
+    /// Matrix size depends on gate type: 2x2 for single-qubit, 4x4 for two-qubit,
+    /// 8x8 for three-qubit gates. All matrices satisfy U†U = I (unitarity).
     ///
-    /// - Returns: 2D array of complex numbers (2×2, 4×4, or 8×8)
+    /// - Returns: 2D array of complex numbers (2x2, 4x4, or 8x8)
+    /// - Complexity: O(1) for fixed-size matrices (2x2, 4x4, 8x8)
     ///
     /// Example:
     /// ```swift
-    /// // Hadamard matrix: (1/√2)[[1,1],[1,-1]]
     /// let h = QuantumGate.hadamard
-    /// let hMatrix = h.matrix()
-    /// // [[0.707+0i, 0.707+0i],
-    /// //  [0.707+0i, -0.707+0i]]
-    ///
-    /// // Pauli-X matrix: [[0,1],[1,0]]
-    /// let x = QuantumGate.pauliX
-    /// let xMatrix = x.matrix()
-    /// // [[0+0i, 1+0i],
-    /// //  [1+0i, 0+0i]]
-    ///
-    /// // CNOT matrix: 4×4 identity with last two rows swapped
-    /// let cnot = QuantumGate.cnot(control: 0, target: 1)
-    /// let cnotMatrix = cnot.matrix()
+    /// let matrix = h.matrix()
+    /// // [[0.707+0i, 0.707+0i], [0.707+0i, -0.707+0i]]
     /// ```
+    ///
+    /// - SeeAlso: ``MatrixUtilities``, ``isUnitary(_:)``
     @_optimize(speed)
     @_eagerMove
-    public func matrix() -> GateMatrix {
+    public func matrix() -> [[Complex<Double>]] {
         switch self {
         case .identity: identityMatrix()
         case .pauliX: pauliXMatrix()
@@ -296,53 +187,53 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         case .swap: swapMatrix()
         case .sqrtSwap: sqrtSwapMatrix()
         case .toffoli: toffoliMatrix()
-        case let .phase(theta): phaseMatrix(theta: theta)
+        case let .phase(angle): phaseMatrix(theta: angle)
         case let .rotationX(theta): rotationXMatrix(theta: theta)
         case let .rotationY(theta): rotationYMatrix(theta: theta)
         case let .rotationZ(theta): rotationZMatrix(theta: theta)
         case let .u1(lambda): u1Matrix(lambda: lambda)
         case let .u2(phi, lambda): u2Matrix(phi: phi, lambda: lambda)
         case let .u3(theta, phi, lambda): u3Matrix(theta: theta, phi: phi, lambda: lambda)
-        case let .controlledPhase(theta, _, _): controlledPhaseMatrix(theta: theta)
-        case let .controlledRotationX(theta, _, _): controlledRotationXMatrix(theta: theta)
-        case let .controlledRotationY(theta, _, _): controlledRotationYMatrix(theta: theta)
-        case let .controlledRotationZ(theta, _, _): controlledRotationZMatrix(theta: theta)
+        case let .controlledPhase(theta): controlledPhaseMatrix(theta: theta)
+        case let .controlledRotationX(theta): controlledRotationXMatrix(theta: theta)
+        case let .controlledRotationY(theta): controlledRotationYMatrix(theta: theta)
+        case let .controlledRotationZ(theta): controlledRotationZMatrix(theta: theta)
         case let .customSingleQubit(matrix): matrix
-        case let .customTwoQubit(matrix, _, _): matrix
+        case let .customTwoQubit(matrix): matrix
         }
     }
 
     // MARK: - Single-Qubit Matrix Implementations
 
-    private func identityMatrix() -> GateMatrix {
+    private func identityMatrix() -> [[Complex<Double>]] {
         [
             [.one, .zero],
             [.zero, .one],
         ]
     }
 
-    private func pauliXMatrix() -> GateMatrix {
+    private func pauliXMatrix() -> [[Complex<Double>]] {
         [
             [.zero, .one],
             [.one, .zero],
         ]
     }
 
-    private func pauliYMatrix() -> GateMatrix {
+    private func pauliYMatrix() -> [[Complex<Double>]] {
         [
             [.zero, -Complex.i],
             [Complex.i, .zero],
         ]
     }
 
-    private func pauliZMatrix() -> GateMatrix {
+    private func pauliZMatrix() -> [[Complex<Double>]] {
         [
             [.one, .zero],
             [.zero, Complex(-1.0, 0.0)],
         ]
     }
 
-    private func hadamardMatrix() -> GateMatrix {
+    private func hadamardMatrix() -> [[Complex<Double>]] {
         let c: Complex<Double> = Complex(invSqrt2, 0.0)
         return [
             [c, c],
@@ -350,15 +241,15 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func phaseMatrix(theta: Double) -> GateMatrix {
-        let phaseFactor = Complex<Double>.exp(theta)
+    private func phaseMatrix(theta: Double) -> [[Complex<Double>]] {
+        let phaseFactor = Complex<Double>(phase: theta)
         return [
             [.one, .zero],
             [.zero, phaseFactor],
         ]
     }
 
-    private func rotationXMatrix(theta: Double) -> GateMatrix {
+    private func rotationXMatrix(theta: Double) -> [[Complex<Double>]] {
         let halfTheta: Double = theta / 2.0
         let c: Complex<Double> = Complex(cos(halfTheta), 0.0)
         let s: Complex<Double> = Complex(0.0, -sin(halfTheta))
@@ -368,7 +259,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func rotationYMatrix(theta: Double) -> GateMatrix {
+    private func rotationYMatrix(theta: Double) -> [[Complex<Double>]] {
         let halfTheta: Double = theta / 2.0
         let c: Complex<Double> = Complex(cos(halfTheta), 0.0)
         let s: Complex<Double> = Complex(sin(halfTheta), 0.0)
@@ -378,29 +269,27 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func rotationZMatrix(theta: Double) -> GateMatrix {
+    private func rotationZMatrix(theta: Double) -> [[Complex<Double>]] {
         let halfTheta: Double = theta / 2.0
-        let negPhase = Complex<Double>.exp(-halfTheta)
-        let posPhase = Complex<Double>.exp(halfTheta)
+        let negPhase = Complex<Double>(phase: -halfTheta)
+        let posPhase = Complex<Double>(phase: halfTheta)
         return [
             [negPhase, .zero],
             [.zero, posPhase],
         ]
     }
 
-    private func u1Matrix(lambda: Double) -> GateMatrix {
-        // U1(λ) = diag(1, e^(iλ))
-        let phaseFactor = Complex<Double>.exp(lambda)
+    private func u1Matrix(lambda: Double) -> [[Complex<Double>]] {
+        let phaseFactor = Complex<Double>(phase: lambda)
         return [
             [.one, .zero],
             [.zero, phaseFactor],
         ]
     }
 
-    private func u2Matrix(phi: Double, lambda: Double) -> GateMatrix {
-        // U2(φ,λ) = (1/√2) * [[1, -e^(iλ)], [e^(iφ), e^(i(φ+λ))]]
-        let expPhi = Complex<Double>.exp(phi)
-        let expLambda = Complex<Double>.exp(lambda)
+    private func u2Matrix(phi: Double, lambda: Double) -> [[Complex<Double>]] {
+        let expPhi = Complex<Double>(phase: phi)
+        let expLambda = Complex<Double>(phase: lambda)
         let expPhiLambda: Complex<Double> = expPhi * expLambda
 
         return [
@@ -409,14 +298,13 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func u3Matrix(theta: Double, phi: Double, lambda: Double) -> GateMatrix {
-        // U3(θ,φ,λ) = [[cos(θ/2), -e^(iλ)sin(θ/2)], [e^(iφ)sin(θ/2), e^(i(φ+λ))cos(θ/2)]]
+    private func u3Matrix(theta: Double, phi: Double, lambda: Double) -> [[Complex<Double>]] {
         let halfTheta: Double = theta / 2.0
         let cosHalfTheta: Double = cos(halfTheta)
         let sinHalfTheta: Double = sin(halfTheta)
 
-        let expPhi = Complex<Double>.exp(phi)
-        let expLambda = Complex<Double>.exp(lambda)
+        let expPhi = Complex<Double>(phase: phi)
+        let expLambda = Complex<Double>(phase: lambda)
         let expPhiLambda: Complex<Double> = expPhi * expLambda
 
         return [
@@ -425,8 +313,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func sxMatrix() -> GateMatrix {
-        // SX = √X = (1/2) * [[1+i, 1-i], [1-i, 1+i]]
+    private func sxMatrix() -> [[Complex<Double>]] {
         let a: Complex<Double> = Complex(0.5, 0.5)
         let b: Complex<Double> = Complex(0.5, -0.5)
         return [
@@ -435,8 +322,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func syMatrix() -> GateMatrix {
-        // SY = √Y = (1/2) * [[1+i, -1-i], [1+i, 1+i]]
+    private func syMatrix() -> [[Complex<Double>]] {
         let a: Complex<Double> = Complex(0.5, 0.5)
         let b: Complex<Double> = Complex(-0.5, -0.5)
         return [
@@ -447,10 +333,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
 
     // MARK: - Two-Qubit Matrix Implementations
 
-    private func cnotMatrix() -> GateMatrix {
-        // Standard basis order: |00⟩, |01⟩, |10⟩, |11⟩
-        // Identity on |00⟩ and |01⟩ (control=0)
-        // Swap |10⟩↔|11⟩ (control=1, flip target)
+    private func cnotMatrix() -> [[Complex<Double>]] {
         [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
@@ -459,9 +342,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func controlledPhaseMatrix(theta: Double) -> GateMatrix {
-        // Applies phase only when both qubits are |1⟩
-        let phaseFactor = Complex<Double>.exp(theta)
+    private func controlledPhaseMatrix(theta: Double) -> [[Complex<Double>]] {
+        let phaseFactor = Complex<Double>(phase: theta)
         return [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
@@ -470,8 +352,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func swapMatrix() -> GateMatrix {
-        // Exchanges two qubits
+    private func swapMatrix() -> [[Complex<Double>]] {
         [
             [.one, .zero, .zero, .zero],
             [.zero, .zero, .one, .zero],
@@ -480,9 +361,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func czMatrix() -> GateMatrix {
-        // Controlled-Z: diag(1,1,1,-1)
-        // Symmetric: CZ(a,b) = CZ(b,a)
+    private func czMatrix() -> [[Complex<Double>]] {
         [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
@@ -491,9 +370,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func cyMatrix() -> GateMatrix {
-        // Controlled-Y: Identity on control=0, Y on control=1
-        // Y = [[0, -i], [i, 0]]
+    private func cyMatrix() -> [[Complex<Double>]] {
         [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
@@ -502,8 +379,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func chMatrix() -> GateMatrix {
-        // Controlled-Hadamard
+    private func chMatrix() -> [[Complex<Double>]] {
         let c: Complex<Double> = Complex(invSqrt2, 0.0)
         return [
             [.one, .zero, .zero, .zero],
@@ -513,12 +389,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func sqrtSwapMatrix() -> GateMatrix {
-        // √SWAP matrix: (√SWAP)² = SWAP
-        // Matrix: [[1, 0, 0, 0],
-        //          [0, (1+i)/2, (1-i)/2, 0],
-        //          [0, (1-i)/2, (1+i)/2, 0],
-        //          [0, 0, 0, 1]]
+    private func sqrtSwapMatrix() -> [[Complex<Double>]] {
         let a: Complex<Double> = Complex(0.5, 0.5)
         let b: Complex<Double> = Complex(0.5, -0.5)
         return [
@@ -529,8 +400,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func controlledRotationXMatrix(theta: Double) -> GateMatrix {
-        // Controlled Rx: Identity on control=0, Rx(θ) on control=1
+    private func controlledRotationXMatrix(theta: Double) -> [[Complex<Double>]] {
         let halfTheta: Double = theta / 2.0
         let c: Complex<Double> = Complex(cos(halfTheta), 0.0)
         let s: Complex<Double> = Complex(0.0, -sin(halfTheta))
@@ -542,8 +412,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func controlledRotationYMatrix(theta: Double) -> GateMatrix {
-        // Controlled Ry: Identity on control=0, Ry(θ) on control=1
+    private func controlledRotationYMatrix(theta: Double) -> [[Complex<Double>]] {
         let halfTheta: Double = theta / 2.0
         let c: Complex<Double> = Complex(cos(halfTheta), 0.0)
         let s: Complex<Double> = Complex(sin(halfTheta), 0.0)
@@ -555,11 +424,10 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    private func controlledRotationZMatrix(theta: Double) -> GateMatrix {
-        // Controlled Rz: Identity on control=0, Rz(θ) on control=1
+    private func controlledRotationZMatrix(theta: Double) -> [[Complex<Double>]] {
         let halfTheta: Double = theta / 2.0
-        let negPhase = Complex<Double>.exp(-halfTheta)
-        let posPhase = Complex<Double>.exp(halfTheta)
+        let negPhase = Complex<Double>(phase: -halfTheta)
+        let posPhase = Complex<Double>(phase: halfTheta)
         return [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
@@ -570,7 +438,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
 
     // MARK: - Multi-Qubit Matrix Implementations
 
-    private func toffoliMatrix() -> GateMatrix {
+    private func toffoliMatrix() -> [[Complex<Double>]] {
         [
             [.one, .zero, .zero, .zero, .zero, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero, .zero, .zero, .zero, .zero],
@@ -587,61 +455,31 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
 
     /// Validate qubit indices for gate application
     ///
-    /// Checks that all qubit indices are within bounds and distinct (no qubit
-    /// appears multiple times). Required before applying gate to ensure circuit
-    /// correctness.
+    /// Checks that qubit array has correct length and all indices are within bounds and distinct.
+    /// Required before applying gate to ensure circuit correctness.
     ///
-    /// - Parameter maxAllowedQubit: Maximum allowed qubit index (inclusive)
-    /// - Returns: True if all qubit indices are valid and distinct
+    /// - Parameters:
+    ///   - qubits: Array of qubit indices to validate
+    ///   - maxAllowedQubit: Maximum allowed qubit index (inclusive)
+    /// - Returns: True if qubit array is valid for this gate
+    /// - Complexity: O(n) where n is number of qubits
     ///
     /// Example:
     /// ```swift
-    /// let cnot = QuantumGate.cnot(control: 0, target: 1)
-    /// cnot.validateQubitIndices(maxAllowedQubit: 2)  // true
-    /// cnot.validateQubitIndices(maxAllowedQubit: 0)  // false (target=1 > max)
-    ///
-    /// let invalid = QuantumGate.cnot(control: 0, target: 0)
-    /// invalid.validateQubitIndices(maxAllowedQubit: 5)  // false (control == target)
-    ///
-    /// let toffoli = QuantumGate.toffoli(control1: 0, control2: 1, target: 2)
-    /// toffoli.validateQubitIndices(maxAllowedQubit: 3)  // true
+    /// QuantumGate.cnot.validateQubitIndices([0, 1], maxAllowedQubit: 2)  // true
+    /// QuantumGate.cnot.validateQubitIndices([0, 0], maxAllowedQubit: 2)  // false (duplicate)
+    /// QuantumGate.toffoli.validateQubitIndices([0, 1, 2], maxAllowedQubit: 3)  // true
     /// ```
+    ///
+    /// - SeeAlso: ``ValidationUtilities``
     @_optimize(speed)
     @_effects(readonly)
-    public func validateQubitIndices(maxAllowedQubit: Int) -> Bool {
-        switch self {
-        case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
-             .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
-             .u1, .u2, .u3, .sx, .sy, .customSingleQubit: true
+    public func validateQubitIndices(_ qubits: [Int], maxAllowedQubit: Int) -> Bool {
+        guard qubits.count == qubitsRequired else { return false }
+        guard qubits.allSatisfy({ $0 >= 0 && $0 <= maxAllowedQubit }) else { return false }
+        guard Set(qubits).count == qubits.count else { return false }
 
-        case let .cnot(control, target),
-             let .cz(control, target),
-             let .cy(control, target),
-             let .ch(control, target):
-            control != target &&
-                control >= 0 && control <= maxAllowedQubit &&
-                target >= 0 && target <= maxAllowedQubit
-
-        case let .controlledPhase(_, control, target),
-             let .controlledRotationX(_, control, target),
-             let .controlledRotationY(_, control, target),
-             let .controlledRotationZ(_, control, target),
-             let .customTwoQubit(_, control, target):
-            control != target &&
-                control >= 0 && control <= maxAllowedQubit &&
-                target >= 0 && target <= maxAllowedQubit
-
-        case let .swap(q1, q2), let .sqrtSwap(q1, q2):
-            q1 != q2 &&
-                q1 >= 0 && q1 <= maxAllowedQubit &&
-                q2 >= 0 && q2 <= maxAllowedQubit
-
-        case let .toffoli(c1, c2, target):
-            c1 != c2 && c1 != target && c2 != target &&
-                c1 >= 0 && c1 <= maxAllowedQubit &&
-                c2 >= 0 && c2 <= maxAllowedQubit &&
-                target >= 0 && target <= maxAllowedQubit
-        }
+        return true
     }
 
     // MARK: - CustomStringConvertible
@@ -654,36 +492,42 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         case .pauliY: "Y"
         case .pauliZ: "Z"
         case .hadamard: "H"
-        case let .phase(theta): "P(\(String(format: "%.3f", theta)))"
+        case let .phase(angle): "P(\(Self.formatAngle(angle)))"
         case .sGate: "S"
         case .tGate: "T"
-        case let .rotationX(theta): "Rx(\(String(format: "%.3f", theta)))"
-        case let .rotationY(theta): "Ry(\(String(format: "%.3f", theta)))"
-        case let .rotationZ(theta): "Rz(\(String(format: "%.3f", theta)))"
-        case let .u1(lambda): "U1(\(String(format: "%.3f", lambda)))"
-        case let .u2(phi, lambda): "U2(\(String(format: "%.3f", phi)), \(String(format: "%.3f", lambda)))"
-        case let .u3(theta, phi, lambda): "U3(\(String(format: "%.3f", theta)), \(String(format: "%.3f", phi)), \(String(format: "%.3f", lambda)))"
+        case let .rotationX(theta): "Rx(\(Self.formatAngle(theta)))"
+        case let .rotationY(theta): "Ry(\(Self.formatAngle(theta)))"
+        case let .rotationZ(theta): "Rz(\(Self.formatAngle(theta)))"
+        case let .u1(lambda): "U1(\(Self.formatAngle(lambda)))"
+        case let .u2(phi, lambda): "U2(\(Self.formatAngle(phi)), \(Self.formatAngle(lambda)))"
+        case let .u3(theta, phi, lambda): "U3(\(Self.formatAngle(theta)), \(Self.formatAngle(phi)), \(Self.formatAngle(lambda)))"
         case .sx: "SX"
         case .sy: "SY"
-        case .customSingleQubit: "CustomU(2×2)"
-        case let .cnot(control, target): "CNOT(c:\(control), t:\(target))"
-        case let .cz(control, target): "CZ(c:\(control), t:\(target))"
-        case let .cy(control, target): "CY(c:\(control), t:\(target))"
-        case let .ch(control, target): "CH(c:\(control), t:\(target))"
-        case let .swap(q1, q2): "SWAP(\(q1), \(q2))"
-        case let .sqrtSwap(q1, q2): "√SWAP(\(q1), \(q2))"
-        case let .toffoli(c1, c2, target): "Toffoli(c1:\(c1), c2:\(c2), t:\(target))"
-        case let .controlledPhase(theta, control, target):
-            "CP(\(String(format: "%.3f", theta)), c:\(control), t:\(target))"
-        case let .controlledRotationX(theta, control, target):
-            "CRx(\(String(format: "%.3f", theta)), c:\(control), t:\(target))"
-        case let .controlledRotationY(theta, control, target):
-            "CRy(\(String(format: "%.3f", theta)), c:\(control), t:\(target))"
-        case let .controlledRotationZ(theta, control, target):
-            "CRz(\(String(format: "%.3f", theta)), c:\(control), t:\(target))"
-        case let .customTwoQubit(_, control, target):
-            "CustomU(4×4, c:\(control), t:\(target))"
+        case .customSingleQubit: "CustomU(2x2)"
+        case .cnot: "CNOT"
+        case .cz: "CZ"
+        case .cy: "CY"
+        case .ch: "CH"
+        case .swap: "SWAP"
+        case .sqrtSwap: "√SWAP"
+        case .toffoli: "Toffoli"
+        case let .controlledPhase(theta):
+            "CP(\(Self.formatAngle(theta)))"
+        case let .controlledRotationX(theta):
+            "CRx(\(Self.formatAngle(theta)))"
+        case let .controlledRotationY(theta):
+            "CRy(\(Self.formatAngle(theta)))"
+        case let .controlledRotationZ(theta):
+            "CRz(\(Self.formatAngle(theta)))"
+        case .customTwoQubit:
+            "CustomU(4x4)"
         }
+    }
+
+    private static func formatAngle(_ angle: Double) -> String {
+        let formatted = String(format: "%.6f", angle)
+        let trimmed = formatted.replacingOccurrences(of: #"\.?0+$"#, with: "", options: .regularExpression)
+        return trimmed.isEmpty ? "0" : trimmed
     }
 }
 
@@ -700,32 +544,23 @@ public extension QuantumGate {
     ///
     /// - Parameter matrix: Square complex matrix to check
     /// - Returns: True if unitary within tolerance (1e-10)
+    /// - Complexity: O(n³) where n is matrix dimension
     ///
     /// Example:
     /// ```swift
-    /// // Hadamard is unitary
     /// let hMatrix = QuantumGate.hadamard.matrix()
     /// QuantumGate.isUnitary(hMatrix)  // true
     ///
-    /// // Invalid matrix: not unitary
-    /// let invalid = [
-    ///     [Complex(1, 0), Complex(1, 0)],
-    ///     [Complex(0, 0), Complex(1, 0)]
-    /// ]
+    /// let invalid = [[Complex(1, 0), Complex(1, 0)], [Complex(0, 0), Complex(1, 0)]]
     /// QuantumGate.isUnitary(invalid)  // false
-    ///
-    /// // Identity is trivially unitary
-    /// let identity = QuantumGate.identity.matrix()
-    /// QuantumGate.isUnitary(identity)  // true
     /// ```
     @_optimize(speed)
     @_effects(readonly)
-    static func isUnitary(_ matrix: GateMatrix) -> Bool {
+    static func isUnitary(_ matrix: [[Complex<Double>]]) -> Bool {
         let n: Int = matrix.count
         guard matrix.allSatisfy({ $0.count == n }) else { return false }
 
-        // Compute U†U
-        let product: GateMatrix = matrixMultiply(MatrixUtilities.hermitianConjugate(matrix), matrix)
+        let product: [[Complex<Double>]] = matrixMultiply(MatrixUtilities.hermitianConjugate(matrix), matrix)
 
         for i in 0 ..< n {
             for j in 0 ..< n {
@@ -742,14 +577,16 @@ public extension QuantumGate {
     }
 
     /// Multiply two square matrices using Accelerate BLAS
+    ///
     /// - Parameters:
     ///   - a: Left matrix
     ///   - b: Right matrix
-    /// - Returns: Matrix product A × B
+    /// - Returns: Matrix product A x B
+    /// - Complexity: O(n³) for nxn matrices (optimized for n≤4, BLAS for n>4)
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
-    static func matrixMultiply(_ a: GateMatrix, _ b: GateMatrix) -> GateMatrix {
+    static func matrixMultiply(_ a: [[Complex<Double>]], _ b: [[Complex<Double>]]) -> [[Complex<Double>]] {
         let n: Int = a.count
 
         if n == 2 {
@@ -766,7 +603,7 @@ public extension QuantumGate {
         }
 
         guard n > 4 else {
-            var result: GateMatrix = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
+            var result: [[Complex<Double>]] = Array(repeating: Array(repeating: Complex<Double>.zero, count: n), count: n)
             for i in 0 ..< n {
                 for j in 0 ..< n {
                     var sum = Complex<Double>.zero
@@ -779,7 +616,6 @@ public extension QuantumGate {
             return result
         }
 
-        // Delegate to shared MatrixUtilities for larger matrices
         return MatrixUtilities.matrixMultiply(a, b)
     }
 
@@ -794,22 +630,19 @@ public extension QuantumGate {
     ///   - b: Second matrix
     ///   - tolerance: Maximum allowed difference (default: 1e-10)
     /// - Returns: True if matrices are equal within tolerance
+    /// - Complexity: O(n²) where n is matrix dimension
     ///
     /// Example:
     /// ```swift
-    /// let phase = QuantumGate.phase(theta: .pi).matrix()
+    /// let phase = QuantumGate.phase(angle: .pi).matrix()
     /// let z = QuantumGate.pauliZ.matrix()
     /// QuantumGate.matricesEqual(phase, z)  // true
-    ///
-    /// let s = QuantumGate.sGate.matrix()
-    /// let phaseHalfPi = QuantumGate.phase(theta: .pi / 2).matrix()
-    /// QuantumGate.matricesEqual(s, phaseHalfPi)  // true
     /// ```
     @_optimize(speed)
     @_effects(readonly)
     static func matricesEqual(
-        _ a: GateMatrix,
-        _ b: GateMatrix,
+        _ a: [[Complex<Double>]],
+        _ b: [[Complex<Double>]],
         tolerance: Double = 1e-10
     ) -> Bool {
         guard a.count == b.count else { return false }
@@ -837,28 +670,18 @@ public extension QuantumGate {
     ///   - matrix: Matrix to check
     ///   - tolerance: Maximum allowed difference from identity (default: 1e-10)
     /// - Returns: True if matrix is identity within tolerance
+    /// - Complexity: O(n²) where n is matrix dimension
     ///
     /// Example:
     /// ```swift
-    /// // H · H = I
     /// let h = QuantumGate.hadamard.matrix()
     /// let hh = QuantumGate.matrixMultiply(h, h)
     /// QuantumGate.isIdentityMatrix(hh)  // true
-    ///
-    /// // X · X = I
-    /// let x = QuantumGate.pauliX.matrix()
-    /// let xx = QuantumGate.matrixMultiply(x, x)
-    /// QuantumGate.isIdentityMatrix(xx)  // true
-    ///
-    /// // CNOT · CNOT = I
-    /// let cnot = QuantumGate.cnot(control: 0, target: 1).matrix()
-    /// let cnotSquared = QuantumGate.matrixMultiply(cnot, cnot)
-    /// QuantumGate.isIdentityMatrix(cnotSquared)  // true
     /// ```
     @_optimize(speed)
     @_effects(readonly)
     static func isIdentityMatrix(
-        _ matrix: GateMatrix,
+        _ matrix: [[Complex<Double>]],
         tolerance: Double = 1e-10
     ) -> Bool {
         guard !matrix.isEmpty else { return false }
@@ -886,28 +709,26 @@ public extension QuantumGate {
 
     /// Create validated custom single-qubit gate
     ///
-    /// Builds custom quantum gate from user-provided 2×2 complex matrix.
+    /// Builds custom quantum gate from user-provided 2x2 complex matrix.
     /// Validates matrix size and unitarity before creating gate. Useful for
     /// research, custom algorithms, and gate decomposition.
     ///
-    /// - Parameter matrix: 2×2 complex matrix (must be unitary)
+    /// - Parameter matrix: 2x2 complex matrix (must be unitary)
     /// - Returns: Custom single-qubit gate
     ///
     /// Example:
     /// ```swift
-    /// // Custom rotation gate
     /// let angle = Double.pi / 6
     /// let customMatrix = [
     ///     [Complex(cos(angle), 0), Complex(-sin(angle), 0)],
     ///     [Complex(sin(angle), 0), Complex(cos(angle), 0)]
     /// ]
-    /// let gate = QuantumGate.createCustomSingleQubit(matrix: customMatrix)
+    /// let gate = QuantumGate.custom(matrix: customMatrix)
+    /// ```
     ///
-    /// // Use in circuit
-    /// var circuit = QuantumCircuit(numQubits: 1)
-    /// circuit.append(gate: gate, toQubit: 0)
+    /// - SeeAlso: ``isUnitary(_:)``, ``ValidationUtilities``
     @_eagerMove
-    static func createCustomSingleQubit(matrix: GateMatrix) -> QuantumGate {
+    static func custom(matrix: [[Complex<Double>]]) -> QuantumGate {
         ValidationUtilities.validate2x2Matrix(matrix)
         ValidationUtilities.validateUnitary(matrix)
 
@@ -916,19 +737,18 @@ public extension QuantumGate {
 
     /// Create validated custom two-qubit gate
     ///
-    /// Builds custom two-qubit gate from user-provided 4×4 complex matrix.
+    /// Builds custom two-qubit gate from user-provided 4x4 complex matrix.
     /// Validates matrix size and unitarity. Useful for custom entangling operations,
     /// variational quantum circuits, and quantum algorithm research.
     ///
     /// - Parameters:
-    ///   - matrix: 4×4 complex matrix (must be unitary)
+    ///   - matrix: 4x4 complex matrix (must be unitary)
     ///   - control: Control qubit index
     ///   - target: Target qubit index
     /// - Returns: Custom two-qubit gate
     ///
     /// Example:
     /// ```swift
-    /// // Custom controlled rotation
     /// let theta = Double.pi / 4
     /// let c = cos(theta / 2)
     /// let s = sin(theta / 2)
@@ -938,24 +758,19 @@ public extension QuantumGate {
     ///     [Complex(0, 0), Complex(0, 0), Complex(c, 0), Complex(-s, 0)],
     ///     [Complex(0, 0), Complex(0, 0), Complex(s, 0), Complex(c, 0)]
     /// ]
-    /// let gate = QuantumGate.createCustomTwoQubit(
-    ///     matrix: customMatrix,
-    ///     control: 0,
-    ///     target: 1
-    /// )
+    /// let gate = QuantumGate.custom(matrix: customMatrix, control: 0, target: 1)
+    /// ```
     ///
-    /// // Use in circuit
-    /// var circuit = QuantumCircuit(numQubits: 2)
-    /// circuit.append(gate: gate, qubits: [])
+    /// - SeeAlso: ``isUnitary(_:)``, ``ValidationUtilities``
     @_eagerMove
-    static func createCustomTwoQubit(
-        matrix: GateMatrix,
-        control: Int,
-        target: Int
+    static func custom(
+        matrix: [[Complex<Double>]],
+        control _: Int,
+        target _: Int
     ) -> QuantumGate {
         ValidationUtilities.validate4x4Matrix(matrix)
         ValidationUtilities.validateUnitary(matrix)
 
-        return .customTwoQubit(matrix: matrix, control: control, target: target)
+        return .customTwoQubit(matrix: matrix)
     }
 }

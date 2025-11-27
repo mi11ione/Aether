@@ -321,7 +321,7 @@ struct OracleBuilderTests {
         oracle([0], 1, &circuit)
         let state = circuit.execute()
 
-        #expect(state.probability(ofState: 0) > 0.99,
+        #expect(state.probability(of: 0) > 0.99,
                 "Constant-zero oracle should not change state")
     }
 
@@ -333,36 +333,36 @@ struct OracleBuilderTests {
         oracle([0], 1, &circuit)
         let state = circuit.execute()
 
-        #expect(state.probability(ofState: 0b10) > 0.99,
+        #expect(state.probability(of: 0b10) > 0.99,
                 "Constant-one oracle should flip output to |1⟩")
     }
 
     @Test("Parity oracle computes XOR correctly")
     func testParityOracleXOR() {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.pauliX, to: 1)
 
         let oracle = QuantumCircuit.balancedParityOracle()
         oracle([0, 1], 2, &circuit)
 
         let state = circuit.execute()
 
-        #expect(state.probability(ofState: 0b011) > 0.99,
+        #expect(state.probability(of: 0b011) > 0.99,
                 "Parity oracle should compute XOR correctly")
     }
 
     @Test("BV oracle [1,0] computes dot product")
     func testBVOracleComputesDotProduct() {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .pauliX, toQubit: 0)
+        circuit.append(.pauliX, to: 0)
 
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: [1, 0])
         oracle([0, 1], 2, &circuit)
 
         let state = circuit.execute()
 
-        #expect(state.probability(ofState: 0b101) > 0.99,
+        #expect(state.probability(of: 0b101) > 0.99,
                 "BV oracle should compute dot product: [1,0]·[1,0]=1")
     }
 
@@ -376,12 +376,12 @@ struct OracleBuilderTests {
         let state1 = circuit1.execute()
 
         var circuit2 = QuantumCircuit(numQubits: 3)
-        circuit2.append(gate: .pauliX, toQubit: 0)
+        circuit2.append(.pauliX, to: 0)
         oracle([0, 1], 2, &circuit2)
         let state2 = circuit2.execute()
 
-        let output1IsCorrect = state1.probability(ofState: 0b000) > 0.99
-        let output2IsCorrect = state2.probability(ofState: 0b001) > 0.99
+        let output1IsCorrect = state1.probability(of: 0b000) > 0.99
+        let output2IsCorrect = state2.probability(of: 0b001) > 0.99
 
         #expect(output1IsCorrect && output2IsCorrect,
                 "Simon oracle f(00)=f(10)=0 for period [1,0]")
@@ -414,7 +414,7 @@ struct AlgorithmsEdgeCasesTests {
     @Test("allQubitsAreZero detects non-zero qubits")
     func testAllQubitsAreZeroDetection() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .pauliX, toQubit: 0)
+        circuit.append(.pauliX, to: 0)
         let state = circuit.execute()
 
         #expect(!state.allQubitsAreZero([0]),

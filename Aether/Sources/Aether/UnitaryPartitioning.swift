@@ -12,9 +12,9 @@ public struct UnitaryPartition: Sendable {
     /// Pauli strings with their coefficients
     public let terms: PauliTerms
 
-    /// Unitary transformation matrix (2^n × 2^n) that diagonalizes the terms
+    /// Unitary transformation matrix (2^n x 2^n) that diagonalizes the terms
     /// After applying U†, all Pauli operators in the partition become (nearly) diagonal
-    public let unitaryMatrix: GateMatrix
+    public let unitaryMatrix: [[Complex<Double>]]
 
     /// Number of qubits
     public let numQubits: Int
@@ -23,7 +23,7 @@ public struct UnitaryPartition: Sendable {
     public let measurementBasis: MeasurementBasis
 
     /// Initialize with precomputed measurement basis
-    public init(terms: PauliTerms, unitaryMatrix: GateMatrix, numQubits: Int) {
+    public init(terms: PauliTerms, unitaryMatrix: [[Complex<Double>]], numQubits: Int) {
         self.terms = terms
         self.unitaryMatrix = unitaryMatrix
         self.numQubits = numQubits
@@ -101,7 +101,7 @@ public struct UnitaryPartitioner {
     private func buildTargetOperator(
         terms: PauliTerms,
         numQubits: Int
-    ) -> GateMatrix {
+    ) -> [[Complex<Double>]] {
         let dimension = 1 << numQubits
         var targetOperator = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
 
@@ -134,7 +134,7 @@ public struct UnitaryPartitioner {
     ///     numQubits: 10
     /// )
     /// print("Reduced \(hamiltonian.terms.count) terms to \(partitions.count) partitions")
-    /// // Output: Reduced 2000 terms to 12 partitions (166× reduction)
+    /// // Output: Reduced 2000 terms to 12 partitions (166x reduction)
     /// ```
     @_optimize(speed)
     @_eagerMove
@@ -149,7 +149,7 @@ public struct UnitaryPartitioner {
         while !remainingGroups.isEmpty {
             let seed: QWCGroup = remainingGroups.removeFirst()
             var currentTerms = seed.terms
-            var lastUnitary: GateMatrix?
+            var lastUnitary: [[Complex<Double>]]?
 
             var i = 0
             while i < remainingGroups.count {
@@ -175,7 +175,7 @@ public struct UnitaryPartitioner {
                     numQubits: numQubits
                 ))
             } else {
-                let identity: GateMatrix = MatrixUtilities.identityMatrix(dimension: 1 << numQubits)
+                let identity: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: 1 << numQubits)
                 partitions.append(UnitaryPartition(
                     terms: currentTerms,
                     unitaryMatrix: identity,
@@ -200,7 +200,7 @@ public struct UnitaryPartitioner {
     private func findDiagonalizingUnitary(
         terms: PauliTerms,
         numQubits: Int
-    ) -> GateMatrix? {
+    ) -> [[Complex<Double>]]? {
         let targetOperator = buildTargetOperator(terms: terms, numQubits: numQubits)
 
         if let (_, eigenvectors) = eigendecompose(targetOperator) {
@@ -223,8 +223,8 @@ public struct UnitaryPartitioner {
     private func optimizeVariational(
         terms: PauliTerms,
         numQubits: Int
-    ) -> GateMatrix? {
-        let pauliMatrices: [GateMatrix] = terms.map { $0.pauliString.toMatrix(numQubits: numQubits) }
+    ) -> [[Complex<Double>]]? {
+        let pauliMatrices: [[[Complex<Double>]]] = terms.map { $0.pauliString.toMatrix(numQubits: numQubits) }
 
         let numParams: Int = variationalParameterCount(numQubits: numQubits, depth: config.ansatzDepth)
         let parameters = [Double](unsafeUninitializedCapacity: numParams) { buffer, count in
@@ -256,7 +256,7 @@ public struct UnitaryPartitioner {
             tolerance: config.tolerance
         )
 
-        let unitary: GateMatrix = buildVariationalUnitary(
+        let unitary: [[Complex<Double>]] = buildVariationalUnitary(
             parameters: result.parameters,
             numQubits: numQubits,
             depth: config.ansatzDepth
@@ -275,7 +275,7 @@ public struct UnitaryPartitioner {
     private func costFunctionCached(
         parameters: [Double],
         terms: PauliTerms,
-        pauliMatrices: [GateMatrix],
+        pauliMatrices: [[[Complex<Double>]]],
         numQubits: Int
     ) -> Double {
         let unitary = buildVariationalUnitary(
@@ -324,7 +324,7 @@ public struct UnitaryPartitioner {
     private func gradientFunctionCached(
         parameters: [Double],
         terms: PauliTerms,
-        pauliMatrices: [GateMatrix],
+        pauliMatrices: [[[Complex<Double>]]],
         numQubits: Int
     ) -> [Double] {
         let epsilon = 1e-7
@@ -374,11 +374,11 @@ public struct UnitaryPartitioner {
         parameters: [Double],
         numQubits: Int,
         depth: Int
-    ) -> GateMatrix {
+    ) -> [[Complex<Double>]] {
         let dimension = 1 << numQubits
-        var unitary: GateMatrix = MatrixUtilities.identityMatrix(dimension: dimension)
+        var unitary: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: dimension)
 
-        let cnotMatrices: [GateMatrix] = (0 ..< (numQubits - 1)).map { qubit in
+        let cnotMatrices: [[[Complex<Double>]]] = (0 ..< (numQubits - 1)).map { qubit in
             cnotMatrix(control: qubit, target: qubit + 1, numQubits: numQubits)
         }
 
@@ -391,7 +391,7 @@ public struct UnitaryPartitioner {
                 let lambda: Double = parameters[paramIndex + 2]
                 paramIndex += 3
 
-                let rotation: GateMatrix = singleQubitRotation(
+                let rotation: [[Complex<Double>]] = singleQubitRotation(
                     qubit: qubit,
                     theta: theta,
                     phi: phi,
@@ -415,21 +415,21 @@ public struct UnitaryPartitioner {
     @_optimize(speed)
     @_eagerMove
     private func conjugateByUnitary(
-        _ matrix: GateMatrix,
-        unitary: GateMatrix
-    ) -> GateMatrix {
-        let unitaryDagger: GateMatrix = MatrixUtilities.hermitianConjugate(unitary)
-        let temp: GateMatrix = MatrixUtilities.matrixMultiply(unitaryDagger, matrix)
+        _ matrix: [[Complex<Double>]],
+        unitary: [[Complex<Double>]]
+    ) -> [[Complex<Double>]] {
+        let unitaryDagger: [[Complex<Double>]] = MatrixUtilities.hermitianConjugate(unitary)
+        let temp: [[Complex<Double>]] = MatrixUtilities.matrixMultiply(unitaryDagger, matrix)
         return MatrixUtilities.matrixMultiply(temp, unitary)
     }
 
     @_optimize(speed)
     @_effects(readonly)
     private func computeOffDiagonalNorm(
-        operator matrix: GateMatrix,
-        unitary: GateMatrix
+        operator matrix: [[Complex<Double>]],
+        unitary: [[Complex<Double>]]
     ) -> Double {
-        let conjugated: GateMatrix = conjugateByUnitary(matrix, unitary: unitary)
+        let conjugated: [[Complex<Double>]] = conjugateByUnitary(matrix, unitary: unitary)
         let n: Int = conjugated.count
 
         var normSquared = 0.0
@@ -450,11 +450,11 @@ public struct UnitaryPartitioner {
         phi: Double,
         lambda: Double,
         numQubits: Int
-    ) -> GateMatrix {
+    ) -> [[Complex<Double>]] {
         let c: Double = cos(theta / 2)
         let s: Double = sin(theta / 2)
 
-        let u3: GateMatrix = [
+        let u3: [[Complex<Double>]] = [
             [Complex(c), Complex(-cos(lambda) * s, -sin(lambda) * s)],
             [Complex(cos(phi) * s, sin(phi) * s), Complex(cos(phi + lambda) * c, sin(phi + lambda) * c)],
         ]
@@ -464,9 +464,9 @@ public struct UnitaryPartitioner {
 
     @_optimize(speed)
     @_eagerMove
-    private func cnotMatrix(control: Int, target: Int, numQubits: Int) -> GateMatrix {
+    private func cnotMatrix(control: Int, target: Int, numQubits: Int) -> [[Complex<Double>]] {
         let dimension = 1 << numQubits
-        var cnot: GateMatrix = MatrixUtilities.identityMatrix(dimension: dimension)
+        var cnot: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: dimension)
 
         for basis in 0 ..< dimension {
             let controlBit: Int = BitUtilities.getBit(basis, qubit: control)
@@ -485,10 +485,10 @@ public struct UnitaryPartitioner {
     @_optimize(speed)
     @_eagerMove
     private func embedSingleQubitGate(
-        _ gate: GateMatrix,
+        _ gate: [[Complex<Double>]],
         qubit: Int,
         numQubits: Int
-    ) -> GateMatrix {
+    ) -> [[Complex<Double>]] {
         let dimension = 1 << numQubits
         var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
 
@@ -513,11 +513,11 @@ public struct UnitaryPartitioner {
 
     /// Compute eigendecomposition of Hermitian matrix using LAPACK's zheev.
     ///
-    /// - Parameter matrix: Hermitian matrix (n × n)
+    /// - Parameter matrix: Hermitian matrix (n x n)
     /// - Returns: Eigenvalues (real, sorted) and eigenvectors (columns), or nil if decomposition fails
     @_optimize(speed)
     @_eagerMove
-    private func eigendecompose(_ matrix: GateMatrix) -> (eigenvalues: [Double], eigenvectors: GateMatrix)? {
+    private func eigendecompose(_ matrix: [[Complex<Double>]]) -> (eigenvalues: [Double], eigenvectors: [[Complex<Double>]])? {
         let n: Int = matrix.count
 
         var a = [Double](unsafeUninitializedCapacity: 2 * n * n) { buffer, count in
@@ -838,7 +838,7 @@ public extension PauliString {
     /// Convert Pauli string to matrix representation.
     @_optimize(speed)
     @_eagerMove
-    func toMatrix(numQubits: Int) -> GateMatrix {
+    func toMatrix(numQubits: Int) -> [[Complex<Double>]] {
         let dimension = 1 << numQubits
         var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
 

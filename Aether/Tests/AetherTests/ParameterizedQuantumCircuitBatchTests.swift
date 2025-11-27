@@ -21,7 +21,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     func bindSingleParameterSet() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
+        circuit.append(gate: .rotationY(theta: .parameter(theta)), qubit: 0)
 
         let parameterSets = [[0.5]]
         let results = circuit.bindBatch(parameterVectors: parameterSets)
@@ -36,8 +36,8 @@ struct ParameterizedQuantumCircuitBatchTests {
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
 
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-        circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
+        circuit.append(gate: .rotationY(theta: .parameter(theta)), qubit: 0)
+        circuit.append(gate: .rotationZ(theta: .parameter(phi)), qubit: 1)
 
         let parameterSets: [[Double]] = [
             [0.1, 0.2],
@@ -57,7 +57,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     func generateGradientSingleParameter() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
+        circuit.append(gate: .rotationY(theta: .parameter(theta)), qubit: 0)
 
         let baseParams = [0.5]
         let (plus, minus) = circuit.generateGradientParameterVectors(baseParameters: baseParams)
@@ -74,8 +74,8 @@ struct ParameterizedQuantumCircuitBatchTests {
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
 
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-        circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
+        circuit.append(gate: .rotationY(theta: .parameter(theta)), qubit: 0)
+        circuit.append(gate: .rotationZ(theta: .parameter(phi)), qubit: 1)
 
         let baseParams: [Double] = [0.1, 0.2]
         let (plus, minus) = circuit.generateGradientParameterVectors(baseParameters: baseParams)
@@ -100,7 +100,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     func generateGradientCustomShift() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
+        circuit.append(gate: .rotationY(theta: .parameter(theta)), qubit: 0)
 
         let baseParams = [1.0]
         let customShift = Double.pi / 4
@@ -117,7 +117,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     func generateGridSearchSingleParameter() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
+        circuit.append(gate: .rotationY(theta: .parameter(theta)), qubit: 0)
 
         let range = [0.0, 0.5, 1.0]
         let vectors = circuit.generateGridSearchVectors(ranges: [range])
@@ -134,8 +134,8 @@ struct ParameterizedQuantumCircuitBatchTests {
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
 
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-        circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
+        circuit.append(gate: .rotationY(theta: .parameter(theta)), qubit: 0)
+        circuit.append(gate: .rotationZ(theta: .parameter(phi)), qubit: 1)
 
         let range1 = [0.0, 1.0]
         let range2 = [0.0, 0.5, 1.0]
@@ -156,7 +156,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         var circuit = ParameterizedQuantumCircuit(numQubits: 3)
         for i in 0 ..< 3 {
             let param = Parameter(name: "theta_\(i)")
-            circuit.append(gate: .rotationY(theta: .parameter(param)), toQubit: i)
+            circuit.append(gate: .rotationY(theta: .parameter(param)), qubit: i)
         }
 
         let range1 = [0.0, 1.0]
@@ -176,8 +176,8 @@ struct ParameterizedQuantumCircuitBatchTests {
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
 
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-        circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
+        circuit.append(gate: .rotationY(theta: .parameter(theta)), qubit: 0)
+        circuit.append(gate: .rotationZ(theta: .parameter(phi)), qubit: 1)
 
         let baseParams: [Double] = [0.1, 0.2]
         let (plus, minus) = circuit.generateGradientParameterVectors(baseParameters: baseParams)
@@ -195,8 +195,8 @@ struct ParameterizedQuantumCircuitBatchTests {
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
 
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-        circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
+        circuit.append(gate: .rotationY(theta: .parameter(theta)), qubit: 0)
+        circuit.append(gate: .rotationZ(theta: .parameter(phi)), qubit: 1)
 
         let range1 = stride(from: 0.0, through: .pi, by: .pi / 2)
         let range2 = stride(from: 0.0, through: .pi, by: .pi / 2)
@@ -236,11 +236,11 @@ struct ParameterizedQuantumCircuitBatchTests {
         let beta = Parameter(name: "beta")
 
         for i in 0 ..< 3 {
-            qaoa.append(gate: .concrete(.hadamard), toQubit: i)
+            qaoa.append(gate: .concrete(.hadamard), qubit: i)
         }
 
-        qaoa.append(gate: .rotationZ(theta: .parameter(gamma)), toQubit: 0)
-        qaoa.append(gate: .rotationX(theta: .parameter(beta)), toQubit: 0)
+        qaoa.append(gate: .rotationZ(theta: .parameter(gamma)), qubit: 0)
+        qaoa.append(gate: .rotationX(theta: .parameter(beta)), qubit: 0)
 
         let gammaRange = stride(from: 0.0, to: .pi, by: .pi / 4)
         let betaRange = stride(from: 0.0, to: .pi, by: .pi / 4)
@@ -280,8 +280,8 @@ struct ParameterizedQuantumCircuitBatchTests {
         let theta = Parameter(name: "theta")
         let phi = Parameter(name: "phi")
 
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
-        circuit.append(gate: .rotationZ(theta: .parameter(phi)), toQubit: 1)
+        circuit.append(gate: .rotationY(theta: .parameter(theta)), qubit: 0)
+        circuit.append(gate: .rotationZ(theta: .parameter(phi)), qubit: 1)
 
         let range1 = [1.0, 2.0, 3.0]
         let range2 = [4.0, 5.0]
@@ -309,7 +309,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         var circuit = ParameterizedQuantumCircuit(numQubits: 3)
         for i in 0 ..< 3 {
             let param = Parameter(name: "theta_\(i)")
-            circuit.append(gate: .rotationY(theta: .parameter(param)), toQubit: i)
+            circuit.append(gate: .rotationY(theta: .parameter(param)), qubit: i)
         }
 
         let range = stride(from: 0.0, through: .pi, by: .pi / 5)
@@ -328,7 +328,7 @@ struct ParameterizedQuantumCircuitBatchTests {
         var circuit = ParameterizedQuantumCircuit(numQubits: 4)
         for i in 0 ..< 4 {
             let param = Parameter(name: "theta_\(i)")
-            circuit.append(gate: .rotationY(theta: .parameter(param)), toQubit: i)
+            circuit.append(gate: .rotationY(theta: .parameter(param)), qubit: i)
         }
 
         let baseParams: [Double] = [0.1, 0.2, 0.3, 0.4]
@@ -381,7 +381,7 @@ struct ParameterizedQuantumCircuitBatchTests {
     func singleRangeGridSearch() {
         var circuit = ParameterizedQuantumCircuit(numQubits: 1)
         let theta = Parameter(name: "theta")
-        circuit.append(gate: .rotationY(theta: .parameter(theta)), toQubit: 0)
+        circuit.append(gate: .rotationY(theta: .parameter(theta)), qubit: 0)
 
         let singleRange = [0.0]
         let vectors = circuit.generateGridSearchVectors(ranges: [singleRange])

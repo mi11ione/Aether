@@ -13,7 +13,7 @@ import MetalPerformanceShaders
 /// across thousands of GPU cores.
 ///
 /// **Performance characteristics:**
-/// - Sequential: N × (circuit_time + measurement_time) where N = 100
+/// - Sequential: N x (circuit_time + measurement_time) where N = 100
 /// - Batched MPS: unitary_conversion_time + batch_execution_time
 /// - Single CPU-GPU round-trip for entire batch
 /// - Parallel execution across GPU cores
@@ -33,8 +33,8 @@ import MetalPerformanceShaders
 /// - Memory management via shared storage mode (zero-copy on unified memory)
 ///
 /// **Memory Management:**
-/// - Each unitary: 2ⁿ × 2ⁿ × 4 bytes (Float32) = dimension² × 4
-/// - 10 qubits: 1024×1024 × 4 = 4 MB per unitary
+/// - Each unitary: 2ⁿ x 2ⁿ x 4 bytes (Float32) = dimension² x 4
+/// - 10 qubits: 1024x1024 x 4 = 4 MB per unitary
 /// - Batch of 100: 400 MB for unitaries + minimal for states
 /// - Dynamic batch size: Query GPU memory, compute max feasible batch
 /// - Automatic batching: Split large requests into chunks if needed
@@ -54,13 +54,13 @@ import MetalPerformanceShaders
 ///
 /// **When to use batched evaluation:**
 /// - Batch size ≥ 10 (amortize conversion cost)
-/// - numQubits ≤ 14 (memory constraints: 16K × 16K × 4 = 1 GB per unitary)
+/// - numQubits ≤ 14 (memory constraints: 16K x 16K x 4 = 1 GB per unitary)
 /// - Same initial state for all evaluations
 /// - Metal GPU available (Apple Silicon or AMD GPU on Mac)
 ///
 /// **When NOT to use:**
 /// - Single circuit evaluation (use QuantumSimulator directly)
-/// - numQubits > 14 (memory explosion: 2ⁿ × 2ⁿ matrix)
+/// - numQubits > 14 (memory explosion: 2ⁿ x 2ⁿ matrix)
 /// - Deep circuits with different structures (can't reuse unitaries)
 /// - Metal unavailable (no GPU acceleration)
 ///
@@ -115,7 +115,7 @@ import MetalPerformanceShaders
 /// let gammaValues = stride(from: 0.0, through: .pi, by: .pi / 20)  // 21 values
 /// let betaValues = stride(from: 0.0, through: .pi, by: .pi / 20)   // 21 values
 ///
-/// // 2. Build all circuits (21 × 21 = 441 circuits)
+/// // 2. Build all circuits (21 x 21 = 441 circuits)
 /// var circuits: [QuantumCircuit] = []
 /// for gamma in gammaValues {
 ///     for beta in betaValues {
@@ -179,13 +179,13 @@ public actor MPSBatchEvaluator {
     /// **Memory-aware batch sizing:**
     /// - Query GPU memory: device.recommendedMaxWorkingSetSize
     /// - Reserve 80% for MPS operations (20% for system/other apps)
-    /// - Compute max batch: availableMemory / (dimension² × 4 + overhead)
+    /// - Compute max batch: availableMemory / (dimension² x 4 + overhead)
     ///
     /// **Typical batch sizes:**
-    /// - 8 qubits (256×256): 1000+ per batch on 8 GB GPU
-    /// - 10 qubits (1K×1K): 500 per batch on 8 GB GPU
-    /// - 12 qubits (4K×4K): 100 per batch on 8 GB GPU
-    /// - 14 qubits (16K×16K): 10-20 per batch on 8 GB GPU
+    /// - 8 qubits (256x256): 1000+ per batch on 8 GB GPU
+    /// - 10 qubits (1Kx1K): 500 per batch on 8 GB GPU
+    /// - 12 qubits (4Kx4K): 100 per batch on 8 GB GPU
+    /// - 14 qubits (16Kx16K): 10-20 per batch on 8 GB GPU
     public init() {
         device = MTLCreateSystemDefaultDevice()
         commandQueue = device?.makeCommandQueue()
@@ -224,7 +224,7 @@ public actor MPSBatchEvaluator {
     /// - Parallel GPU execution for all batch elements
     ///
     /// - Parameters:
-    ///   - unitaries: Array of circuit unitaries (2ⁿ × 2ⁿ each)
+    ///   - unitaries: Array of circuit unitaries (2ⁿ x 2ⁿ each)
     ///   - initialState: Starting quantum state (same for all)
     /// - Returns: Array of output states (one per unitary)
     ///
@@ -247,7 +247,7 @@ public actor MPSBatchEvaluator {
     @_optimize(speed)
     @_eagerMove
     public func evaluateBatch(
-        unitaries: [GateMatrix],
+        unitaries: [[[Complex<Double>]]],
         initialState: QuantumState
     ) async -> [QuantumState] {
         ValidationUtilities.validateNonEmpty(unitaries, name: "unitaries")
@@ -261,7 +261,7 @@ public actor MPSBatchEvaluator {
         }
 
         guard isMetalAvailable else {
-            return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState)
+            return evaluateBatchCPU(unitaries: unitaries, initialState: initialState)
         }
 
         let batchSize: Int = unitaries.count
@@ -286,7 +286,7 @@ public actor MPSBatchEvaluator {
     ///
     /// **Performance:**
     /// - Transfers: Only unitaries (large) + energies (small, N doubles)
-    /// - Avoids: Transferring N full states (dimension × N complex numbers)
+    /// - Avoids: Transferring N full states (dimension x N complex numbers)
     /// - Memory savings: 100 states @ 1024 amplitudes = 1.6 MB vs 800 bytes
     ///
     /// **SparseHamiltonian acceleration:**
@@ -316,7 +316,7 @@ public actor MPSBatchEvaluator {
     @_optimize(speed)
     @_eagerMove
     public func evaluateExpectationValues(
-        unitaries: [GateMatrix],
+        unitaries: [[[Complex<Double>]]],
         initialState: QuantumState,
         hamiltonian: Observable
     ) async -> [Double] {
@@ -332,7 +332,7 @@ public actor MPSBatchEvaluator {
 
     /// Evaluate batch with SparseHamiltonian (maximum performance)
     ///
-    /// Uses SparseHamiltonian backend directly for 100-1000× speedup over
+    /// Uses SparseHamiltonian backend directly for 100-1000x speedup over
     /// Observable term-by-term measurement. Optimal for molecular Hamiltonians
     /// with 0.01-1% sparsity.
     ///
@@ -344,7 +344,7 @@ public actor MPSBatchEvaluator {
     @_optimize(speed)
     @_eagerMove
     public func evaluateExpectationValues(
-        unitaries: [GateMatrix],
+        unitaries: [[[Complex<Double>]]],
         initialState: QuantumState,
         sparseHamiltonian: SparseHamiltonian
     ) async -> [Double] {
@@ -378,12 +378,12 @@ public actor MPSBatchEvaluator {
     @_optimize(speed)
     @_eagerMove
     private func evaluateBatchGPU(
-        unitaries: [GateMatrix],
+        unitaries: [[[Complex<Double>]]],
         initialState: QuantumState,
         numQubits: Int
     ) async -> [QuantumState] {
         guard let device, let commandQueue else {
-            return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState)
+            return evaluateBatchCPU(unitaries: unitaries, initialState: initialState)
         }
 
         let batchSize: Int = unitaries.count
@@ -437,38 +437,38 @@ public actor MPSBatchEvaluator {
             bytes: realMatrices,
             length: realMatrices.count * MemoryLayout<Float>.stride,
             options: .storageModeShared
-        ) else { return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
+        ) else { return evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
 
         guard let imagMatrixBuffer = device.makeBuffer(
             bytes: imagMatrices,
             length: imagMatrices.count * MemoryLayout<Float>.stride,
             options: .storageModeShared
-        ) else { return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
+        ) else { return evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
 
         guard let realStateBuffer = device.makeBuffer(
             bytes: realState,
             length: realState.count * MemoryLayout<Float>.stride,
             options: .storageModeShared
-        ) else { return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
+        ) else { return evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
 
         guard let imagStateBuffer = device.makeBuffer(
             bytes: imagState,
             length: imagState.count * MemoryLayout<Float>.stride,
             options: .storageModeShared
-        ) else { return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
+        ) else { return evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
 
         guard let resultRealBuffer = device.makeBuffer(
             length: batchSize * dimension * MemoryLayout<Float>.stride,
             options: .storageModeShared
-        ) else { return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
+        ) else { return evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
 
         guard let resultImagBuffer = device.makeBuffer(
             length: batchSize * dimension * MemoryLayout<Float>.stride,
             options: .storageModeShared
-        ) else { return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
+        ) else { return evaluateBatchCPU(unitaries: unitaries, initialState: initialState) }
 
         guard let commandBuffer = commandQueue.makeCommandBuffer() else {
-            return await evaluateBatchCPU(unitaries: unitaries, initialState: initialState)
+            return evaluateBatchCPU(unitaries: unitaries, initialState: initialState)
         }
 
         let matVecInit = MPSMatrixVectorMultiplication(
@@ -577,7 +577,7 @@ public actor MPSBatchEvaluator {
         for batchIndex in 0 ..< batchSize {
             let baseOffset = batchIndex * dimension
 
-            let amplitudes = AmplitudeVector(unsafeUninitializedCapacity: dimension) { ampBuffer, ampCount in
+            let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: dimension) { ampBuffer, ampCount in
                 for i in 0 ..< dimension {
                     let realPart = Double(resultRealPointer[baseOffset + i])
                     let imagPart = Double(resultImagPointer[baseOffset + i])
@@ -596,14 +596,14 @@ public actor MPSBatchEvaluator {
     @_optimize(speed)
     @_eagerMove
     private func evaluateBatchCPU(
-        unitaries: [GateMatrix],
+        unitaries: [[[Complex<Double>]]],
         initialState: QuantumState
-    ) async -> [QuantumState] {
+    ) -> [QuantumState] {
         var resultStates: [QuantumState] = []
         resultStates.reserveCapacity(unitaries.count)
 
         for unitary in unitaries {
-            let resultAmplitudes: AmplitudeVector = matrixVectorMultiply(
+            let resultAmplitudes: [Complex<Double>] = matrixVectorMultiply(
                 matrix: unitary,
                 vector: initialState.amplitudes
             )
@@ -620,13 +620,13 @@ public actor MPSBatchEvaluator {
     @_optimize(speed)
     @_eagerMove
     private func evaluateBatchChunked(
-        unitaries: [GateMatrix],
+        unitaries: [[[Complex<Double>]]],
         initialState: QuantumState
     ) async -> [QuantumState] {
         var allResults: [QuantumState] = []
         allResults.reserveCapacity(unitaries.count)
 
-        let chunks: [[GateMatrix]] = unitaries.chunked(into: maxBatchSize)
+        let chunks: [[[[Complex<Double>]]]] = unitaries.chunked(into: maxBatchSize)
 
         for chunk in chunks {
             let chunkResults: [QuantumState] = await evaluateBatchGPU(
@@ -644,9 +644,9 @@ public actor MPSBatchEvaluator {
     @_optimize(speed)
     @_eagerMove
     private func matrixVectorMultiply(
-        matrix: GateMatrix,
-        vector: AmplitudeVector
-    ) -> AmplitudeVector {
+        matrix: [[Complex<Double>]],
+        vector: [Complex<Double>]
+    ) -> [Complex<Double>] {
         let dimension = vector.count
 
         var matrixInterleaved = [Double](unsafeUninitializedCapacity: dimension * dimension * 2) { _, count in
@@ -661,7 +661,7 @@ public actor MPSBatchEvaluator {
             }
         }
 
-        var result = AmplitudeVector(unsafeUninitializedCapacity: dimension) { _, count in
+        var result = [Complex<Double>](unsafeUninitializedCapacity: dimension) { _, count in
             count = dimension
         }
 

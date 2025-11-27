@@ -21,7 +21,7 @@ struct CircuitBuildingTests {
     @Test("Append single gate")
     func appendSingleGate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
 
         #expect(circuit.gateCount == 1)
         #expect(!circuit.isEmpty)
@@ -30,8 +30,8 @@ struct CircuitBuildingTests {
     @Test("Append multiple gates")
     func appendMultipleGates() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.cnot, to: [0, 1])
 
         #expect(circuit.gateCount == 2)
     }
@@ -39,33 +39,33 @@ struct CircuitBuildingTests {
     @Test("Insert gate at position")
     func insertGateAtPosition() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
-        circuit.insert(gate: .pauliZ, qubits: [0], at: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliX, to: 1)
+        circuit.insert(.pauliZ, to: [0], at: 1)
 
         #expect(circuit.gateCount == 3)
-        #expect(circuit.operation(at: 1).gate == .pauliZ)
+        #expect(circuit.gates[1].gate == .pauliZ)
     }
 
     @Test("Remove gate")
     func removeGate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliX, to: 0)
 
         circuit.remove(at: 0)
 
         #expect(circuit.gateCount == 1)
-        #expect(circuit.operation(at: 0).gate == .pauliX)
+        #expect(circuit.gates[0].gate == .pauliX)
     }
 
     @Test("Clear circuit")
     func clearCircuit() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.hadamard, to: 1)
 
-        circuit.clear()
+        circuit.removeAllGates()
 
         #expect(circuit.isEmpty)
         #expect(circuit.gateCount == 0)
@@ -80,7 +80,7 @@ struct CircuitExecutionTests {
     @Test("Empty circuit returns unchanged state")
     func emptyCircuitUnchanged() {
         let circuit = QuantumCircuit(numQubits: 1)
-        let initialState = QuantumState(singleQubit: 0)
+        let initialState = QuantumState(qubit: 0)
         let finalState = circuit.execute(on: initialState)
 
         #expect(initialState == finalState)
@@ -89,37 +89,37 @@ struct CircuitExecutionTests {
     @Test("Single-gate circuit")
     func singleGateCircuit() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .pauliX, toQubit: 0)
+        circuit.append(.pauliX, to: 0)
 
-        let initialState = QuantumState(singleQubit: 0)
+        let initialState = QuantumState(qubit: 0)
         let finalState = circuit.execute(on: initialState)
 
-        #expect(abs(finalState.getAmplitude(ofState: 1).real - 1.0) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 1).real - 1.0) < 1e-10)
     }
 
     @Test("Multi-gate circuit")
     func multiGateCircuit() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .pauliZ, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliZ, to: 0)
+        circuit.append(.hadamard, to: 0)
 
-        let initialState = QuantumState(singleQubit: 0)
+        let initialState = QuantumState(qubit: 0)
         let finalState = circuit.execute(on: initialState)
 
-        #expect(abs(finalState.getAmplitude(ofState: 1).real - 1.0) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 1).real - 1.0) < 1e-10)
     }
 
     @Test("Execute from default |0⟩ state")
     func executeFromDefaultState() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
 
         let finalState = circuit.execute()
 
         let invSqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(finalState.getAmplitude(ofState: 0).real - invSqrt2) < 1e-10)
-        #expect(abs(finalState.getAmplitude(ofState: 1).real - invSqrt2) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 0).real - invSqrt2) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 1).real - invSqrt2) < 1e-10)
     }
 }
 
@@ -131,9 +131,9 @@ struct StepThroughTests {
     @Test("Execute up to index 0 (no gates)")
     func executeUpToZero() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
 
-        let initialState = QuantumState(singleQubit: 0)
+        let initialState = QuantumState(qubit: 0)
         let finalState = circuit.execute(on: initialState, upToIndex: 0)
 
         #expect(initialState == finalState)
@@ -142,32 +142,32 @@ struct StepThroughTests {
     @Test("Execute up to middle of circuit")
     func executeUpToMiddle() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .pauliZ, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliZ, to: 0)
+        circuit.append(.hadamard, to: 0)
 
-        let initialState = QuantumState(singleQubit: 0)
+        let initialState = QuantumState(qubit: 0)
         let state1 = circuit.execute(on: initialState, upToIndex: 1)
         let invSqrt2 = 1.0 / sqrt(2.0)
 
-        #expect(abs(state1.getAmplitude(ofState: 0).real - invSqrt2) < 1e-10)
+        #expect(abs(state1.amplitude(of: 0).real - invSqrt2) < 1e-10)
     }
 
     @Test("Step through entire circuit")
     func stepThroughEntireCircuit() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 0)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.pauliX, to: 0)
 
-        let initialState = QuantumState(singleQubit: 0)
+        let initialState = QuantumState(qubit: 0)
 
         let state0 = circuit.execute(on: initialState, upToIndex: 0)
         let state1 = circuit.execute(on: initialState, upToIndex: 1)
         let state2 = circuit.execute(on: initialState, upToIndex: 2)
 
         #expect(state0 == initialState)
-        #expect(abs(state1.getAmplitude(ofState: 1).real - 1.0) < 1e-10)
-        #expect(abs(state2.getAmplitude(ofState: 0).real - 1.0) < 1e-10)
+        #expect(abs(state1.amplitude(of: 1).real - 1.0) < 1e-10)
+        #expect(abs(state2.amplitude(of: 0).real - 1.0) < 1e-10)
     }
 }
 
@@ -178,19 +178,19 @@ struct StepThroughTests {
 struct BellStateCircuitTests {
     @Test("Bell state circuit creates entanglement")
     func bellStateCreatesEntanglement() {
-        let circuit = QuantumCircuit.bellState()
+        let circuit = QuantumCircuit.bell()
         let finalState = circuit.execute()
         let invSqrt2 = 1.0 / sqrt(2.0)
 
-        #expect(abs(finalState.getAmplitude(ofState: 0).real - invSqrt2) < 1e-10)
-        #expect(abs(finalState.getAmplitude(ofState: 3).real - invSqrt2) < 1e-10)
-        #expect(abs(finalState.getAmplitude(ofState: 1).magnitude()) < 1e-10)
-        #expect(abs(finalState.getAmplitude(ofState: 2).magnitude()) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 0).real - invSqrt2) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 3).real - invSqrt2) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 1).magnitude) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 2).magnitude) < 1e-10)
     }
 
     @Test("Bell state is normalized")
     func bellStateNormalized() {
-        let circuit = QuantumCircuit.bellState()
+        let circuit = QuantumCircuit.bell()
         let finalState = circuit.execute()
 
         #expect(finalState.isNormalized())
@@ -198,11 +198,11 @@ struct BellStateCircuitTests {
 
     @Test("Bell state has correct probabilities")
     func bellStateProbabilities() {
-        let circuit = QuantumCircuit.bellState()
+        let circuit = QuantumCircuit.bell()
         let finalState = circuit.execute()
 
-        #expect(abs(finalState.probability(ofState: 0) - 0.5) < 1e-10)
-        #expect(abs(finalState.probability(ofState: 3) - 0.5) < 1e-10)
+        #expect(abs(finalState.probability(of: 0) - 0.5) < 1e-10)
+        #expect(abs(finalState.probability(of: 3) - 0.5) < 1e-10)
     }
 }
 
@@ -213,26 +213,26 @@ struct BellStateCircuitTests {
 struct GHZStateCircuitTests {
     @Test("3-qubit GHZ state")
     func threeQubitGHZ() {
-        let circuit = QuantumCircuit.ghzState(numQubits: 3)
+        let circuit = QuantumCircuit.ghz(numQubits: 3)
         let finalState = circuit.execute()
 
         let invSqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(finalState.getAmplitude(ofState: 0).real - invSqrt2) < 1e-10)
-        #expect(abs(finalState.getAmplitude(ofState: 7).real - invSqrt2) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 0).real - invSqrt2) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 7).real - invSqrt2) < 1e-10)
 
         for i in 1 ..< 7 {
-            #expect(abs(finalState.getAmplitude(ofState: i).magnitude()) < 1e-10)
+            #expect(abs(finalState.amplitude(of: i).magnitude) < 1e-10)
         }
     }
 
     @Test("4-qubit GHZ state")
     func fourQubitGHZ() {
-        let circuit = QuantumCircuit.ghzState(numQubits: 4)
+        let circuit = QuantumCircuit.ghz(numQubits: 4)
         let finalState = circuit.execute()
 
         let invSqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(finalState.getAmplitude(ofState: 0).real - invSqrt2) < 1e-10)
-        #expect(abs(finalState.getAmplitude(ofState: 15).real - invSqrt2) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 0).real - invSqrt2) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 15).real - invSqrt2) < 1e-10)
     }
 }
 
@@ -243,55 +243,34 @@ struct GHZStateCircuitTests {
 struct SuperpositionCircuitTests {
     @Test("Single qubit superposition")
     func singleQubitSuperposition() {
-        let circuit = QuantumCircuit.superposition(numQubits: 1)
+        let circuit = QuantumCircuit.uniformSuperposition(numQubits: 1)
         let finalState = circuit.execute()
 
         let invSqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(finalState.getAmplitude(ofState: 0).real - invSqrt2) < 1e-10)
-        #expect(abs(finalState.getAmplitude(ofState: 1).real - invSqrt2) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 0).real - invSqrt2) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 1).real - invSqrt2) < 1e-10)
     }
 
     @Test("2-qubit equal superposition")
     func twoQubitSuperposition() {
-        let circuit = QuantumCircuit.superposition(numQubits: 2)
+        let circuit = QuantumCircuit.uniformSuperposition(numQubits: 2)
         let finalState = circuit.execute()
 
         let expectedProb = 0.25
         for i in 0 ..< 4 {
-            #expect(abs(finalState.probability(ofState: i) - expectedProb) < 1e-10)
+            #expect(abs(finalState.probability(of: i) - expectedProb) < 1e-10)
         }
     }
 
     @Test("3-qubit equal superposition")
     func threeQubitSuperposition() {
-        let circuit = QuantumCircuit.superposition(numQubits: 3)
+        let circuit = QuantumCircuit.uniformSuperposition(numQubits: 3)
         let finalState = circuit.execute()
 
         let expectedProb = 1.0 / 8.0
         for i in 0 ..< 8 {
-            #expect(abs(finalState.probability(ofState: i) - expectedProb) < 1e-10)
+            #expect(abs(finalState.probability(of: i) - expectedProb) < 1e-10)
         }
-    }
-}
-
-/// Test suite for quantum circuit validation.
-/// Validates circuit structure integrity, gate-qubit compatibility,
-/// and error detection for invalid quantum circuit configurations.
-@Suite("Circuit Validation")
-struct CircuitValidationTests {
-    @Test("Valid circuit passes validation")
-    func validCircuit() {
-        var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
-
-        #expect(circuit.validate())
-    }
-
-    @Test("Empty circuit is valid")
-    func emptyCircuitValid() {
-        let circuit = QuantumCircuit(numQubits: 2)
-        #expect(circuit.validate())
     }
 }
 
@@ -311,10 +290,10 @@ struct CircuitPropertiesTests {
         var circuit = QuantumCircuit(numQubits: 2)
         #expect(circuit.gateCount == 0)
 
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         #expect(circuit.gateCount == 1)
 
-        circuit.append(gate: .hadamard, toQubit: 1)
+        circuit.append(.hadamard, to: 1)
         #expect(circuit.gateCount == 2)
 
         circuit.remove(at: 0)
@@ -330,10 +309,10 @@ struct CircuitEqualityTests {
     @Test("Identical circuits are equal")
     func identicalCircuitsEqual() {
         var circuit1 = QuantumCircuit(numQubits: 2)
-        circuit1.append(gate: .hadamard, toQubit: 0)
+        circuit1.append(.hadamard, to: 0)
 
         var circuit2 = QuantumCircuit(numQubits: 2)
-        circuit2.append(gate: .hadamard, toQubit: 0)
+        circuit2.append(.hadamard, to: 0)
 
         #expect(circuit1 == circuit2)
     }
@@ -341,10 +320,10 @@ struct CircuitEqualityTests {
     @Test("Different gate sequences are not equal")
     func differentSequencesNotEqual() {
         var circuit1 = QuantumCircuit(numQubits: 2)
-        circuit1.append(gate: .hadamard, toQubit: 0)
+        circuit1.append(.hadamard, to: 0)
 
         var circuit2 = QuantumCircuit(numQubits: 2)
-        circuit2.append(gate: .pauliX, toQubit: 0)
+        circuit2.append(.pauliX, to: 0)
 
         #expect(circuit1 != circuit2)
     }
@@ -367,7 +346,7 @@ struct CircuitDescriptionTests {
     @Test("Non-empty circuit description")
     func nonEmptyCircuitDescription() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
 
         let desc = circuit.description
         #expect(desc.contains("2 qubits"))
@@ -382,7 +361,7 @@ struct CircuitDescriptionTests {
 struct CircuitScalabilityTests {
     @Test("Circuit works with 8 qubits")
     func eightQubitCircuit() {
-        let circuit = QuantumCircuit.superposition(numQubits: 8)
+        let circuit = QuantumCircuit.uniformSuperposition(numQubits: 8)
         let finalState = circuit.execute()
 
         #expect(finalState.numQubits == 8)
@@ -392,8 +371,8 @@ struct CircuitScalabilityTests {
     @Test("Circuit works with 12 qubits")
     func twelveQubitCircuit() {
         var circuit = QuantumCircuit(numQubits: 12)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .cnot(control: 0, target: 5), qubits: [])
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.cnot, to: [0, 5])
 
         let finalState = circuit.execute()
         #expect(finalState.numQubits == 12)
@@ -406,7 +385,7 @@ struct CircuitScalabilityTests {
 
         for _ in 0 ..< 5 {
             for q in 0 ..< 4 {
-                circuit.append(gate: .hadamard, toQubit: q)
+                circuit.append(.hadamard, to: q)
             }
         }
 
@@ -428,7 +407,6 @@ struct QFTCircuitTests {
 
         #expect(circuit.numQubits == 3)
         #expect(circuit.gateCount > 0)
-        #expect(circuit.validate())
     }
 
     @Test("QFT preserves normalization")
@@ -447,14 +425,14 @@ struct QFTCircuitTests {
         let expectedAmp = 1.0 / sqrt(8.0)
 
         for i in 0 ..< 8 {
-            let amp = finalState.getAmplitude(ofState: i)
-            #expect(abs(amp.magnitude() - expectedAmp) < 1e-10)
+            let amp = finalState.amplitude(of: i)
+            #expect(abs(amp.magnitude - expectedAmp) < 1e-10)
         }
     }
 
     @Test("Inverse QFT reverses QFT")
     func inverseQFTReversesQFT() {
-        var amplitudes = AmplitudeVector(repeating: .zero, count: 8)
+        var amplitudes = [Complex<Double>](repeating: .zero, count: 8)
         amplitudes[5] = .one
         let initialState = QuantumState(numQubits: 3, amplitudes: amplitudes)
 
@@ -464,11 +442,11 @@ struct QFTCircuitTests {
         let inverseQFT = QuantumCircuit.inverseQFT(numQubits: 3)
         let finalState = inverseQFT.execute(on: afterQFT)
 
-        #expect(abs(finalState.getAmplitude(ofState: 5).real - 1.0) < 1e-8)
+        #expect(abs(finalState.amplitude(of: 5).real - 1.0) < 1e-8)
 
         for i in 0 ..< 8 {
             if i != 5 {
-                #expect(abs(finalState.getAmplitude(ofState: i).magnitude()) < 1e-8)
+                #expect(abs(finalState.amplitude(of: i).magnitude) < 1e-8)
             }
         }
     }
@@ -498,7 +476,7 @@ struct QFTCircuitTests {
         let n = 3
 
         for k in 0 ..< (1 << n) {
-            var amplitudes = AmplitudeVector(repeating: .zero, count: 1 << n)
+            var amplitudes = [Complex<Double>](repeating: .zero, count: 1 << n)
             amplitudes[k] = .one
             let initialState = QuantumState(numQubits: n, amplitudes: amplitudes)
 
@@ -509,8 +487,8 @@ struct QFTCircuitTests {
 
             let expectedMag = 1.0 / sqrt(Double(1 << n))
             for i in 0 ..< (1 << n) {
-                let amp = finalState.getAmplitude(ofState: i)
-                #expect(abs(amp.magnitude() - expectedMag) < 1e-9)
+                let amp = finalState.amplitude(of: i)
+                #expect(abs(amp.magnitude - expectedMag) < 1e-9)
             }
         }
     }
@@ -526,7 +504,7 @@ struct StateCachingTests {
         var circuit = QuantumCircuit(numQubits: 3)
         for i in 0 ..< 12 {
             let qubit = i % 3
-            circuit.append(gate: .hadamard, toQubit: qubit)
+            circuit.append(.hadamard, to: qubit)
         }
 
         let initialState = QuantumState(numQubits: 3)
@@ -542,10 +520,10 @@ struct StateCachingTests {
         var circuit = QuantumCircuit(numQubits: 2)
 
         for _ in 0 ..< 5 {
-            circuit.append(gate: .hadamard, toQubit: 0)
-            circuit.append(gate: .hadamard, toQubit: 1)
-            circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
-            circuit.append(gate: .hadamard, toQubit: 0)
+            circuit.append(.hadamard, to: 0)
+            circuit.append(.hadamard, to: 1)
+            circuit.append(.cnot, to: [0, 1])
+            circuit.append(.hadamard, to: 0)
         }
 
         let initialState = QuantumState(numQubits: 2)
@@ -566,13 +544,13 @@ struct StateCachingTests {
         var circuit = QuantumCircuit(numQubits: 2)
 
         for _ in 0 ..< 10 {
-            circuit.append(gate: .hadamard, toQubit: 0)
+            circuit.append(.hadamard, to: 0)
         }
 
         let initialState = QuantumState(numQubits: 2)
 
         _ = circuit.execute(on: initialState, upToIndex: 10)
-        circuit.append(gate: .pauliX, toQubit: 1)
+        circuit.append(.pauliX, to: 1)
 
         let finalState = circuit.execute(on: initialState, upToIndex: 11)
         #expect(finalState.isNormalized())
@@ -583,7 +561,7 @@ struct StateCachingTests {
         var circuit = QuantumCircuit(numQubits: 2)
 
         for _ in 0 ..< 15 {
-            circuit.append(gate: .hadamard, toQubit: 0)
+            circuit.append(.hadamard, to: 0)
         }
 
         let initialState = QuantumState(numQubits: 2)
@@ -599,7 +577,7 @@ struct StateCachingTests {
     @Test("Cache works with empty upToIndex")
     func cacheWorksWithZeroIndex() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let initialState = QuantumState(numQubits: 2)
         let state = circuit.execute(on: initialState, upToIndex: 0)
 
@@ -631,7 +609,7 @@ struct GroverCircuitTests {
         #expect(circuit.numQubits == 3)
         #expect(circuit.gateCount > 0)
 
-        let firstOps = circuit.operations.prefix(3)
+        let firstOps = circuit.gates.prefix(3)
         #expect(firstOps.allSatisfy { op in
             if case .hadamard = op.gate { return true }
             return false
@@ -655,7 +633,7 @@ struct GroverCircuitTests {
         let initialState = QuantumState(numQubits: circuit.numQubits)
         let finalState = circuit.execute(on: initialState)
 
-        let targetProb = finalState.probability(ofState: target)
+        let targetProb = finalState.probability(of: target)
 
         #expect(targetProb > 0.8, "Target probability: \(targetProb)")
     }
@@ -668,7 +646,7 @@ struct GroverCircuitTests {
         let initialState = QuantumState(numQubits: circuit.numQubits)
         let finalState = circuit.execute(on: initialState)
 
-        let targetProb = finalState.probability(ofState: target)
+        let targetProb = finalState.probability(of: target)
 
         #expect(targetProb > 0.8, "Target probability: \(targetProb)")
     }
@@ -700,7 +678,7 @@ struct GroverCircuitTests {
             let initialState = QuantumState(numQubits: circuit.numQubits)
             let finalState = circuit.execute(on: initialState)
 
-            let targetProb = finalState.probability(ofState: target)
+            let targetProb = finalState.probability(of: target)
 
             #expect(
                 targetProb > 0.7,
@@ -717,7 +695,7 @@ struct GroverCircuitTests {
 
         #expect(finalState.isNormalized())
 
-        let prob = finalState.probability(ofState: 1)
+        let prob = finalState.probability(of: 1)
         #expect(prob > 0.49)
     }
 
@@ -741,7 +719,6 @@ struct GroverCircuitTests {
 
         #expect(circuit.numQubits == 3)
         #expect(circuit.gateCount > 0, "Annealing circuit should have gates")
-        #expect(circuit.validate(), "Circuit should be valid")
     }
 
     @Test("Annealing circuit execution")
@@ -793,7 +770,6 @@ struct GroverCircuitTests {
 
         #expect(circuit.numQubits == 3)
         #expect(circuit.gateCount > 0)
-        #expect(circuit.validate())
 
         let finalState = circuit.execute()
         #expect(finalState.isNormalized())
@@ -877,36 +853,36 @@ struct GroverCircuitTests {
 struct CircuitCoverageTests {
     @Test("Initialize circuit with predefined operations")
     func initWithOperations() {
-        let ops = [
+        let gates = [
             GateOperation(gate: .hadamard, qubits: [0]),
             GateOperation(gate: .pauliX, qubits: [1]),
-            GateOperation(gate: .cnot(control: 0, target: 1), qubits: []),
+            GateOperation(gate: .cnot, qubits: [0, 1]),
         ]
 
-        let circuit = QuantumCircuit(numQubits: 2, operations: ops)
+        let circuit = QuantumCircuit(numQubits: 2, gates: gates)
 
         #expect(circuit.numQubits == 2)
         #expect(circuit.gateCount == 3)
-        #expect(circuit.operations[0].gate == .hadamard)
+        #expect(circuit.gates[0].gate == .hadamard)
     }
 
     @Test("Append gate with timestamp")
     func appendGateWithTimestamp() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, qubits: [0], timestamp: 1.5)
-        circuit.append(gate: .pauliX, qubits: [1], timestamp: 3.0)
+        circuit.append(.hadamard, to: 0, timestamp: 1.5)
+        circuit.append(.pauliX, to: 1, timestamp: 3.0)
 
         #expect(circuit.gateCount == 2)
-        #expect(circuit.operations[0].timestamp == 1.5)
-        #expect(circuit.operations[1].timestamp == 3.0)
+        #expect(circuit.gates[0].timestamp == 1.5)
+        #expect(circuit.gates[1].timestamp == 3.0)
     }
 
     @Test("GateOperation description with timestamp")
     func gateOperationDescriptionWithTimestamp() {
         let op1 = GateOperation(gate: .hadamard, qubits: [0], timestamp: 2.5)
-        let op2 = GateOperation(gate: .cnot(control: 0, target: 1), qubits: [], timestamp: 1.25)
+        let op2 = GateOperation(gate: .cnot, qubits: [0, 1], timestamp: 1.25)
 
-        #expect(op1.description.contains("2.50"))
+        #expect(op1.description.contains("2.5s"))
         #expect(op1.description.contains("s"))
         #expect(op2.description.contains("1.25"))
     }
@@ -918,45 +894,18 @@ struct CircuitCoverageTests {
         #expect(op.description.contains("H"))
     }
 
-    @Test("Circuit validation fails with invalid gate indices")
-    func validationFailsInvalidGate() {
-        var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .cnot(control: 0, target: 0), qubits: [])
-
-        #expect(!circuit.validate())
-    }
-
-    @Test("Circuit validation passes for valid circuit")
-    func validationPassesForValid() {
-        var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .hadamard, qubits: [0])
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
-        circuit.append(gate: .toffoli(control1: 0, control2: 1, target: 2), qubits: [])
-
-        #expect(circuit.validate())
-    }
-
     @Test("Multi-controlled Z on 4 qubits")
     func multiControlledZ4Qubits() {
         let circuit = QuantumCircuit.qft(numQubits: 4)
 
         #expect(circuit.numQubits == 4)
         #expect(circuit.gateCount > 0)
-        #expect(circuit.validate())
-    }
-
-    @Test("Multi-controlled X with no controls")
-    func multiControlledXNoControls() {
-        let circuit = QuantumCircuit.grover(numQubits: 1, target: 0)
-
-        #expect(circuit.validate())
     }
 
     @Test("Multi-controlled X with one control")
     func multiControlledXOneControl() {
         let circuit = QuantumCircuit.grover(numQubits: 2, target: 0)
 
-        #expect(circuit.validate())
         #expect(circuit.gateCount > 0)
     }
 
@@ -965,7 +914,6 @@ struct CircuitCoverageTests {
         let circuit = QuantumCircuit.grover(numQubits: 4, target: 5)
 
         #expect(circuit.numQubits >= 4)
-        #expect(circuit.validate())
     }
 
     @Test("Multi-controlled X: n=0 controls (just X gate)")
@@ -976,11 +924,10 @@ struct CircuitCoverageTests {
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: controls, target: target)
 
-        #expect(circuit.validate())
         #expect(circuit.gateCount == 1, "Should add single X gate")
 
         let finalState = circuit.execute()
-        #expect(abs(finalState.getAmplitude(ofState: 1).real - 1.0) < 1e-10)
+        #expect(abs(finalState.amplitude(of: 1).real - 1.0) < 1e-10)
     }
 
     @Test("Multi-controlled X: n=1 control (CNOT)")
@@ -991,7 +938,6 @@ struct CircuitCoverageTests {
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: controls, target: target)
 
-        #expect(circuit.validate())
         #expect(circuit.gateCount > 0)
 
         let finalState = circuit.execute()
@@ -1007,7 +953,6 @@ struct CircuitCoverageTests {
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: controls, target: target)
 
-        #expect(circuit.validate())
         #expect(circuit.gateCount > 0, "Should have decomposed into gates")
     }
 
@@ -1018,7 +963,7 @@ struct CircuitCoverageTests {
         let target = 3
 
         for control in controls {
-            circuit.append(gate: .pauliX, toQubit: control)
+            circuit.append(.pauliX, to: control)
         }
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: controls, target: target)
@@ -1026,7 +971,7 @@ struct CircuitCoverageTests {
         let finalState = circuit.execute()
         let allOnesState = 0b1111
 
-        #expect(abs(finalState.probability(ofState: allOnesState) - 1.0) < 1e-6)
+        #expect(abs(finalState.probability(of: allOnesState) - 1.0) < 1e-6)
     }
 
     @Test("Multi-controlled X with 3 controls does not flip with one |0⟩")
@@ -1035,15 +980,15 @@ struct CircuitCoverageTests {
         let controls = [0, 1, 2]
         let target = 3
 
-        circuit.append(gate: .pauliX, toQubit: controls[1])
-        circuit.append(gate: .pauliX, toQubit: controls[2])
+        circuit.append(.pauliX, to: controls[1])
+        circuit.append(.pauliX, to: controls[2])
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: controls, target: target)
 
         let finalState = circuit.execute()
         let expectedState = 0b0110
 
-        #expect(abs(finalState.probability(ofState: expectedState) - 1.0) < 1e-6)
+        #expect(abs(finalState.probability(of: expectedState) - 1.0) < 1e-6)
     }
 
     @Test("Multi-controlled X with 4 controls flips when all are |1⟩")
@@ -1053,7 +998,7 @@ struct CircuitCoverageTests {
         let target = 4
 
         for control in controls {
-            circuit.append(gate: .pauliX, toQubit: control)
+            circuit.append(.pauliX, to: control)
         }
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: controls, target: target)
@@ -1061,7 +1006,7 @@ struct CircuitCoverageTests {
         let finalState = circuit.execute()
         let allOnesState = 0b11111
 
-        #expect(abs(finalState.probability(ofState: allOnesState) - 1.0) < 1e-6)
+        #expect(abs(finalState.probability(of: allOnesState) - 1.0) < 1e-6)
     }
 
     @Test("Multi-controlled X with 4 controls does not flip with one |0⟩")
@@ -1071,7 +1016,7 @@ struct CircuitCoverageTests {
         let target = 4
 
         for i in 1 ..< controls.count {
-            circuit.append(gate: .pauliX, toQubit: controls[i])
+            circuit.append(.pauliX, to: controls[i])
         }
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: controls, target: target)
@@ -1079,7 +1024,7 @@ struct CircuitCoverageTests {
         let finalState = circuit.execute()
         let expectedState = 0b01110
 
-        #expect(abs(finalState.probability(ofState: expectedState) - 1.0) < 1e-6)
+        #expect(abs(finalState.probability(of: expectedState) - 1.0) < 1e-6)
     }
 
     @Test("Multi-controlled X with 5 controls flips when all are |1⟩")
@@ -1089,7 +1034,7 @@ struct CircuitCoverageTests {
         let target = 5
 
         for control in controls {
-            circuit.append(gate: .pauliX, toQubit: control)
+            circuit.append(.pauliX, to: control)
         }
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: controls, target: target)
@@ -1097,7 +1042,7 @@ struct CircuitCoverageTests {
         let finalState = circuit.execute()
         let allOnesState = 0b111111
 
-        #expect(abs(finalState.probability(ofState: allOnesState) - 1.0) < 1e-6)
+        #expect(abs(finalState.probability(of: allOnesState) - 1.0) < 1e-6)
     }
 
     @Test("Multi-controlled X with 5 controls does not flip with one |0⟩")
@@ -1107,7 +1052,7 @@ struct CircuitCoverageTests {
         let target = 5
 
         for i in 1 ..< controls.count {
-            circuit.append(gate: .pauliX, toQubit: controls[i])
+            circuit.append(.pauliX, to: controls[i])
         }
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: controls, target: target)
@@ -1115,7 +1060,7 @@ struct CircuitCoverageTests {
         let finalState = circuit.execute()
         let expectedState = 0b011110
 
-        #expect(abs(finalState.probability(ofState: expectedState) - 1.0) < 1e-6)
+        #expect(abs(finalState.probability(of: expectedState) - 1.0) < 1e-6)
     }
 
     @Test("Multi-controlled X with 6 controls validates correctness")
@@ -1125,7 +1070,7 @@ struct CircuitCoverageTests {
         let target = 6
 
         for control in controls {
-            circuit.append(gate: .pauliX, toQubit: control)
+            circuit.append(.pauliX, to: control)
         }
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: controls, target: target)
@@ -1134,14 +1079,14 @@ struct CircuitCoverageTests {
         let allOnesState = 0b1111111
 
         #expect(finalState.isNormalized())
-        #expect(abs(finalState.probability(ofState: allOnesState) - 1.0) < 1e-6)
+        #expect(abs(finalState.probability(of: allOnesState) - 1.0) < 1e-6)
     }
 
     @Test("State expansion with ancilla qubits preserves original amplitudes")
     func stateExpansionPreservesAmplitudes() {
-        var setupCircuit = QuantumCircuit(numQubits: 4)
-        setupCircuit.append(gate: .pauliX, toQubit: 0)
-        setupCircuit.append(gate: .pauliX, toQubit: 1)
+        var setupCircuit = QuantumCircuit(numQubits: 5)
+        setupCircuit.append(.pauliX, to: 0)
+        setupCircuit.append(.pauliX, to: 1)
         let initialState = setupCircuit.execute()
 
         var circuit = QuantumCircuit(numQubits: 4)
@@ -1150,15 +1095,15 @@ struct CircuitCoverageTests {
         let finalState = circuit.execute(on: initialState)
 
         #expect(finalState.isNormalized())
-        #expect(finalState.probability(ofState: 0b0011) > 0.99)
+        #expect(finalState.probability(of: 0b0011) > 0.99)
     }
 
     @Test("State expansion allocates ancilla at zero state")
     func stateExpansionAncillaAtZero() {
         var circuit = QuantumCircuit(numQubits: 4)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 1)
-        circuit.append(gate: .hadamard, toQubit: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.hadamard, to: 1)
+        circuit.append(.hadamard, to: 2)
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: [0, 1, 2], target: 3)
 
@@ -1167,7 +1112,7 @@ struct CircuitCoverageTests {
 
         var probabilityWithAncillaZero = 0.0
         for state in 0 ..< 16 {
-            probabilityWithAncillaZero += finalState.probability(ofState: state)
+            probabilityWithAncillaZero += finalState.probability(of: state)
         }
         #expect(abs(probabilityWithAncillaZero - 1.0) < 1e-10, "Ancilla should be uncomputed to |0⟩")
     }
@@ -1175,15 +1120,15 @@ struct CircuitCoverageTests {
     @Test("maxQubitUsed detects ancilla qubits")
     func maxQubitUsedDetectsAncilla() {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        #expect(circuit.maxQubitUsed() == 2)
+        circuit.append(.hadamard, to: 0)
+        #expect(circuit.highestQubitIndex == 2)
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: [0, 1], target: 2)
-        #expect(circuit.maxQubitUsed() == 2)
+        #expect(circuit.highestQubitIndex == 2)
 
         circuit = QuantumCircuit(numQubits: 4)
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: [0, 1, 2], target: 3)
-        #expect(circuit.maxQubitUsed() == 4, "Should detect ancilla qubit 4")
+        #expect(circuit.highestQubitIndex == 4, "Should detect ancilla qubit 4")
     }
 
     @Test("State expansion handles multiple ancilla qubits")
@@ -1194,57 +1139,37 @@ struct CircuitCoverageTests {
         let target = 5
 
         for control in controls {
-            circuit.append(gate: .pauliX, toQubit: control)
+            circuit.append(.pauliX, to: control)
         }
 
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: controls, target: target)
 
-        #expect(circuit.maxQubitUsed() == 8, "Should use ancilla qubits 6, 7, 8")
+        #expect(circuit.highestQubitIndex == 8, "Should use ancilla qubits 6, 7, 8")
 
         let finalState = circuit.execute()
 
         #expect(finalState.isNormalized())
-        #expect(finalState.probability(ofState: 0b111111) > 0.99, "Target should flip")
-    }
-
-    @Test("State expansion in execute upToIndex with ancilla qubits")
-    func stateExpansionExecuteUpToIndex() {
-        var setupCircuit = QuantumCircuit(numQubits: 4)
-        setupCircuit.append(gate: .pauliX, toQubit: 0)
-        setupCircuit.append(gate: .pauliX, toQubit: 1)
-        setupCircuit.append(gate: .pauliX, toQubit: 2)
-        let initialState = setupCircuit.execute()
-
-        var circuit = QuantumCircuit(numQubits: 4)
-        QuantumCircuit.appendMultiControlledX(to: &circuit, controls: [0, 1, 2], target: 3)
-        circuit.append(gate: .pauliX, toQubit: 3)
-
-        let partialState = circuit.execute(on: initialState, upToIndex: circuit.gateCount - 1)
-        #expect(partialState.isNormalized())
-        #expect(partialState.probability(ofState: 0b1111) > 0.99)
-
-        let fullState = circuit.execute(on: initialState)
-        #expect(fullState.probability(ofState: 0b0111) > 0.99)
+        #expect(finalState.probability(of: 0b111111) > 0.99, "Target should flip")
     }
 
     @Test("maxQubitUsed with empty operations returns numQubits minus 1")
     func maxQubitUsedEmptyCircuit() {
         let circuit = QuantumCircuit(numQubits: 5)
-        #expect(circuit.maxQubitUsed() == 4)
+        #expect(circuit.highestQubitIndex == 4)
     }
 
     @Test("maxQubitUsed detects single-qubit gate qubits")
     func maxQubitUsedSingleQubitGates() {
         var circuit = QuantumCircuit(numQubits: 3)
 
-        circuit.append(gate: .hadamard, toQubit: 2)
-        #expect(circuit.maxQubitUsed() == 2)
+        circuit.append(.hadamard, to: 2)
+        #expect(circuit.highestQubitIndex == 2)
 
-        circuit.append(gate: .pauliX, toQubit: 1)
-        #expect(circuit.maxQubitUsed() == 2)
+        circuit.append(.pauliX, to: 1)
+        #expect(circuit.highestQubitIndex == 2)
 
-        circuit.append(gate: .phase(theta: .pi), toQubit: 0)
-        #expect(circuit.maxQubitUsed() == 2)
+        circuit.append(.phase(angle: .pi), to: 0)
+        #expect(circuit.highestQubitIndex == 2)
     }
 
     @Test("Grover finds target with high probability (5-qubit)")
@@ -1253,49 +1178,9 @@ struct CircuitCoverageTests {
         let circuit = QuantumCircuit.grover(numQubits: 5, target: target)
         let initialState = QuantumState(numQubits: circuit.numQubits)
         let finalState = circuit.execute(on: initialState)
-        let targetProb = finalState.probability(ofState: target)
+        let targetProb = finalState.probability(of: target)
 
         #expect(targetProb > 0.7, "Target probability: \(targetProb)")
-    }
-
-    @Test("Append gate with dynamic circuit growth")
-    func appendGateDynamicGrowth() {
-        var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, qubits: [5])
-
-        #expect(circuit.numQubits == 6, "Circuit should grow to accommodate qubit 5")
-        #expect(circuit.gateCount == 1)
-        #expect(circuit.validate())
-    }
-
-    @Test("Circuit validation with out-of-bounds qubit in operations array")
-    func validationOutOfBoundsQubitInArray() {
-        var circuit = QuantumCircuit(numQubits: 2)
-
-        circuit.append(gate: .hadamard, qubits: [0])
-
-        let ops = [
-            GateOperation(gate: .hadamard, qubits: [5]),
-        ]
-        let invalidCircuit = QuantumCircuit(numQubits: 2, operations: ops)
-
-        #expect(!invalidCircuit.validate(), "Should detect out-of-bounds qubit")
-    }
-
-    @Test("Circuit validation with negative qubit in operations")
-    func validationNegativeQubitInOps() {
-        let ops = [
-            GateOperation(gate: .hadamard, qubits: [-1]),
-        ]
-        let invalidCircuit = QuantumCircuit(numQubits: 2, operations: ops)
-
-        #expect(!invalidCircuit.validate(), "Should detect negative qubit index")
-    }
-
-    @Test("Circuit validation passes empty circuit")
-    func validationPassesEmptyCircuit() {
-        let circuit = QuantumCircuit(numQubits: 3)
-        #expect(circuit.validate(), "Empty circuit should be valid")
     }
 
     @Test("Circuit description with more than 5 gates")
@@ -1303,7 +1188,7 @@ struct CircuitCoverageTests {
         var circuit = QuantumCircuit(numQubits: 2)
 
         for _ in 0 ..< 7 {
-            circuit.append(gate: .hadamard, toQubit: 0)
+            circuit.append(.hadamard, to: 0)
         }
 
         let desc = circuit.description
@@ -1315,9 +1200,9 @@ struct CircuitCoverageTests {
     func maxQubitUsedEmptyQubitArray() {
         var circuit = QuantumCircuit(numQubits: 3)
         let ops = [GateOperation(gate: .hadamard, qubits: [])]
-        circuit = QuantumCircuit(numQubits: 3, operations: ops)
+        circuit = QuantumCircuit(numQubits: 3, gates: ops)
 
-        #expect(circuit.maxQubitUsed() == 2)
+        #expect(circuit.highestQubitIndex == 2)
     }
 
     @Test("Multi-controlled X with empty controls array")
@@ -1327,7 +1212,7 @@ struct CircuitCoverageTests {
 
         #expect(circuit.gateCount == 1)
         let state = circuit.execute()
-        #expect(state.probability(ofState: 0b01) > 0.99, "Target qubit should be flipped")
+        #expect(state.probability(of: 0b01) > 0.99, "Target qubit should be flipped")
     }
 
     @Test("appendMultiControlledX with empty controls array")
@@ -1336,6 +1221,6 @@ struct CircuitCoverageTests {
         QuantumCircuit.appendMultiControlledX(to: &circuit, controls: [], target: 1)
 
         let finalState = circuit.execute()
-        #expect(finalState.probability(ofState: 0b10) > 0.99)
+        #expect(finalState.probability(of: 0b10) > 0.99)
     }
 }

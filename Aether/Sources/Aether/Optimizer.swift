@@ -1155,7 +1155,7 @@ public struct SPSAOptimizer: Optimizer {
 /// - Trust region update: expand if r > 0.75, shrink if r < 0.1, accept if r > 0.1
 ///
 /// **Algorithm**:
-/// 1. Initialize simplex with n+1 points spaced by simplexScale × initialTrustRadius
+/// 1. Initialize simplex with n+1 points spaced by simplexScale x initialTrustRadius
 /// 2. Build linear gradient model via weighted directional derivatives from simplex
 /// 3. Solve trust region subproblem using Cauchy point (exact for linear models)
 /// 4. Evaluate objective at trial point, compute actual vs predicted reduction ratio

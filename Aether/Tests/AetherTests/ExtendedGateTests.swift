@@ -13,29 +13,29 @@ struct ExtendedGateTests {
     @Test("CZ gate creates Bell state variant")
     func testCZGate() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 1)
-        circuit.append(gate: .cz(control: 0, target: 1), qubits: [])
-        circuit.append(gate: .hadamard, toQubit: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.hadamard, to: 1)
+        circuit.append(.cz, to: [0, 1])
+        circuit.append(.hadamard, to: 1)
 
         let state = circuit.execute()
 
         let expected00 = 0.5
         let expected11 = 0.5
 
-        #expect(abs(state.probability(ofState: 0) - expected00) < 1e-10)
-        #expect(abs(state.probability(ofState: 3) - expected11) < 1e-10)
+        #expect(abs(state.probability(of: 0) - expected00) < 1e-10)
+        #expect(abs(state.probability(of: 3) - expected11) < 1e-10)
     }
 
     @Test("CZ gate is symmetric")
     func testCZSymmetry() {
         var circuit1 = QuantumCircuit(numQubits: 2)
-        circuit1.append(gate: .hadamard, toQubit: 0)
-        circuit1.append(gate: .cz(control: 0, target: 1), qubits: [])
+        circuit1.append(.hadamard, to: 0)
+        circuit1.append(.cz, to: [0, 1])
 
         var circuit2 = QuantumCircuit(numQubits: 2)
-        circuit2.append(gate: .hadamard, toQubit: 0)
-        circuit2.append(gate: .cz(control: 1, target: 0), qubits: [])
+        circuit2.append(.hadamard, to: 0)
+        circuit2.append(.cz, to: [1, 0])
 
         let state1 = circuit1.execute()
         let state2 = circuit2.execute()
@@ -45,7 +45,7 @@ struct ExtendedGateTests {
 
     @Test("CY gate matrix is unitary")
     func testCYUnitary() {
-        let gate = QuantumGate.cy(control: 0, target: 1)
+        let gate = QuantumGate.cy
         let matrix = gate.matrix()
         #expect(QuantumGate.isUnitary(matrix))
     }
@@ -53,13 +53,13 @@ struct ExtendedGateTests {
     @Test("CH gate creates controlled superposition")
     func testCHGate() {
         var state = QuantumState(numQubits: 2)
-        state.setAmplitude(ofState: 1, amplitude: .one)
-        state.setAmplitude(ofState: 0, amplitude: .zero)
+        state.setAmplitude(1, to: .one)
+        state.setAmplitude(0, to: .zero)
 
-        state = GateApplication.apply(gate: .ch(control: 0, target: 1), to: [], state: state)
+        state = GateApplication.apply(.ch, to: [0, 1], state: state)
 
-        let prob0 = state.probability(ofState: 1)
-        let prob1 = state.probability(ofState: 3)
+        let prob0 = state.probability(of: 1)
+        let prob1 = state.probability(of: 3)
 
         #expect(abs(prob0 - 0.5) < 1e-10)
         #expect(abs(prob1 - 0.5) < 1e-10)
@@ -74,33 +74,33 @@ struct IDMUniversalGateTests {
     @Test("U1 gate is pure phase")
     func testU1Gate() {
         let lambda = Double.pi / 3.0
-        let state = QuantumState(singleQubit: 1)
-        let transformed = GateApplication.apply(gate: .u1(lambda: lambda), to: [0], state: state)
+        let state = QuantumState(qubit: 1)
+        let transformed = GateApplication.apply(.u1(lambda: lambda), to: 0, state: state)
 
-        #expect(abs(transformed.probability(ofState: 1) - 1.0) < 1e-10)
+        #expect(abs(transformed.probability(of: 1) - 1.0) < 1e-10)
     }
 
     @Test("U2 gate creates superposition")
     func testU2Gate() {
         let phi = 0.0
         let lambda = 0.0
-        let state = QuantumState(singleQubit: 0)
-        let transformed = GateApplication.apply(gate: .u2(phi: phi, lambda: lambda), to: [0], state: state)
+        let state = QuantumState(qubit: 0)
+        let transformed = GateApplication.apply(.u2(phi: phi, lambda: lambda), to: 0, state: state)
 
-        #expect(abs(transformed.probability(ofState: 0) - 0.5) < 1e-10)
-        #expect(abs(transformed.probability(ofState: 1) - 0.5) < 1e-10)
+        #expect(abs(transformed.probability(of: 0) - 0.5) < 1e-10)
+        #expect(abs(transformed.probability(of: 1) - 0.5) < 1e-10)
     }
 
     @Test("U3 gate can implement any single-qubit gate")
     func testU3Gate() {
-        let state = QuantumState(singleQubit: 0)
+        let state = QuantumState(qubit: 0)
         let transformed = GateApplication.apply(
-            gate: .u3(theta: .pi, phi: 0.0, lambda: .pi),
-            to: [0],
+            .u3(theta: .pi, phi: 0.0, lambda: .pi),
+            to: 0,
             state: state
         )
 
-        #expect(abs(transformed.probability(ofState: 1) - 1.0) < 1e-10)
+        #expect(abs(transformed.probability(of: 1) - 1.0) < 1e-10)
     }
 
     @Test("U3 matrix is unitary")
@@ -118,37 +118,37 @@ struct IDMUniversalGateTests {
 struct SquareRootGatesTests {
     @Test("SX gate squared equals X")
     func testSXSquared() {
-        var state = QuantumState(singleQubit: 0)
-        state = GateApplication.apply(gate: .sx, to: [0], state: state)
-        state = GateApplication.apply(gate: .sx, to: [0], state: state)
+        var state = QuantumState(qubit: 0)
+        state = GateApplication.apply(.sx, to: 0, state: state)
+        state = GateApplication.apply(.sx, to: 0, state: state)
 
-        #expect(abs(state.probability(ofState: 1) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 1) - 1.0) < 1e-10)
     }
 
     @Test("SY gate squared equals Y")
     func testSYSquared() {
-        var state = QuantumState(singleQubit: 0)
-        state = GateApplication.apply(gate: .sy, to: [0], state: state)
-        state = GateApplication.apply(gate: .sy, to: [0], state: state)
+        var state = QuantumState(qubit: 0)
+        state = GateApplication.apply(.sy, to: 0, state: state)
+        state = GateApplication.apply(.sy, to: 0, state: state)
 
-        #expect(abs(state.probability(ofState: 1) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 1) - 1.0) < 1e-10)
     }
 
     @Test("√SWAP gate squared equals SWAP")
     func testSqrtSWAPSquared() {
         var state = QuantumState(numQubits: 2)
-        state.setAmplitude(ofState: 1, amplitude: .one)
-        state.setAmplitude(ofState: 0, amplitude: .zero)
+        state.setAmplitude(1, to: .one)
+        state.setAmplitude(0, to: .zero)
 
-        state = GateApplication.apply(gate: .sqrtSwap(qubit1: 0, qubit2: 1), to: [], state: state)
-        state = GateApplication.apply(gate: .sqrtSwap(qubit1: 0, qubit2: 1), to: [], state: state)
+        state = GateApplication.apply(.sqrtSwap, to: [0, 1], state: state)
+        state = GateApplication.apply(.sqrtSwap, to: [0, 1], state: state)
 
-        #expect(abs(state.probability(ofState: 2) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 2) - 1.0) < 1e-10)
     }
 
     @Test("√SWAP matrix is unitary")
     func testSqrtSWAPUnitary() {
-        let gate = QuantumGate.sqrtSwap(qubit1: 0, qubit2: 1)
+        let gate = QuantumGate.sqrtSwap
         let matrix = gate.matrix()
         #expect(QuantumGate.isUnitary(matrix))
     }
@@ -164,8 +164,8 @@ struct ControlledRotationGatesTests {
         let state = QuantumState(numQubits: 2)
         let theta = Double.pi / 4.0
         let transformed = GateApplication.apply(
-            gate: .controlledRotationX(theta: theta, control: 0, target: 1),
-            to: [],
+            .controlledRotationX(theta: theta),
+            to: [0, 1],
             state: state
         )
 
@@ -175,22 +175,22 @@ struct ControlledRotationGatesTests {
     @Test("CRx gate with control=1 rotates target")
     func testCRxControlOn() {
         var state = QuantumState(numQubits: 2)
-        state.setAmplitude(ofState: 1, amplitude: .one)
-        state.setAmplitude(ofState: 0, amplitude: .zero)
+        state.setAmplitude(1, to: .one)
+        state.setAmplitude(0, to: .zero)
 
         let theta = Double.pi
         state = GateApplication.apply(
-            gate: .controlledRotationX(theta: theta, control: 0, target: 1),
-            to: [],
+            .controlledRotationX(theta: theta),
+            to: [0, 1],
             state: state
         )
 
-        #expect(abs(state.probability(ofState: 3) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 3) - 1.0) < 1e-10)
     }
 
     @Test("CRy gate matrix is unitary")
     func testCRyUnitary() {
-        let gate = QuantumGate.controlledRotationY(theta: 1.23, control: 0, target: 1)
+        let gate = QuantumGate.controlledRotationY(theta: 1.23)
         let matrix = gate.matrix()
         #expect(QuantumGate.isUnitary(matrix))
     }
@@ -198,17 +198,17 @@ struct ControlledRotationGatesTests {
     @Test("CRz gate applies phase rotation")
     func testCRzGate() {
         var state = QuantumState(numQubits: 2)
-        state.setAmplitude(ofState: 3, amplitude: .one)
-        state.setAmplitude(ofState: 0, amplitude: .zero)
+        state.setAmplitude(3, to: .one)
+        state.setAmplitude(0, to: .zero)
 
         let theta = Double.pi / 2.0
         state = GateApplication.apply(
-            gate: .controlledRotationZ(theta: theta, control: 0, target: 1),
-            to: [],
+            .controlledRotationZ(theta: theta),
+            to: [0, 1],
             state: state
         )
 
-        #expect(abs(state.probability(ofState: 3) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 3) - 1.0) < 1e-10)
     }
 }
 
@@ -219,45 +219,45 @@ struct ControlledRotationGatesTests {
 struct CustomUnitaryGatesTests {
     @Test("Custom single-qubit gate validates unitarity")
     func testCustomSingleQubitValidation() {
-        let validMatrix: GateMatrix = [
+        let validMatrix: [[Complex<Double>]] = [
             [.zero, .one],
             [.one, .zero],
         ]
 
-        let gate = QuantumGate.createCustomSingleQubit(matrix: validMatrix)
+        let gate = QuantumGate.custom(matrix: validMatrix)
         #expect(gate.qubitsRequired == 1)
     }
 
     @Test("Custom two-qubit gate validates unitarity")
     func testCustomTwoQubitValidation() {
-        let validMatrix: GateMatrix = [
+        let validMatrix: [[Complex<Double>]] = [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
             [.zero, .zero, .zero, .one],
             [.zero, .zero, .one, .zero],
         ]
 
-        let gate = QuantumGate.createCustomTwoQubit(matrix: validMatrix, control: 0, target: 1)
+        let gate = QuantumGate.custom(matrix: validMatrix, control: 0, target: 1)
         #expect(gate.qubitsRequired == 2)
     }
 
     @Test("Custom gate works in circuit")
     func testCustomGateInCircuit() {
         let invSqrt2 = 1.0 / sqrt(2.0)
-        let hadamardMatrix: GateMatrix = [
+        let hadamardMatrix: [[Complex<Double>]] = [
             [Complex(invSqrt2, 0.0), Complex(invSqrt2, 0.0)],
             [Complex(invSqrt2, 0.0), Complex(-invSqrt2, 0.0)],
         ]
 
-        let customH = QuantumGate.createCustomSingleQubit(matrix: hadamardMatrix)
+        let customH = QuantumGate.custom(matrix: hadamardMatrix)
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: customH, toQubit: 0)
+        circuit.append(customH, to: 0)
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(ofState: 0) - 0.5) < 1e-10)
-        #expect(abs(state.probability(ofState: 1) - 0.5) < 1e-10)
+        #expect(abs(state.probability(of: 0) - 0.5) < 1e-10)
+        #expect(abs(state.probability(of: 1) - 0.5) < 1e-10)
     }
 }
 
@@ -273,47 +273,47 @@ struct MultiControlledGatesTests {
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(ofState: 1) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 1) - 1.0) < 1e-10)
     }
 
     @Test("Multi-controlled Y with 2 controls")
     func testMultiControlledY2() {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.pauliX, to: 1)
 
         QuantumCircuit.appendMultiControlledY(to: &circuit, controls: [0, 1], target: 2)
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(ofState: 7) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 7) - 1.0) < 1e-10)
     }
 
     @Test("Multi-controlled Z with 0 controls")
     func testMultiControlledZ0() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         QuantumCircuit.appendMultiControlledZ(to: &circuit, controls: [], target: 0)
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(ofState: 0) - 0.5) < 1e-10)
-        #expect(abs(state.probability(ofState: 1) - 0.5) < 1e-10)
+        #expect(abs(state.probability(of: 0) - 0.5) < 1e-10)
+        #expect(abs(state.probability(of: 1) - 0.5) < 1e-10)
     }
 
     @Test("Multi-controlled Z with 2 controls")
     func testMultiControlledZ2() {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
-        circuit.append(gate: .hadamard, toQubit: 2)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.pauliX, to: 1)
+        circuit.append(.hadamard, to: 2)
 
         QuantumCircuit.appendMultiControlledZ(to: &circuit, controls: [0, 1], target: 2)
 
         let state = circuit.execute()
 
-        let prob0 = state.probability(ofState: 3)
-        let prob1 = state.probability(ofState: 7)
+        let prob0 = state.probability(of: 3)
+        let prob1 = state.probability(of: 7)
 
         #expect(abs(prob0 - 0.5) < 1e-10)
         #expect(abs(prob1 - 0.5) < 1e-10)
@@ -322,17 +322,17 @@ struct MultiControlledGatesTests {
     @Test("Multi-controlled Z with 3 controls")
     func testMultiControlledZ3() {
         var circuit = QuantumCircuit(numQubits: 4)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
-        circuit.append(gate: .pauliX, toQubit: 2)
-        circuit.append(gate: .hadamard, toQubit: 3)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.pauliX, to: 1)
+        circuit.append(.pauliX, to: 2)
+        circuit.append(.hadamard, to: 3)
 
         QuantumCircuit.appendMultiControlledZ(to: &circuit, controls: [0, 1, 2], target: 3)
 
         let state = circuit.execute()
 
-        let prob0 = state.probability(ofState: 7)
-        let prob1 = state.probability(ofState: 15)
+        let prob0 = state.probability(of: 7)
+        let prob1 = state.probability(of: 15)
 
         #expect(abs(prob0 - 0.5) < 1e-10)
         #expect(abs(prob1 - 0.5) < 1e-10)
@@ -345,101 +345,101 @@ struct MultiControlledGatesTests {
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(ofState: 1) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 1) - 1.0) < 1e-10)
     }
 
     @Test("Multi-controlled U with pauliZ")
     func testMultiControlledUPauliZ() {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
-        circuit.append(gate: .hadamard, toQubit: 2)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.pauliX, to: 1)
+        circuit.append(.hadamard, to: 2)
 
         QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .pauliZ, controls: [0, 1], target: 2)
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(ofState: 3) - 0.5) < 1e-10)
-        #expect(abs(state.probability(ofState: 7) - 0.5) < 1e-10)
+        #expect(abs(state.probability(of: 3) - 0.5) < 1e-10)
+        #expect(abs(state.probability(of: 7) - 0.5) < 1e-10)
     }
 
     @Test("Multi-controlled U with hadamard")
     func testMultiControlledUHadamard() {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.pauliX, to: 1)
 
         QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .hadamard, controls: [0, 1], target: 2)
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(ofState: 3) - 0.5) < 1e-10)
-        #expect(abs(state.probability(ofState: 7) - 0.5) < 1e-10)
+        #expect(abs(state.probability(of: 3) - 0.5) < 1e-10)
+        #expect(abs(state.probability(of: 7) - 0.5) < 1e-10)
     }
 
     @Test("Multi-controlled U with arbitrary gate")
     func testMultiControlledUArbitrary() {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.pauliX, to: 1)
 
         QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .tGate, controls: [0, 1], target: 2)
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(ofState: 3) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 3) - 1.0) < 1e-10)
     }
 
     @Test("Multi-controlled Y with 1 control")
     func testMultiControlledY1() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .pauliX, toQubit: 0)
+        circuit.append(.pauliX, to: 0)
 
         QuantumCircuit.appendMultiControlledY(to: &circuit, controls: [0], target: 1)
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(ofState: 3) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 3) - 1.0) < 1e-10)
     }
 
     @Test("Multi-controlled Z with 1 control")
     func testMultiControlledZ1() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 1)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.hadamard, to: 1)
 
         QuantumCircuit.appendMultiControlledZ(to: &circuit, controls: [0], target: 1)
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(ofState: 1) - 0.5) < 1e-10)
-        #expect(abs(state.probability(ofState: 3) - 0.5) < 1e-10)
+        #expect(abs(state.probability(of: 1) - 0.5) < 1e-10)
+        #expect(abs(state.probability(of: 3) - 0.5) < 1e-10)
     }
 
     @Test("Multi-controlled U with pauliX")
     func testMultiControlledUPauliX() {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.pauliX, to: 1)
 
         QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .pauliX, controls: [0, 1], target: 2)
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(ofState: 7) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 7) - 1.0) < 1e-10)
     }
 
     @Test("Multi-controlled U with pauliY")
     func testMultiControlledUPauliY() {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.pauliX, to: 1)
 
         QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .pauliY, controls: [0, 1], target: 2)
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(ofState: 7) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 7) - 1.0) < 1e-10)
     }
 }
 
@@ -455,11 +455,11 @@ struct GatePropertyTests {
         #expect(QuantumGate.u1(lambda: 0.5).qubitsRequired == 1)
         #expect(QuantumGate.u2(phi: 0.5, lambda: 0.5).qubitsRequired == 1)
         #expect(QuantumGate.u3(theta: 0.5, phi: 0.5, lambda: 0.5).qubitsRequired == 1)
-        #expect(QuantumGate.cz(control: 0, target: 1).qubitsRequired == 2)
-        #expect(QuantumGate.cy(control: 0, target: 1).qubitsRequired == 2)
-        #expect(QuantumGate.ch(control: 0, target: 1).qubitsRequired == 2)
-        #expect(QuantumGate.sqrtSwap(qubit1: 0, qubit2: 1).qubitsRequired == 2)
-        #expect(QuantumGate.controlledRotationX(theta: 0.5, control: 0, target: 1).qubitsRequired == 2)
+        #expect(QuantumGate.cz.qubitsRequired == 2)
+        #expect(QuantumGate.cy.qubitsRequired == 2)
+        #expect(QuantumGate.ch.qubitsRequired == 2)
+        #expect(QuantumGate.sqrtSwap.qubitsRequired == 2)
+        #expect(QuantumGate.controlledRotationX(theta: 0.5).qubitsRequired == 2)
     }
 
     @Test("All new gate matrices are unitary")
@@ -470,13 +470,13 @@ struct GatePropertyTests {
             .u1(lambda: 1.23),
             .u2(phi: 1.23, lambda: 2.34),
             .u3(theta: 1.23, phi: 2.34, lambda: 3.45),
-            .cz(control: 0, target: 1),
-            .cy(control: 0, target: 1),
-            .ch(control: 0, target: 1),
-            .sqrtSwap(qubit1: 0, qubit2: 1),
-            .controlledRotationX(theta: 1.23, control: 0, target: 1),
-            .controlledRotationY(theta: 1.23, control: 0, target: 1),
-            .controlledRotationZ(theta: 1.23, control: 0, target: 1),
+            .cz,
+            .cy,
+            .ch,
+            .sqrtSwap,
+            .controlledRotationX(theta: 1.23),
+            .controlledRotationY(theta: 1.23),
+            .controlledRotationZ(theta: 1.23),
         ]
 
         for gate in gates {
@@ -487,42 +487,42 @@ struct GatePropertyTests {
 
     @Test("Gate validation works for new gates")
     func testGateValidation() {
-        #expect(QuantumGate.cz(control: 0, target: 1).validateQubitIndices(maxAllowedQubit: 5))
-        #expect(QuantumGate.cy(control: 2, target: 3).validateQubitIndices(maxAllowedQubit: 5))
-        #expect(!QuantumGate.cz(control: 0, target: 0).validateQubitIndices(maxAllowedQubit: 5))
-        #expect(!QuantumGate.sqrtSwap(qubit1: 0, qubit2: 0).validateQubitIndices(maxAllowedQubit: 5))
+        #expect(QuantumGate.cz.validateQubitIndices([0, 1], maxAllowedQubit: 5))
+        #expect(QuantumGate.cy.validateQubitIndices([2, 3], maxAllowedQubit: 5))
+        #expect(!QuantumGate.cz.validateQubitIndices([0, 0], maxAllowedQubit: 5))
+        #expect(!QuantumGate.sqrtSwap.validateQubitIndices([0, 0], maxAllowedQubit: 5))
     }
 
     @Test("Gate descriptions are correct")
     func testGateDescriptions() {
         #expect(QuantumGate.sx.description == "SX")
         #expect(QuantumGate.sy.description == "SY")
-        #expect(QuantumGate.cz(control: 0, target: 1).description == "CZ(c:0, t:1)")
-        #expect(QuantumGate.cy(control: 0, target: 1).description == "CY(c:0, t:1)")
-        #expect(QuantumGate.ch(control: 0, target: 1).description == "CH(c:0, t:1)")
+        #expect(QuantumGate.cz.description == "CZ")
+        #expect(QuantumGate.cy.description == "CY")
+        #expect(QuantumGate.ch.description == "CH")
         #expect(QuantumGate.u1(lambda: 1.234).description.contains("U1"))
         #expect(QuantumGate.u2(phi: 1.5, lambda: 2.5).description.contains("U2"))
         #expect(QuantumGate.u3(theta: 1.0, phi: 2.0, lambda: 3.0).description.contains("U3"))
-        #expect(QuantumGate.sqrtSwap(qubit1: 2, qubit2: 3).description.contains("√SWAP"))
-        #expect(QuantumGate.cnot(control: 0, target: 1).description.contains("CNOT"))
-        #expect(QuantumGate.controlledRotationX(theta: 1.5, control: 0, target: 1).description.contains("CRx"))
-        #expect(QuantumGate.controlledRotationY(theta: 1.5, control: 0, target: 1).description.contains("CRy"))
-        #expect(QuantumGate.controlledRotationZ(theta: 1.5, control: 0, target: 1).description.contains("CRz"))
+        #expect(QuantumGate.sqrtSwap.description.contains("√SWAP"))
+        #expect(QuantumGate.cnot.description.contains("CNOT"))
+        #expect(QuantumGate.controlledRotationX(theta: 1.5).description.contains("CRx"))
+        #expect(QuantumGate.controlledRotationY(theta: 1.5).description.contains("CRy"))
+        #expect(QuantumGate.controlledRotationZ(theta: 1.5).description.contains("CRz"))
 
-        let customSingleMatrix: GateMatrix = [
+        let customSingleMatrix: [[Complex<Double>]] = [
             [.zero, .one],
             [.one, .zero],
         ]
-        let customSingleGate = QuantumGate.createCustomSingleQubit(matrix: customSingleMatrix)
-        #expect(customSingleGate.description == "CustomU(2×2)")
+        let customSingleGate = QuantumGate.custom(matrix: customSingleMatrix)
+        #expect(customSingleGate.description == "CustomU(2x2)")
 
-        let customTwoMatrix: GateMatrix = [
+        let customTwoMatrix: [[Complex<Double>]] = [
             [.one, .zero, .zero, .zero],
             [.zero, .one, .zero, .zero],
             [.zero, .zero, .zero, .one],
             [.zero, .zero, .one, .zero],
         ]
-        let customTwoGate = QuantumGate.createCustomTwoQubit(matrix: customTwoMatrix, control: 0, target: 1)
+        let customTwoGate = QuantumGate.custom(matrix: customTwoMatrix, control: 0, target: 1)
         #expect(customTwoGate.description.contains("CustomU"))
     }
 }
@@ -535,8 +535,8 @@ struct NumericalPrecisionTests {
     @Test("Gates preserve normalization")
     func testNormalizationPreservation() {
         var state = QuantumState(numQubits: 2)
-        state.setAmplitude(ofState: 0, amplitude: Complex(0.6, 0.0))
-        state.setAmplitude(ofState: 1, amplitude: Complex(0.0, 0.8))
+        state.setAmplitude(0, to: Complex(0.6, 0.0))
+        state.setAmplitude(1, to: Complex(0.0, 0.8))
 
         let gates: [QuantumGate] = [
             .sx,
@@ -545,19 +545,19 @@ struct NumericalPrecisionTests {
         ]
 
         for gate in gates {
-            let transformed = GateApplication.apply(gate: gate, to: [0], state: state)
+            let transformed = GateApplication.apply(gate, to: 0, state: state)
             #expect(transformed.isNormalized(), "Gate \(gate) did not preserve normalization")
         }
     }
 
     @Test("IBM gates compose correctly")
     func testIBMGateComposition() {
-        var state1 = QuantumState(singleQubit: 0)
-        state1 = GateApplication.apply(gate: .u1(lambda: 1.23), to: [0], state: state1)
+        var state1 = QuantumState(qubit: 0)
+        state1 = GateApplication.apply(.u1(lambda: 1.23), to: 0, state: state1)
 
-        var state2 = QuantumState(singleQubit: 0)
-        state2 = GateApplication.apply(gate: .u3(theta: 0.0, phi: 0.0, lambda: 1.23), to: [0], state: state2)
+        var state2 = QuantumState(qubit: 0)
+        state2 = GateApplication.apply(.u3(theta: 0.0, phi: 0.0, lambda: 1.23), to: 0, state: state2)
 
-        #expect(abs(state1.probability(ofState: 0) - state2.probability(ofState: 0)) < 1e-10)
+        #expect(abs(state1.probability(of: 0) - state2.probability(of: 0)) < 1e-10)
     }
 }

@@ -55,7 +55,7 @@ public enum QWCGrouper {
     /// let hamiltonian = Observable(terms: molecularTerms)  // 2000 terms
     /// let groups = QWCGrouper.group(terms: hamiltonian.terms)
     /// print("Reduced \(hamiltonian.terms.count) terms to \(groups.count) groups")
-    /// // Output: Reduced 2000 terms to 48 groups (41× reduction)
+    /// // Output: Reduced 2000 terms to 48 groups (41x reduction)
     /// ```
     @_optimize(speed)
     @_eagerMove
@@ -295,7 +295,7 @@ public enum QWCGrouper {
             QWC Grouping Statistics:
             - Terms: \(numTerms)
             - Groups: \(numGroups)
-            - Reduction: \(String(format: "%.1f", reductionFactor))×
+            - Reduction: \(String(format: "%.1f", reductionFactor))x
             - Largest group: \(largestGroupSize) terms
             - Average group: \(String(format: "%.1f", averageGroupSize)) terms
             """
@@ -315,7 +315,7 @@ public enum QWCGrouper {
     /// // QWC Grouping Statistics:
     /// // - Terms: 2000
     /// // - Groups: 48
-    /// // - Reduction: 41.7×
+    /// // - Reduction: 41.7x
     /// ```
     @_optimize(speed)
     @_eagerMove

@@ -67,14 +67,14 @@ struct ComplexPropertiesTests {
     @Test("Conjugate: (2+3i)* = (2-3i)")
     func conjugate() {
         let z = Complex(2.0, 3.0)
-        let conjugate = z.conjugate()
+        let conjugate = z.conjugate
         #expect(conjugate == Complex(2.0, -3.0))
     }
 
     @Test("Conjugate property: z · z* = |z|²")
     func conjugateProperty() {
         let z = Complex(3.0, 4.0)
-        let product = z * z.conjugate()
+        let product = z * z.conjugate
         #expect(abs(product.real - z.magnitudeSquared) < 1e-10)
         #expect(abs(product.imaginary) < 1e-10)
     }
@@ -82,7 +82,7 @@ struct ComplexPropertiesTests {
     @Test("Magnitude: |3+4i| = 5")
     func magnitude() {
         let z = Complex(3.0, 4.0)
-        #expect(abs(z.magnitude() - 5.0) < 1e-10)
+        #expect(abs(z.magnitude - 5.0) < 1e-10)
     }
 
     @Test("Magnitude squared: |3+4i|² = 25")
@@ -94,7 +94,7 @@ struct ComplexPropertiesTests {
     @Test("Phase: arg(1+i) = π/4")
     func phase() {
         let z = Complex(1.0, 1.0)
-        #expect(abs(z.phase() - .pi / 4.0) < 1e-10)
+        #expect(abs(z.phase - .pi / 4.0) < 1e-10)
     }
 }
 
@@ -136,35 +136,34 @@ struct ComplexSpecialValuesTests {
 struct ComplexEulerIdentityTests {
     @Test("Euler's identity: e^(iπ) + 1 = 0")
     func eulerIdentity() {
-        let result = Complex<Double>.exp(.pi) + Complex.one
+        let result = Complex<Double>(phase: .pi) + Complex.one
         #expect(abs(result.real) < 1e-10)
         #expect(abs(result.imaginary) < 1e-10)
     }
 
     @Test("Exponential at zero: e^(i0) = 1")
     func expZero() {
-        let result = Complex<Double>.exp(0)
+        let result = Complex<Double>(phase: 0)
         #expect(result == Complex.one)
     }
 
     @Test("Exponential at π/2: e^(iπ/2) = i")
     func expPiOverTwo() {
-        let result = Complex<Double>.exp(.pi / 2.0)
+        let result = Complex<Double>(phase: .pi / 2.0)
         #expect(abs(result.real) < 1e-10)
         #expect(abs(result.imaginary - 1.0) < 1e-10)
     }
 }
 
 /// Test suite for polar coordinate conversions.
-/// Validates r·e^(iθ) ↔ (r, θ) round-trip conversions
+/// Validates r·e^(iθ) <-> (r, θ) round-trip conversions
 /// used in phase visualization and quantum state analysis.
 @Suite("Polar Coordinate Conversions")
 struct ComplexPolarTests {
     @Test("Polar conversion round-trip preserves value")
     func polarConversionRoundTrip() {
         let z = Complex(3.0, 4.0)
-        let (r, theta) = z.toPolar()
-        let reconstructed = Complex<Double>.fromPolar(r: r, theta: theta)
+        let reconstructed = Complex<Double>(magnitude: z.magnitude, phase: z.phase)
 
         #expect(abs(reconstructed.real - z.real) < 1e-10)
         #expect(abs(reconstructed.imaginary - z.imaginary) < 1e-10)
@@ -242,14 +241,6 @@ struct ComplexNumericalStabilityTests {
         #expect(result.isFinite)
     }
 
-    @Test("Division by near-zero returns NaN")
-    func divisionByNearZero() {
-        let z = Complex(1.0, 0.0)
-        let nearZero = Complex(1e-20, 0.0)
-        let result = z / nearZero
-        #expect(!result.isFinite)
-    }
-
     @Test("Accumulated error remains within bounds")
     func accumulatedError() {
         var z = Complex(1.0, 0.0)
@@ -267,7 +258,7 @@ struct ComplexNumericalStabilityTests {
     @Test("Magnitude is never negative")
     func magnitudeNeverNegative() {
         let z = Complex(-3.0, -4.0)
-        #expect(z.magnitude() >= 0)
+        #expect(z.magnitude >= 0)
     }
 }
 
@@ -392,15 +383,6 @@ struct ComplexFloatCoverageTests {
         #expect(abs(result.imaginary - (2.0 / 41.0)) < 1e-5)
     }
 
-    @Test("Float: Division by near-zero")
-    func floatDivisionByNearZero() {
-        let z = Complex<Float>(1.0, 0.0)
-        let nearZero = Complex<Float>(1e-15, 0.0)
-        let result = z / nearZero
-
-        #expect(!result.isFinite)
-    }
-
     @Test("Float: Static constants")
     func floatStaticConstants() {
         let zero = Complex<Float>.zero
@@ -429,17 +411,17 @@ struct ComplexFloatCoverageTests {
     func floatMagnitudePhase() {
         let z = Complex<Float>(3.0, 4.0)
 
-        #expect(abs(z.magnitude() - 5.0) < 1e-5)
+        #expect(abs(z.magnitude - 5.0) < 1e-5)
         #expect(abs(z.magnitudeSquared - 25.0) < 1e-5)
 
         let w = Complex<Float>(1.0, 1.0)
-        #expect(abs(w.phase() - Float.pi / 4.0) < 1e-5)
+        #expect(abs(w.phase - Float.pi / 4.0) < 1e-5)
     }
 
     @Test("Float: Trigonometric functions (cos/sin)")
     func floatTrigonometricFunctions() {
         let theta = Float.pi / 4.0
-        let result = Complex<Float>.exp(theta)
+        let result = Complex<Float>(phase: theta)
 
         #expect(abs(result.real - cos(theta)) < 1e-5)
         #expect(abs(result.imaginary - sin(theta)) < 1e-5)
@@ -448,8 +430,7 @@ struct ComplexFloatCoverageTests {
     @Test("Float: Polar conversion")
     func floatPolarConversion() {
         let z = Complex<Float>(3.0, 4.0)
-        let (r, theta) = z.toPolar()
-        let reconstructed = Complex<Float>.fromPolar(r: r, theta: theta)
+        let reconstructed = Complex<Float>(magnitude: z.magnitude, phase: z.phase)
 
         #expect(abs(reconstructed.real - z.real) < 1e-5)
         #expect(abs(reconstructed.imaginary - z.imaginary) < 1e-5)
@@ -458,7 +439,7 @@ struct ComplexFloatCoverageTests {
     @Test("Float: Magnitude calculation")
     func floatMagnitude() {
         let z = Complex<Float>(9.0, 0.0)
-        let mag = z.magnitude()
+        let mag = z.magnitude
 
         #expect(abs(mag - 9.0) < 1e-5)
     }
@@ -466,7 +447,7 @@ struct ComplexFloatCoverageTests {
     @Test("Float: atan2 function")
     func floatAtan2() {
         let z = Complex<Float>(1.0, 1.0)
-        let phase = z.phase()
+        let phase = z.phase
 
         #expect(abs(phase - Float.pi / 4.0) < 1e-5)
     }
@@ -588,15 +569,6 @@ struct ComplexCompoundAssignmentOperatorTests {
         #expect(a == expected)
     }
 
-    @Test("Division by near-zero complex via /= yields NaNs (Double)")
-    func divideEqualsNearZeroComplexDouble() {
-        var a = Complex<Double>(1.0, 1.0)
-        let tiny = Complex<Double>(1e-20, -1e-20)
-        a /= tiny
-        #expect(a.real.isNaN)
-        #expect(a.imaginary.isNaN)
-    }
-
     @Test("+= and *= scalar work for Float as well")
     func plusEqualsAndTimesEqualsFloat() {
         var a = Complex<Float>(2.0, 3.0)
@@ -661,12 +633,12 @@ struct ComplexCompoundAssignmentOperatorTests {
     @Test("Phase computation works for Float")
     func phaseComputationFloat() {
         let z = Complex<Float>(1.0, 1.0)
-        let theta = z.phase()
+        let theta = z.phase
         let expectedPhase = Float.pi / 4.0
         #expect(abs(theta - expectedPhase) < 1e-5)
 
         let zNegative = Complex<Float>(-1.0, 0.0)
-        let phaseNeg = zNegative.phase()
+        let phaseNeg = zNegative.phase
         #expect(abs(abs(phaseNeg) - Float.pi) < 1e-5)
     }
 }

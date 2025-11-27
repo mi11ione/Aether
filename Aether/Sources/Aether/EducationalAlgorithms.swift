@@ -82,16 +82,16 @@ public extension QuantumCircuit {
         let inputQubits: [Int] = Array(0 ..< numInputQubits)
         let outputQubit: Int = numInputQubits
 
-        circuit.append(gate: .pauliX, toQubit: outputQubit)
+        circuit.append(.pauliX, to: outputQubit)
 
         for qubit in 0 ..< numQubits {
-            circuit.append(gate: .hadamard, toQubit: qubit)
+            circuit.append(.hadamard, to: qubit)
         }
 
         oracle(inputQubits, outputQubit, &circuit)
 
         for qubit in inputQubits {
-            circuit.append(gate: .hadamard, toQubit: qubit)
+            circuit.append(.hadamard, to: qubit)
         }
 
         return circuit
@@ -150,15 +150,15 @@ public extension QuantumCircuit {
         let inputQubits: [Int] = Array(0 ..< numInputQubits)
         let outputQubit: Int = numInputQubits
 
-        circuit.append(gate: .pauliX, toQubit: outputQubit)
+        circuit.append(.pauliX, to: outputQubit)
         for qubit in 0 ..< totalQubits {
-            circuit.append(gate: .hadamard, toQubit: qubit)
+            circuit.append(.hadamard, to: qubit)
         }
 
         oracle(inputQubits, outputQubit, &circuit)
 
         for qubit in inputQubits {
-            circuit.append(gate: .hadamard, toQubit: qubit)
+            circuit.append(.hadamard, to: qubit)
         }
 
         return circuit
@@ -222,13 +222,13 @@ public extension QuantumCircuit {
         let outputQubits: [Int] = Array(numQubits ..< totalQubits)
 
         for qubit in inputQubits {
-            circuit.append(gate: .hadamard, toQubit: qubit)
+            circuit.append(.hadamard, to: qubit)
         }
 
         oracle(inputQubits, outputQubits[0], &circuit)
 
         for qubit in inputQubits {
-            circuit.append(gate: .hadamard, toQubit: qubit)
+            circuit.append(.hadamard, to: qubit)
         }
 
         return circuit
@@ -252,7 +252,7 @@ public extension QuantumCircuit {
     @inlinable
     static func constantOneOracle() -> Oracle {
         { _, outputQubit, circuit in
-            circuit.append(gate: .pauliX, toQubit: outputQubit)
+            circuit.append(.pauliX, to: outputQubit)
         }
     }
 
@@ -263,7 +263,7 @@ public extension QuantumCircuit {
     static func balancedParityOracle() -> Oracle {
         { inputQubits, outputQubit, circuit in
             for input in inputQubits {
-                circuit.append(gate: .cnot(control: input, target: outputQubit), qubits: [])
+                circuit.append(.cnot, to: [input, outputQubit])
             }
         }
     }
@@ -275,7 +275,7 @@ public extension QuantumCircuit {
     static func balancedFirstBitOracle() -> Oracle {
         { inputQubits, outputQubit, circuit in
             guard let firstQubit = inputQubits.first else { return }
-            circuit.append(gate: .cnot(control: firstQubit, target: outputQubit), qubits: [])
+            circuit.append(.cnot, to: [firstQubit, outputQubit])
         }
     }
 
@@ -297,7 +297,7 @@ public extension QuantumCircuit {
             ValidationUtilities.validateEqualCounts(inputQubits, hiddenString, name1: "input qubits", name2: "hidden string")
 
             for (i, bit) in hiddenString.enumerated() where bit == 1 {
-                circuit.append(gate: .cnot(control: inputQubits[i], target: outputQubit), qubits: [])
+                circuit.append(.cnot, to: [inputQubits[i], outputQubit])
             }
         }
     }
@@ -323,12 +323,8 @@ public extension QuantumCircuit {
         return { inputQubits, outputQubit, circuit in
             ValidationUtilities.validateEqualCounts(inputQubits, period, name1: "input qubits", name2: "period")
 
-            // Standard construction: Copy input bits where period bit is 0
-            // This ensures f(x) = f(x⊕s) because XOR with s flips bits where s=1,
-            // but we only copy bits where s=0, so both x and x⊕s produce same output
-            // Mathematically proven correct for all periods s
             for (i, bit) in period.enumerated() where bit == 0 {
-                circuit.append(gate: .cnot(control: inputQubits[i], target: outputQubit), qubits: [])
+                circuit.append(.cnot, to: [inputQubits[i], outputQubit])
             }
         }
     }
@@ -349,7 +345,7 @@ public extension QuantumState {
     @inlinable
     func measureQubits(_ qubits: [Int]) -> [Int] {
         ValidationUtilities.validateOperationQubits(qubits, numQubits: numQubits)
-        let (maxIndex, _) = mostProbableBasisState()
+        let (maxIndex, _) = mostProbableState()
 
         return [Int](unsafeUninitializedCapacity: qubits.count) { buffer, count in
             for i in 0 ..< qubits.count {
@@ -367,7 +363,7 @@ public extension QuantumState {
     @inlinable
     func allQubitsAreZero(_ qubits: [Int]) -> Bool {
         ValidationUtilities.validateOperationQubits(qubits, numQubits: numQubits)
-        let (maxIndex, _) = mostProbableBasisState()
+        let (maxIndex, _) = mostProbableState()
 
         for qubit in qubits {
             if BitUtilities.getBit(maxIndex, qubit: qubit) != 0 { return false }

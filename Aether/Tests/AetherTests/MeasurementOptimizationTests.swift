@@ -1268,7 +1268,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps = PauliString(operators: [(qubit: 0, basis: .z)])
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps)])
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
         let config = ShotAllocator.Config.default
         let allocation = observable.allocateShots(totalShots: 1000, state: state, config: config)
@@ -1281,7 +1281,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps2 = PauliString(operators: [(qubit: 0, basis: .x)])
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
         let config = ShotAllocator.Config.default
         let allocation = await observable.allocateShotsForGroups(totalShots: 1000, state: state, config: config)
@@ -1650,7 +1650,7 @@ struct MeasurementOptimizationIntegrationTests {
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
         let config = ShotAllocator.Config.default
@@ -1669,7 +1669,7 @@ struct MeasurementOptimizationIntegrationTests {
         let terms = [(coefficient: 1.0, pauliString: ps1), (coefficient: 10.0, pauliString: ps2)]
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
         let allocation = allocator.allocate(terms: terms, totalShots: 1000, state: state)
@@ -1909,7 +1909,7 @@ struct MeasurementOptimizationIntegrationTests {
 
         for partition in partitions {
             #expect(partition.unitaryMatrix.count == 8,
-                    "3-qubit unitary matrix should be 8×8")
+                    "3-qubit unitary matrix should be 8x8")
         }
     }
 }

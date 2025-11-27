@@ -21,7 +21,7 @@ public typealias ShotAllocation = [Int: Int]
 ///
 /// To minimize total shots N for target variance σ², the optimal allocation is:
 ///
-/// nᵢ = N × (|cᵢ| √Var(Pᵢ)) / (Σⱼ |cⱼ| √Var(Pⱼ))
+/// nᵢ = N x (|cᵢ| √Var(Pᵢ)) / (Σⱼ |cⱼ| √Var(Pⱼ))
 ///
 /// This reduces shot requirements compared to uniform allocation by concentrating
 /// shots on high-variance, high-weight terms.

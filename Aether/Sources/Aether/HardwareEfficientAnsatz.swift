@@ -24,13 +24,13 @@
 ///
 /// **Mathematical Form:**
 /// For depth p, numQubits n:
-/// - Total parameters: p × n (for single rotation gate per qubit per layer)
+/// - Total parameters: p x n (for single rotation gate per qubit per layer)
 /// - Circuit: [Rotation layer] -> [Entangling layer] -> repeat p times
 /// - Ansatz |ψ(θ)⟩ = U_p(θ_{p-1}) ... U_2(θ_1) U_1(θ_0) |0⟩^⊗n
 ///
 /// **Example - 4-qubit, depth=2 ansatz:**
 /// ```swift
-/// // Creates parameterized circuit with 8 parameters (4 qubits × 2 layers)
+/// // Creates parameterized circuit with 8 parameters (4 qubits x 2 layers)
 /// let ansatz = HardwareEfficientAnsatz.create(numQubits: 4, depth: 2)
 ///
 /// // Structure:
@@ -40,7 +40,7 @@
 /// //          CNOT(q0->q1), CNOT(q1->q2), CNOT(q2->q3)
 ///
 /// print(ansatz.parameterCount())  // 8
-/// print(ansatz.gateCount())       // 20 gates (8 Ry + 6 CNOT × 2 layers)
+/// print(ansatz.gateCount())       // 20 gates (8 Ry + 6 CNOT x 2 layers)
 ///
 /// // Use in VQE
 /// let vqe = await VariationalQuantumEigensolver(
@@ -63,7 +63,7 @@
 /// let fullAnsatz = HardwareEfficientAnsatz.create(
 ///     numQubits: 4,
 ///     depth: 2,
-///     rotationGates: .full  // Rz-Ry-Rz per qubit (3× more parameters)
+///     rotationGates: .full  // Rz-Ry-Rz per qubit (3x more parameters)
 /// )
 ///
 /// // Custom entangling pattern
@@ -88,7 +88,7 @@ public struct HardwareEfficientAnsatz {
         case rz
 
         /// Full rotation: Rz-Ry-Rz sequence (3 parameters per qubit per layer)
-        /// Most expressive but 3× more parameters
+        /// Most expressive but 3x more parameters
         case full
 
         @inlinable
@@ -122,9 +122,8 @@ public struct HardwareEfficientAnsatz {
     /// Parameters are auto-named: "theta_{layer}_{qubit}_{axis}" for traceability.
     ///
     /// **Performance:**
-    /// - Circuit construction: O(depth × numQubits)
-    /// - Gate count: depth × (numQubits × rotations + (numQubits - 1) × CNOTs)
-    /// - Parameter count: depth × numQubits × rotationGates.parametersPerQubit()
+    /// - Circuit construction: O(depth x numQubits)
+    /// - Gate count: depth x (numQubits x rotations + (numQubits - 1) x CNOTs)
     ///
     /// - Parameters:
     ///   - numQubits: Number of qubits (1-30)
@@ -215,19 +214,19 @@ public struct HardwareEfficientAnsatz {
         case .ry:
             for qubit in 0 ..< numQubits {
                 let param = Parameter(name: layerPrefix + String(qubit))
-                circuit.append(gate: .rotationY(theta: .parameter(param)), toQubit: qubit)
+                circuit.append(gate: .rotationY(theta: .parameter(param)), qubit: qubit)
             }
 
         case .rx:
             for qubit in 0 ..< numQubits {
                 let param = Parameter(name: layerPrefix + String(qubit))
-                circuit.append(gate: .rotationX(theta: .parameter(param)), toQubit: qubit)
+                circuit.append(gate: .rotationX(theta: .parameter(param)), qubit: qubit)
             }
 
         case .rz:
             for qubit in 0 ..< numQubits {
                 let param = Parameter(name: layerPrefix + String(qubit))
-                circuit.append(gate: .rotationZ(theta: .parameter(param)), toQubit: qubit)
+                circuit.append(gate: .rotationZ(theta: .parameter(param)), qubit: qubit)
             }
 
         case .full:
@@ -237,9 +236,9 @@ public struct HardwareEfficientAnsatz {
                 let paramY = Parameter(name: layerPrefix + qubitStr + "_y")
                 let paramZ2 = Parameter(name: layerPrefix + qubitStr + "_z2")
 
-                circuit.append(gate: .rotationZ(theta: .parameter(paramZ1)), toQubit: qubit)
-                circuit.append(gate: .rotationY(theta: .parameter(paramY)), toQubit: qubit)
-                circuit.append(gate: .rotationZ(theta: .parameter(paramZ2)), toQubit: qubit)
+                circuit.append(gate: .rotationZ(theta: .parameter(paramZ1)), qubit: qubit)
+                circuit.append(gate: .rotationY(theta: .parameter(paramY)), qubit: qubit)
+                circuit.append(gate: .rotationZ(theta: .parameter(paramZ2)), qubit: qubit)
             }
         }
     }
@@ -267,16 +266,16 @@ public struct HardwareEfficientAnsatz {
         switch pattern {
         case .linear, .circular:
             for i in 0 ..< (numQubits - 1) {
-                circuit.append(gate: .concrete(.cnot(control: i, target: i + 1)), qubits: [])
+                circuit.append(gate: .concrete(.cnot), qubits: [i, i + 1])
             }
             if pattern == .circular, numQubits >= 2 {
-                circuit.append(gate: .concrete(.cnot(control: numQubits - 1, target: 0)), qubits: [])
+                circuit.append(gate: .concrete(.cnot), qubits: [numQubits - 1, 0])
             }
 
         case .allToAll:
             for i in 0 ..< numQubits {
                 for j in (i + 1) ..< numQubits {
-                    circuit.append(gate: .concrete(.cnot(control: i, target: j)), qubits: [])
+                    circuit.append(gate: .concrete(.cnot), qubits: [i, j])
                 }
             }
         }

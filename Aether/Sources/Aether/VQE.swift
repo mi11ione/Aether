@@ -132,7 +132,7 @@ public actor VariationalQuantumEigensolver {
     /// **Performance:**
     /// - Sparse backend: O(nnz) where nnz = number of non-zeros (~0.01-1% of 4^n)
     /// - Observable backend: O(k·2^n) where k = number of Pauli terms
-    /// - For 10-qubit H₂O: 8K non-zeros vs 2000 terms × 1024 amplitudes
+    /// - For 10-qubit H₂O: 8K non-zeros vs 2000 terms x 1024 amplitudes
     ///
     /// - Parameters:
     ///   - hamiltonian: Molecular or optimization Hamiltonian
@@ -170,7 +170,7 @@ public actor VariationalQuantumEigensolver {
     ///
     /// **Complexity:**
     /// - Per iteration: O(d·2^n + nnz) where d = circuit depth, nnz = Hamiltonian non-zeros
-    /// - Total: O(iters × (d·2^n + nnz)) where iters = optimizer iterations
+    /// - Total: O(iters x (d·2^n + nnz)) where iters = optimizer iterations
     ///
     /// - Parameter initialParameters: Starting point in parameter space
     /// - Returns: VQE result with optimal energy and parameters

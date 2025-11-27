@@ -27,9 +27,9 @@
 /// - CNOT/Toffoli: Separate input/output buffers prevent read-after-write hazards
 ///
 /// **Kernel functions**:
-/// 1. `applySingleQubitGate`: Parallel 2×2 matrix-vector multiplication for qubit pairs
+/// 1. `applySingleQubitGate`: Parallel 2x2 matrix-vector multiplication for qubit pairs
 /// 2. `applyCNOT`: Optimized controlled-NOT with conditional amplitude swap
-/// 3. `applyTwoQubitGate`: General 4×4 matrix-vector for arbitrary two-qubit gates
+/// 3. `applyTwoQubitGate`: General 4x4 matrix-vector for arbitrary two-qubit gates
 /// 4. `applyToffoli`: Double-controlled NOT (three-qubit gate)
 /// 5. `csrSparseMatVec`: CSR sparse matrix-vector multiply for Hamiltonian expectation values
 ///
@@ -38,7 +38,7 @@
 /// // Metal shader automatically invoked by MetalGateApplication
 /// let metalApp = MetalGateApplication()
 /// let state = QuantumState(numQubits: 12)  // 4096 amplitudes
-/// let newState = metalApp.apply(gate: .hadamard, to: [0], state: state)
+/// let newState = metalApp.apply(gate: .hadamard, to: 0, state: state)
 /// // GPU processes 2048 amplitude pairs in parallel
 /// ```
 ///
@@ -84,9 +84,9 @@ inline ComplexFloat complexScale(ComplexFloat a, float scalar) {
 
 // MARK: - Single-Qubit Gate Kernel
 
-/// Apply single-qubit gate: parallel 2×2 matrix-vector multiplication
+/// Apply single-qubit gate: parallel 2x2 matrix-vector multiplication
 ///
-/// Transforms quantum state by applying 2×2 unitary matrix U to target qubit.
+/// Transforms quantum state by applying 2x2 unitary matrix U to target qubit.
 /// Each thread processes one amplitude pair (cᵢ, cⱼ) where i and j differ only
 /// in the target qubit bit.
 ///
@@ -109,7 +109,7 @@ inline ComplexFloat complexScale(ComplexFloat a, float scalar) {
 /// **Parameters**:
 /// - amplitudes: Input/output state vector (2^n complex amplitudes)
 /// - targetQubit: Qubit index to apply gate to (0 to n-1)
-/// - gateMatrix: 2×2 unitary matrix [g00, g01, g10, g11] in row-major order
+/// - gateMatrix: 2x2 unitary matrix [g00, g01, g10, g11] in row-major order
 /// - numQubits: Total number of qubits (n)
 /// - gid: Thread ID in grid (0 to 2^(n-1) - 1)
 ///
@@ -207,16 +207,16 @@ kernel void applyCNOT(
 
 // MARK: - Two-Qubit Gate Kernel
 
-/// Apply two-qubit gate: parallel 4×4 matrix-vector multiplication
+/// Apply two-qubit gate: parallel 4x4 matrix-vector multiplication
 ///
-/// Transforms quantum state by applying 4×4 unitary matrix to control/target qubits.
+/// Transforms quantum state by applying 4x4 unitary matrix to control/target qubits.
 /// Each thread processes one amplitude quartet (c00, c01, c10, c11) where indices
 /// differ only in the control and target qubit bits.
 ///
 /// **Algorithm**:
 /// - Launch 2^(n-2) threads (quarter of state size)
 /// - Thread gid computes index quartet by "inserting" two 0 bits at qubit positions
-/// - Applies 4×4 matrix: [c'00, c'01, c'10, c'11]ᵀ = U · [c00, c01, c10, c11]ᵀ
+/// - Applies 4x4 matrix: [c'00, c'01, c'10, c'11]ᵀ = U · [c00, c01, c10, c11]ᵀ
 /// - Writes results back in-place (each thread owns 4 unique indices)
 ///
 /// **Index computation** (insert two 0 bits at control and target positions):
@@ -235,7 +235,7 @@ kernel void applyCNOT(
 /// - amplitudes: Input/output state vector (2^n complex amplitudes)
 /// - controlQubit: Control qubit index (0 to n-1)
 /// - targetQubit: Target qubit index (0 to n-1, ≠ control)
-/// - gateMatrix: 4×4 unitary matrix (16 elements, row-major order)
+/// - gateMatrix: 4x4 unitary matrix (16 elements, row-major order)
 /// - numQubits: Total number of qubits (n)
 /// - gid: Thread ID in grid (0 to 2^(n-2) - 1)
 ///
@@ -306,7 +306,7 @@ kernel void applyTwoQubitGate(
 ///
 /// Implements three-qubit Toffoli gate that flips target qubit if both control
 /// qubits are |1⟩. Essential for reversible classical logic and quantum error
-/// correction. Optimized special case avoiding 8×8 matrix multiplication.
+/// correction. Optimized special case avoiding 8x8 matrix multiplication.
 ///
 /// **Algorithm**:
 /// - Each thread processes one amplitude at index gid
@@ -333,7 +333,7 @@ kernel void applyTwoQubitGate(
 /// - Thread 6 (0b110): Both controls=1, target=0 -> output[7] = input[6]
 /// - Thread 7 (0b111): Both controls=1, target=1 -> output[6] = input[7]
 /// - Other threads: Write unchanged (controls not both 1)
-/// - Output: [c000, c001, c010, c011, c100, c101, c111, c110] (swap c110↔c111)
+/// - Output: [c000, c001, c010, c011, c100, c101, c111, c110] (swap c110<->c111)
 kernel void applyToffoli(
     device ComplexFloat *amplitudes [[buffer(0)]],
     constant uint &control1Qubit [[buffer(1)]],

@@ -27,7 +27,7 @@ import Foundation
 /// - Circuit depth: O(p·|E|) where |E| = Hamiltonian terms
 /// - Parameter count: 2p (γ and β per layer)
 /// - Typical convergence: 50-300 optimizer iterations
-/// - Uses SparseHamiltonian backend (100-1000× speedup)
+/// - Uses SparseHamiltonian backend (100-1000x speedup)
 ///
 /// **Use Cases:**
 /// - **MaxCut**: Graph partitioning, network design
@@ -193,7 +193,7 @@ public actor QAOA {
     ///
     /// **Complexity:**
     /// - Per iteration: O(d·2^n + nnz) where d = circuit depth, nnz = Hamiltonian non-zeros
-    /// - Total: O(iters × (d·2^n + nnz)) where iters = optimizer iterations
+    /// - Total: O(iters x (d·2^n + nnz)) where iters = optimizer iterations
     ///
     /// **Thread Safety:**
     /// - Actor isolation ensures thread-safe execution
@@ -253,7 +253,7 @@ public actor QAOA {
         ValidationUtilities.validateParameterVectorLength(
             initialParameters.count,
             expected: expectedParamCount,
-            name: "QAOA initialParameters (requires 2 × depth)"
+            name: "QAOA initialParameters (requires 2 x depth)"
         )
 
         currentIteration = 0
@@ -331,7 +331,7 @@ public actor QAOA {
         probabilities.reserveCapacity(min(state.stateSpaceSize, 100))
 
         for i in 0 ..< state.stateSpaceSize {
-            let prob: Double = state.probability(ofState: i)
+            let prob: Double = state.probability(of: i)
             if prob > 1e-6 {
                 probabilities[i] = prob
             }

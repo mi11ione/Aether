@@ -92,7 +92,7 @@ public extension QuantumState {
         let stateSpaceSize = 1 << numQubits
         ValidationUtilities.validateIndexInBounds(basisStateIndex, bound: stateSpaceSize, name: "Basis state index")
 
-        let amplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+        let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
             for i in 0 ..< stateSpaceSize {
                 buffer[i] = i == basisStateIndex ? .one : .zero
             }
@@ -139,8 +139,8 @@ public extension QuantumCircuit {
     @_eagerMove
     static func bellPhiPlus() -> QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.cnot, to: [0, 1])
         return circuit
     }
 
@@ -163,9 +163,9 @@ public extension QuantumCircuit {
     @_eagerMove
     static func bellPhiMinus() -> QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .pauliZ, toQubit: 0)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliZ, to: 0)
+        circuit.append(.cnot, to: [0, 1])
         return circuit
     }
 
@@ -188,9 +188,9 @@ public extension QuantumCircuit {
     @_eagerMove
     static func bellPsiPlus() -> QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliX, to: 1)
+        circuit.append(.cnot, to: [0, 1])
         return circuit
     }
 
@@ -213,10 +213,10 @@ public extension QuantumCircuit {
     @_eagerMove
     static func bellPsiMinus() -> QuantumCircuit {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .pauliZ, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliZ, to: 0)
+        circuit.append(.pauliX, to: 1)
+        circuit.append(.cnot, to: [0, 1])
         return circuit
     }
 
@@ -274,7 +274,7 @@ public extension QuantumCircuit {
         let stateSpaceSize = 1 << numQubits
         let amplitude = Complex<Double>(1.0 / sqrt(Double(numQubits)), 0.0)
 
-        let amplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+        let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
             for i in 0 ..< stateSpaceSize {
                 buffer[i] = i.nonzeroBitCount == 1 ? amplitude : .zero
             }
@@ -366,13 +366,13 @@ public extension QuantumCircuit {
         let useEnumeration = count < stateSpaceSize / 2
 
         if useEnumeration {
-            var amplitudes = AmplitudeVector(repeating: .zero, count: stateSpaceSize)
+            var amplitudes = [Complex<Double>](repeating: .zero, count: stateSpaceSize)
             enumerateCombinations(n: numQubits, k: numOnes) { state in
                 amplitudes[state] = amplitude
             }
             return QuantumState(numQubits: numQubits, amplitudes: amplitudes)
         } else {
-            let amplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+            let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
                 for i in 0 ..< stateSpaceSize {
                     buffer[i] = i.nonzeroBitCount == numOnes ? amplitude : .zero
                 }
@@ -455,7 +455,7 @@ public extension QuantumCircuit {
 
         for qubit in 0 ..< numQubits {
             if (basisStateIndex >> qubit) & 1 == 1 {
-                circuit.append(gate: .pauliX, toQubit: qubit)
+                circuit.append(.pauliX, to: qubit)
             }
         }
 

@@ -205,7 +205,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     /// let theta = Parameter(name: "theta")
     ///
     /// // Parameterized gate - auto-registers "theta"
-    /// circuit.append(gate: .rotationY(theta: .parameter(theta)), qubits: [0])
+    /// circuit.append(gate: .rotationY(theta: .parameter(theta)), qubit: 0)
     ///
     /// // Concrete gate - no parameters
     /// circuit.append(gate: .concrete(.hadamard), qubits: [1])
@@ -241,7 +241,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
     ///   - gate: Parameterized gate
     ///   - qubit: Target qubit index
     ///   - timestamp: Optional timestamp
-    public mutating func append(gate: ParameterizedGate, toQubit qubit: Int, timestamp: Double? = nil) {
+    public mutating func append(gate: ParameterizedGate, qubit: Int, timestamp: Double? = nil) {
         append(gate: gate, qubits: [qubit], timestamp: timestamp)
     }
 
@@ -284,57 +284,23 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
         return operations[index]
     }
 
-    /// Find maximum qubit index used in circuit
+    /// Maximum qubit index referenced by any operation in circuit
+    ///
+    /// Used to detect ancilla qubits that may exceed logical circuit size.
+    ///
     /// - Returns: Maximum qubit index, or numQubits-1 if no operations
+    /// - Complexity: O(n) where n is number of operations
     @_optimize(speed)
     @_effects(readonly)
     public func maxQubitUsed() -> Int {
         var maxQubit: Int = numQubits - 1
 
         for operation in operations {
-            let gateMax: Int = switch operation.gate {
-            case .phase, .rotationX, .rotationY, .rotationZ, .u1, .u2, .u3:
-                operation.qubits.max() ?? -1
-
-            case let .controlledPhase(_, control, target),
-                 let .controlledRotationX(_, control, target),
-                 let .controlledRotationY(_, control, target),
-                 let .controlledRotationZ(_, control, target):
-                max(control, target)
-
-            case let .concrete(gate):
-                maxQubitForConcreteGate(gate)
-            }
-
+            let gateMax: Int = operation.qubits.max() ?? -1
             maxQubit = max(maxQubit, gateMax)
         }
 
         return maxQubit
-    }
-
-    /// Extract maximum qubit from concrete gate
-    @_optimize(speed)
-    @_effects(readonly)
-    private func maxQubitForConcreteGate(_ gate: QuantumGate) -> Int {
-        switch gate {
-        case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
-             .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
-             .u1, .u2, .u3, .sx, .sy, .customSingleQubit: -1
-
-        case let .cnot(control, target),
-             let .cz(control, target),
-             let .cy(control, target),
-             let .ch(control, target),
-             let .controlledPhase(_, control, target),
-             let .controlledRotationX(_, control, target),
-             let .controlledRotationY(_, control, target),
-             let .controlledRotationZ(_, control, target),
-             let .customTwoQubit(_, control, target): max(control, target)
-
-        case let .swap(q1, q2), let .sqrtSwap(q1, q2): max(q1, q2)
-
-        case let .toffoli(c1, c2, target): max(c1, c2, target)
-        }
     }
 
     // MARK: - Validation
@@ -393,7 +359,7 @@ public struct ParameterizedQuantumCircuit: Equatable, Sendable, CustomStringConv
 
         for operation in operations {
             let concreteGate = operation.gate.bind(with: bindings)
-            concreteCircuit.append(gate: concreteGate, qubits: operation.qubits, timestamp: operation.timestamp)
+            concreteCircuit.append(concreteGate, to: operation.qubits, timestamp: operation.timestamp)
         }
 
         return concreteCircuit

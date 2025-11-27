@@ -482,7 +482,7 @@ public struct Measurement {
         let stateSpaceSize = 1 << numQubits
         ValidationUtilities.validateIndexInBounds(outcome, bound: stateSpaceSize, name: "Outcome")
 
-        let amplitudes = AmplitudeVector(unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+        let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
             for i in 0 ..< stateSpaceSize {
                 buffer[i] = i == outcome ? .one : .zero
             }
@@ -575,13 +575,13 @@ public struct Measurement {
         switch basis {
         case .x:
             // X basis: Apply H to rotate |+⟩->|0⟩, |-⟩->|1⟩
-            return GateApplication.apply(gate: .hadamard, to: [qubit], state: state)
+            return GateApplication.apply(.hadamard, to: qubit, state: state)
 
         case .y:
             // Y basis: Apply S†H to rotate |+i⟩->|0⟩, |-i⟩->|1⟩
             // S† = phase(-π/2)
-            var rotated = GateApplication.apply(gate: .phase(theta: -Double.pi / 2.0), to: [qubit], state: state)
-            rotated = GateApplication.apply(gate: .hadamard, to: [qubit], state: rotated)
+            var rotated = GateApplication.apply(.phase(angle: -Double.pi / 2.0), to: qubit, state: state)
+            rotated = GateApplication.apply(.hadamard, to: qubit, state: rotated)
             return rotated
 
         case .z:
@@ -609,12 +609,12 @@ public struct Measurement {
         switch basis {
         case .x:
             // Inverse of H is H (self-inverse)
-            return GateApplication.apply(gate: .hadamard, to: [qubit], state: state)
+            return GateApplication.apply(.hadamard, to: qubit, state: state)
 
         case .y:
             // Inverse of S†H is HS
-            var rotated = GateApplication.apply(gate: .hadamard, to: [qubit], state: state)
-            rotated = GateApplication.apply(gate: .sGate, to: [qubit], state: rotated)
+            var rotated = GateApplication.apply(.hadamard, to: qubit, state: state)
+            rotated = GateApplication.apply(.sGate, to: qubit, state: rotated)
             return rotated
 
         case .z:
@@ -677,7 +677,7 @@ public struct Measurement {
     @_eagerMove
     public mutating func measureCustomBasis(
         qubit: Int,
-        basisState: AmplitudeVector,
+        basisState: [Complex<Double>],
         state: QuantumState
     ) -> (outcome: Int, collapsedState: QuantumState) {
         ValidationUtilities.validateIndexInBounds(qubit, bound: state.numQubits, name: "Qubit index")
@@ -691,21 +691,21 @@ public struct Measurement {
         let c1 = basisState[1]
 
         let rotationMatrix = [
-            [c0.conjugate(), c1.conjugate()],
+            [c0.conjugate, c1.conjugate],
             [-c1, c0],
         ]
 
-        let rotationGate = QuantumGate.createCustomSingleQubit(matrix: rotationMatrix)
+        let rotationGate = QuantumGate.custom(matrix: rotationMatrix)
 
-        let rotatedState = GateApplication.apply(gate: rotationGate, to: [qubit], state: state)
+        let rotatedState = GateApplication.apply(rotationGate, to: qubit, state: state)
 
         let (outcome, collapsedRotated) = measureQubit(qubit, state: rotatedState)
 
         let adjointMatrix = MatrixUtilities.hermitianConjugate(rotationMatrix)
 
-        let inverseGate = QuantumGate.createCustomSingleQubit(matrix: adjointMatrix)
+        let inverseGate = QuantumGate.custom(matrix: adjointMatrix)
 
-        let finalState = GateApplication.apply(gate: inverseGate, to: [qubit], state: collapsedRotated)
+        let finalState = GateApplication.apply(inverseGate, to: qubit, state: collapsedRotated)
 
         return (outcome: outcome, collapsedState: finalState)
     }
@@ -900,7 +900,7 @@ public struct Measurement {
             // Extract measurement outcome for these qubits
             let outcomeIndex = BitUtilities.getBits(i, qubits: qubits)
 
-            probabilities[outcomeIndex] += state.probability(ofState: i)
+            probabilities[outcomeIndex] += state.probability(of: i)
         }
 
         // Sample joint outcome
@@ -960,7 +960,7 @@ public struct Measurement {
             expected |= (outcome << qubit)
         }
 
-        let newAmplitudes = AmplitudeVector(unsafeUninitializedCapacity: state.stateSpaceSize) { buffer, count in
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: state.stateSpaceSize) { buffer, count in
             for i in 0 ..< state.stateSpaceSize {
                 buffer[i] = (i & mask) == expected ? state.amplitudes[i] * normalizationFactor : .zero
             }
@@ -1052,7 +1052,7 @@ public struct Measurement {
         let bitMask = BitUtilities.bitMask(qubit: qubit)
 
         for i in 0 ..< state.stateSpaceSize {
-            let probability = state.probability(ofState: i)
+            let probability = state.probability(of: i)
 
             if (i & bitMask) == 0 {
                 prob0 += probability
@@ -1089,7 +1089,7 @@ public struct Measurement {
         let bitMask = BitUtilities.bitMask(qubit: qubit)
         let expected = outcome == 0 ? 0 : bitMask
 
-        let newAmplitudes = AmplitudeVector(unsafeUninitializedCapacity: state.stateSpaceSize) { buffer, count in
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: state.stateSpaceSize) { buffer, count in
             for i in 0 ..< state.stateSpaceSize {
                 buffer[i] = (i & bitMask) == expected ? state.amplitudes[i] * normalizationFactor : .zero
             }

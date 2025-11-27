@@ -7,20 +7,20 @@ import Accelerate
 ///
 /// Converts quantum circuits to dense unitary matrices via sequential gate composition.
 /// Enables batched circuit execution on GPU through Metal Performance Shaders matrix-vector
-/// operations, achieving 50-100× speedup for parameter space exploration in VQE and QAOA.
+/// operations, achieving 50-100x speedup for parameter space exploration in VQE and QAOA.
 ///
 /// **Mathematical Foundation:**
 /// - Quantum circuit C = G₁G₂...Gₙ represented as unitary U = Gₙ...G₂G₁ (right-to-left composition)
-/// - Each gate Gᵢ is 2ⁿ × 2ⁿ matrix with sparse structure (identity on non-target qubits)
+/// - Each gate Gᵢ is 2ⁿ x 2ⁿ matrix with sparse structure (identity on non-target qubits)
 /// - Composition via matrix multiplication: U = Gₙ · ... · G₂ · G₁
 /// - Complexity: O(depth · 2³ⁿ) for n-qubit circuit with d gates
 ///
 /// **Memory Scaling:**
-/// - Unitary matrix: 2ⁿ × 2ⁿ complex numbers = 2ⁿ⁺¹ · 16 bytes (Double)
-/// - 8 qubits: 256×256 × 16 = 1 MB
-/// - 10 qubits: 1024×1024 × 16 = 16 MB
-/// - 12 qubits: 4096×4096 × 16 = 256 MB
-/// - 14 qubits: 16384×16384 × 16 = 4 GB (approaching practical limit)
+/// - Unitary matrix: 2ⁿ x 2ⁿ complex numbers = 2ⁿ⁺¹ · 16 bytes (Double)
+/// - 8 qubits: 256x256 x 16 = 1 MB
+/// - 10 qubits: 1024x1024 x 16 = 16 MB
+/// - 12 qubits: 4096x4096 x 16 = 256 MB
+/// - 14 qubits: 16384x16384 x 16 = 4 GB (approaching practical limit)
 ///
 /// **Performance Characteristics:**
 /// - Gate expansion: O(2²ⁿ) to embed small gate in full Hilbert space
@@ -48,7 +48,7 @@ import Accelerate
 /// let baseParams: [Double] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 /// let baseCircuit = ansatz.bind(parameterVector: baseParams)
 ///
-/// // Generate shifted circuits for gradient (2 × 8 = 16 circuits)
+/// // Generate shifted circuits for gradient (2 x 8 = 16 circuits)
 /// var shiftedCircuits: [QuantumCircuit] = []
 /// for i in 0..<baseParams.count {
 ///     let (plus, minus) = ansatz.generateShiftedCircuits(
@@ -62,7 +62,7 @@ import Accelerate
 /// // Convert all to unitaries once (expensive but one-time)
 /// let unitaries = shiftedCircuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
 ///
-/// // Batch evaluate on GPU (50-100× faster than sequential)
+/// // Batch evaluate on GPU (50-100x faster than sequential)
 /// let batchEvaluator = await MPSBatchEvaluator()
 /// let energies = await batchEvaluator.evaluateExpectationValues(
 ///     unitaries: unitaries,
@@ -93,7 +93,7 @@ import Accelerate
 ///         circuits.append(circuit)
 ///     }
 /// }
-/// // 11 × 11 = 121 circuits
+/// // 11 x 11 = 121 circuits
 ///
 /// // Convert to unitaries (one-time cost)
 /// let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
@@ -116,28 +116,28 @@ public enum CircuitUnitary {
 
     /// Compute full circuit unitary matrix via gate composition
     ///
-    /// Converts quantum circuit to dense 2ⁿ × 2ⁿ unitary matrix through sequential
+    /// Converts quantum circuit to dense 2ⁿ x 2ⁿ unitary matrix through sequential
     /// matrix multiplication of gate matrices. Uses BLAS-accelerated matrix multiply
-    /// from MatrixUtilities for 10-100× speedup over naive loops.
+    /// from MatrixUtilities for 10-100x speedup over naive loops.
     ///
     /// **Algorithm:**
-    /// 1. Start with identity matrix I (dimension 2ⁿ × 2ⁿ)
+    /// 1. Start with identity matrix I (dimension 2ⁿ x 2ⁿ)
     /// 2. For each gate G in circuit (left to right):
-    ///    - Expand G to full Hilbert space (embed small gate in 2ⁿ × 2ⁿ matrix)
+    ///    - Expand G to full Hilbert space (embed small gate in 2ⁿ x 2ⁿ matrix)
     ///    - Compose: U ← G · U (right-multiply, gates apply right-to-left)
     /// 3. Return final U
     ///
     /// **Gate Expansion:**
     /// - Single-qubit gate on qubit k: I ⊗ ... ⊗ G ⊗ ... ⊗ I (G at position k)
     /// - Two-qubit gate on qubits (c,t): Similar tensor product structure
-    /// - Three-qubit Toffoli: Full 8×8 matrix embedded in 2ⁿ space
+    /// - Three-qubit Toffoli: Full 8x8 matrix embedded in 2ⁿ space
     ///
     /// **Complexity:**
     /// - Per gate: O(2³ⁿ) for matrix multiply + O(2²ⁿ) for expansion
     /// - Total: O(depth · 2³ⁿ) where depth = number of gates
     ///
     /// **Memory:**
-    /// - Working matrices: 3 × 2ⁿ × 2ⁿ × 16 bytes (current U, gate matrix, result)
+    /// - Working matrices: 3 x 2ⁿ x 2ⁿ x 16 bytes (current U, gate matrix, result)
     /// - Peak usage: ~750 MB for 12 qubits
     ///
     /// **Validation:**
@@ -146,7 +146,7 @@ public enum CircuitUnitary {
     /// - Does NOT validate unitarity (assume circuit is valid)
     ///
     /// - Parameter circuit: Quantum circuit to convert
-    /// - Returns: Dense unitary matrix (2ⁿ × 2ⁿ complex matrix)
+    /// - Returns: Dense unitary matrix (2ⁿ x 2ⁿ complex matrix)
     ///
     /// Example:
     /// ```swift
@@ -157,7 +157,7 @@ public enum CircuitUnitary {
     ///
     /// // Convert to unitary
     /// let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
-    /// // unitary is 4×4 matrix representing H₀ · CNOT₀₁
+    /// // unitary is 4x4 matrix representing H₀ · CNOT₀₁
     ///
     /// // Verify: applying unitary to |00⟩ gives (|00⟩ + |11⟩)/√2
     /// let initialState = [Complex<Double>(1,0), .zero, .zero, .zero]
@@ -166,16 +166,16 @@ public enum CircuitUnitary {
     /// ```
     @_optimize(speed)
     @_eagerMove
-    public static func computeUnitary(circuit: QuantumCircuit) -> GateMatrix {
+    public static func computeUnitary(circuit: QuantumCircuit) -> [[Complex<Double>]] {
         let numQubits: Int = circuit.numQubits
         ValidationUtilities.validatePositiveQubits(numQubits)
         ValidationUtilities.validateMemoryLimit(numQubits)
 
         let dimension = 1 << numQubits
-        var unitary: GateMatrix = MatrixUtilities.identityMatrix(dimension: dimension)
+        var unitary: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: dimension)
 
-        for operation in circuit.operations {
-            let gateMatrix: GateMatrix = expandGateToFullSpace(
+        for operation in circuit.gates {
+            let gateMatrix: [[Complex<Double>]] = expandGateToFullSpace(
                 gate: operation.gate,
                 qubits: operation.qubits,
                 numQubits: numQubits
@@ -189,14 +189,14 @@ public enum CircuitUnitary {
 
     // MARK: - Gate Expansion
 
-    /// Expand gate to full Hilbert space (2ⁿ × 2ⁿ matrix)
+    /// Expand gate to full Hilbert space (2ⁿ x 2ⁿ matrix)
     ///
-    /// Embeds small gate matrix (2×2 or 4×4 or 8×8) into full 2ⁿ × 2ⁿ space
+    /// Embeds small gate matrix (2x2 or 4x4 or 8x8) into full 2ⁿ x 2ⁿ space
     /// via tensor product with identity on non-target qubits.
     ///
     /// **Algorithm:**
     /// - Single-qubit: Tensor product I ⊗ ... ⊗ G ⊗ ... ⊗ I
-    /// - Two-qubit: Similar but with 4×4 gate matrix
+    /// - Two-qubit: Similar but with 4x4 gate matrix
     /// - Three-qubit: Direct construction from Toffoli structure
     ///
     /// **Complexity:** O(2²ⁿ) to fill full matrix
@@ -210,14 +210,14 @@ public enum CircuitUnitary {
     ///   - gate: Quantum gate to expand
     ///   - qubits: Qubit indices (for gates that store qubits in gate enum)
     ///   - numQubits: Total number of qubits in circuit
-    /// - Returns: Full 2ⁿ × 2ⁿ matrix
+    /// - Returns: Full 2ⁿ x 2ⁿ matrix
     @_optimize(speed)
     @_eagerMove
     private static func expandGateToFullSpace(
         gate: QuantumGate,
         qubits: [Int],
         numQubits: Int
-    ) -> GateMatrix {
+    ) -> [[Complex<Double>]] {
         let dimension = 1 << numQubits
 
         switch gate {
@@ -229,22 +229,12 @@ public enum CircuitUnitary {
             return expandSingleQubitGate(gate: gate, targetQubit: targetQubit, dimension: dimension)
 
         // Two-qubit gates
-        case let .cnot(control, target),
-             let .cz(control, target),
-             let .cy(control, target),
-             let .ch(control, target),
-             let .controlledPhase(_, control, target),
-             let .controlledRotationX(_, control, target),
-             let .controlledRotationY(_, control, target),
-             let .controlledRotationZ(_, control, target),
-             let .swap(control, target),
-             let .sqrtSwap(control, target),
-             let .customTwoQubit(_, control, target):
-            return expandTwoQubitGate(gate: gate, control: control, target: target, dimension: dimension)
+        case .cnot, .cz, .cy, .ch, .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ, .swap, .sqrtSwap, .customTwoQubit:
+            return expandTwoQubitGate(gate: gate, control: qubits[0], target: qubits[1], dimension: dimension)
 
         // Three-qubit gates
-        case let .toffoli(control1, control2, target):
-            return expandToffoliGate(control1: control1, control2: control2, target: target, dimension: dimension)
+        case .toffoli:
+            return expandToffoliGate(control1: qubits[0], control2: qubits[1], target: qubits[2], dimension: dimension)
         }
     }
 
@@ -253,9 +243,9 @@ public enum CircuitUnitary {
     /// **Algorithm:**
     /// Instead of iterating all dimension² pairs, directly compute valid indices.
     /// For single-qubit gate, only pairs where other bits match are non-zero.
-    /// For each "other bits" pattern (dimension/2 patterns), we have 4 entries (2×2 gate).
+    /// For each "other bits" pattern (dimension/2 patterns), we have 4 entries (2x2 gate).
     ///
-    /// **Complexity:** O(2ⁿ × 4) = O(2ⁿ⁺²) instead of O(2²ⁿ)
+    /// **Complexity:** O(2ⁿ x 4) = O(2ⁿ⁺²) instead of O(2²ⁿ)
     ///
     /// **Example:** H on qubit 0 of 2-qubit system
     /// ```
@@ -271,9 +261,9 @@ public enum CircuitUnitary {
         gate: QuantumGate,
         targetQubit: Int,
         dimension: Int
-    ) -> GateMatrix {
-        let smallMatrix: GateMatrix = gate.matrix()
-        var fullMatrix: GateMatrix = Array(
+    ) -> [[Complex<Double>]] {
+        let smallMatrix: [[Complex<Double>]] = gate.matrix()
+        var fullMatrix: [[Complex<Double>]] = Array(
             repeating: Array(repeating: Complex<Double>.zero, count: dimension),
             count: dimension
         )
@@ -300,12 +290,12 @@ public enum CircuitUnitary {
     /// **Algorithm:**
     /// Instead of iterating all dimension² pairs, directly compute valid indices.
     /// For two-qubit gate, only pairs where other bits match are non-zero.
-    /// For each "other bits" pattern (dimension/4 patterns), we have 16 entries (4×4 gate).
+    /// For each "other bits" pattern (dimension/4 patterns), we have 16 entries (4x4 gate).
     ///
-    /// **Complexity:** O(2ⁿ × 16 / 4) = O(2ⁿ⁺²) instead of O(2²ⁿ)
+    /// **Complexity:** O(2ⁿ x 16 / 4) = O(2ⁿ⁺²) instead of O(2²ⁿ)
     ///
     /// **Index Mapping:**
-    /// - Gate matrix is 4×4: indices 0-3 map to (c,t) = (0,0), (0,1), (1,0), (1,1)
+    /// - Gate matrix is 4x4: indices 0-3 map to (c,t) = (0,0), (0,1), (1,0), (1,1)
     /// - Row index: 2*controlBit + targetBit
     @_optimize(speed)
     @_eagerMove
@@ -314,9 +304,9 @@ public enum CircuitUnitary {
         control: Int,
         target: Int,
         dimension: Int
-    ) -> GateMatrix {
-        let smallMatrix: GateMatrix = gate.matrix()
-        var fullMatrix: GateMatrix = Array(
+    ) -> [[Complex<Double>]] {
+        let smallMatrix: [[Complex<Double>]] = gate.matrix()
+        var fullMatrix: [[Complex<Double>]] = Array(
             repeating: Array(repeating: Complex<Double>.zero, count: dimension),
             count: dimension
         )
@@ -373,8 +363,8 @@ public enum CircuitUnitary {
         control2: Int,
         target: Int,
         dimension: Int
-    ) -> GateMatrix {
-        var fullMatrix: GateMatrix = Array(
+    ) -> [[Complex<Double>]] {
+        var fullMatrix: [[Complex<Double>]] = Array(
             repeating: Array(repeating: Complex<Double>.zero, count: dimension),
             count: dimension
         )

@@ -15,8 +15,8 @@ struct StatePreparationTests {
 
         #expect(state.numQubits == 1)
         #expect(state.amplitudes.count == 2)
-        #expect(state.getAmplitude(ofState: 0) == .one)
-        #expect(state.getAmplitude(ofState: 1) == .zero)
+        #expect(state.amplitude(of: 0) == .one)
+        #expect(state.amplitude(of: 1) == .zero)
         #expect(state.isNormalized())
     }
 
@@ -26,8 +26,8 @@ struct StatePreparationTests {
 
         #expect(state.numQubits == 1)
         #expect(state.amplitudes.count == 2)
-        #expect(state.getAmplitude(ofState: 0) == .zero)
-        #expect(state.getAmplitude(ofState: 1) == .one)
+        #expect(state.amplitude(of: 0) == .zero)
+        #expect(state.amplitude(of: 1) == .one)
         #expect(state.isNormalized())
     }
 
@@ -40,9 +40,9 @@ struct StatePreparationTests {
 
         for i in 0 ..< 8 {
             if i == 5 {
-                #expect(state.getAmplitude(ofState: i) == .one)
+                #expect(state.amplitude(of: i) == .one)
             } else {
-                #expect(state.getAmplitude(ofState: i) == .zero)
+                #expect(state.amplitude(of: i) == .zero)
             }
         }
         #expect(state.isNormalized())
@@ -55,11 +55,11 @@ struct StatePreparationTests {
 
         let state = QuantumState.basisState(numQubits: numQubits, basisStateIndex: maxIndex)
 
-        #expect(state.getAmplitude(ofState: maxIndex) == .one)
+        #expect(state.amplitude(of: maxIndex) == .one)
         #expect(state.isNormalized())
 
         for i in 0 ..< maxIndex {
-            #expect(state.getAmplitude(ofState: i) == .zero)
+            #expect(state.amplitude(of: i) == .zero)
         }
     }
 
@@ -68,10 +68,10 @@ struct StatePreparationTests {
         let circuit = QuantumCircuit.basisStateCircuit(numQubits: 4, basisStateIndex: 11)
         let finalState = circuit.execute()
 
-        #expect(finalState.getAmplitude(ofState: 11).magnitude() > 0.99)
+        #expect(finalState.amplitude(of: 11).magnitude > 0.99)
         #expect(finalState.isNormalized())
 
-        let prob = finalState.probability(ofState: 11)
+        let prob = finalState.probability(of: 11)
         #expect(abs(prob - 1.0) < 1e-10, "State |1011⟩ should have probability 1.0")
     }
 
@@ -79,7 +79,7 @@ struct StatePreparationTests {
     func basisStateCircuitGateCount() {
         let circuit = QuantumCircuit.basisStateCircuit(numQubits: 4, basisStateIndex: 10)
 
-        let xGateCount = circuit.operations.count(where: {
+        let xGateCount = circuit.gates.count(where: {
             if case .pauliX = $0.gate { true } else { false }
         })
 
@@ -100,14 +100,14 @@ struct BellStateVariantsTests {
         #expect(state.numQubits == 2)
         #expect(state.isNormalized())
 
-        let prob00 = state.probability(ofState: 0)
-        let prob11 = state.probability(ofState: 3)
+        let prob00 = state.probability(of: 0)
+        let prob11 = state.probability(of: 3)
 
         #expect(abs(prob00 - 0.5) < 1e-10, "|Φ⁺⟩ should have 50% |00⟩")
         #expect(abs(prob11 - 0.5) < 1e-10, "|Φ⁺⟩ should have 50% |11⟩")
 
-        #expect(state.probability(ofState: 1) < 1e-10)
-        #expect(state.probability(ofState: 2) < 1e-10)
+        #expect(state.probability(of: 1) < 1e-10)
+        #expect(state.probability(of: 2) < 1e-10)
     }
 
     @Test("Bell state |Φ⁻⟩ = (|00⟩ - |11⟩)/√2")
@@ -118,14 +118,14 @@ struct BellStateVariantsTests {
         #expect(state.numQubits == 2)
         #expect(state.isNormalized())
 
-        let prob00 = state.probability(ofState: 0)
-        let prob11 = state.probability(ofState: 3)
+        let prob00 = state.probability(of: 0)
+        let prob11 = state.probability(of: 3)
 
         #expect(abs(prob00 - 0.5) < 1e-10, "|Φ⁻⟩ should have 50% |00⟩")
         #expect(abs(prob11 - 0.5) < 1e-10, "|Φ⁻⟩ should have 50% |11⟩")
 
-        let amp00 = state.getAmplitude(ofState: 0)
-        let amp11 = state.getAmplitude(ofState: 3)
+        let amp00 = state.amplitude(of: 0)
+        let amp11 = state.amplitude(of: 3)
 
         #expect(amp00.real * amp11.real < 0, "Amplitudes should have opposite signs for |Φ⁻⟩")
     }
@@ -138,14 +138,14 @@ struct BellStateVariantsTests {
         #expect(state.numQubits == 2)
         #expect(state.isNormalized())
 
-        let prob01 = state.probability(ofState: 1)
-        let prob10 = state.probability(ofState: 2)
+        let prob01 = state.probability(of: 1)
+        let prob10 = state.probability(of: 2)
 
         #expect(abs(prob01 - 0.5) < 1e-10, "|Ψ⁺⟩ should have 50% |01⟩")
         #expect(abs(prob10 - 0.5) < 1e-10, "|Ψ⁺⟩ should have 50% |10⟩")
 
-        #expect(state.probability(ofState: 0) < 1e-10)
-        #expect(state.probability(ofState: 3) < 1e-10)
+        #expect(state.probability(of: 0) < 1e-10)
+        #expect(state.probability(of: 3) < 1e-10)
     }
 
     @Test("Bell state |Ψ⁻⟩ = (|01⟩ - |10⟩)/√2")
@@ -156,14 +156,14 @@ struct BellStateVariantsTests {
         #expect(state.numQubits == 2)
         #expect(state.isNormalized())
 
-        let prob01 = state.probability(ofState: 1)
-        let prob10 = state.probability(ofState: 2)
+        let prob01 = state.probability(of: 1)
+        let prob10 = state.probability(of: 2)
 
         #expect(abs(prob01 - 0.5) < 1e-10, "|Ψ⁻⟩ should have 50% |01⟩")
         #expect(abs(prob10 - 0.5) < 1e-10, "|Ψ⁻⟩ should have 50% |10⟩")
 
-        let amp01 = state.getAmplitude(ofState: 1)
-        let amp10 = state.getAmplitude(ofState: 2)
+        let amp01 = state.amplitude(of: 1)
+        let amp10 = state.amplitude(of: 2)
 
         #expect(amp01.real * amp10.real < 0, "Amplitudes should have opposite signs for |Ψ⁻⟩")
     }
@@ -196,14 +196,14 @@ struct WStateTests {
         #expect(state.numQubits == 2)
         #expect(state.isNormalized())
 
-        let prob01 = state.probability(ofState: 1)
-        let prob10 = state.probability(ofState: 2)
+        let prob01 = state.probability(of: 1)
+        let prob10 = state.probability(of: 2)
 
         #expect(abs(prob01 - 0.5) < 1e-6, "|W₂⟩ should have ~50% |01⟩")
         #expect(abs(prob10 - 0.5) < 1e-6, "|W₂⟩ should have ~50% |10⟩")
 
-        #expect(state.probability(ofState: 0) < 1e-6)
-        #expect(state.probability(ofState: 3) < 1e-6)
+        #expect(state.probability(of: 0) < 1e-6)
+        #expect(state.probability(of: 3) < 1e-6)
     }
 
     @Test("W state for 3 qubits: |W₃⟩ = (|100⟩ + |010⟩ + |001⟩)/√3")
@@ -215,16 +215,16 @@ struct WStateTests {
 
         let expectedProb = 1.0 / 3.0
 
-        let prob001 = state.probability(ofState: 1)
-        let prob010 = state.probability(ofState: 2)
-        let prob100 = state.probability(ofState: 4)
+        let prob001 = state.probability(of: 1)
+        let prob010 = state.probability(of: 2)
+        let prob100 = state.probability(of: 4)
 
         #expect(abs(prob001 - expectedProb) < 1e-4, "|001⟩ should have probability ~1/3")
         #expect(abs(prob010 - expectedProb) < 1e-4, "|010⟩ should have probability ~1/3")
         #expect(abs(prob100 - expectedProb) < 1e-4, "|100⟩ should have probability ~1/3")
 
         for i in [0, 3, 5, 6, 7] {
-            #expect(state.probability(ofState: i) < 1e-4, "State |\(i)⟩ should be near zero")
+            #expect(state.probability(of: i) < 1e-4, "State |\(i)⟩ should be near zero")
         }
     }
 
@@ -238,7 +238,7 @@ struct WStateTests {
         var totalProbSingleExcitation = 0.0
         for i in 0 ..< 16 {
             if i.nonzeroBitCount == 1 {
-                totalProbSingleExcitation += state.probability(ofState: i)
+                totalProbSingleExcitation += state.probability(of: i)
             }
         }
 
@@ -267,10 +267,10 @@ struct DickeStateTests {
         let state = QuantumCircuit.dickeState(numQubits: 3, numOnes: 0)
 
         #expect(state.isNormalized())
-        #expect(state.getAmplitude(ofState: 0) == .one, "Only |000⟩ should have amplitude 1")
+        #expect(state.amplitude(of: 0) == .one, "Only |000⟩ should have amplitude 1")
 
         for i in 1 ..< 8 {
-            #expect(state.getAmplitude(ofState: i) == .zero)
+            #expect(state.amplitude(of: i) == .zero)
         }
     }
 
@@ -279,10 +279,10 @@ struct DickeStateTests {
         let state = QuantumCircuit.dickeState(numQubits: 3, numOnes: 3)
 
         #expect(state.isNormalized())
-        #expect(state.getAmplitude(ofState: 7) == .one, "Only |111⟩ should have amplitude 1")
+        #expect(state.amplitude(of: 7) == .one, "Only |111⟩ should have amplitude 1")
 
         for i in 0 ..< 7 {
-            #expect(state.getAmplitude(ofState: i) == .zero)
+            #expect(state.amplitude(of: i) == .zero)
         }
     }
 
@@ -294,12 +294,12 @@ struct DickeStateTests {
 
         let expectedProb = 1.0 / 3.0
 
-        #expect(abs(state.probability(ofState: 1) - expectedProb) < 1e-10, "|001⟩ probability")
-        #expect(abs(state.probability(ofState: 2) - expectedProb) < 1e-10, "|010⟩ probability")
-        #expect(abs(state.probability(ofState: 4) - expectedProb) < 1e-10, "|100⟩ probability")
+        #expect(abs(state.probability(of: 1) - expectedProb) < 1e-10, "|001⟩ probability")
+        #expect(abs(state.probability(of: 2) - expectedProb) < 1e-10, "|010⟩ probability")
+        #expect(abs(state.probability(of: 4) - expectedProb) < 1e-10, "|100⟩ probability")
 
         for i in [0, 3, 5, 6, 7] {
-            #expect(state.probability(ofState: i) < 1e-10, "State |\(i)⟩ should be zero")
+            #expect(state.probability(of: i) < 1e-10, "State |\(i)⟩ should be zero")
         }
     }
 
@@ -315,7 +315,7 @@ struct DickeStateTests {
         for i in 0 ..< 16 {
             if i.nonzeroBitCount == 2 {
                 count += 1
-                totalProb += state.probability(ofState: i)
+                totalProb += state.probability(of: i)
             }
         }
 
@@ -325,7 +325,7 @@ struct DickeStateTests {
         let expectedProb = 1.0 / 6.0
         for i in 0 ..< 16 {
             if i.nonzeroBitCount == 2 {
-                #expect(abs(state.probability(ofState: i) - expectedProb) < 1e-10)
+                #expect(abs(state.probability(of: i) - expectedProb) < 1e-10)
             }
         }
     }
@@ -338,7 +338,7 @@ struct DickeStateTests {
 
         for i in 0 ..< 32 {
             if i.nonzeroBitCount == 2 {
-                magnitudes.append(state.getAmplitude(ofState: i).magnitude())
+                magnitudes.append(state.amplitude(of: i).magnitude)
             }
         }
 
@@ -352,9 +352,9 @@ struct DickeStateTests {
     func dickeStateSymmetry() {
         let state = QuantumCircuit.dickeState(numQubits: 3, numOnes: 1)
 
-        let prob1 = state.probability(ofState: 1)
-        let prob2 = state.probability(ofState: 2)
-        let prob4 = state.probability(ofState: 4)
+        let prob1 = state.probability(of: 1)
+        let prob2 = state.probability(of: 2)
+        let prob4 = state.probability(of: 4)
 
         #expect(abs(prob1 - prob2) < 1e-10, "Symmetric under qubit permutation")
         #expect(abs(prob2 - prob4) < 1e-10, "Symmetric under qubit permutation")
@@ -368,7 +368,7 @@ struct DickeStateTests {
 struct EdgeCasesAndValidationTests {
     @Test("Uniform superposition is correctly implemented")
     func uniformSuperpositionVerification() {
-        let circuit = QuantumCircuit.superposition(numQubits: 3)
+        let circuit = QuantumCircuit.uniformSuperposition(numQubits: 3)
         let state = circuit.execute()
 
         #expect(state.numQubits == 3)
@@ -376,7 +376,7 @@ struct EdgeCasesAndValidationTests {
 
         let expectedProb = 1.0 / 8.0
         for i in 0 ..< 8 {
-            let prob = state.probability(ofState: i)
+            let prob = state.probability(of: i)
             #expect(abs(prob - expectedProb) < 1e-10,
                     "State |\(i)⟩ should have probability 1/8")
         }
@@ -396,7 +396,7 @@ struct EdgeCasesAndValidationTests {
         #expect(state.isNormalized(), "State should be auto-normalized")
 
         for i in 0 ..< 4 {
-            #expect(abs(state.getAmplitude(ofState: i).magnitude() - 0.5) < 1e-10)
+            #expect(abs(state.amplitude(of: i).magnitude - 0.5) < 1e-10)
         }
     }
 
@@ -408,9 +408,9 @@ struct EdgeCasesAndValidationTests {
 
         for i in 0 ..< (1 << 10) {
             if i.nonzeroBitCount == 5 {
-                #expect(state.probability(ofState: i) > 0, "Hamming-5 states should be non-zero")
+                #expect(state.probability(of: i) > 0, "Hamming-5 states should be non-zero")
             } else {
-                #expect(state.probability(ofState: i) < 1e-10, "Other states should be zero")
+                #expect(state.probability(of: i) < 1e-10, "Other states should be zero")
             }
         }
     }

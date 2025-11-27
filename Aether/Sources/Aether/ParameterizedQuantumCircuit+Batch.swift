@@ -53,7 +53,7 @@ public extension ParameterizedQuantumCircuit {
     /// Validates all parameter vectors have correct length before binding.
     ///
     /// **Performance:**
-    /// - O(N × M) where N = batch size, M = gates per circuit
+    /// - O(N x M) where N = batch size, M = gates per circuit
     /// - Sequential binding but with upfront validation
     /// - Amortized cost negligible compared to circuit execution
     ///
@@ -215,7 +215,7 @@ public extension ParameterizedQuantumCircuit {
     /// let parameterVectors = qaoaAnsatz.generateGridSearchVectors(
     ///     ranges: [Array(gammaRange), Array(betaRange)]
     /// )
-    /// // 11 × 11 = 121 parameter vectors
+    /// // 11 x 11 = 121 parameter vectors
     ///
     /// // Bind all and evaluate
     /// let circuits = qaoaAnsatz.bindBatch(parameterVectors: parameterVectors)

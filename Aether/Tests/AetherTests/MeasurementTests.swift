@@ -12,7 +12,7 @@ import Testing
 struct ProbabilityDistributionTests {
     @Test("Probability distribution for |0⟩")
     func probabilityDistributionZeroState() {
-        let state = QuantumState(singleQubit: 0)
+        let state = QuantumState(qubit: 0)
         let probabilities = Measurement.probabilityDistribution(state: state)
 
         #expect(abs(probabilities[0] - 1.0) < 1e-10)
@@ -56,20 +56,20 @@ struct StateCollapseTests {
     func collapseToZero() {
         let collapsed = Measurement.collapseToOutcome(0, numQubits: 2)
 
-        #expect(abs(collapsed.getAmplitude(ofState: 0).real - 1.0) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 1).magnitude()) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 2).magnitude()) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 3).magnitude()) < 1e-10)
+        #expect(abs(collapsed.amplitude(of: 0).real - 1.0) < 1e-10)
+        #expect(abs(collapsed.amplitude(of: 1).magnitude) < 1e-10)
+        #expect(abs(collapsed.amplitude(of: 2).magnitude) < 1e-10)
+        #expect(abs(collapsed.amplitude(of: 3).magnitude) < 1e-10)
     }
 
     @Test("Collapse to outcome 3")
     func collapseToThree() {
         let collapsed = Measurement.collapseToOutcome(3, numQubits: 2)
 
-        #expect(abs(collapsed.getAmplitude(ofState: 0).magnitude()) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 1).magnitude()) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 2).magnitude()) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 3).real - 1.0) < 1e-10)
+        #expect(abs(collapsed.amplitude(of: 0).magnitude) < 1e-10)
+        #expect(abs(collapsed.amplitude(of: 1).magnitude) < 1e-10)
+        #expect(abs(collapsed.amplitude(of: 2).magnitude) < 1e-10)
+        #expect(abs(collapsed.amplitude(of: 3).real - 1.0) < 1e-10)
     }
 
     @Test("Collapsed state is normalized")
@@ -86,7 +86,7 @@ struct StateCollapseTests {
 struct FullMeasurementTests {
     @Test("Measure |0⟩ always gives 0")
     func measureZeroState() {
-        let state = QuantumState(singleQubit: 0)
+        let state = QuantumState(qubit: 0)
         var measurement = Measurement()
 
         for _ in 0 ..< 10 {
@@ -98,7 +98,7 @@ struct FullMeasurementTests {
 
     @Test("Measure |1⟩ always gives 1")
     func measureOneState() {
-        let state = QuantumState(singleQubit: 1)
+        let state = QuantumState(qubit: 1)
         var measurement = Measurement()
 
         for _ in 0 ..< 10 {
@@ -120,12 +120,12 @@ struct FullMeasurementTests {
         let result = measurement.measure(state: state)
 
         #expect(result.outcome == 0 || result.outcome == 1)
-        #expect(abs(result.collapsedState.getAmplitude(ofState: result.outcome).real - 1.0) < 1e-10)
+        #expect(abs(result.collapsedState.amplitude(of: result.outcome).real - 1.0) < 1e-10)
     }
 
     @Test("Measuring collapsed state is deterministic")
     func measureCollapsedStateIsDeterministic() {
-        let state = QuantumState(singleQubit: 0)
+        let state = QuantumState(qubit: 0)
         var measurement = Measurement()
 
         let firstResult = measurement.measure(state: state)
@@ -167,7 +167,7 @@ struct StatisticalDistributionTests {
 
     @Test("Bell state statistics")
     func bellStateStatistics() {
-        let circuit = QuantumCircuit.bellState()
+        let circuit = QuantumCircuit.bell()
         var measurement = Measurement()
 
         let numRuns = 1000
@@ -229,7 +229,7 @@ struct PartialMeasurementTests {
 
     @Test("Marginal probabilities for Bell state")
     func marginalProbabilitiesBell() {
-        let circuit = QuantumCircuit.bellState()
+        let circuit = QuantumCircuit.bell()
         let state = circuit.execute()
 
         let (prob0_q0, prob1_q0) = Measurement.marginalProbabilities(qubit: 0, state: state)
@@ -243,7 +243,7 @@ struct PartialMeasurementTests {
 
     @Test("Partial collapse preserves compatible amplitudes")
     func partialCollapseCompatibleAmplitudes() {
-        let circuit = QuantumCircuit.superposition(numQubits: 2)
+        let circuit = QuantumCircuit.uniformSuperposition(numQubits: 2)
         let state = circuit.execute()
 
         let collapsed = Measurement.partialCollapse(
@@ -254,15 +254,15 @@ struct PartialMeasurementTests {
         )
 
         let invSqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(collapsed.getAmplitude(ofState: 0).real - invSqrt2) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 2).real - invSqrt2) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 1).magnitude()) < 1e-10)
-        #expect(abs(collapsed.getAmplitude(ofState: 3).magnitude()) < 1e-10)
+        #expect(abs(collapsed.amplitude(of: 0).real - invSqrt2) < 1e-10)
+        #expect(abs(collapsed.amplitude(of: 2).real - invSqrt2) < 1e-10)
+        #expect(abs(collapsed.amplitude(of: 1).magnitude) < 1e-10)
+        #expect(abs(collapsed.amplitude(of: 3).magnitude) < 1e-10)
     }
 
     @Test("Partial collapse renormalizes state")
     func partialCollapseRenormalizes() {
-        let circuit = QuantumCircuit.superposition(numQubits: 2)
+        let circuit = QuantumCircuit.uniformSuperposition(numQubits: 2)
         let state = circuit.execute()
 
         let collapsed = Measurement.partialCollapse(
@@ -277,7 +277,7 @@ struct PartialMeasurementTests {
 
     @Test("Measure single qubit of separable state")
     func measureSingleQubitSeparable() {
-        var amplitudes = AmplitudeVector(repeating: .zero, count: 4)
+        var amplitudes = [Complex<Double>](repeating: .zero, count: 4)
         amplitudes[1] = .one
         let state = QuantumState(numQubits: 2, amplitudes: amplitudes)
         var measurement = Measurement()
@@ -291,7 +291,7 @@ struct PartialMeasurementTests {
 
     @Test("Measure qubit in Bell state demonstrates entanglement")
     func measureBellStateEntanglement() {
-        let circuit = QuantumCircuit.bellState()
+        let circuit = QuantumCircuit.bell()
         let state = circuit.execute()
         var measurement = Measurement()
 
@@ -303,7 +303,7 @@ struct PartialMeasurementTests {
 
     @Test("Partial measurement statistics")
     func partialMeasurementStatistics() {
-        let circuit = QuantumCircuit.bellState()
+        let circuit = QuantumCircuit.bell()
         var measurement = Measurement()
 
         let numRuns = 1000
@@ -386,7 +386,7 @@ struct StatisticalHelpersTests {
 
     @Test("Run circuit multiple times")
     func runCircuitMultipleTimes() {
-        let circuit = QuantumCircuit.bellState()
+        let circuit = QuantumCircuit.bell()
         var measurement = Measurement()
 
         let outcomes = measurement.runMultiple(circuit: circuit, numRuns: 100)
@@ -403,7 +403,7 @@ struct StatisticalHelpersTests {
 struct MeasurementEdgeCasesTests {
     @Test("Measure single-qubit state")
     func measureSingleQubit() {
-        let state = QuantumState(singleQubit: 0)
+        let state = QuantumState(qubit: 0)
         let result = Measurement.measureOnce(state: state)
 
         #expect(result.outcome == 0)
@@ -412,7 +412,7 @@ struct MeasurementEdgeCasesTests {
 
     @Test("Measure 3-qubit state")
     func measureThreeQubits() {
-        let circuit = QuantumCircuit.superposition(numQubits: 3)
+        let circuit = QuantumCircuit.uniformSuperposition(numQubits: 3)
         let state = circuit.execute()
         var measurement = Measurement()
 
@@ -450,7 +450,7 @@ struct MeasurementEdgeCasesTests {
 struct NormalizationChecksTests {
     @Test("All measurements preserve normalization")
     func measurementsPreserveNormalization() {
-        let circuit = QuantumCircuit.bellState()
+        let circuit = QuantumCircuit.bell()
         let state = circuit.execute()
         var measurement = Measurement()
 
@@ -462,7 +462,7 @@ struct NormalizationChecksTests {
 
     @Test("Partial measurements preserve normalization")
     func partialMeasurementsPreserveNormalization() {
-        let circuit = QuantumCircuit.ghzState(numQubits: 3)
+        let circuit = QuantumCircuit.ghz(numQubits: 3)
         let state = circuit.execute()
         var measurement = Measurement()
 
@@ -575,7 +575,7 @@ struct SeededMeasurementTests {
 struct MeasurementResultDisplayTests {
     @Test("MeasurementResult description includes outcome")
     func descriptionIncludesOutcome() {
-        let state = QuantumState(singleQubit: 0)
+        let state = QuantumState(qubit: 0)
         let result = Measurement.measureOnce(state: state)
 
         #expect(result.description.contains("outcome"))
@@ -584,7 +584,7 @@ struct MeasurementResultDisplayTests {
 
     @Test("MeasurementResult description includes state info")
     func descriptionIncludesState() {
-        let state = QuantumState(singleQubit: 1)
+        let state = QuantumState(qubit: 1)
         let result = Measurement.measureOnce(state: state)
 
         #expect(result.description.contains("state"))
@@ -606,7 +606,7 @@ struct MeasurementResultDisplayTests {
 struct StaticConvenienceTests {
     @Test("measureOnce static method works")
     func measureOnceWorks() {
-        let state = QuantumState(singleQubit: 0)
+        let state = QuantumState(qubit: 0)
         let result = Measurement.measureOnce(state: state)
 
         #expect(result.outcome == 0)
@@ -624,7 +624,7 @@ struct StaticConvenienceTests {
 
     @Test("runMultiple static method works")
     func runMultipleStaticWorks() {
-        let circuit = QuantumCircuit.bellState()
+        let circuit = QuantumCircuit.bell()
         let outcomes = Measurement.runMultiple(circuit: circuit, numRuns: 50)
 
         #expect(outcomes.count == 50)
@@ -742,7 +742,7 @@ struct PauliBasisMeasurementTests {
 
     @Test("Measure |1⟩ in Z basis gives -1")
     func measureOneInZBasis() {
-        let state = QuantumState(singleQubit: 1)
+        let state = QuantumState(qubit: 1)
         var measurement = Measurement()
 
         for _ in 0 ..< 10 {
@@ -1022,7 +1022,7 @@ struct MultiQubitPauliMeasurementTests {
 
     @Test("Measure three-qubit Pauli string")
     func measureThreeQubitPauliString() {
-        let ghz = QuantumCircuit.ghzState(numQubits: 3).execute()
+        let ghz = QuantumCircuit.ghz(numQubits: 3).execute()
         let pauliString = PauliString(operators: [
             (qubit: 0, basis: .z),
             (qubit: 1, basis: .z),
@@ -1047,7 +1047,7 @@ struct MultiQubitPauliMeasurementTests {
 
     @Test("Measure mixed Pauli string (X,Y,Z)")
     func measureMixedPauliString() {
-        let state = QuantumCircuit.superposition(numQubits: 3).execute()
+        let state = QuantumCircuit.uniformSuperposition(numQubits: 3).execute()
         let pauliString = PauliString(operators: [
             (qubit: 0, basis: .x),
             (qubit: 1, basis: .y),
@@ -1099,7 +1099,7 @@ struct MultiQubitPauliMeasurementTests {
 struct MultipleQubitPartialMeasurementTests {
     @Test("Measure multiple qubits on GHZ state")
     func measureMultipleQubitsGHZ() {
-        let ghz = QuantumCircuit.ghzState(numQubits: 3).execute()
+        let ghz = QuantumCircuit.ghz(numQubits: 3).execute()
         var measurement = Measurement()
 
         let (outcomes, collapsedState) = measurement.measureQubits([0, 1], state: ghz)
@@ -1141,7 +1141,7 @@ struct MultipleQubitPartialMeasurementTests {
 
     @Test("Measure non-adjacent qubits")
     func measureNonAdjacentQubits() {
-        let state = QuantumCircuit.superposition(numQubits: 4).execute()
+        let state = QuantumCircuit.uniformSuperposition(numQubits: 4).execute()
         var measurement = Measurement()
 
         let (outcomes, collapsedState) = measurement.measureQubits([0, 2], state: state)
@@ -1154,7 +1154,7 @@ struct MultipleQubitPartialMeasurementTests {
 
     @Test("Measure qubits in arbitrary order")
     func measureQubitsArbitraryOrder() {
-        let state = QuantumCircuit.ghzState(numQubits: 3).execute()
+        let state = QuantumCircuit.ghz(numQubits: 3).execute()
         var measurement = Measurement()
 
         let (outcomes, collapsedState) = measurement.measureQubits([2, 0], state: state)
@@ -1236,13 +1236,13 @@ struct StatevectorSnapshotTests {
             label: "Initial"
         )
 
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let snapshot2 = Measurement.captureSnapshot(
             state: circuit.execute(),
             label: "After H"
         )
 
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+        circuit.append(.cnot, to: [0, 1])
         let snapshot3 = Measurement.captureSnapshot(
             state: circuit.execute(),
             label: "Bell state"
@@ -1293,8 +1293,8 @@ struct StatevectorSnapshotTests {
 
         let snapshot = Measurement.captureSnapshot(state: complexState, label: "Complex")
 
-        #expect(snapshot.state.getAmplitude(ofState: 0) == Complex(0.5, 0.5))
-        #expect(snapshot.state.getAmplitude(ofState: 3).real == invSqrt2)
+        #expect(snapshot.state.amplitude(of: 0) == Complex(0.5, 0.5))
+        #expect(snapshot.state.amplitude(of: 3).real == invSqrt2)
     }
 
     @Test("Snapshots are independent")
@@ -1326,7 +1326,7 @@ struct StatevectorSnapshotTests {
 struct MeasurementInfrastructureEdgeCasesTests {
     @Test("Pauli measurement on multi-qubit state affects only target qubit")
     func pauliMeasurementOnlyAffectsTarget() {
-        let state = QuantumCircuit.superposition(numQubits: 3).execute()
+        let state = QuantumCircuit.uniformSuperposition(numQubits: 3).execute()
         var measurement = Measurement()
 
         let result = measurement.measurePauli(qubit: 1, basis: .x, state: state)
@@ -1359,7 +1359,7 @@ struct MeasurementInfrastructureEdgeCasesTests {
     @Test("PauliMeasurement description shows negative eigenvalue correctly")
     func pauliMeasurementDescriptionNegative() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .pauliX, toQubit: 0)
+        circuit.append(.pauliX, to: 0)
         let state = circuit.execute()
 
         var measurement = Measurement()
@@ -1373,7 +1373,7 @@ struct MeasurementInfrastructureEdgeCasesTests {
     @Test("PauliStringMeasurement description shows negative eigenvalue correctly")
     func pauliStringMeasurementDescriptionNegative() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .pauliX, toQubit: 0)
+        circuit.append(.pauliX, to: 0)
         let state = circuit.execute()
 
         let pauliString = PauliString(operators: [(0, .z), (1, .z)])

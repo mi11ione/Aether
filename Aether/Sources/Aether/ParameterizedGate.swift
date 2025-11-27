@@ -191,7 +191,7 @@ public enum ParameterizedGate: Equatable, Hashable, Sendable, CustomStringConver
         switch self {
         case let .phase(theta):
             let value = theta.evaluate(with: bindings)
-            return .phase(theta: value)
+            return .phase(angle: value)
 
         case let .rotationX(theta):
             let value = theta.evaluate(with: bindings)
@@ -220,21 +220,21 @@ public enum ParameterizedGate: Equatable, Hashable, Sendable, CustomStringConver
             let lambdaValue = lambda.evaluate(with: bindings)
             return .u3(theta: thetaValue, phi: phiValue, lambda: lambdaValue)
 
-        case let .controlledPhase(theta, control, target):
+        case let .controlledPhase(theta, _, _):
             let value = theta.evaluate(with: bindings)
-            return .controlledPhase(theta: value, control: control, target: target)
+            return .controlledPhase(theta: value)
 
-        case let .controlledRotationX(theta, control, target):
+        case let .controlledRotationX(theta, _, _):
             let value = theta.evaluate(with: bindings)
-            return .controlledRotationX(theta: value, control: control, target: target)
+            return .controlledRotationX(theta: value)
 
-        case let .controlledRotationY(theta, control, target):
+        case let .controlledRotationY(theta, _, _):
             let value = theta.evaluate(with: bindings)
-            return .controlledRotationY(theta: value, control: control, target: target)
+            return .controlledRotationY(theta: value)
 
-        case let .controlledRotationZ(theta, control, target):
+        case let .controlledRotationZ(theta, _, _):
             let value = theta.evaluate(with: bindings)
-            return .controlledRotationZ(theta: value, control: control, target: target)
+            return .controlledRotationZ(theta: value)
 
         case let .concrete(gate):
             return gate
@@ -254,7 +254,7 @@ public enum ParameterizedGate: Equatable, Hashable, Sendable, CustomStringConver
     @_effects(readonly)
     public func validateQubitIndices(maxAllowedQubit: Int) -> Bool {
         switch self {
-        case .phase, .rotationX, .rotationY, .rotationZ, .u1, .u2, .u3: true
+        case .phase, .rotationX, .rotationY, .rotationZ, .u1, .u2, .u3, .concrete: true
 
         case let .controlledPhase(_, control, target),
              let .controlledRotationX(_, control, target),
@@ -263,9 +263,6 @@ public enum ParameterizedGate: Equatable, Hashable, Sendable, CustomStringConver
             control != target &&
                 control >= 0 && control <= maxAllowedQubit &&
                 target >= 0 && target <= maxAllowedQubit
-
-        case let .concrete(gate):
-            gate.validateQubitIndices(maxAllowedQubit: maxAllowedQubit)
         }
     }
 

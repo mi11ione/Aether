@@ -208,7 +208,7 @@ public actor SparseHamiltonian {
 
         let tolerance = 1e-12
         let nonZeros: [COOElement] = elements.compactMap { index, value -> COOElement? in
-            guard abs(value.magnitude()) > tolerance else { return nil }
+            guard abs(value.magnitude) > tolerance else { return nil }
             return COOElement(row: index.row, col: index.col, value: value)
         }
 
@@ -229,11 +229,11 @@ public actor SparseHamiltonian {
     ///   - Pauli X: column = row with bit flipped, phase = 1
     ///   - Pauli Y: column = row with bit flipped, phase = ±i
     ///   - Pauli Z: column = row, phase = ±1
-    /// - Complexity: O(2ⁿ × n) instead of O(4ⁿ × n)
+    /// - Complexity: O(2ⁿ x n) instead of O(4ⁿ x n)
     ///
     /// **Sparsity:**
     /// - All Pauli strings: exactly 2ⁿ non-zeros (one per row)
-    /// - 1000× faster for 10-qubit systems
+    /// - 1000x faster for 10-qubit systems
     ///
     /// - Parameters:
     ///   - pauliString: Pauli operators (sparse: only non-identity qubits)
@@ -290,12 +290,12 @@ public actor SparseHamiltonian {
         guard let kernelFunction = library.makeFunction(name: "csrSparseMatVec") else { return nil }
         guard let pipelineState = try? device.makeComputePipelineState(function: kernelFunction) else { return nil }
 
-        let (rowPointers, columnIndices, values): ([UInt32], [UInt32], AmplitudeVector) = convertCOOtoCSR(
+        let (rowPointers, columnIndices, values): ([UInt32], [UInt32], [Complex<Double>]) = convertCOOtoCSR(
             cooMatrix: cooMatrix,
             numRows: dimension
         )
 
-        let float32Values: [GPUComplex] = values.withUnsafeBufferPointer { complexBuffer in
+        let float32Values: [(Float, Float)] = values.withUnsafeBufferPointer { complexBuffer in
             let doublePtr = UnsafeRawPointer(complexBuffer.baseAddress!)
                 .assumingMemoryBound(to: Double.self)
             let doubleCount = values.count * 2
@@ -307,7 +307,7 @@ public actor SparseHamiltonian {
 
             return floatBuffer.withUnsafeMutableBufferPointer { floatPtr in
                 let gpuPtr = UnsafeRawPointer(floatPtr.baseAddress!)
-                    .assumingMemoryBound(to: GPUComplex.self)
+                    .assumingMemoryBound(to: (Float, Float).self)
                 return Array(UnsafeBufferPointer(start: gpuPtr, count: values.count))
             }
         }
@@ -329,7 +329,7 @@ public actor SparseHamiltonian {
 
         guard let valueBuffer = device.makeBuffer(
             bytes: float32Values,
-            length: float32Values.count * MemoryLayout<GPUComplex>.stride,
+            length: float32Values.count * MemoryLayout<(Float, Float)>.stride,
             options: storageMode
         ) else { return nil }
 
@@ -366,7 +366,7 @@ public actor SparseHamiltonian {
     private static func convertCOOtoCSR(
         cooMatrix: [COOElement],
         numRows: Int
-    ) -> (rowPointers: [UInt32], columnIndices: [UInt32], values: AmplitudeVector) {
+    ) -> (rowPointers: [UInt32], columnIndices: [UInt32], values: [Complex<Double>]) {
         let nnz = cooMatrix.count
 
         var rowPointers = [UInt32](unsafeUninitializedCapacity: numRows + 1) { buffer, count in
@@ -376,7 +376,7 @@ public actor SparseHamiltonian {
 
         var columnIndices = [UInt32]()
         columnIndices.reserveCapacity(nnz)
-        var values = AmplitudeVector()
+        var values = [Complex<Double>]()
         values.reserveCapacity(nnz)
 
         for element in cooMatrix {
@@ -400,7 +400,7 @@ public actor SparseHamiltonian {
     /// **Algorithm:**
     /// - Split complex matrix H = A + iB into real (A) and imaginary (B) components
     /// - Build two Accelerate sparse matrices using coordinate format
-    /// - Accelerate uses AMX coprocessor on Apple Silicon for 10-20× speedup
+    /// - Accelerate uses AMX coprocessor on Apple Silicon for 10-20x speedup
     ///
     /// **Complex arithmetic:**
     /// - (A + iB)(x + iy) = (Ax - By) + i(Ay + Bx)
@@ -491,7 +491,7 @@ public actor SparseHamiltonian {
     ///   - rows: Row indices (Int32 array)
     ///   - cols: Column indices (Int32 array)
     ///   - values: Matrix values (Double array)
-    ///   - dimension: Matrix dimension (N×N)
+    ///   - dimension: Matrix dimension (NxN)
     /// - Returns: Accelerate sparse matrix or nil if construction fails
     @_eagerMove
     private static func buildAccelerateSparseMatrix(
@@ -619,7 +619,7 @@ public actor SparseHamiltonian {
         columnIndices: MTLBuffer,
         values: MTLBuffer
     ) -> Double {
-        let float32State: [GPUComplex] = state.amplitudes.withUnsafeBufferPointer { complexBuffer in
+        let float32State: [(Float, Float)] = state.amplitudes.withUnsafeBufferPointer { complexBuffer in
             let doublePtr = UnsafeRawPointer(complexBuffer.baseAddress!)
                 .assumingMemoryBound(to: Double.self)
             let doubleCount = dimension * 2
@@ -631,19 +631,19 @@ public actor SparseHamiltonian {
 
             return floatBuffer.withUnsafeMutableBufferPointer { floatPtr in
                 let gpuPtr = UnsafeRawPointer(floatPtr.baseAddress!)
-                    .assumingMemoryBound(to: GPUComplex.self)
+                    .assumingMemoryBound(to: (Float, Float).self)
                 return Array(UnsafeBufferPointer(start: gpuPtr, count: dimension))
             }
         }
 
         guard let inputBuffer = device.makeBuffer(
             bytes: float32State,
-            length: dimension * MemoryLayout<GPUComplex>.stride,
+            length: dimension * MemoryLayout<(Float, Float)>.stride,
             options: .storageModeShared
         ) else { return observable.expectationValue(state: state) }
 
         guard let outputBuffer = device.makeBuffer(
-            length: dimension * MemoryLayout<GPUComplex>.stride,
+            length: dimension * MemoryLayout<(Float, Float)>.stride,
             options: .storageModeShared
         ) else { return observable.expectationValue(state: state) }
 
@@ -673,7 +673,7 @@ public actor SparseHamiltonian {
         commandBuffer.waitUntilCompleted()
 
         let outputPointer = outputBuffer.contents().bindMemory(
-            to: GPUComplex.self,
+            to: (Float, Float).self,
             capacity: dimension
         )
 
@@ -719,16 +719,16 @@ public actor SparseHamiltonian {
     /// 1. Split complex state |ψ⟩ = x + iy into real (x) and imaginary (y) vectors
     /// 2. Compute complex SpMV using 4 real operations:
     ///    - (A + iB)(x + iy) = (Ax - By) + i(Ay + Bx)
-    ///    - Ax: Real matrix × real vector (Accelerate SpMV)
-    ///    - By: Imaginary matrix × imaginary vector (Accelerate SpMV)
-    ///    - Ay: Real matrix × imaginary vector (Accelerate SpMV)
-    ///    - Bx: Imaginary matrix × real vector (Accelerate SpMV)
+    ///    - Ax: Real matrix x real vector (Accelerate SpMV)
+    ///    - By: Imaginary matrix x imaginary vector (Accelerate SpMV)
+    ///    - Ay: Real matrix x imaginary vector (Accelerate SpMV)
+    ///    - Bx: Imaginary matrix x real vector (Accelerate SpMV)
     /// 3. Combine: H|ψ⟩ = (Ax - By) + i(Ay + Bx)
     /// 4. Inner product: ⟨ψ|H|ψ⟩ = Σᵢ ψᵢ* · (H|ψ⟩)ᵢ
     ///
     /// **Performance:**
     /// - Accelerate uses AMX coprocessor on Apple Silicon (M1/M2/M3)
-    /// - 10-20× faster than manual loops for n<8 qubits
+    /// - 10-20x faster than manual loops for n<8 qubits
     /// - BLAS Level 2 optimizations: cache blocking, vectorization
     ///
     /// - Parameters:
@@ -883,12 +883,12 @@ public struct SparseMatrixStatistics: CustomStringConvertible, Sendable {
         Sparse Hamiltonian Statistics:
           Backend: \(backend)
           Qubits: \(numQubits)
-          Dimension: \(dimension) × \(dimension)
+          Dimension: \(dimension) x \(dimension)
           Non-zeros: \(nonZeros)
           Sparsity: \(sparsityPercent)
           Memory: \(memoryStr)
           Dense equivalent: \(String(format: "%.2f MB", denseMemoryMB))
-          Compression: \(String(format: "%.1f×", compressionRatio))
+          Compression: \(String(format: "%.1fx", compressionRatio))
         """
     }
 }

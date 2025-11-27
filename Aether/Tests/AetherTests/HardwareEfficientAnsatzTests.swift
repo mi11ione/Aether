@@ -61,7 +61,7 @@ struct HardwareEfficientAnsatzTests {
         #expect(ansatz.parameterCount() == 2)
     }
 
-    @Test("Full rotation gates (3× parameters)")
+    @Test("Full rotation gates (3x parameters)")
     func fullRotationGates() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1, rotationGates: .full)
 

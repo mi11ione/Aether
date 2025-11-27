@@ -1,28 +1,26 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-/// Shared validation utilities for quantum computing parameters
+/// Centralized validation utilities for quantum computing parameters
 ///
-/// Centralizes common precondition checks used throughout the quantum simulator.
-/// Ensures consistent error messages and validation logic across all modules.
-/// All validations use `precondition` which terminates on failure in debug builds
-/// and may be optimized away in release builds for performance.
+/// Provides consistent precondition checks used throughout the quantum simulator ensuring uniform
+/// error messages and validation logic across all modules. All validations use `precondition` which
+/// terminates on failure in debug builds and may be optimized away in release builds for zero runtime
+/// cost. Single source of truth for validation rules prevents inconsistent error handling.
 ///
-/// **Design Philosophy**:
-/// - Consistent error messages across codebase
-/// - Single source of truth for validation rules
-/// - Zero runtime cost in optimized builds (precondition inlining)
-/// - Clear, actionable error messages for developers
-@frozen
+/// **Example**:
+/// ```swift
+/// ValidationUtilities.validatePositiveQubits(numQubits)
+/// ValidationUtilities.validateQubitIndex(qubit, numQubits: state.numQubits)
+/// ValidationUtilities.validateNormalizedState(state)
+/// ValidationUtilities.validateUnitary(gateMatrix)
+/// ```
 public enum ValidationUtilities {
     /// Validate that number of qubits is positive (at least 1)
     ///
-    /// Quantum circuits require at least one qubit to be meaningful.
-    /// Maximum practical limit is typically 30 qubits due to memory constraints
-    /// (2^30 = 1GB of Complex<Double> amplitudes).
-    ///
     /// - Parameter numQubits: Number of qubits to validate
     /// - Precondition: numQubits must be > 0
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -32,11 +30,10 @@ public enum ValidationUtilities {
 
     /// Validate that number of qubits is within memory limits
     ///
-    /// States with >30 qubits require >8GB memory for amplitude storage.
-    /// Enforces practical upper bound to prevent memory exhaustion.
-    ///
     /// - Parameter numQubits: Number of qubits to validate
     /// - Precondition: numQubits must be <= 30
+    /// - Complexity: O(1)
+    /// - Note: 30-qubit limit = 2^30 amplitudes = ~8GB for Complex<Double>
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -49,12 +46,9 @@ public enum ValidationUtilities {
 
     /// Validate that quantum state satisfies normalization constraint
     ///
-    /// All valid quantum states must have Σᵢ |cᵢ|² = 1 for Born rule probability
-    /// interpretation. Non-normalized states indicate numerical errors or invalid
-    /// state construction.
-    ///
     /// - Parameter state: Quantum state to validate
     /// - Precondition: state must be normalized (within 1e-10 tolerance)
+    /// - Complexity: O(1) - delegates to state.isNormalized()
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -67,14 +61,12 @@ public enum ValidationUtilities {
 
     /// Validate that index is within bounds [0, bound)
     ///
-    /// Generic bounds check for indices, qubit indices, array access, state space indices, etc.
-    /// Validates that index is non-negative and strictly less than the upper bound.
-    ///
     /// - Parameters:
     ///   - index: Index to validate
     ///   - bound: Upper bound (exclusive)
     ///   - name: Descriptive name for error message
     /// - Precondition: 0 <= index < bound
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -87,13 +79,11 @@ public enum ValidationUtilities {
 
     /// Validate that qubit index is within bounds
     ///
-    /// Single-qubit operations must operate on valid qubit index.
-    /// Checks that index is non-negative and less than total qubit count.
-    ///
     /// - Parameters:
     ///   - qubit: Qubit index to validate
     ///   - numQubits: Total number of qubits in system
     /// - Precondition: 0 <= qubit < numQubits
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -106,13 +96,11 @@ public enum ValidationUtilities {
 
     /// Validate that all qubits in operation are within bounds
     ///
-    /// Multi-qubit gates (CNOT, Toffoli, etc.) must operate on valid qubit indices.
-    /// Checks that all indices are non-negative and less than total qubit count.
-    ///
     /// - Parameters:
     ///   - qubits: Array of qubit indices to validate
     ///   - numQubits: Total number of qubits in system
     /// - Precondition: All qubits must satisfy 0 <= qubit < numQubits
+    /// - Complexity: O(k) where k = qubits.count
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -125,12 +113,27 @@ public enum ValidationUtilities {
 
     // MARK: - Numeric Validations
 
+    /// Validate that complex number denominator is non-zero for division
+    ///
+    /// - Parameters:
+    ///   - magnitudeSquared: Magnitude squared of denominator
+    ///   - threshold: Division threshold below which denominator is considered zero
+    /// - Precondition: magnitudeSquared > threshold
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateComplexDivisionByZero<T: BinaryFloatingPoint>(_ magnitudeSquared: T, threshold: T) {
+        precondition(magnitudeSquared > threshold, "Complex division by zero")
+    }
+
     /// Validate that integer value is positive
     ///
     /// - Parameters:
     ///   - value: Value to validate
     ///   - name: Parameter name for error message
     /// - Precondition: value > 0
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -144,6 +147,7 @@ public enum ValidationUtilities {
     ///   - value: Value to validate
     ///   - name: Parameter name for error message
     /// - Precondition: value >= 0
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -157,6 +161,7 @@ public enum ValidationUtilities {
     ///   - value: Value to validate
     ///   - name: Parameter name for error message
     /// - Precondition: value > 0
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -170,6 +175,7 @@ public enum ValidationUtilities {
     ///   - value: Value to validate
     ///   - name: Parameter name for error message
     /// - Precondition: value >= 0
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -184,6 +190,7 @@ public enum ValidationUtilities {
     ///   - max: Maximum allowed value (inclusive)
     ///   - name: Parameter name for error message
     /// - Precondition: value <= max
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -198,6 +205,7 @@ public enum ValidationUtilities {
     ///   - min: Minimum allowed value (inclusive)
     ///   - name: Parameter name for error message
     /// - Precondition: value >= min
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -213,6 +221,7 @@ public enum ValidationUtilities {
     ///   - max: Maximum allowed value (exclusive)
     ///   - name: Parameter name for error message
     /// - Precondition: min <= value < max
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -228,6 +237,7 @@ public enum ValidationUtilities {
     ///   - max: Maximum allowed value (inclusive)
     ///   - name: Parameter name for error message
     /// - Precondition: min < value <= max
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -243,6 +253,7 @@ public enum ValidationUtilities {
     ///   - array: Array to validate
     ///   - name: Array name for error message
     /// - Precondition: !array.isEmpty
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -256,6 +267,7 @@ public enum ValidationUtilities {
     ///   - array: Array to validate
     ///   - name: Array name for error message
     /// - Precondition: All elements must be 0 or 1
+    /// - Complexity: O(n)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -269,6 +281,7 @@ public enum ValidationUtilities {
     ///   - array: Binary array to validate
     ///   - name: Array name for error message
     /// - Precondition: array.contains(1)
+    /// - Complexity: O(n)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -281,6 +294,7 @@ public enum ValidationUtilities {
     /// - Parameters:
     ///   - qubits: Qubit indices to validate
     /// - Precondition: All qubits >= 0
+    /// - Complexity: O(n)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -293,6 +307,7 @@ public enum ValidationUtilities {
     /// - Parameters:
     ///   - qubits: Qubit indices to validate
     /// - Precondition: No duplicate qubit indices
+    /// - Complexity: O(1) for 2-3 qubits, O(n) for larger arrays
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -319,6 +334,7 @@ public enum ValidationUtilities {
     ///   - name1: First array name for error message
     ///   - name2: Second array name for error message
     /// - Precondition: array1.count == array2.count
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -330,6 +346,13 @@ public enum ValidationUtilities {
     }
 
     /// Validate array count matches expected value
+    ///
+    /// - Parameters:
+    ///   - array: Array to validate
+    ///   - expected: Expected count
+    ///   - name: Array name for error message
+    /// - Precondition: array.count == expected
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -348,13 +371,14 @@ public enum ValidationUtilities {
     ///   - matrix: Matrix to validate
     ///   - name: Matrix name for error message
     /// - Precondition: All rows have same length as number of rows
+    /// - Complexity: O(n) to check all rows
     @_effects(readonly)
     @inlinable
     @inline(__always)
     static func validateSquareMatrix(_ matrix: [[some Any]], name: String) {
         precondition(!matrix.isEmpty, "\(name) must not be empty")
         let n = matrix.count
-        precondition(matrix.allSatisfy { $0.count == n }, "\(name) must be square (got \(matrix.count)×\(matrix[0].count))")
+        precondition(matrix.allSatisfy { $0.count == n }, "\(name) must be square (got \(matrix.count)x\(matrix[0].count))")
     }
 
     /// Validate that two matrices have same dimensions
@@ -365,6 +389,7 @@ public enum ValidationUtilities {
     ///   - name1: First matrix name
     ///   - name2: Second matrix name
     /// - Precondition: Matrices must have same dimensions
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -372,7 +397,7 @@ public enum ValidationUtilities {
         precondition(!matrix1.isEmpty && !matrix2.isEmpty, "Matrices must not be empty")
         precondition(
             matrix1.count == matrix2.count,
-            "\(name1) and \(name2) must have same dimensions (got \(matrix1.count)×\(matrix1[0].count) and \(matrix2.count)×\(matrix2[0].count))"
+            "\(name1) and \(name2) must have same dimensions (got \(matrix1.count)x\(matrix1[0].count) and \(matrix2.count)x\(matrix2[0].count))"
         )
     }
 
@@ -381,6 +406,7 @@ public enum ValidationUtilities {
     /// - Parameters:
     ///   - dimension: Matrix dimension
     /// - Precondition: dimension > 0
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -390,20 +416,20 @@ public enum ValidationUtilities {
 
     /// Validate that square matrix has expected dimension
     ///
-    /// Used for batch unitary validation where all matrices must match state space size.
-    ///
     /// - Parameters:
     ///   - matrix: Square matrix to validate
     ///   - expected: Expected dimension (rows and columns)
     ///   - name: Matrix name for error message
     /// - Precondition: matrix.count == expected
+    /// - Complexity: O(1)
+    /// - Note: Used for batch unitary validation where all matrices must match state space size
     @_effects(readonly)
     @inlinable
     @inline(__always)
     static func validateMatrixDimensionEquals(_ matrix: [[some Any]], expected: Int, name: String) {
         precondition(
             matrix.count == expected,
-            "\(name) dimension must be \(expected)×\(expected) (got \(matrix.count)×\(matrix.count))"
+            "\(name) dimension must be \(expected)x\(expected) (got \(matrix.count)x\(matrix.count))"
         )
     }
 
@@ -415,6 +441,7 @@ public enum ValidationUtilities {
     ///   - probabilities: Probability distribution
     ///   - tolerance: Numerical tolerance (default 1e-10)
     /// - Precondition: abs(sum - 1.0) < tolerance
+    /// - Complexity: O(n)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -434,6 +461,7 @@ public enum ValidationUtilities {
     ///   - value: Value to validate
     ///   - name: Descriptive name for error message
     /// - Precondition: value == 0 || value == 1
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -445,10 +473,11 @@ public enum ValidationUtilities {
     ///
     /// - Parameter basisState: Basis state vector
     /// - Precondition: basisState.count == 2
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateTwoComponentBasis(_ basisState: AmplitudeVector) {
+    static func validateTwoComponentBasis(_ basisState: [Complex<Double>]) {
         precondition(basisState.count == 2, "Basis state must have 2 components (got \(basisState.count))")
     }
 
@@ -458,10 +487,11 @@ public enum ValidationUtilities {
     ///   - basisState: Basis state vector
     ///   - tolerance: Numerical tolerance (default 1e-10)
     /// - Precondition: abs(norm - 1.0) < tolerance
+    /// - Complexity: O(n) where n = basisState.count
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateNormalizedBasis(_ basisState: AmplitudeVector, tolerance: Double = 1e-10) {
+    static func validateNormalizedBasis(_ basisState: [Complex<Double>], tolerance: Double = 1e-10) {
         let norm = basisState.reduce(0.0) { $0 + $1.magnitudeSquared }
         precondition(abs(norm - 1.0) < tolerance, "Basis state must be normalized (got norm² = \(norm))")
     }
@@ -470,6 +500,7 @@ public enum ValidationUtilities {
     ///
     /// - Parameter qubits: Qubit array
     /// - Precondition: qubits.count == 1
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -483,10 +514,11 @@ public enum ValidationUtilities {
     ///   - amplitudes: Amplitude array
     ///   - numQubits: Number of qubits
     /// - Precondition: amplitudes.count == (1 << numQubits)
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateAmplitudeCount(_ amplitudes: AmplitudeVector, numQubits: Int) {
+    static func validateAmplitudeCount(_ amplitudes: [Complex<Double>], numQubits: Int) {
         let expectedCount = 1 << numQubits
         precondition(
             amplitudes.count == expectedCount,
@@ -501,6 +533,7 @@ public enum ValidationUtilities {
     ///   - required: Required number of qubits
     ///   - exact: If true, require exact match; if false, require minimum (default: false)
     /// - Precondition: exact ? state.numQubits == required : state.numQubits >= required
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -524,6 +557,7 @@ public enum ValidationUtilities {
     ///   - numOnes: Number of qubits in |1⟩ state
     ///   - numQubits: Total number of qubits
     /// - Precondition: 0 <= numOnes <= numQubits
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -542,6 +576,7 @@ public enum ValidationUtilities {
     ///   - string: String to validate
     ///   - name: String name for error message
     /// - Precondition: !string.isEmpty
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -551,15 +586,33 @@ public enum ValidationUtilities {
 
     // MARK: - Circuit Validations
 
-    /// Validate that circuit passes validation
+    /// Validate circuit operations and qubit indices
     ///
-    /// - Parameter isValid: Result of circuit.validate()
-    /// - Precondition: isValid == true
+    /// Checks that all operations have valid qubit indices within circuit bounds and that
+    /// gates are properly formed. Central validation for quantum circuits before execution.
+    ///
+    /// - Parameters:
+    ///   - operations: Array of gate operations to validate
+    ///   - numQubits: Number of qubits in the circuit
+    /// - Precondition: All operation qubits must be in range [0, numQubits)
+    /// - Precondition: All gates must validate against maxAllowedQubit (29 for 30-qubit limit)
+    /// - Complexity: O(n x m) where n = operations count, m = qubits per operation
     @_effects(readonly)
     @inlinable
-    @inline(__always)
-    static func validateCircuit(_ isValid: Bool) {
-        precondition(isValid, "Circuit validation failed")
+    static func validateCircuitOperations(_ operations: [GateOperation], numQubits: Int) {
+        let maxAllowedQubit = 29
+
+        for operation in operations {
+            precondition(
+                operation.qubits.allSatisfy { $0 >= 0 && $0 < numQubits },
+                "Circuit operation has qubit index out of bounds [0, \(numQubits))"
+            )
+
+            precondition(
+                operation.gate.validateQubitIndices(operation.qubits, maxAllowedQubit: maxAllowedQubit),
+                "Gate \(operation.gate) has invalid qubit configuration"
+            )
+        }
     }
 
     /// Validate that up-to index is within operation count bounds
@@ -568,6 +621,7 @@ public enum ValidationUtilities {
     ///   - upToIndex: Index to validate
     ///   - operationCount: Total number of operations
     /// - Precondition: 0 <= upToIndex <= operationCount
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -582,6 +636,7 @@ public enum ValidationUtilities {
     ///
     /// - Parameter qubitsRequired: Number of qubits required by gate
     /// - Precondition: qubitsRequired == 1
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -600,6 +655,7 @@ public enum ValidationUtilities {
     ///   - max: Maximum allowed qubits
     ///   - algorithmName: Algorithm name for error message
     /// - Precondition: numQubits <= max
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -614,6 +670,7 @@ public enum ValidationUtilities {
     ///   - min: Minimum required qubits
     ///   - algorithmName: Algorithm name for error message
     /// - Precondition: numQubits >= min
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -632,6 +689,7 @@ public enum ValidationUtilities {
     ///   - initialRadius: Initial trust region radius
     ///   - maxRadius: Maximum trust region radius
     /// - Precondition: minRadius < initialRadius <= maxRadius
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -654,6 +712,7 @@ public enum ValidationUtilities {
     ///   - acceptRatio: Threshold for accepting steps
     ///   - expandRatio: Threshold for expanding trust region
     /// - Precondition: acceptRatio < expandRatio
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -675,6 +734,7 @@ public enum ValidationUtilities {
     ///   - vertex1: First vertex index
     ///   - vertex2: Second vertex index
     /// - Precondition: vertex1 != vertex2
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -693,6 +753,7 @@ public enum ValidationUtilities {
     ///   - allocation: Allocation dictionary
     ///   - index: Required index
     /// - Precondition: allocation[index] != nil
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -704,6 +765,7 @@ public enum ValidationUtilities {
     ///
     /// - Parameter bypass: Bypass validation flag
     /// - Precondition: bypass == true
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -717,6 +779,7 @@ public enum ValidationUtilities {
     ///   - count: Number of qubit indices parsed from the key
     ///   - key: Original key string for error message
     /// - Precondition: count == 1 || count == 2
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -739,6 +802,7 @@ public enum ValidationUtilities {
     ///   - expected: Expected vector length
     ///   - name: Parameter name for error message (default: "Parameter vector")
     /// - Precondition: actual == expected
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -757,6 +821,7 @@ public enum ValidationUtilities {
     ///   - parameterName: Name of parameter to check
     ///   - parameterSet: Set of valid parameter names in circuit
     /// - Precondition: parameterSet.contains(parameterName)
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -764,32 +829,34 @@ public enum ValidationUtilities {
         precondition(parameterSet.contains(parameterName), "Parameter '\(parameterName)' not found in circuit")
     }
 
-    /// Validate that matrix is 2×2 for single-qubit gates
+    /// Validate that matrix is 2x2 for single-qubit gates
     ///
     /// - Parameter matrix: Matrix to validate
-    /// - Precondition: matrix is 2×2
+    /// - Precondition: matrix is 2x2
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validate2x2Matrix(_ matrix: GateMatrix) {
-        precondition(matrix.count == 2, "Single-qubit gate requires 2×2 matrix (got \(matrix.count) rows)")
-        precondition(matrix[0].count == 2, "Single-qubit gate requires 2×2 matrix (row 0 has \(matrix[0].count) columns)")
-        precondition(matrix[1].count == 2, "Single-qubit gate requires 2×2 matrix (row 1 has \(matrix[1].count) columns)")
+    static func validate2x2Matrix(_ matrix: [[Complex<Double>]]) {
+        precondition(matrix.count == 2, "Single-qubit gate requires 2x2 matrix (got \(matrix.count) rows)")
+        precondition(matrix[0].count == 2, "Single-qubit gate requires 2x2 matrix (row 0 has \(matrix[0].count) columns)")
+        precondition(matrix[1].count == 2, "Single-qubit gate requires 2x2 matrix (row 1 has \(matrix[1].count) columns)")
     }
 
-    /// Validate that matrix is 4×4 for two-qubit gates
+    /// Validate that matrix is 4x4 for two-qubit gates
     ///
     /// - Parameter matrix: Matrix to validate
-    /// - Precondition: matrix is 4×4
+    /// - Precondition: matrix is 4x4
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validate4x4Matrix(_ matrix: GateMatrix) {
-        precondition(matrix.count == 4, "Two-qubit gate requires 4×4 matrix (got \(matrix.count) rows)")
-        precondition(matrix[0].count == 4, "Two-qubit gate requires 4×4 matrix (row 0 has \(matrix[0].count) columns)")
-        precondition(matrix[1].count == 4, "Two-qubit gate requires 4×4 matrix (row 1 has \(matrix[1].count) columns)")
-        precondition(matrix[2].count == 4, "Two-qubit gate requires 4×4 matrix (row 2 has \(matrix[2].count) columns)")
-        precondition(matrix[3].count == 4, "Two-qubit gate requires 4×4 matrix (row 3 has \(matrix[3].count) columns)")
+    static func validate4x4Matrix(_ matrix: [[Complex<Double>]]) {
+        precondition(matrix.count == 4, "Two-qubit gate requires 4x4 matrix (got \(matrix.count) rows)")
+        precondition(matrix[0].count == 4, "Two-qubit gate requires 4x4 matrix (row 0 has \(matrix[0].count) columns)")
+        precondition(matrix[1].count == 4, "Two-qubit gate requires 4x4 matrix (row 1 has \(matrix[1].count) columns)")
+        precondition(matrix[2].count == 4, "Two-qubit gate requires 4x4 matrix (row 2 has \(matrix[2].count) columns)")
+        precondition(matrix[3].count == 4, "Two-qubit gate requires 4x4 matrix (row 3 has \(matrix[3].count) columns)")
     }
 
     /// Validate that matrix is unitary (U†U = I)
@@ -798,10 +865,11 @@ public enum ValidationUtilities {
     ///
     /// - Parameter matrix: Matrix to validate
     /// - Precondition: matrix must be unitary within tolerance (1e-10)
+    /// - Complexity: O(n³) where n = matrix dimension (2 for single-qubit, 4 for two-qubit gates)
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateUnitary(_ matrix: GateMatrix) {
+    static func validateUnitary(_ matrix: [[Complex<Double>]]) {
         precondition(QuantumGate.isUnitary(matrix), "Matrix is not unitary (U†U ≠ I)")
     }
 
@@ -814,6 +882,7 @@ public enum ValidationUtilities {
     ///   - parameterName: Name of parameter to check
     ///   - bindings: Dictionary of parameter bindings
     /// - Precondition: bindings[parameterName] != nil
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -834,6 +903,7 @@ public enum ValidationUtilities {
     ///   - parameters: Array of parameters in the circuit
     ///   - parameterSet: Set of parameter names for O(1) lookup
     /// - Precondition: bindings keys exactly match parameter names
+    /// - Complexity: O(n + m) where n = parameters.count, m = bindings.count
     @_effects(readonly)
     @inlinable
     @inline(__always)

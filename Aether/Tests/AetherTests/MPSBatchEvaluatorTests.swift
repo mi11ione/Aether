@@ -21,7 +21,7 @@ struct MPSBatchEvaluatorTests {
     @Test("Single circuit batch evaluation")
     func singleCircuitBatch() async {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
         let initialState = QuantumState(numQubits: 2)
@@ -45,13 +45,13 @@ struct MPSBatchEvaluatorTests {
     @Test("Multiple circuits batch evaluation")
     func multipleCircuitsBatch() async {
         var circuit1 = QuantumCircuit(numQubits: 2)
-        circuit1.append(gate: .hadamard, toQubit: 0)
+        circuit1.append(.hadamard, to: 0)
 
         var circuit2 = QuantumCircuit(numQubits: 2)
-        circuit2.append(gate: .pauliX, toQubit: 0)
+        circuit2.append(.pauliX, to: 0)
 
         var circuit3 = QuantumCircuit(numQubits: 2)
-        circuit3.append(gate: .pauliZ, toQubit: 1)
+        circuit3.append(.pauliZ, to: 1)
 
         let unitaries = [
             CircuitUnitary.computeUnitary(circuit: circuit1),
@@ -88,7 +88,7 @@ struct MPSBatchEvaluatorTests {
 
         let circuit1 = QuantumCircuit(numQubits: 2)
         var circuit2 = QuantumCircuit(numQubits: 2)
-        circuit2.append(gate: .pauliX, toQubit: 0)
+        circuit2.append(.pauliX, to: 0)
 
         let unitaries = [
             CircuitUnitary.computeUnitary(circuit: circuit1),
@@ -122,7 +122,7 @@ struct MPSBatchEvaluatorTests {
 
         let circuit1 = QuantumCircuit(numQubits: 2)
         var circuit2 = QuantumCircuit(numQubits: 2)
-        circuit2.append(gate: .hadamard, toQubit: 0)
+        circuit2.append(.hadamard, to: 0)
 
         let unitaries = [
             CircuitUnitary.computeUnitary(circuit: circuit1),
@@ -149,8 +149,8 @@ struct MPSBatchEvaluatorTests {
     @Test("Three-qubit circuit batch evaluation")
     func threeQubitBatch() async {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.cnot, to: [0, 1])
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
         let initialState = QuantumState(numQubits: 3)
@@ -227,8 +227,8 @@ struct MPSBatchEvaluatorTests {
     @Test("Bell state preparation batch")
     func bellStateBatch() async {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.cnot, to: [0, 1])
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
         let initialState = QuantumState(numQubits: 2)
@@ -242,8 +242,8 @@ struct MPSBatchEvaluatorTests {
         let inv_sqrt2 = 1.0 / sqrt(2.0)
         #expect(abs(results[0].amplitudes[0].real - inv_sqrt2) < 1e-5)
         #expect(abs(results[0].amplitudes[3].real - inv_sqrt2) < 1e-5)
-        #expect(abs(results[0].amplitudes[1].magnitude()) < 1e-5)
-        #expect(abs(results[0].amplitudes[2].magnitude()) < 1e-5)
+        #expect(abs(results[0].amplitudes[1].magnitude) < 1e-5)
+        #expect(abs(results[0].amplitudes[2].magnitude) < 1e-5)
     }
 
     @Test("Rotation sweep batch evaluation")
@@ -253,7 +253,7 @@ struct MPSBatchEvaluatorTests {
 
         for angle in angles {
             var circuit = QuantumCircuit(numQubits: 2)
-            circuit.append(gate: .rotationY(theta: angle), toQubit: 0)
+            circuit.append(.rotationY(theta: angle), to: 0)
             circuits.append(circuit)
         }
 
@@ -277,7 +277,7 @@ struct MPSBatchEvaluatorTests {
     @Test("Four-qubit batch evaluation")
     func fourQubitBatch() async {
         var circuit = QuantumCircuit(numQubits: 4)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
         let initialState = QuantumState(numQubits: 4)
@@ -313,15 +313,15 @@ struct MPSBatchEvaluatorTests {
 
         for result in results {
             #expect(abs(result.amplitudes[0].real - 1.0) < 1e-5)
-            #expect(abs(result.amplitudes[1].magnitude()) < 1e-5)
+            #expect(abs(result.amplitudes[1].magnitude) < 1e-5)
         }
     }
 
     @Test("Batch evaluation preserves normalization")
     func preservesNormalization() async {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .rotationY(theta: .pi / 4), toQubit: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.rotationY(theta: .pi / 4), to: 1)
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
         let initialState = QuantumState(numQubits: 2)
@@ -334,7 +334,7 @@ struct MPSBatchEvaluatorTests {
 
         var norm = 0.0
         for amplitude in results[0].amplitudes {
-            norm += amplitude.magnitude() * amplitude.magnitude()
+            norm += amplitude.magnitude * amplitude.magnitude
         }
 
         #expect(abs(norm - 1.0) < 1e-5)
@@ -353,7 +353,7 @@ struct MPSBatchEvaluatorTests {
         )
 
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
         let initialState = QuantumState(numQubits: 2)
@@ -386,9 +386,9 @@ struct MPSBatchEvaluatorTests {
     @Test("Batch with Toffoli gate")
     func batchWithToffoli() async {
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .pauliX, toQubit: 1)
-        circuit.append(gate: .toffoli(control1: 0, control2: 1, target: 2), qubits: [])
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.pauliX, to: 1)
+        circuit.append(.toffoli, to: [0, 1, 2])
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
         let initialState = QuantumState(numQubits: 3)
@@ -408,11 +408,11 @@ struct MPSBatchEvaluatorTests {
     @Test("Batch evaluation with custom initial state")
     func customInitialState() async {
         var prepCircuit = QuantumCircuit(numQubits: 2)
-        prepCircuit.append(gate: .pauliX, toQubit: 0)
+        prepCircuit.append(.pauliX, to: 0)
         let initialState = prepCircuit.execute()
 
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 1)
+        circuit.append(.hadamard, to: 1)
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
@@ -422,7 +422,7 @@ struct MPSBatchEvaluatorTests {
             initialState: initialState
         )
 
-        prepCircuit.append(gate: .hadamard, toQubit: 1)
+        prepCircuit.append(.hadamard, to: 1)
         let expected = prepCircuit.execute()
 
         for i in 0 ..< 4 {
@@ -433,7 +433,7 @@ struct MPSBatchEvaluatorTests {
     @Test("Large angle rotation batch")
     func largeAngleRotation() async {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .rotationX(theta: 2 * .pi), toQubit: 0)
+        circuit.append(.rotationX(theta: 2 * .pi), to: 0)
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
         let initialState = QuantumState(numQubits: 2)
@@ -452,7 +452,7 @@ struct MPSBatchEvaluatorTests {
         var circuits: [QuantumCircuit] = []
         for i in 0 ..< 5 {
             var circuit = QuantumCircuit(numQubits: 2)
-            circuit.append(gate: .rotationY(theta: Double(i) * .pi / 4), toQubit: 0)
+            circuit.append(.rotationY(theta: Double(i) * .pi / 4), to: 0)
             circuits.append(circuit)
         }
 
@@ -486,7 +486,7 @@ struct MPSBatchEvaluatorTests {
 
         for i in 0 ..< batchSize {
             var circuit = QuantumCircuit(numQubits: 2)
-            circuit.append(gate: .rotationY(theta: Double(i) * 0.01), toQubit: 0)
+            circuit.append(.rotationY(theta: Double(i) * 0.01), to: 0)
             circuits.append(circuit)
         }
 
@@ -542,8 +542,8 @@ struct MPSBatchEvaluatorTests {
         var circuits: [QuantumCircuit] = []
         for i in 0 ..< 25 {
             var circuit = QuantumCircuit(numQubits: 2)
-            circuit.append(gate: .rotationX(theta: Double(i) * 0.1), toQubit: 0)
-            circuit.append(gate: .hadamard, toQubit: 1)
+            circuit.append(.rotationX(theta: Double(i) * 0.1), to: 0)
+            circuit.append(.hadamard, to: 1)
             circuits.append(circuit)
         }
 
@@ -560,7 +560,7 @@ struct MPSBatchEvaluatorTests {
         for (index, result) in results.enumerated() {
             var sumProbabilities = 0.0
             for amplitude in result.amplitudes {
-                sumProbabilities += amplitude.magnitude() * amplitude.magnitude()
+                sumProbabilities += amplitude.magnitude * amplitude.magnitude
             }
             #expect(
                 abs(sumProbabilities - 1.0) < 1e-5,

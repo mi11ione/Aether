@@ -78,7 +78,7 @@ public struct QAOAAnsatz {
     /// Create QAOA ansatz circuit
     ///
     /// Constructs parameterized quantum circuit implementing QAOA structure:
-    /// initial superposition + alternating problem/mixer layers × depth.
+    /// initial superposition + alternating problem/mixer layers x depth.
     ///
     /// **Algorithm:**
     /// 1. Apply Hadamard to all qubits: |0⟩^⊗n -> |+⟩^⊗n
@@ -142,7 +142,7 @@ public struct QAOAAnsatz {
 
         // Initial state: |+⟩^⊗n (equal superposition)
         for qubit in 0 ..< numQubits {
-            circuit.append(gate: .concrete(.hadamard), toQubit: qubit)
+            circuit.append(gate: .concrete(.hadamard), qubit: qubit)
         }
 
         // Alternating problem and mixer layers
@@ -254,11 +254,11 @@ public struct QAOAAnsatz {
 
                 switch op.basis {
                 case .z: break
-                case .x: circuit.append(gate: .concrete(.hadamard), toQubit: op.qubit)
+                case .x: circuit.append(gate: .concrete(.hadamard), qubit: op.qubit)
                 case .y:
                     circuit.append(
                         gate: .concrete(.rotationX(theta: -.pi / 2)),
-                        toQubit: op.qubit
+                        qubit: op.qubit
                     )
                 }
             }
@@ -280,7 +280,7 @@ public struct QAOAAnsatz {
             // Single-qubit case: exp(-iθ·c·Z) = Rz(2·θ·c)
             circuit.append(
                 gate: .rotationZ(theta: .parameter(scaledParameter)),
-                toQubit: qubits[0]
+                qubit: qubits[0]
             )
         } else {
             // Multi-qubit case: CNOT ladder + Rz + reverse ladder
@@ -288,22 +288,22 @@ public struct QAOAAnsatz {
             // Forward CNOT ladder: entangle qubits
             for i in 0 ..< (qubits.count - 1) {
                 circuit.append(
-                    gate: .concrete(.cnot(control: qubits[i], target: qubits[i + 1])),
-                    qubits: []
+                    gate: .concrete(.cnot),
+                    qubits: [qubits[i], qubits[i + 1]]
                 )
             }
 
             // Rotation on last qubit: Rz(2·θ·c)
             circuit.append(
                 gate: .rotationZ(theta: .parameter(scaledParameter)),
-                toQubit: qubits[qubits.count - 1]
+                qubit: qubits[qubits.count - 1]
             )
 
             // Reverse CNOT ladder: disentangle
             for i in stride(from: qubits.count - 2, through: 0, by: -1) {
                 circuit.append(
-                    gate: .concrete(.cnot(control: qubits[i], target: qubits[i + 1])),
-                    qubits: []
+                    gate: .concrete(.cnot),
+                    qubits: [qubits[i], qubits[i + 1]]
                 )
             }
         }
@@ -316,13 +316,13 @@ public struct QAOAAnsatz {
 
             case .x:
                 // Reverse: H (Hadamard is self-inverse)
-                circuit.append(gate: .concrete(.hadamard), toQubit: op.qubit)
+                circuit.append(gate: .concrete(.hadamard), qubit: op.qubit)
 
             case .y:
                 // Reverse: Rx(+π/2)
                 circuit.append(
                     gate: .concrete(.rotationX(theta: .pi / 2)),
-                    toQubit: op.qubit
+                    qubit: op.qubit
                 )
             }
         }

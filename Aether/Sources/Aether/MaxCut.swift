@@ -20,7 +20,7 @@
 /// H_p = -½ Σ_{(i,j)∈E} ZᵢZⱼ  (minimization equivalent to MaxCut)
 ///
 /// **Properties:**
-/// - Minimizing H_p ↔ Maximizing cut size
+/// - Minimizing H_p <-> Maximizing cut size
 /// - Ground state energy: E₀ = -maxcut/2
 /// - MaxCut value: maxcut = -2·E₀
 ///
@@ -76,7 +76,7 @@ public struct MaxCut {
     ///
     /// **Edge encoding:**
     /// - Each edge (i,j) contributes term: -0.5·Z_i⊗Z_j
-    /// - Coefficient -0.5 ensures: min H_p ↔ max cut
+    /// - Coefficient -0.5 ensures: min H_p <-> max cut
     /// - ZᵢZⱼ = +1 if qubits in same state (not cut)
     /// - ZᵢZⱼ = -1 if qubits in different states (cut)
     ///

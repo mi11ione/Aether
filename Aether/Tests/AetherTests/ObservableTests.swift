@@ -43,7 +43,7 @@ struct ObservableHermitianTests {
         )
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .pauliX, toQubit: 0)
+        circuit.append(.pauliX, to: 0)
         let state = circuit.execute()
 
         let expectation = observable.expectationValue(state: state)
@@ -58,7 +58,7 @@ struct ObservableHermitianTests {
         )
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
         let expectation = observable.expectationValue(state: state)
@@ -73,8 +73,8 @@ struct ObservableHermitianTests {
         )
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .pauliX, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
         let expectation = observable.expectationValue(state: state)
@@ -89,8 +89,8 @@ struct ObservableHermitianTests {
         )
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .sGate, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.sGate, to: 0)
         let state = circuit.execute()
 
         let expectation = observable.expectationValue(state: state)
@@ -163,7 +163,7 @@ struct ObservableHermitianTests {
         )
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
         let expectation = observable.expectationValue(state: state)
@@ -236,7 +236,7 @@ struct ObservableVarianceTests {
         )
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
         let variance = observable.variance(state: state)
@@ -252,8 +252,8 @@ struct ObservableVarianceTests {
         ])
 
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .rotationY(theta: 0.5), toQubit: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.rotationY(theta: 0.5), to: 1)
         let state = circuit.execute()
 
         let variance = observable.variance(state: state)
@@ -269,8 +269,8 @@ struct ObservableVarianceTests {
         )
 
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.hadamard, to: 1)
         let state = circuit.execute()
 
         let variance = observable.variance(state: state)
@@ -286,8 +286,8 @@ struct ObservableVarianceTests {
         ])
 
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.hadamard, to: 1)
         let state = circuit.execute()
 
         let variance = observable.variance(state: state)
@@ -322,7 +322,7 @@ struct ObservablePauliMultiplicationTests {
         )
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
         let variance = observable.variance(state: state)
@@ -341,8 +341,8 @@ struct ObservablePauliMultiplicationTests {
         )
 
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.hadamard, to: 1)
         let state = circuit.execute()
 
         let variance = observable.variance(state: state)
@@ -358,7 +358,7 @@ struct ObservablePauliMultiplicationTests {
         ])
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
         let variance = observable.variance(state: state)
@@ -385,7 +385,7 @@ struct ObservablePauliMultiplicationTests {
         ])
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
         let variance = observable.variance(state: state)

@@ -147,7 +147,7 @@ public struct Observable: CustomStringConvertible, Sendable {
         for i in 0 ..< rotatedState.stateSpaceSize {
             let parity = (i & qubitMask).nonzeroBitCount & 1
             let eigenvalue = 1 - 2 * parity
-            expectation += Double(eigenvalue) * rotatedState.probability(ofState: i)
+            expectation += Double(eigenvalue) * rotatedState.probability(of: i)
         }
 
         return expectation

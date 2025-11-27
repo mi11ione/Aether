@@ -12,8 +12,8 @@ func demoBellState() {
 
     let start = Date()
     var circuit = QuantumCircuit(numQubits: 2)
-    circuit.append(gate: .hadamard, toQubit: 0)
-    circuit.append(gate: .cnot(control: 0, target: 1), qubits: [0, 1])
+    circuit.append(.hadamard, to: 0)
+    circuit.append(.cnot, to: [0, 1])
     let state = circuit.execute()
     let elapsed = Date().timeIntervalSince(start)
 
@@ -21,9 +21,9 @@ func demoBellState() {
 
     for i in 0 ..< state.amplitudes.count {
         let amp = state.amplitudes[i]
-        if abs(amp.magnitude()) > 1e-10 {
+        if abs(amp.magnitude) > 1e-10 {
             let basis = String(i, radix: 2).padLeft(toLength: 2, withPad: "0")
-            print("  |\(basis)⟩: \(String(format: "%.4f", amp.magnitude()))")
+            print("  |\(basis)⟩: \(String(format: "%.4f", amp.magnitude))")
         }
     }
 
@@ -84,14 +84,14 @@ func demoLargeHamiltonian() async {
     let sparseH = SparseHamiltonian(observable: observable)
 
     print("Sparse matrix: \(sparseH.nnz) non-zeros")
-    print("Complexity: \(terms.count) terms × 256 states = \(terms.count * 256) operations\n")
+    print("Complexity: \(terms.count) terms x 256 states = \(terms.count * 256) operations\n")
 
     var circuit = QuantumCircuit(numQubits: 8)
     for qubit in 0 ..< 8 {
-        circuit.append(gate: .rotationY(theta: Double.random(in: 0 ... .pi)), toQubit: qubit)
+        circuit.append(.rotationY(theta: Double.random(in: 0 ... .pi)), to: qubit)
     }
     for i in 0 ..< 7 {
-        circuit.append(gate: .cnot(control: i, target: i + 1), qubits: [i, i + 1])
+        circuit.append(.cnot, to: [i, i + 1])
     }
 
     let state = circuit.execute()
@@ -126,13 +126,13 @@ func demoPerformanceScaling() {
 
         for _ in 0 ..< 50 {
             let qubit = Int.random(in: 0 ..< numQubits)
-            circuit.append(gate: .hadamard, toQubit: qubit)
+            circuit.append(.hadamard, to: qubit)
 
             if numQubits > 1 {
                 let control = Int.random(in: 0 ..< numQubits)
                 let target = Int.random(in: 0 ..< numQubits)
                 if control != target {
-                    circuit.append(gate: .cnot(control: control, target: target), qubits: [control, target])
+                    circuit.append(.cnot, to: [control, target])
                 }
             }
         }

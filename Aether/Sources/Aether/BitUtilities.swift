@@ -1,48 +1,47 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-/// Shared bit manipulation utilities for quantum computing
+/// Bit manipulation utilities for quantum basis state indexing
 ///
-/// Centralizes common bit operations used throughout the quantum simulator for
-/// qubit indexing, basis state manipulation, and gate application. All operations
-/// work on raw integers representing basis state indices in little-endian qubit
-/// ordering (qubit 0 is LSB).
+/// Centralizes common bit operations used throughout the quantum simulator for qubit indexing,
+/// basis state manipulation, and gate application. All operations work on raw integers representing
+/// basis state indices in little-endian qubit ordering (qubit 0 is LSB). Essential for gate
+/// application logic, measurement outcome extraction, and control qubit evaluation.
 ///
-/// **Qubit Ordering Convention**:
-/// - Little-endian: qubit 0 is least significant bit
-/// - Basis state |q₂q₁q₀⟩ maps to integer q₂×4 + q₁×2 + q₀×1
-/// - Example: |101⟩ = 5 (binary 0b101)
+/// **Qubit Ordering Convention**: Little-endian where qubit 0 is least significant bit.
+/// Basis state |q₂q₁q₀⟩ maps to integer q₂x4 + q₁x2 + q₀x1. Example: |101⟩ = 5 (binary 0b101).
 ///
-/// **Performance**: All operations are O(1) bitwise operations compiled to
-/// single CPU instructions (shift, AND, OR, XOR).
-@frozen
+/// **Performance**: All operations are O(1) bitwise operations compiled to single CPU instructions
+/// (shift, AND, OR, XOR) for zero-cost abstractions.
+///
+/// **Example**:
+/// ```swift
+/// let state = 5  // |101⟩ in binary
+/// let bit0 = BitUtilities.getBit(state, qubit: 0)  // 1
+/// let flipped = BitUtilities.flipBit(state, qubit: 1)  // 7 (|111⟩)
+/// let mask = BitUtilities.bitMask(qubit: 2)  // 4 (0b100)
+/// ```
 public enum BitUtilities {
     /// Extract bit value at specific qubit position
     ///
-    /// Retrieves the value (0 or 1) of a single qubit from a basis state index.
-    /// Uses right shift and mask to isolate the target bit.
-    ///
-    /// **Algorithm**: `(index >> qubit) & 1`
-    /// - Right shift moves target bit to LSB position
-    /// - AND with 1 isolates the bit value
+    /// Retrieves the value (0 or 1) of a single qubit from a basis state index using right shift
+    /// and mask operations. Algorithm: `(index >> qubit) & 1` moves target bit to LSB position
+    /// and isolates it. Used for measurement outcome extraction, marginal probability computation,
+    /// and control qubit evaluation in gate application.
     ///
     /// **Example**:
     /// ```swift
     /// let state = 5  // |101⟩ in binary
-    /// BitUtilities.getBit(state, qubit: 0)  // -> 1 (LSB)
-    /// BitUtilities.getBit(state, qubit: 1)  // -> 0
-    /// BitUtilities.getBit(state, qubit: 2)  // -> 1 (MSB)
+    /// BitUtilities.getBit(state, qubit: 0)  // 1 (LSB)
+    /// BitUtilities.getBit(state, qubit: 1)  // 0
+    /// BitUtilities.getBit(state, qubit: 2)  // 1 (MSB)
     /// ```
-    ///
-    /// **Use Cases**:
-    /// - Determining qubit measurement outcomes from basis states
-    /// - Computing marginal probabilities (sum over bit=0 vs bit=1)
-    /// - Gate application logic (conditional operations based on control qubits)
     ///
     /// - Parameters:
     ///   - index: Basis state index (0 to 2^n-1)
     ///   - qubit: Qubit position (0 = LSB, n-1 = MSB)
     /// - Returns: Bit value (0 or 1)
+    /// - Complexity: O(1) - single CPU instruction (shift + AND)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -52,34 +51,23 @@ public enum BitUtilities {
 
     /// Set bit at specific qubit position to given value
     ///
-    /// Modifies a basis state index by setting the specified qubit to 0 or 1.
-    /// Uses bitwise operations to efficiently update single bits.
-    ///
-    /// **Algorithms**:
-    /// - Set to 0 (clear): `index & ~(1 << qubit)`
-    ///   * Creates mask with 0 at target position, 1s elsewhere
-    ///   * AND operation clears the bit
-    /// - Set to 1: `index | (1 << qubit)`
-    ///   * Creates mask with 1 at target position
-    ///   * OR operation sets the bit
+    /// Modifies a basis state index by setting the specified qubit to 0 or 1 using bitwise operations.
+    /// Algorithm: `(index & ~(1 << qubit)) | (value << qubit)` clears target bit then sets it to value.
+    /// Used for basis state construction, measurement collapse, and controlled gate operations.
     ///
     /// **Example**:
     /// ```swift
     /// let state = 5  // |101⟩
-    /// BitUtilities.setBit(state, qubit: 1, value: 1)  // -> 7 (|111⟩)
-    /// BitUtilities.setBit(state, qubit: 0, value: 0)  // -> 4 (|100⟩)
+    /// BitUtilities.setBit(state, qubit: 1, value: 1)  // 7 (|111⟩)
+    /// BitUtilities.setBit(state, qubit: 0, value: 0)  // 4 (|100⟩)
     /// ```
-    ///
-    /// **Use Cases**:
-    /// - Constructing specific basis states
-    /// - Measurement collapse (setting qubits to measured values)
-    /// - Controlled gate operations (setting target based on control)
     ///
     /// - Parameters:
     ///   - index: Original basis state index
     ///   - qubit: Qubit position to modify
     ///   - value: New bit value (0 or 1)
     /// - Returns: Modified basis state index
+    /// - Complexity: O(1) - constant bitwise operations (AND, OR, shift)
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -89,30 +77,24 @@ public enum BitUtilities {
 
     /// Flip bit at specific qubit position
     ///
-    /// Toggles the specified qubit: 0->1 or 1->0. Essential for implementing
-    /// X gates and CNOT operations which flip target qubits.
-    ///
-    /// **Algorithm**: `index ^ (1 << qubit)`
-    /// - Creates mask with 1 at target position
-    /// - XOR flips the bit (0⊕1=1, 1⊕1=0)
+    /// Toggles the specified qubit: 0->1 or 1->0 using XOR operation. Essential for implementing
+    /// X gates and CNOT operations which flip target qubits. Algorithm: `index ^ (1 << qubit)`
+    /// creates mask with 1 at target position and XOR flips the bit (0⊕1=1, 1⊕1=0).
     ///
     /// **Example**:
     /// ```swift
     /// let state = 5  // |101⟩
-    /// BitUtilities.flipBit(state, qubit: 1)  // -> 7 (|111⟩)
-    /// BitUtilities.flipBit(state, qubit: 0)  // -> 4 (|100⟩)
-    /// BitUtilities.flipBit(state, qubit: 2)  // -> 1 (|001⟩)
+    /// BitUtilities.flipBit(state, qubit: 1)  // 7 (|111⟩)
+    /// BitUtilities.flipBit(state, qubit: 0)  // 4 (|100⟩)
+    /// BitUtilities.flipBit(state, qubit: 2)  // 1 (|001⟩)
     /// ```
-    ///
-    /// **Use Cases**:
-    /// - X gate: flips target qubit unconditionally
-    /// - CNOT gate: flips target if control=1
-    /// - Toffoli gate: flips target if both controls=1
     ///
     /// - Parameters:
     ///   - index: Original basis state index
     ///   - qubit: Qubit position to flip
     /// - Returns: Modified basis state index with flipped bit
+    /// - Complexity: O(1) - single CPU instruction (XOR)
+    /// - Note: Core operation for X, CNOT, and Toffoli gate implementations
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -122,13 +104,21 @@ public enum BitUtilities {
 
     /// Clear bit at specific qubit position (set to 0)
     ///
-    /// Convenience method equivalent to `setBit(index, qubit, value: 0)`.
-    /// Provided for clarity when intent is specifically to clear a bit.
+    /// Convenience method equivalent to `setBit(_:qubit:value:)` with value 0, provided for clarity when
+    /// intent is specifically to clear a bit. Algorithm: `index & ~(1 << qubit)` creates mask with
+    /// 0 at target position and 1s elsewhere, then AND operation clears the bit.
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let state = 7  // |111⟩
+    /// BitUtilities.clearBit(state, qubit: 1)  // 5 (|101⟩)
+    /// ```
     ///
     /// - Parameters:
     ///   - index: Original basis state index
     ///   - qubit: Qubit position to clear
     /// - Returns: Modified basis state index with bit cleared
+    /// - Complexity: O(1) - constant bitwise operations
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -138,25 +128,20 @@ public enum BitUtilities {
 
     /// Create bit mask for specific qubit position
     ///
-    /// Generates integer with single bit set at qubit position, all others zero.
-    /// Useful for efficient batch operations and gate decompositions.
-    ///
-    /// **Algorithm**: `1 << qubit`
+    /// Generates integer with single bit set at qubit position, all others zero. Algorithm: `1 << qubit`
+    /// shifts 1 left by qubit positions to create mask value 2^qubit. Useful for precomputing masks in
+    /// gate application, batch operations, and bit field manipulation.
     ///
     /// **Example**:
     /// ```swift
-    /// BitUtilities.bitMask(qubit: 0)  // -> 1 (0b001)
-    /// BitUtilities.bitMask(qubit: 1)  // -> 2 (0b010)
-    /// BitUtilities.bitMask(qubit: 2)  // -> 4 (0b100)
+    /// BitUtilities.bitMask(qubit: 0)  // 1 (0b001)
+    /// BitUtilities.bitMask(qubit: 1)  // 2 (0b010)
+    /// BitUtilities.bitMask(qubit: 2)  // 4 (0b100)
     /// ```
-    ///
-    /// **Use Cases**:
-    /// - Gate application: precompute masks for control/target qubits
-    /// - Batch operations: apply same mask to multiple indices
-    /// - Bit field manipulation: combine multiple masks with OR
     ///
     /// - Parameter qubit: Qubit position (0 = LSB)
     /// - Returns: Integer with single bit set (2^qubit)
+    /// - Complexity: O(1) - single shift operation
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -166,27 +151,22 @@ public enum BitUtilities {
 
     /// Extract multiple bits as integer value
     ///
-    /// Retrieves values of multiple qubits and combines them into single integer.
-    /// Useful for multi-qubit gate conditions and measurement outcomes.
-    ///
-    /// **Algorithm**: For each qubit, extract bit and combine with appropriate weight
+    /// Retrieves values of multiple qubits and combines them into single integer by iterating through
+    /// qubit positions, extracting each bit, and combining with appropriate weight. Useful for multi-qubit
+    /// gate conditions (Toffoli control checks) and multi-qubit measurement outcomes.
     ///
     /// **Example**:
     /// ```swift
     /// let state = 7  // |111⟩
-    /// BitUtilities.getBits(state, qubits: [0, 1])  // -> 3 (both bits are 1)
-    /// BitUtilities.getBits(state, qubits: [1, 2])  // -> 3
+    /// BitUtilities.getBits(state, qubits: [0, 1])  // 3 (both bits are 1)
+    /// BitUtilities.getBits(state, qubits: [1, 2])  // 3
     /// ```
-    ///
-    /// **Use Cases**:
-    /// - Toffoli gate: check if both control qubits are 1
-    /// - Multi-qubit measurement: extract outcomes for subset of qubits
-    /// - Conditional operations: execute based on multiple qubit values
     ///
     /// - Parameters:
     ///   - index: Basis state index
     ///   - qubits: Array of qubit positions to extract
     /// - Returns: Integer formed from extracted bits (qubits[0] = LSB)
+    /// - Complexity: O(k) where k = qubits.count
     @_effects(readonly)
     @inlinable
     @inline(__always)
@@ -201,14 +181,23 @@ public enum BitUtilities {
 
     /// Extract two bits as integer value (optimized for Toffoli gate)
     ///
-    /// Specialized fast path for the common 2-qubit case (Toffoli controls).
-    /// Avoids loop overhead entirely with direct bit extraction.
+    /// Specialized fast path for the common 2-qubit case avoiding loop overhead entirely with direct
+    /// bit extraction. Algorithm: `((index >> qubit0) & 1) | (((index >> qubit1) & 1) << 1)` extracts
+    /// both bits in parallel. Primarily used for Toffoli gate control qubit checks.
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let state = 7  // |111⟩
+    /// BitUtilities.getTwoBits(state, qubit0: 0, qubit1: 1)  // 3
+    /// BitUtilities.getTwoBits(state, qubit0: 1, qubit1: 2)  // 3
+    /// ```
     ///
     /// - Parameters:
     ///   - index: Basis state index
     ///   - qubit0: First qubit position (becomes bit 0 of result)
     ///   - qubit1: Second qubit position (becomes bit 1 of result)
     /// - Returns: Integer 0-3 formed from the two extracted bits
+    /// - Complexity: O(1) - direct bit extraction without loop
     @_effects(readonly)
     @inlinable
     @inline(__always)

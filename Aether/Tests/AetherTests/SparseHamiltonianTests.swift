@@ -51,7 +51,7 @@ struct SparseHamiltonianCorrectnessTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
         let expectedValue = observable.expectationValue(state: state)
@@ -69,8 +69,8 @@ struct SparseHamiltonianCorrectnessTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .sGate, toQubit: 0)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.sGate, to: 0)
         let state = circuit.execute()
 
         let expectedValue = observable.expectationValue(state: state)
@@ -121,8 +121,8 @@ struct SparseHamiltonianCorrectnessTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .rotationY(theta: 0.5), toQubit: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.rotationY(theta: 0.5), to: 1)
         let state = circuit.execute()
 
         let expectedValue = observable.expectationValue(state: state)
@@ -175,9 +175,9 @@ struct SparseHamiltonianCorrectnessTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 1)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.hadamard, to: 1)
+        circuit.append(.cnot, to: [0, 1])
         let state = circuit.execute()
 
         let expectedValue = observable.expectationValue(state: state)
@@ -461,11 +461,11 @@ struct SparseHamiltonianEdgeCasesTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         var circuit = QuantumCircuit(numQubits: 3)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .rotationY(theta: 0.5), toQubit: 1)
-        circuit.append(gate: .rotationZ(theta: 1.2), toQubit: 2)
-        circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
-        circuit.append(gate: .cnot(control: 1, target: 2), qubits: [])
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.rotationY(theta: 0.5), to: 1)
+        circuit.append(.rotationZ(theta: 1.2), to: 2)
+        circuit.append(.cnot, to: [0, 1])
+        circuit.append(.cnot, to: [1, 2])
         let state = circuit.execute()
 
         let expectedValue = observable.expectationValue(state: state)
@@ -484,8 +484,8 @@ struct SparseHamiltonianEdgeCasesTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         var circuit = QuantumCircuit(numQubits: 8)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 7)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.hadamard, to: 7)
         let state = circuit.execute()
 
         let expectedValue = observable.expectationValue(state: state)
@@ -505,9 +505,9 @@ struct SparseHamiltonianEdgeCasesTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         var circuit = QuantumCircuit(numQubits: 10)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .hadamard, toQubit: 5)
-        circuit.append(gate: .hadamard, toQubit: 9)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.hadamard, to: 5)
+        circuit.append(.hadamard, to: 9)
         let state = circuit.execute()
 
         let expectedValue = observable.expectationValue(state: state)
@@ -529,8 +529,8 @@ struct SparseHamiltonianEdgeCasesTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         var circuit = QuantumCircuit(numQubits: 8)
-        circuit.append(gate: .hadamard, toQubit: 0)
-        circuit.append(gate: .rotationY(theta: 0.5), toQubit: 4)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.rotationY(theta: 0.5), to: 4)
         let state = circuit.execute()
 
         let expectedValue = observable.expectationValue(state: state)

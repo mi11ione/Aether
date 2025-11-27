@@ -219,7 +219,7 @@ public extension Observable {
             Approximation Statistics:
             - Original terms: \(originalTerms)
             - Approximate terms: \(approximateTerms)
-            - Reduction: \(String(format: "%.1f", reductionFactor))×
+            - Reduction: \(String(format: "%.1f", reductionFactor))x
             - Coefficient retention: \(String(format: "%.1f%%", coefficientRetention * 100))
             """
         }

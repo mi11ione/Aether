@@ -35,8 +35,8 @@ struct ParameterizedGatePropertiesTests {
     @Test("Concrete gates have correct qubit requirements")
     func concreteGatesQubitRequirements() {
         let hadamard = ParameterizedGate.concrete(.hadamard)
-        let cnot = ParameterizedGate.concrete(.cnot(control: 0, target: 1))
-        let toffoli = ParameterizedGate.concrete(.toffoli(control1: 0, control2: 1, target: 2))
+        let cnot = ParameterizedGate.concrete(.cnot)
+        let toffoli = ParameterizedGate.concrete(.toffoli)
 
         #expect(hadamard.qubitsRequired == 1)
         #expect(cnot.qubitsRequired == 2)
@@ -186,7 +186,7 @@ struct ParameterizedGateBindingTests {
         let boundPhase = phase.bind(with: bindings)
         let boundU1 = u1.bind(with: bindings)
 
-        #expect(boundPhase == .phase(theta: 0.5))
+        #expect(boundPhase == .phase(angle: 0.5))
         #expect(boundU1 == .u1(lambda: 0.5))
     }
 
@@ -235,9 +235,9 @@ struct ParameterizedGateBindingTests {
         let boundCry = cry.bind(with: bindings)
         let boundCrz = crz.bind(with: bindings)
 
-        #expect(boundCrx == .controlledRotationX(theta: Double.pi / 2.0, control: 0, target: 1))
-        #expect(boundCry == .controlledRotationY(theta: Double.pi / 2.0, control: 0, target: 1))
-        #expect(boundCrz == .controlledRotationZ(theta: Double.pi / 2.0, control: 0, target: 1))
+        #expect(boundCrx == .controlledRotationX(theta: Double.pi / 2.0))
+        #expect(boundCry == .controlledRotationY(theta: Double.pi / 2.0))
+        #expect(boundCrz == .controlledRotationZ(theta: Double.pi / 2.0))
     }
 
     @Test("Bind controlled phase gate")
@@ -248,7 +248,7 @@ struct ParameterizedGateBindingTests {
         let cphase = ParameterizedGate.controlledPhase(theta: .parameter(param), control: 0, target: 1)
         let bound = cphase.bind(with: bindings)
 
-        #expect(bound == .controlledPhase(theta: Double.pi, control: 0, target: 1))
+        #expect(bound == .controlledPhase(theta: Double.pi))
     }
 
     @Test("Bind concrete gate returns same gate")
@@ -274,7 +274,7 @@ struct ParameterizedGateBindingTests {
         let bindings = ["theta": 1.0]
 
         let bound = gate.bind(with: bindings)
-        #expect(bound == .controlledRotationX(theta: 1.0, control: 2, target: 5))
+        #expect(bound == .controlledRotationX(theta: 1.0))
     }
 }
 
@@ -326,11 +326,13 @@ struct ParameterizedGateValidationTests {
 
     @Test("Concrete gates delegate validation")
     func concreteGatesDelegateValidation() {
-        let cnot = ParameterizedGate.concrete(.cnot(control: 0, target: 1))
-        let invalidCnot = ParameterizedGate.concrete(.cnot(control: 5, target: 1))
+        let concrete = ParameterizedGate.concrete(.cnot)
+        let validControlled = ParameterizedGate.controlledPhase(theta: .value(0.5), control: 0, target: 2)
+        let invalidControlled = ParameterizedGate.controlledPhase(theta: .value(0.5), control: 0, target: 5)
 
-        #expect(cnot.validateQubitIndices(maxAllowedQubit: 5))
-        #expect(!invalidCnot.validateQubitIndices(maxAllowedQubit: 2))
+        #expect(concrete.validateQubitIndices(maxAllowedQubit: 5))
+        #expect(validControlled.validateQubitIndices(maxAllowedQubit: 5))
+        #expect(!invalidControlled.validateQubitIndices(maxAllowedQubit: 2))
     }
 
     @Test("All controlled gate types validate")

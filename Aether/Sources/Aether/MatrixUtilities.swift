@@ -5,46 +5,49 @@ import Accelerate
 
 /// Shared matrix utilities for quantum computing
 ///
-/// Centralizes common matrix operations used throughout the quantum simulator,
-/// particularly for quantum gate manipulation and unitary optimization. All
-/// operations use Apple's Accelerate BLAS for optimal performance on Apple Silicon.
+/// Centralizes common matrix operations used throughout the quantum simulator for gate composition,
+/// unitarity validation, and operator transformations. All operations use Apple's Accelerate BLAS
 ///
-/// **Memory Layout**: Uses row-major ordering (C-style) for consistency with
-/// Swift's natural 2D array indexing matrix[row][col]. BLAS operations configured
-/// with CblasRowMajor to match this convention.
-@frozen
+/// **Quantum Context**: Essential for gate algebra (composing sequential gates into single unitary),
+/// verifying gate correctness (U†U = I), and basis transformations (U†OU). Matrix multiplication
+/// is the fundamental operation for gate fusion optimization and circuit compilation.
+///
+/// **Performance**: BLAS-accelerated matrix operations provide speedup over naive loops via
+/// SIMD vectorization and cache optimization. Critical for unitary partitioning, circuit optimization,
+/// and multi-gate composition in variational algorithms.
+///
+/// **Example**:
+/// ```swift
+/// let h = QuantumGate.hadamard.matrix()
+/// let x = QuantumGate.pauliX.matrix()
+/// let composed = MatrixUtilities.matrixMultiply(h, x)  // H x X composition
+/// let adjoint = MatrixUtilities.hermitianConjugate(composed)
+/// let identity = MatrixUtilities.matrixMultiply(adjoint, composed)  // U† x U = I
+/// ```
 public enum MatrixUtilities {
-    /// Complex matrix multiplication using BLAS (A × B)
+    /// Compute matrix product C = A x B using BLAS
     ///
-    /// Computes matrix product C = A × B for square complex matrices using Apple's
-    /// Accelerate framework BLAS with hardware-accelerated vectorization and AMX
-    /// coprocessor utilization.
+    /// Performs dense complex matrix multiplication computation.
+    /// Primary use cases: gate composition (fusing sequential gates), unitarity validation (U†U),
+    /// and basis transformations (U†OU for operator conjugation).
     ///
-    /// **Algorithm**:
-    /// 1. Convert Swift Complex<Double> arrays to interleaved Double arrays [r₀, i₀, r₁, i₁, ...]
-    /// 2. Call BLAS `cblas_zgemm` with row-major layout
-    /// 3. Convert result back to Complex<Double> matrix
-    ///
-    /// **Memory Layout**: Row-major (CblasRowMajor)
-    /// - Indexing: buffer[(row * n + col) * 2] = real, buffer[(row * n + col) * 2 + 1] = imag
-    /// - Matches Swift's natural matrix[row][col] access pattern
-    ///
-    /// **Complexity**: O(n³) arithmetic operations with hardware acceleration via SIMD
-    /// and cache optimization.
-    ///
-    /// **Use Cases**:
-    /// - Gate composition: U = U₂ × U₁
-    /// - Unitarity checking: U†U = I
-    /// - Conjugate by unitary: U†PU for operator transformations
+    /// **Example**:
+    /// ```swift
+    /// let h = QuantumGate.hadamard.matrix()
+    /// let x = QuantumGate.pauliX.matrix()
+    /// let hx = MatrixUtilities.matrixMultiply(h, x)  // Fuse H and X into single gate
+    /// ```
     ///
     /// - Parameters:
-    ///   - a: Left matrix (n×n)
-    ///   - b: Right matrix (n×n)
-    /// - Returns: Product matrix C = A × B (n×n)
+    ///   - a: Left matrix (nxn)
+    ///   - b: Right matrix (nxn)
+    /// - Returns: Product matrix C = A x B (nxn)
+    /// - Complexity: O(n³) with BLAS hardware acceleration (SIMD, cache optimization)
+    /// - Precondition: Both matrices must be square with matching dimensions
     @_optimize(speed)
     @inlinable
     @_eagerMove
-    static func matrixMultiply(_ a: GateMatrix, _ b: GateMatrix) -> GateMatrix {
+    static func matrixMultiply(_ a: [[Complex<Double>]], _ b: [[Complex<Double>]]) -> [[Complex<Double>]] {
         ValidationUtilities.validateSquareMatrix(a, name: "Matrix A")
         ValidationUtilities.validateSquareMatrix(b, name: "Matrix B")
         ValidationUtilities.validateSameDimensions(a, b, name1: "Matrix A", name2: "Matrix B")
@@ -117,64 +120,60 @@ public enum MatrixUtilities {
         return result
     }
 
-    /// Hermitian conjugate (conjugate transpose) of complex matrix
+    /// Compute Hermitian conjugate (conjugate transpose) M† = (M*)ᵀ
     ///
-    /// Computes M† = (M*)ᵀ where * denotes complex conjugation and ᵀ denotes
-    /// matrix transpose. Essential operation for unitary validation (U†U = I)
-    /// and operator transformations in quantum mechanics.
+    /// Computes conjugate transpose by swapping row/column indices and negating imaginary parts.
+    /// Essential for unitarity validation (U†U = I), operator basis transformations (U†OU), and
+    /// computing adjoint evolution. For unitary gates: U† = U⁻¹ (inverse equals conjugate transpose).
     ///
-    /// **Algorithm**: (M†)[i][j] = conj(M[j][i])
-    /// - Swap row/column indices (transpose)
-    /// - Negate imaginary part (complex conjugate)
+    /// **Example**:
+    /// ```swift
+    /// let u = QuantumGate.hadamard.matrix()
+    /// let uDagger = MatrixUtilities.hermitianConjugate(u)
+    /// let identity = MatrixUtilities.matrixMultiply(uDagger, u)  // U† x U = I
+    /// ```
     ///
-    /// **Physical Interpretation**:
-    /// - For unitary matrices: U† = U⁻¹ (inverse equals conjugate transpose)
-    /// - For Hermitian operators: H† = H (observables are self-adjoint)
-    /// - Time-reversal: U† reverses quantum evolution U
-    ///
-    /// **Complexity**: O(n²) - single pass through matrix elements
-    ///
-    /// **Use Cases**:
-    /// - Unitarity check: isUnitary(U) = U†U ≈ I
-    /// - Basis change: O' = U†OU for operator O in new basis
-    /// - Adjoint expectation: ⟨ψ|O|ψ⟩ = ⟨ψ|O†|ψ⟩* for Hermitian O
-    ///
-    /// - Parameter matrix: Square complex matrix (n×n)
-    /// - Returns: Hermitian conjugate M† (n×n)
+    /// - Parameter matrix: Square complex matrix (nxn)
+    /// - Returns: Hermitian conjugate M† (nxn)
+    /// - Complexity: O(n²)
+    /// - Precondition: Matrix must be square
+    /// - Note: For Hermitian operators (observables): H† = H (self-adjoint property)
     @_effects(readonly)
     @inlinable
     @_eagerMove
-    static func hermitianConjugate(_ matrix: GateMatrix) -> GateMatrix {
+    static func hermitianConjugate(_ matrix: [[Complex<Double>]]) -> [[Complex<Double>]] {
         ValidationUtilities.validateSquareMatrix(matrix, name: "Matrix")
         let n = matrix.count
 
         return (0 ..< n).map { i in
             [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
                 for j in 0 ..< n {
-                    buffer[j] = matrix[j][i].conjugate()
+                    buffer[j] = matrix[j][i].conjugate
                 }
                 count = n
             }
         }
     }
 
-    /// Create identity matrix of specified dimension
+    /// Create identity matrix with 1s on diagonal, 0s elsewhere
     ///
-    /// Constructs n×n identity matrix with 1s on diagonal and 0s elsewhere.
-    /// Used as initialization for unitary transformations and as reference
-    /// for unitarity checks (U†U should equal identity).
+    /// Constructs nxn identity matrix for unitarity validation reference (U†U should equal I),
+    /// initialization of unitary transformations, and matrix algebra operations. Identity satisfies
+    /// I x M = M x I = M for any matrix M, and is itself unitary: I† = I.
     ///
-    /// **Properties**:
-    /// - I × M = M × I = M for any matrix M
-    /// - I is unitary: I† = I and I†I = I
-    /// - Eigenvalues: all equal to 1
+    /// **Example**:
+    /// ```swift
+    /// let i4 = MatrixUtilities.identityMatrix(dimension: 4)  // 4x4 identity for 2-qubit gates
+    /// ```
     ///
-    /// - Parameter dimension: Size of identity matrix (n×n)
-    /// - Returns: Identity matrix I_n
+    /// - Parameter dimension: Size of identity matrix (nxn)
+    /// - Returns: Identity matrix I_n with 1s on diagonal, 0s elsewhere
+    /// - Complexity: O(n²)
+    /// - Precondition: dimension > 0
     @_effects(readonly)
     @inlinable
     @_eagerMove
-    static func identityMatrix(dimension: Int) -> GateMatrix {
+    static func identityMatrix(dimension: Int) -> [[Complex<Double>]] {
         ValidationUtilities.validateMatrixDimension(dimension)
 
         return (0 ..< dimension).map { i in
