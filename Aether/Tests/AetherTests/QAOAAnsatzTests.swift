@@ -21,7 +21,7 @@ struct QAOAAnsatzTests {
             mixerHamiltonian: mixer
         )
 
-        #expect(!ansatz.isEmpty())
+        #expect(!ansatz.isEmpty)
         #expect(ansatz.parameters.contains { $0.name.starts(with: "gamma_0_c_") })
         #expect(ansatz.parameters.contains { $0.name.starts(with: "beta_0_c_") })
     }
@@ -109,11 +109,7 @@ struct PauliStringExponentiationTests {
 
     @Test("Three-qubit ZZZ uses extended ladder")
     func threeQubitZZZ() {
-        let pauliString = PauliString(operators: [
-            (qubit: 0, basis: .z),
-            (qubit: 1, basis: .z),
-            (qubit: 2, basis: .z),
-        ])
+        let pauliString = PauliString(.z(0), .z(1), .z(2))
         let cost = Observable(terms: [(coefficient: -0.25, pauliString: pauliString)])
         let mixer = MixerHamiltonian.xMixer(numQubits: 3)
 
@@ -136,7 +132,7 @@ struct PauliStringExponentiationTests {
 
     @Test("Y operator requires Rx basis rotation")
     func yOperatorBasisRotation() {
-        let cost = Observable(terms: [(coefficient: 1.0, pauliString: PauliString(operators: [(qubit: 0, basis: .y)]))])
+        let cost = Observable(terms: [(coefficient: 1.0, pauliString: PauliString(.y(0)))])
         let mixer = MixerHamiltonian.xMixer(numQubits: 1)
 
         let ansatz = QAOAAnsatz.create(
@@ -158,11 +154,7 @@ struct PauliStringExponentiationTests {
 
     @Test("Mixed XYZ string has multiple basis rotations")
     func mixedPauliString() {
-        let pauliString = PauliString(operators: [
-            (qubit: 0, basis: .x),
-            (qubit: 1, basis: .y),
-            (qubit: 2, basis: .z),
-        ])
+        let pauliString = PauliString(.x(0), .y(1), .z(2))
         let cost = Observable(terms: [(coefficient: 0.5, pauliString: pauliString)])
         let mixer = MixerHamiltonian.xMixer(numQubits: 3)
 
@@ -223,8 +215,8 @@ struct CoefficientScalingTests {
     @Test("Near-zero coefficients are filtered")
     func nearZeroFiltering() {
         let cost = Observable(terms: [
-            (coefficient: 1e-16, pauliString: PauliString(operators: [(qubit: 0, basis: .z)])),
-            (coefficient: 0.5, pauliString: PauliString(operators: [(qubit: 1, basis: .z)])),
+            (coefficient: 1e-16, pauliString: PauliString(.z(0))),
+            (coefficient: 0.5, pauliString: PauliString(.z(1))),
         ])
         let mixer = MixerHamiltonian.xMixer(numQubits: 2)
 
@@ -257,7 +249,7 @@ struct CompleteQAOAWorkflowsTests {
             mixerHamiltonian: mixer
         )
 
-        #expect(!ansatz.isEmpty())
+        #expect(!ansatz.isEmpty)
 
         let scaledParams = ansatz.parameters.filter { $0.name.contains("_c_") }
         #expect(scaledParams.count > 0)
@@ -275,7 +267,7 @@ struct CompleteQAOAWorkflowsTests {
             mixerHamiltonian: mixer
         )
 
-        #expect(!ansatz.isEmpty())
+        #expect(!ansatz.isEmpty)
 
         let scaledParams = ansatz.parameters.filter { $0.name.contains("_c_") }
         #expect(scaledParams.count > 0)

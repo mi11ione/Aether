@@ -153,22 +153,13 @@ public struct HardwareEfficientAnsatz {
         depth: Int,
         rotationGates: RotationGateSet = .ry,
         entanglingPattern: EntanglingPattern = .linear
-    ) -> ParameterizedQuantumCircuit {
+    ) -> QuantumCircuit {
         ValidationUtilities.validatePositiveQubits(numQubits)
         ValidationUtilities.validateMemoryLimit(numQubits)
         ValidationUtilities.validatePositiveInt(depth, name: "depth")
         ValidationUtilities.validateUpperBound(depth, max: 100, name: "depth")
 
-        let rotationsPerLayer = numQubits * rotationGates.parametersPerQubit()
-        let entanglingGatesPerLayer: Int = switch entanglingPattern {
-        case .linear: numQubits - 1
-        case .circular: numQubits
-        case .allToAll: numQubits * (numQubits - 1) / 2
-        }
-        let totalGates = depth * (rotationsPerLayer + entanglingGatesPerLayer)
-
-        var circuit = ParameterizedQuantumCircuit(numQubits: numQubits)
-        circuit.reserveCapacity(totalGates)
+        var circuit = QuantumCircuit(numQubits: numQubits)
 
         for layerIndex in 0 ..< depth {
             appendRotationLayer(
@@ -203,7 +194,7 @@ public struct HardwareEfficientAnsatz {
     ///   - rotationGates: Type of rotation gates to apply
     @_optimize(speed)
     private static func appendRotationLayer(
-        to circuit: inout ParameterizedQuantumCircuit,
+        to circuit: inout QuantumCircuit,
         numQubits: Int,
         layerIndex: Int,
         rotationGates: RotationGateSet
@@ -214,19 +205,19 @@ public struct HardwareEfficientAnsatz {
         case .ry:
             for qubit in 0 ..< numQubits {
                 let param = Parameter(name: layerPrefix + String(qubit))
-                circuit.append(gate: .rotationY(theta: .parameter(param)), qubit: qubit)
+                circuit.append(.rotationY(.parameter(param)), to: qubit)
             }
 
         case .rx:
             for qubit in 0 ..< numQubits {
                 let param = Parameter(name: layerPrefix + String(qubit))
-                circuit.append(gate: .rotationX(theta: .parameter(param)), qubit: qubit)
+                circuit.append(.rotationX(.parameter(param)), to: qubit)
             }
 
         case .rz:
             for qubit in 0 ..< numQubits {
                 let param = Parameter(name: layerPrefix + String(qubit))
-                circuit.append(gate: .rotationZ(theta: .parameter(param)), qubit: qubit)
+                circuit.append(.rotationZ(.parameter(param)), to: qubit)
             }
 
         case .full:
@@ -236,9 +227,9 @@ public struct HardwareEfficientAnsatz {
                 let paramY = Parameter(name: layerPrefix + qubitStr + "_y")
                 let paramZ2 = Parameter(name: layerPrefix + qubitStr + "_z2")
 
-                circuit.append(gate: .rotationZ(theta: .parameter(paramZ1)), qubit: qubit)
-                circuit.append(gate: .rotationY(theta: .parameter(paramY)), qubit: qubit)
-                circuit.append(gate: .rotationZ(theta: .parameter(paramZ2)), qubit: qubit)
+                circuit.append(.rotationZ(.parameter(paramZ1)), to: qubit)
+                circuit.append(.rotationY(.parameter(paramY)), to: qubit)
+                circuit.append(.rotationZ(.parameter(paramZ2)), to: qubit)
             }
         }
     }
@@ -259,23 +250,23 @@ public struct HardwareEfficientAnsatz {
     ///   - pattern: Entangling topology
     @_optimize(speed)
     private static func appendEntanglingLayer(
-        to circuit: inout ParameterizedQuantumCircuit,
+        to circuit: inout QuantumCircuit,
         numQubits: Int,
         pattern: EntanglingPattern
     ) {
         switch pattern {
         case .linear, .circular:
             for i in 0 ..< (numQubits - 1) {
-                circuit.append(gate: .concrete(.cnot), qubits: [i, i + 1])
+                circuit.append(.cnot, to: [i, i + 1])
             }
             if pattern == .circular, numQubits >= 2 {
-                circuit.append(gate: .concrete(.cnot), qubits: [numQubits - 1, 0])
+                circuit.append(.cnot, to: [numQubits - 1, 0])
             }
 
         case .allToAll:
             for i in 0 ..< numQubits {
                 for j in (i + 1) ..< numQubits {
-                    circuit.append(gate: .concrete(.cnot), qubits: [i, j])
+                    circuit.append(.cnot, to: [i, j])
                 }
             }
         }

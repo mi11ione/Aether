@@ -169,9 +169,8 @@ public actor MetalGateApplication {
 
     /// Create GPU gate executor using shared Metal resources
     ///
-    /// Returns nil if Metal unavailable (unsupported hardware, iOS Simulator on Intel Mac) or
-    /// shader compilation fails (missing QuantumGPU.metal, malformed metallib). Reuses pre-compiled
-    /// compute pipelines from ``MetalResources`` singleton to avoid expensive re-compilation.
+    /// Returns nil if Metal unavailable or shader compilation fails (missing QuantumGPU.metal, malformed metallib).
+    /// Reuses pre-compiled compute pipelines from `MetalResources` singleton to avoid expensive re-compilation.
     ///
     /// **Example**:
     /// ```swift
@@ -224,7 +223,7 @@ public actor MetalGateApplication {
     ///   - state: Input quantum state (normalized statevector)
     /// - Returns: New quantum state with unitary transformation applied, maintaining normalization
     /// - Complexity: O(2^n) time, O(2^n) GPU buffer allocation
-    /// - Precondition: All qubit indices must be valid for state (validated by ``ValidationUtilities``)
+    /// - Precondition: All qubit indices must be valid for state
     @_eagerMove
     public func apply(_ gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {
         switch gate {
@@ -481,8 +480,8 @@ public extension GateApplication {
     /// ```swift
     /// let small = QuantumState(numQubits: 5)
     /// let large = QuantumState(numQubits: 15)
-    /// let r1 = await GateApplication.applyHybrid(.hadamard, to: [0], state: small)  // CPU
-    /// let r2 = await GateApplication.applyHybrid(.hadamard, to: [0], state: large)  // GPU
+    /// let r1 = await GateApplication.applyHybrid(.hadamard, to: 0, state: small)  // CPU
+    /// let r2 = await GateApplication.applyHybrid(.hadamard, to: 0, state: large)  // GPU
     /// ```
     ///
     /// - Parameters:

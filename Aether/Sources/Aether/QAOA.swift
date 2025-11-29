@@ -114,7 +114,7 @@ public actor QAOA {
     private let simulator: QuantumSimulator
 
     /// Parameterized QAOA ansatz circuit
-    private let ansatz: ParameterizedQuantumCircuit
+    private let ansatz: QuantumCircuit
 
     /// Pre-computed parameter binder for fast repeated binding
     private let parameterBinder: QAOAParameterBinder

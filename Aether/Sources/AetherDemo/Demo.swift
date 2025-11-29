@@ -41,16 +41,16 @@ func demoLargeHamiltonian() async {
 
     var terms: PauliTerms = []
 
-    terms.append((coefficient: -1.0523732, pauliString: PauliString(operators: [])))
+    terms.append((coefficient: -1.0523732, pauliString: PauliString()))
 
     for qubit in 0 ..< 8 {
         terms.append((
             coefficient: Double.random(in: -1.0 ... 1.0),
-            pauliString: PauliString(operators: [(qubit, .z)])
+            pauliString: PauliString(.z(qubit))
         ))
         terms.append((
             coefficient: Double.random(in: -0.5 ... 0.5),
-            pauliString: PauliString(operators: [(qubit, .x)])
+            pauliString: PauliString(.x(qubit))
         ))
     }
 
@@ -58,11 +58,11 @@ func demoLargeHamiltonian() async {
         for j in (i + 1) ..< 8 {
             terms.append((
                 coefficient: Double.random(in: -0.5 ... 0.5),
-                pauliString: PauliString(operators: [(i, .z), (j, .z)])
+                pauliString: PauliString(.z(i), .z(j))
             ))
             terms.append((
                 coefficient: Double.random(in: -0.3 ... 0.3),
-                pauliString: PauliString(operators: [(i, .x), (j, .x)])
+                pauliString: PauliString(.x(i), .x(j))
             ))
         }
     }
@@ -75,7 +75,7 @@ func demoLargeHamiltonian() async {
 
         terms.append((
             coefficient: Double.random(in: -0.1 ... 0.1),
-            pauliString: PauliString(operators: [(q1, .z), (q2, .x), (q3, .y)])
+            pauliString: PauliString(.z(q1), .x(q2), .y(q3))
         ))
     }
 
@@ -88,7 +88,7 @@ func demoLargeHamiltonian() async {
 
     var circuit = QuantumCircuit(numQubits: 8)
     for qubit in 0 ..< 8 {
-        circuit.append(.rotationY(theta: Double.random(in: 0 ... .pi)), to: qubit)
+        circuit.append(.rotationY(Double.random(in: 0 ... .pi)), to: qubit)
     }
     for i in 0 ..< 7 {
         circuit.append(.cnot, to: [i, i + 1])

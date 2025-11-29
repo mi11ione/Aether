@@ -11,7 +11,7 @@ import Testing
 struct VariationalQuantumEigensolverTests {
     @Test("Create VQE without sparse backend")
     func createVQEWithoutSparseBackend() async {
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer()
 
@@ -28,7 +28,7 @@ struct VariationalQuantumEigensolverTests {
 
     @Test("VQE finds ground state of simple Hamiltonian")
     func findGroundStateSimpleHamiltonian() async {
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
@@ -60,7 +60,7 @@ struct VariationalQuantumEigensolverTests {
             func getLastEnergy() -> Double { lastEnergy }
         }
 
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
@@ -86,7 +86,7 @@ struct VariationalQuantumEigensolverTests {
 
     @Test("VQE tracks progress")
     func vqeTracksProgress() async {
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
@@ -107,8 +107,8 @@ struct VariationalQuantumEigensolverTests {
     @Test("VQE with two-qubit Hamiltonian")
     func twoQubitHamiltonian() async {
         let hamiltonian = Observable(terms: [
-            (1.0, PauliString(operators: [(0, .z)])),
-            (1.0, PauliString(operators: [(1, .z)])),
+            (1.0, PauliString(.z(0))),
+            (1.0, PauliString(.z(1))),
         ])
 
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1)
@@ -129,7 +129,7 @@ struct VariationalQuantumEigensolverTests {
 
     @Test("VQE convergence via energy tolerance")
     func convergenceViaEnergyTolerance() async {
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
@@ -147,7 +147,7 @@ struct VariationalQuantumEigensolverTests {
 
     @Test("VQE with gradient descent optimizer")
     func vqeWithGradientDescent() async {
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = GradientDescentOptimizer(learningRate: 0.5)
 
@@ -168,7 +168,7 @@ struct VariationalQuantumEigensolverTests {
 
     @Test("VQE with L-BFGS-B optimizer")
     func vqeWithLBFGSB() async {
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = LBFGSBOptimizer(tolerance: 1e-3)
 
@@ -189,7 +189,7 @@ struct VariationalQuantumEigensolverTests {
 
     @Test("VQE with SPSA optimizer")
     func vqeWithSPSA() async {
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = SPSAOptimizer(initialStepSize: 0.1)
 
@@ -207,7 +207,7 @@ struct VariationalQuantumEigensolverTests {
 
     @Test("VQE backend info with sparse")
     func backendInfoWithSparse() async {
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer()
 
@@ -224,7 +224,7 @@ struct VariationalQuantumEigensolverTests {
 
     @Test("VQE backend info without sparse")
     func backendInfoWithoutSparse() async {
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer()
 
@@ -242,7 +242,7 @@ struct VariationalQuantumEigensolverTests {
 
     @Test("VQE without Metal acceleration")
     func vqeWithoutMetalAcceleration() async {
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
@@ -261,7 +261,7 @@ struct VariationalQuantumEigensolverTests {
 
     @Test("VQE tracks function evaluations")
     func vqeTracksFunctionEvaluations() async {
-        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(operators: [(0, .z)]))
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 

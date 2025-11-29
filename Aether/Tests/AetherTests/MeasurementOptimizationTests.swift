@@ -39,49 +39,49 @@ struct PauliCommutationTests {
 
     @Test("Multi-qubit Pauli strings with even anticommutations commute")
     func multiQubitEvenAnticommutations() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .x)])
+        let ps1 = PauliString(.x(0), .y(1))
+        let ps2 = PauliString(.y(0), .x(1))
         #expect(PauliCommutation.commute(ps1, ps2))
     }
 
     @Test("Multi-qubit Pauli strings with odd anticommutations anticommute")
     func multiQubitOddAnticommutations() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .z)])
+        let ps1 = PauliString(.x(0), .y(1))
+        let ps2 = PauliString(.x(0), .z(1))
         #expect(!PauliCommutation.commute(ps1, ps2))
     }
 
     @Test("Non-overlapping Pauli strings commute")
     func nonOverlappingStrings() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 1, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(1))
         #expect(PauliCommutation.commute(ps1, ps2))
     }
 
     @Test("Qubit-wise commuting strings with matching operators")
     func qwcMatchingOperators() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
+        let ps1 = PauliString(.x(0), .y(1))
+        let ps2 = PauliString(.x(0), .y(1))
         #expect(PauliCommutation.qubitWiseCommute(ps1, ps2))
     }
 
     @Test("Qubit-wise commuting strings with identity gaps")
     func qwcWithIdentityGaps() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 2, basis: .z)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
+        let ps1 = PauliString(.x(0), .z(2))
+        let ps2 = PauliString(.x(0), .y(1))
         #expect(PauliCommutation.qubitWiseCommute(ps1, ps2))
     }
 
     @Test("Non-qubit-wise commuting strings with conflicting operators")
     func nonQwcConflictingOperators() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .x)])
+        let ps1 = PauliString(.x(0), .y(1))
+        let ps2 = PauliString(.y(0), .x(1))
         #expect(!PauliCommutation.qubitWiseCommute(ps1, ps2))
     }
 
     @Test("Measurement basis for single Pauli string")
     func measurementBasisSingleString() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .z)])
+        let ps = PauliString(.x(0), .z(1))
         let basis = PauliCommutation.measurementBasis(for: [ps])
         #expect(basis?[0] == .x)
         #expect(basis?[1] == .z)
@@ -89,9 +89,9 @@ struct PauliCommutationTests {
 
     @Test("Measurement basis for QWC group")
     func measurementBasisQwcGroup() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps3 = PauliString(operators: [(qubit: 1, basis: .y)])
+        let ps1 = PauliString(.x(0), .y(1))
+        let ps2 = PauliString(.x(0))
+        let ps3 = PauliString(.y(1))
         let basis = PauliCommutation.measurementBasis(for: [ps1, ps2, ps3])
         #expect(basis?[0] == .x)
         #expect(basis?[1] == .y)
@@ -99,8 +99,8 @@ struct PauliCommutationTests {
 
     @Test("Measurement basis returns nil for non-QWC strings")
     func measurementBasisNonQwc() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let basis = PauliCommutation.measurementBasis(for: [ps1, ps2])
         #expect(basis == nil)
     }
@@ -119,8 +119,8 @@ struct PauliCommutationTests {
 struct QWCGroupingTests {
     @Test("QWCGroup weight calculation")
     func qwcGroupWeight() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 1, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(1))
         let group = QWCGroup(
             terms: [(coefficient: 2.0, pauliString: ps1), (coefficient: -3.5, pauliString: ps2)],
             measurementBasis: [0: .x, 1: .y]
@@ -130,7 +130,7 @@ struct QWCGroupingTests {
 
     @Test("Grouping single Pauli term")
     func groupingSingleTerm() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let groups = QWCGrouper.group(terms: [(coefficient: 1.0, pauliString: ps)])
         #expect(groups.count == 1)
         #expect(groups[0].terms.count == 1)
@@ -138,9 +138,9 @@ struct QWCGroupingTests {
 
     @Test("Grouping QWC terms into single group")
     func groupingQwcTerms() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 1, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.x(0), .y(1))
+        let ps3 = PauliString(.y(1))
         let groups = QWCGrouper.group(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3)])
         #expect(groups.count == 1)
         #expect(groups[0].terms.count == 3)
@@ -148,19 +148,19 @@ struct QWCGroupingTests {
 
     @Test("Grouping non-QWC terms into multiple groups")
     func groupingNonQwcTerms() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
+        let ps3 = PauliString(.z(0))
         let groups = QWCGrouper.group(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3)])
         #expect(groups.count == 3)
     }
 
     @Test("Grouping mixed QWC and non-QWC terms")
     func groupingMixedTerms() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let ps4 = PauliString(operators: [(qubit: 1, basis: .y)])
+        let ps1 = PauliString(.x(0), .y(1))
+        let ps2 = PauliString(.x(0))
+        let ps3 = PauliString(.y(0))
+        let ps4 = PauliString(.y(1))
         let groups = QWCGrouper.group(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3), (coefficient: 4.0, pauliString: ps4)])
         #expect(groups.count == 2)
     }
@@ -173,8 +173,8 @@ struct QWCGroupingTests {
 
     @Test("Each group has valid measurement basis")
     func groupsHaveValidMeasurementBasis() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let groups = QWCGrouper.group(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         for group in groups {
             #expect(!group.measurementBasis.isEmpty)
@@ -183,7 +183,7 @@ struct QWCGroupingTests {
 
     @Test("Grouping statistics for single group")
     func statisticsSingleGroup() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let groups = [QWCGroup(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps), (coefficient: 3.0, pauliString: ps)], measurementBasis: [0: .x])]
         let stats = QWCGrouper.statistics(for: groups)
         #expect(stats.numTerms == 3)
@@ -194,8 +194,8 @@ struct QWCGroupingTests {
 
     @Test("Grouping statistics for multiple groups")
     func statisticsMultipleGroups() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let groups = QWCGrouper.group(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps1), (coefficient: 3.0, pauliString: ps2)])
         let stats = QWCGrouper.statistics(for: groups)
         #expect(stats.numTerms == 3)
@@ -213,7 +213,7 @@ struct QWCGroupingTests {
 
     @Test("Grouping statistics description format")
     func statisticsDescription() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let groups = [QWCGroup(terms: [(coefficient: 1.0, pauliString: ps)], measurementBasis: [0: .x])]
         let stats = QWCGrouper.statistics(for: groups)
         let description = stats.description
@@ -231,7 +231,7 @@ struct ShotAllocationTests {
     @Test("Uniform allocation when no weights available")
     func uniformAllocation() {
         let allocator = ShotAllocator()
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let terms = [(coefficient: 0.0, pauliString: ps), (coefficient: 0.0, pauliString: ps), (coefficient: 0.0, pauliString: ps)]
         let allocation = allocator.allocate(terms: terms, totalShots: 300, state: nil)
         #expect(allocation.count == 3)
@@ -244,7 +244,7 @@ struct ShotAllocationTests {
     @Test("Weighted allocation based on coefficients")
     func weightedAllocation() {
         let allocator = ShotAllocator()
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps), (coefficient: 3.0, pauliString: ps)]
         let allocation = allocator.allocate(terms: terms, totalShots: 600, state: nil)
         #expect(allocation[2]! > allocation[1]!)
@@ -255,7 +255,7 @@ struct ShotAllocationTests {
     func minimumShotsEnforced() {
         let config = ShotAllocator.Config(minShotsPerTerm: 50, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 100.0, pauliString: ps)]
         let allocation = allocator.allocate(terms: terms, totalShots: 200, state: nil)
         #expect(allocation[0]! >= 50)
@@ -265,7 +265,7 @@ struct ShotAllocationTests {
     @Test("Total allocated shots equals requested total")
     func totalShotsMatches() {
         let allocator = ShotAllocator()
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps), (coefficient: 3.0, pauliString: ps), (coefficient: 4.0, pauliString: ps)]
         let allocation = allocator.allocate(terms: terms, totalShots: 1000, state: nil)
         let total = allocation.values.reduce(0, +)
@@ -275,8 +275,8 @@ struct ShotAllocationTests {
     @Test("Allocation for QWC groups")
     func allocationForGroups() {
         let allocator = ShotAllocator()
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let group1 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps1)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 3.0, pauliString: ps2)], measurementBasis: [0: .y])
         let allocation = allocator.allocateForGroups(groups: [group1, group2], totalShots: 400, state: nil)
@@ -320,7 +320,7 @@ struct ShotAllocationTests {
     @Test("Variance reduction estimation")
     func varianceReductionEstimation() {
         let allocator = ShotAllocator()
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 10.0, pauliString: ps)]
         let allocation = allocator.allocate(terms: terms, totalShots: 1000, state: nil)
         let reduction = allocator.estimateVarianceReduction(
@@ -335,7 +335,7 @@ struct ShotAllocationTests {
     func customConfiguration() {
         let config = ShotAllocator.Config(minShotsPerTerm: 100, roundToInteger: false)
         let allocator = ShotAllocator(config: config)
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let allocation = allocator.allocate(terms: [(coefficient: 1.0, pauliString: ps)], totalShots: 500, state: nil)
         #expect(allocation[0]! >= 100)
     }
@@ -344,7 +344,7 @@ struct ShotAllocationTests {
     func allocationEnforcesMinimum() {
         let config = ShotAllocator.Config(minShotsPerTerm: 400, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 1.0, pauliString: ps)]
         let allocation = allocator.allocate(terms: terms, totalShots: 500, state: nil)
 
@@ -359,7 +359,7 @@ struct ShotAllocationTests {
     func shotReductionFromOverAllocation() {
         let config = ShotAllocator.Config(minShotsPerTerm: 30, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
 
         let terms = [
             (coefficient: 10.0, pauliString: ps),
@@ -383,7 +383,7 @@ struct ShotAllocationTests {
     func shotReductionIterativeRemoval() {
         let config = ShotAllocator.Config(minShotsPerTerm: 25, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
 
         var terms: [(Double, PauliString)] = []
         terms += [(10.0, ps), (10.0, ps), (10.0, ps)]
@@ -403,9 +403,9 @@ struct ShotAllocationTests {
         let config = ShotAllocator.Config(minShotsPerTerm: 40, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
 
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 1, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 2, basis: .z)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(1))
+        let ps3 = PauliString(.z(2))
 
         let group1 = QWCGroup(terms: [(coefficient: 10.0, pauliString: ps1)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps2)], measurementBasis: [1: .y])
@@ -424,7 +424,7 @@ struct ShotAllocationTests {
     func shotReductionRespectsMinimum() {
         let config = ShotAllocator.Config(minShotsPerTerm: 30, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
 
         let terms = [
             (coefficient: 8.0, pauliString: ps),
@@ -448,7 +448,7 @@ struct ShotAllocationTests {
     func shotReductionBreaksMidLoop() {
         let config = ShotAllocator.Config(minShotsPerTerm: 10, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
 
         let mixedTerms = [
             (coefficient: 10.0, pauliString: ps),
@@ -481,7 +481,7 @@ struct UnitaryPartitioningTests {
             maxOffDiagonalNorm: 0.1
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)], numQubits: 1)
         #expect(partitions.count >= 1)
     }
@@ -496,8 +496,8 @@ struct UnitaryPartitioningTests {
             maxOffDiagonalNorm: 0.1
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.x(0), .y(1))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)], numQubits: 2)
         #expect(partitions.count >= 1)
     }
@@ -527,14 +527,14 @@ struct UnitaryPartitioningTests {
             maxOffDiagonalNorm: 0.05
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)], numQubits: 1)
         #expect(!partitions.isEmpty)
     }
 
     @Test("Partition has unitary matrix")
     func partitionHasUnitaryMatrix() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
@@ -547,8 +547,8 @@ struct UnitaryPartitioningTests {
 
     @Test("Multiple partitions preserve all terms")
     func multiplePartitionsPreserveTerms() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let partition1 = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps1)],
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
@@ -567,7 +567,7 @@ struct UnitaryPartitioningTests {
 
     @Test("Partition matrix dimensions match qubit count")
     func partitionMatrixDimensions() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
             unitaryMatrix: [[Complex(1.0, 0.0)]],
@@ -587,8 +587,8 @@ struct UnitaryPartitioningTests {
             maxOffDiagonalNorm: 0.1
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let inputTerms = [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)]
         let partitions = partitioner.partition(terms: inputTerms, numQubits: 1)
         let totalTerms = partitions.reduce(0) { $0 + $1.terms.count }
@@ -597,7 +597,7 @@ struct UnitaryPartitioningTests {
 
     @Test("Unitary partition numQubits property")
     func unitaryPartitionNumQubits() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
+        let ps = PauliString(.x(0), .y(1))
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
             unitaryMatrix: [[Complex(1.0, 0.0)]],
@@ -608,7 +608,7 @@ struct UnitaryPartitioningTests {
 
     @Test("Unitary partition stores terms correctly")
     func unitaryPartitionStoresTerms() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
             unitaryMatrix: [[Complex(1.0, 0.0)]],
@@ -620,7 +620,7 @@ struct UnitaryPartitioningTests {
 
     @Test("Unitary partition measurement basis property")
     func unitaryPartitionMeasurementBasis() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
+        let ps = PauliString(.x(0), .y(1))
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
             unitaryMatrix: [[Complex(1.0, 0.0)]],
@@ -633,8 +633,8 @@ struct UnitaryPartitioningTests {
 
     @Test("Unitary partition weight property")
     func unitaryPartitionWeight() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let partition = UnitaryPartition(
             terms: [(coefficient: 2.0, pauliString: ps1), (coefficient: -3.5, pauliString: ps2)],
             unitaryMatrix: [[Complex(1.0, 0.0)]],
@@ -653,8 +653,8 @@ struct UnitaryPartitioningTests {
             maxOffDiagonalNorm: 0.1
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)], numQubits: 1)
         #expect(!partitions.isEmpty)
     }
@@ -669,8 +669,8 @@ struct UnitaryPartitioningTests {
             maxOffDiagonalNorm: 0.2
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .x)])
+        let ps1 = PauliString(.x(0), .y(1))
+        let ps2 = PauliString(.y(0), .x(1))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)], numQubits: 2)
         #expect(!partitions.isEmpty)
     }
@@ -685,7 +685,7 @@ struct UnitaryPartitioningTests {
             maxOffDiagonalNorm: 0.15
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps = PauliString(.z(0))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)], numQubits: 1)
         #expect(!partitions.isEmpty)
     }
@@ -698,9 +698,9 @@ struct UnitaryPartitioningTests {
 struct ObservableApproximationTests {
     @Test("Truncate with threshold")
     func truncateWithThreshold() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
+        let ps3 = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.1, pauliString: ps2), (coefficient: 0.01, pauliString: ps3)])
         let truncated = observable.truncate(threshold: 0.05)
         #expect(truncated.terms.count == 2)
@@ -708,8 +708,8 @@ struct ObservableApproximationTests {
 
     @Test("Truncate keeps largest term when all below threshold")
     func truncateKeepsLargest() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 0.01, pauliString: ps1), (coefficient: 0.02, pauliString: ps2)])
         let truncated = observable.truncate(threshold: 0.1)
         #expect(truncated.terms.count == 1)
@@ -718,7 +718,7 @@ struct ObservableApproximationTests {
 
     @Test("Truncate with zero threshold keeps all terms")
     func truncateZeroThreshold() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: 0.1, pauliString: ps)])
         let truncated = observable.truncate(threshold: 0.0)
         #expect(truncated.terms.count == 2)
@@ -733,9 +733,9 @@ struct ObservableApproximationTests {
 
     @Test("Top-K selection")
     func topKSelection() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
+        let ps3 = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 3.0, pauliString: ps2), (coefficient: 2.0, pauliString: ps3)])
         let topK = observable.topK(k: 2)
         #expect(topK.terms.count == 2)
@@ -744,7 +744,7 @@ struct ObservableApproximationTests {
 
     @Test("Top-K with k larger than term count")
     func topKLargerThanCount() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps)])
         let topK = observable.topK(k: 10)
         #expect(topK.terms.count == 2)
@@ -752,7 +752,7 @@ struct ObservableApproximationTests {
 
     @Test("Top-K with k equal to zero returns largest term")
     func topKZero() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let topK = observable.topK(k: 0)
         #expect(topK.terms.count == 1)
@@ -760,7 +760,7 @@ struct ObservableApproximationTests {
 
     @Test("Approximation error calculation")
     func approximationError() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 0.9, pauliString: ps)])
         let state = QuantumState(numQubits: 1)
@@ -770,7 +770,7 @@ struct ObservableApproximationTests {
 
     @Test("Approximation error for identical observables")
     func approximationErrorIdentical() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let state = QuantumState(numQubits: 1)
         let error = observable.approximationError(approximate: observable, state: state)
@@ -820,8 +820,8 @@ struct ObservableApproximationTests {
 
     @Test("Approximation statistics computation")
     func approximationStatistics() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let approximate = Observable(terms: [(coefficient: 1.0, pauliString: ps1)])
         let stats = full.approximationStatistics(approximate: approximate)
@@ -832,7 +832,7 @@ struct ObservableApproximationTests {
 
     @Test("Approximation statistics for identical observables")
     func approximationStatisticsIdentical() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let stats = observable.approximationStatistics(approximate: observable)
         #expect(stats.originalTerms == stats.approximateTerms)
@@ -841,7 +841,7 @@ struct ObservableApproximationTests {
 
     @Test("Approximation statistics description format")
     func approximationStatisticsDescription() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let stats = full.approximationStatistics(approximate: full)
         let description = stats.description
@@ -852,7 +852,7 @@ struct ObservableApproximationTests {
 
     @Test("Relative approximation error calculation")
     func relativeApproximationError() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps = PauliString(.z(0))
         let full = Observable(terms: [(coefficient: 2.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 1.8, pauliString: ps)])
         let state = QuantumState(numQubits: 1)
@@ -863,7 +863,7 @@ struct ObservableApproximationTests {
 
     @Test("Relative approximation error with zero exact value")
     func relativeApproximationErrorZeroExact() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: -1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let state = QuantumState(numQubits: 1)
@@ -873,8 +873,8 @@ struct ObservableApproximationTests {
 
     @Test("Adaptive truncate with schedule")
     func adaptiveTruncate() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.1, pauliString: ps2)])
         let schedule = Observable.AdaptiveSchedule(
             initialThreshold: 0.5,
@@ -887,7 +887,7 @@ struct ObservableApproximationTests {
 
     @Test("Validate approximation within tolerance")
     func validateApproximation() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps = PauliString(.z(0))
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 0.99, pauliString: ps)])
         let state = QuantumState(numQubits: 1)
@@ -897,7 +897,7 @@ struct ObservableApproximationTests {
 
     @Test("Validate approximation outside tolerance")
     func validateApproximationOutsideTolerance() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps = PauliString(.z(0))
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 0.5, pauliString: ps)])
         let state = QuantumState(numQubits: 1)
@@ -907,9 +907,9 @@ struct ObservableApproximationTests {
 
     @Test("Find optimal threshold for approximation")
     func findOptimalThreshold() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
+        let ps3 = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.5, pauliString: ps2), (coefficient: 0.1, pauliString: ps3)])
         let state = QuantumState(numQubits: 1)
         let threshold = observable.findOptimalThreshold(state: state, maxError: 0.2, searchSteps: 10)
@@ -919,9 +919,9 @@ struct ObservableApproximationTests {
 
     @Test("Find optimal threshold with strict error constraint")
     func findOptimalThresholdStrictConstraint() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .z)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .z)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps1 = PauliString(.z(0))
+        let ps2 = PauliString(.z(0))
+        let ps3 = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.3, pauliString: ps2), (coefficient: 0.1, pauliString: ps3)])
         let state = QuantumState(numQubits: 1)
         let threshold = observable.findOptimalThreshold(state: state, maxError: 0.01, searchSteps: 20)
@@ -939,7 +939,7 @@ struct ObservableApproximationTests {
 
     @Test("Approximation statistics with empty original observable")
     func approximationStatsEmptyOriginal() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let empty = Observable(terms: [])
         let nonEmpty = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let stats = empty.approximationStatistics(approximate: nonEmpty)
@@ -961,9 +961,9 @@ struct ObservableApproximationTests {
     @Test("topK with k=0 returns single largest term")
     func topKZeroReturnsLargest() {
         let observable = Observable(terms: [
-            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
-            (coefficient: 3.5, pauliString: PauliString(operators: [(1, .z)])),
-            (coefficient: -2.0, pauliString: PauliString(operators: [(2, .y)])),
+            (coefficient: 1.0, pauliString: PauliString(.x(0))),
+            (coefficient: 3.5, pauliString: PauliString(.z(1))),
+            (coefficient: -2.0, pauliString: PauliString(.y(2))),
         ])
 
         let approx = observable.topK(k: 0)
@@ -983,8 +983,8 @@ struct ObservableApproximationTests {
     @Test("topK with negative k returns largest term")
     func topKNegativeReturnsLargest() {
         let observable = Observable(terms: [
-            (coefficient: -5.0, pauliString: PauliString(operators: [(0, .z)])),
-            (coefficient: 2.0, pauliString: PauliString(operators: [(1, .x)])),
+            (coefficient: -5.0, pauliString: PauliString(.z(0))),
+            (coefficient: 2.0, pauliString: PauliString(.x(1))),
         ])
 
         let approx = observable.topK(k: -1)
@@ -996,9 +996,9 @@ struct ObservableApproximationTests {
     @Test("topK with k=1 returns single largest term")
     func topKOneReturnsLargest() {
         let observable = Observable(terms: [
-            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
-            (coefficient: 4.0, pauliString: PauliString(operators: [(1, .z)])),
-            (coefficient: -2.0, pauliString: PauliString(operators: [(2, .y)])),
+            (coefficient: 1.0, pauliString: PauliString(.x(0))),
+            (coefficient: 4.0, pauliString: PauliString(.z(1))),
+            (coefficient: -2.0, pauliString: PauliString(.y(2))),
         ])
 
         let approx = observable.topK(k: 1)
@@ -1010,10 +1010,10 @@ struct ObservableApproximationTests {
     @Test("topK with k=2 returns two largest terms")
     func topKTwoReturnsTopTwo() {
         let observable = Observable(terms: [
-            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
-            (coefficient: 4.0, pauliString: PauliString(operators: [(1, .z)])),
-            (coefficient: -3.0, pauliString: PauliString(operators: [(2, .y)])),
-            (coefficient: 2.0, pauliString: PauliString(operators: [(3, .x)])),
+            (coefficient: 1.0, pauliString: PauliString(.x(0))),
+            (coefficient: 4.0, pauliString: PauliString(.z(1))),
+            (coefficient: -3.0, pauliString: PauliString(.y(2))),
+            (coefficient: 2.0, pauliString: PauliString(.x(3))),
         ])
 
         let approx = observable.topK(k: 2)
@@ -1028,8 +1028,8 @@ struct ObservableApproximationTests {
     @Test("topK with k larger than term count returns all terms")
     func topKLargerThanCountReturnsAll() {
         let observable = Observable(terms: [
-            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
-            (coefficient: 2.0, pauliString: PauliString(operators: [(1, .z)])),
+            (coefficient: 1.0, pauliString: PauliString(.x(0))),
+            (coefficient: 2.0, pauliString: PauliString(.z(1))),
         ])
 
         let approx = observable.topK(k: 10)
@@ -1040,9 +1040,9 @@ struct ObservableApproximationTests {
     @Test("topK selects by absolute value of coefficient")
     func topKSelectsByAbsoluteValue() {
         let observable = Observable(terms: [
-            (coefficient: 1.0, pauliString: PauliString(operators: [(0, .x)])),
-            (coefficient: -5.0, pauliString: PauliString(operators: [(1, .z)])),
-            (coefficient: 3.0, pauliString: PauliString(operators: [(2, .y)])),
+            (coefficient: 1.0, pauliString: PauliString(.x(0))),
+            (coefficient: -5.0, pauliString: PauliString(.z(1))),
+            (coefficient: 3.0, pauliString: PauliString(.y(2))),
         ])
 
         let approx = observable.topK(k: 1)
@@ -1059,8 +1059,8 @@ struct ObservableApproximationTests {
 struct MeasurementOptimizationIntegrationTests {
     @Test("QWC groups caching")
     func qwcGroupsCaching() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let groups1 = observable.qwcGroups
         let groups2 = observable.qwcGroups
@@ -1071,7 +1071,7 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("QWC groups for single term")
     func qwcGroupsSingleTerm() async {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let groups = observable.qwcGroups
         await #expect(groups().count == 1)
@@ -1080,9 +1080,9 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("QWC groups reduce measurement count")
     func qwcGroupsReduceMeasurements() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 1, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.x(0), .y(1))
+        let ps3 = PauliString(.y(1))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3)])
         let groups = observable.qwcGroups
         await #expect(groups().count < 3)
@@ -1090,8 +1090,8 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Unitary partitions caching")
     func unitaryPartitionsCaching() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let config = UnitaryPartitioner.Config(
             maxIterations: 5,
@@ -1107,7 +1107,7 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Unitary partitions for single term")
     func unitaryPartitionsSingleTerm() async {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let config = UnitaryPartitioner.Config(
             maxIterations: 5,
@@ -1122,8 +1122,8 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Shot allocation for observable terms")
     func shotAllocationForTerms() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 3.0, pauliString: ps2)])
         let config = ShotAllocator.Config.default
         let allocation = observable.allocateShots(totalShots: 1000, state: nil, config: config)
@@ -1133,8 +1133,8 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Shot allocation for QWC groups")
     func shotAllocationForGroups() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.x(0), .y(1))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let config = ShotAllocator.Config.default
         let allocation = await observable.allocateShotsForGroups(totalShots: 1000, state: nil, config: config)
@@ -1143,8 +1143,8 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Measurement optimization statistics computation")
     func measurementOptimizationStatistics() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let stats = await observable.measurementOptimizationStatistics(numQubits: 1)
         #expect(stats.numTerms == 2)
@@ -1153,7 +1153,7 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Measurement optimization statistics description format")
     func measurementOptimizationStatisticsDescription() async {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let stats = await observable.measurementOptimizationStatistics(numQubits: 1)
         let description = stats.description
@@ -1172,8 +1172,8 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Different observables have different QWC groups")
     func differentObservablesDifferentGroups() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let obs1 = Observable(terms: [(coefficient: 1.0, pauliString: ps1)])
         let obs2 = Observable(terms: [(coefficient: 1.0, pauliString: ps2)])
         let groups1 = obs1.qwcGroups
@@ -1187,8 +1187,8 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Shot allocation respects minimum shots")
     func shotAllocationRespectsMinimum() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 100.0, pauliString: ps2)])
         let config = ShotAllocator.Config(minShotsPerTerm: 50, roundToInteger: true)
         let allocation = observable.allocateShots(totalShots: 500, state: nil, config: config)
@@ -1199,10 +1199,10 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Measurement optimization reduces required measurements")
     func measurementOptimizationReduces() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps3 = PauliString(operators: [(qubit: 1, basis: .y)])
-        let ps4 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
+        let ps1 = PauliString(.x(0), .y(1))
+        let ps2 = PauliString(.x(0))
+        let ps3 = PauliString(.y(1))
+        let ps4 = PauliString(.x(0), .y(1))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3), (coefficient: 4.0, pauliString: ps4)])
         let groups = observable.qwcGroups
         await #expect(groups().count < observable.terms.count)
@@ -1210,7 +1210,7 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Clear grouping caches")
     func clearGroupingCaches() async {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
 
         let groups1 = observable.qwcGroups
@@ -1224,8 +1224,8 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Measurement circuits for term-by-term strategy")
     func measurementCircuitsTermByTerm() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let count = await observable.measurementCircuits(strategy: .termByTerm)
         #expect(count == 2)
@@ -1233,8 +1233,8 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Measurement circuits for QWC grouping strategy")
     func measurementCircuitsQwcGrouping() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let count = await observable.measurementCircuits(strategy: .qwcGrouping)
         #expect(count == 1)
@@ -1242,7 +1242,7 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Measurement circuits for unitary partitioning strategy")
     func measurementCircuitsUnitaryPartitioning() async {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let config = UnitaryPartitioner.Config(
             maxIterations: 5,
@@ -1257,7 +1257,7 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Measurement circuits for automatic strategy selection")
     func measurementCircuitsAutomatic() async {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let count = await observable.measurementCircuits(strategy: .automatic(numQubits: 1))
         #expect(count >= 1)
@@ -1265,7 +1265,7 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Shot allocation with state for variance estimation")
     func shotAllocationWithState() {
-        let ps = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps)])
         var circuit = QuantumCircuit(numQubits: 1)
         circuit.append(.hadamard, to: 0)
@@ -1277,8 +1277,8 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Shot allocation for groups with state")
     func shotAllocationForGroupsWithState() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         var circuit = QuantumCircuit(numQubits: 1)
         circuit.append(.hadamard, to: 0)
@@ -1294,7 +1294,12 @@ struct MeasurementOptimizationIntegrationTests {
         for i in 0 ..< 600 {
             let qubit = i % 5
             let basis: PauliBasis = [.x, .y, .z][i % 3]
-            let ps = PauliString(operators: [(qubit: qubit, basis: basis)])
+            let op = switch basis {
+            case .x: PauliOperator.x(qubit)
+            case .y: PauliOperator.y(qubit)
+            case .z: PauliOperator.z(qubit)
+            }
+            let ps = PauliString(op)
             terms.append((coefficient: 1.0, pauliString: ps))
         }
         let observable = Observable(terms: terms)
@@ -1308,7 +1313,12 @@ struct MeasurementOptimizationIntegrationTests {
         for i in 0 ..< 600 {
             let qubit = i % 20
             let basis: PauliBasis = [.x, .y, .z][i % 3]
-            let ps = PauliString(operators: [(qubit: qubit, basis: basis)])
+            let op = switch basis {
+            case .x: PauliOperator.x(qubit)
+            case .y: PauliOperator.y(qubit)
+            case .z: PauliOperator.z(qubit)
+            }
+            let ps = PauliString(op)
             terms.append((coefficient: Double(i % 10 + 1) * 0.1, pauliString: ps))
         }
         let observable = Observable(terms: terms)
@@ -1321,9 +1331,9 @@ struct MeasurementOptimizationIntegrationTests {
     func shotAllocationWithRemainingShots() {
         let config = ShotAllocator.Config(minShotsPerTerm: 1, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
+        let ps3 = PauliString(.z(0))
         let terms = [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3)]
         let allocation = allocator.allocate(terms: terms, totalShots: 100, state: nil)
         #expect(allocation.count == 3)
@@ -1335,10 +1345,10 @@ struct MeasurementOptimizationIntegrationTests {
     func shotAllocationDistributesRemainder() {
         let config = ShotAllocator.Config(minShotsPerTerm: 1, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z)])
-        let ps4 = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
+        let ps3 = PauliString(.z(0))
+        let ps4 = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3), (coefficient: 1.0, pauliString: ps4)]
         let allocation = allocator.allocate(terms: terms, totalShots: 97, state: nil)
         #expect(allocation.count == 4)
@@ -1350,9 +1360,9 @@ struct MeasurementOptimizationIntegrationTests {
     func shotAllocationGroupsWithRemainingShots() {
         let config = ShotAllocator.Config(minShotsPerTerm: 1, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
+        let ps3 = PauliString(.z(0))
         let group1 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps1)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps2)], measurementBasis: [0: .y])
         let group3 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps3)], measurementBasis: [0: .z])
@@ -1366,7 +1376,7 @@ struct MeasurementOptimizationIntegrationTests {
     func shotAllocationGroupsDistributesRemainder() {
         let config = ShotAllocator.Config(minShotsPerTerm: 1, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let group1 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps)], measurementBasis: [0: .y])
         let group3 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps)], measurementBasis: [0: .z])
@@ -1381,7 +1391,7 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Shot allocation for groups with zero total weight")
     func shotAllocationGroupsZeroWeight() {
         let allocator = ShotAllocator()
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let group1 = QWCGroup(terms: [(coefficient: 0.0, pauliString: ps)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 0.0, pauliString: ps)], measurementBasis: [0: .y])
         let allocation = allocator.allocateForGroups(groups: [group1, group2], totalShots: 1000, state: nil)
@@ -1393,8 +1403,8 @@ struct MeasurementOptimizationIntegrationTests {
     func shotAllocationGroupsShotsReduction() {
         let config = ShotAllocator.Config(minShotsPerTerm: 400, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let group1 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps1)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps2)], measurementBasis: [0: .y])
         let allocation = allocator.allocateForGroups(groups: [group1, group2], totalShots: 500, state: nil)
@@ -1414,7 +1424,12 @@ struct MeasurementOptimizationIntegrationTests {
         for i in 0 ..< 600 {
             let qubit = i % 12
             let basis: PauliBasis = [.x, .y, .z][i % 3]
-            let ps = PauliString(operators: [(qubit: qubit, basis: basis)])
+            let op = switch basis {
+            case .x: PauliOperator.x(qubit)
+            case .y: PauliOperator.y(qubit)
+            case .z: PauliOperator.z(qubit)
+            }
+            let ps = PauliString(op)
             terms.append((coefficient: Double(i % 10 + 1) * 0.1, pauliString: ps))
         }
         let observable = Observable(terms: terms)
@@ -1433,9 +1448,9 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 0.5
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
+        let ps3 = PauliString(.z(0))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.8, pauliString: ps2), (coefficient: 0.6, pauliString: ps3)], numQubits: 1)
         #expect(!partitions.isEmpty)
     }
@@ -1450,9 +1465,9 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 1e-15
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .x)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z), (qubit: 1, basis: .z)])
+        let ps1 = PauliString(.x(0), .y(1))
+        let ps2 = PauliString(.y(0), .x(1))
+        let ps3 = PauliString(.z(0), .z(1))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3)], numQubits: 2)
         #expect(partitions.count >= 1)
     }
@@ -1467,10 +1482,10 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 1e-15
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z)])
-        let ps4 = PauliString(operators: [(qubit: 1, basis: .x)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
+        let ps3 = PauliString(.z(0))
+        let ps4 = PauliString(.x(1))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3), (coefficient: 1.0, pauliString: ps4)], numQubits: 2)
 
         #expect(partitions.count >= 2)
@@ -1489,10 +1504,10 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 0.2
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .z)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z), (qubit: 1, basis: .x)])
-        let ps4 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .z)])
+        let ps1 = PauliString(.x(0), .y(1))
+        let ps2 = PauliString(.y(0), .z(1))
+        let ps3 = PauliString(.z(0), .x(1))
+        let ps4 = PauliString(.x(0), .z(1))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.9, pauliString: ps2), (coefficient: 0.8, pauliString: ps3), (coefficient: 0.7, pauliString: ps4)], numQubits: 2)
         #expect(!partitions.isEmpty)
     }
@@ -1507,9 +1522,9 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 0.25
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z), (qubit: 1, basis: .z)])
+        let ps1 = PauliString(.x(0), .x(1))
+        let ps2 = PauliString(.y(0), .y(1))
+        let ps3 = PauliString(.z(0), .z(1))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.95, pauliString: ps2), (coefficient: 0.85, pauliString: ps3)], numQubits: 2)
         #expect(!partitions.isEmpty)
     }
@@ -1524,9 +1539,9 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 0.15
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y), (qubit: 2, basis: .z)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .z), (qubit: 2, basis: .x)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z), (qubit: 1, basis: .x), (qubit: 2, basis: .y)])
+        let ps1 = PauliString(.x(0), .y(1), .z(2))
+        let ps2 = PauliString(.y(0), .z(1), .x(2))
+        let ps3 = PauliString(.z(0), .x(1), .y(2))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.9, pauliString: ps2), (coefficient: 0.8, pauliString: ps3)], numQubits: 3)
         #expect(!partitions.isEmpty)
     }
@@ -1541,8 +1556,8 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 1e-16
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y), (qubit: 2, basis: .z)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .z), (qubit: 2, basis: .x)])
+        let ps1 = PauliString(.x(0), .y(1), .z(2))
+        let ps2 = PauliString(.y(0), .z(1), .x(2))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)], numQubits: 3)
         #expect(partitions.count >= 1)
     }
@@ -1557,8 +1572,8 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 0.8
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.5, pauliString: ps2)], numQubits: 1)
         #expect(!partitions.isEmpty)
     }
@@ -1573,10 +1588,10 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 0.2
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .z)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z), (qubit: 1, basis: .x)])
-        let ps4 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .x)])
+        let ps1 = PauliString(.x(0), .y(1))
+        let ps2 = PauliString(.y(0), .z(1))
+        let ps3 = PauliString(.z(0), .x(1))
+        let ps4 = PauliString(.x(0), .x(1))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.9, pauliString: ps2), (coefficient: 0.8, pauliString: ps3), (coefficient: 0.7, pauliString: ps4)], numQubits: 2)
         #expect(!partitions.isEmpty)
     }
@@ -1591,11 +1606,11 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 0.18
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y), (qubit: 2, basis: .z)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .z), (qubit: 2, basis: .x)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z), (qubit: 1, basis: .x), (qubit: 2, basis: .y)])
-        let ps4 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .x), (qubit: 2, basis: .x)])
-        let ps5 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .y), (qubit: 2, basis: .y)])
+        let ps1 = PauliString(.x(0), .y(1), .z(2))
+        let ps2 = PauliString(.y(0), .z(1), .x(2))
+        let ps3 = PauliString(.z(0), .x(1), .y(2))
+        let ps4 = PauliString(.x(0), .x(1), .x(2))
+        let ps5 = PauliString(.y(0), .y(1), .y(2))
         let partitions = partitioner.partition(
             terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.95, pauliString: ps2), (coefficient: 0.9, pauliString: ps3), (coefficient: 0.85, pauliString: ps4), (coefficient: 0.8, pauliString: ps5)],
             numQubits: 3
@@ -1613,11 +1628,11 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 0.22
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .x)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z), (qubit: 1, basis: .z)])
-        let ps4 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .z)])
-        let ps5 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .z)])
+        let ps1 = PauliString(.x(0), .y(1))
+        let ps2 = PauliString(.y(0), .x(1))
+        let ps3 = PauliString(.z(0), .z(1))
+        let ps4 = PauliString(.x(0), .z(1))
+        let ps5 = PauliString(.y(0), .z(1))
         let partitions = partitioner.partition(
             terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.92, pauliString: ps2), (coefficient: 0.88, pauliString: ps3), (coefficient: 0.84, pauliString: ps4), (coefficient: 0.8, pauliString: ps5)],
             numQubits: 2
@@ -1627,8 +1642,8 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Cache collision detection prevents wrong results")
     func cacheCollisionDetection() async {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
         let obs1 = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let obs2 = Observable(terms: [(coefficient: 3.0, pauliString: ps1), (coefficient: 4.0, pauliString: ps2)])
 
@@ -1645,8 +1660,8 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Batch variance estimation with state")
     func batchVarianceEstimation() {
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .z)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps1 = PauliString(.z(0))
+        let ps2 = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
 
         var circuit = QuantumCircuit(numQubits: 1)
@@ -1664,8 +1679,8 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Variance reduction estimation with state parameter")
     func varianceReductionWithState() {
         let allocator = ShotAllocator()
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .z)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps1 = PauliString(.z(0))
+        let ps2 = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps1), (coefficient: 10.0, pauliString: ps2)]
 
         var circuit = QuantumCircuit(numQubits: 1)
@@ -1686,7 +1701,7 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Variance reduction without state uses conservative estimate")
     func varianceReductionWithoutState() {
         let allocator = ShotAllocator()
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 10.0, pauliString: ps)]
         let allocation = allocator.allocate(terms: terms, totalShots: 1000, state: nil)
         let reduction = allocator.estimateVarianceReduction(
@@ -1709,9 +1724,9 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 0.2
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
+        let ps3 = PauliString(.z(0))
 
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.9, pauliString: ps2), (coefficient: 0.8, pauliString: ps3)], numQubits: 1)
 
@@ -1724,7 +1739,7 @@ struct MeasurementOptimizationIntegrationTests {
     func effectiveMinimumPreventsOverAllocation() {
         let config = ShotAllocator.Config(minShotsPerTerm: 1000, roundToInteger: true)
         let allocator = ShotAllocator(config: config)
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
 
         let terms = Array(repeating: (coefficient: 1.0, pauliString: ps), count: 10)
         let allocation = allocator.allocate(terms: terms, totalShots: 1000, state: nil)
@@ -1741,7 +1756,7 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Cache returns correct values after clear")
     func cacheReturnsCorrectValuesAfterClear() async {
-        let ps = PauliString(operators: [(qubit: 0, basis: .x)])
+        let ps = PauliString(.x(0))
         let obs1 = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
 
         let groups1 = obs1.qwcGroups
@@ -1767,9 +1782,9 @@ struct MeasurementOptimizationIntegrationTests {
         )
         let partitioner = UnitaryPartitioner(config: config)
 
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
+        let ps3 = PauliString(.z(0))
 
         let partitions = partitioner.partition(
             terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3)],
@@ -1793,8 +1808,8 @@ struct MeasurementOptimizationIntegrationTests {
         )
         let partitioner = UnitaryPartitioner(config: config)
 
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
 
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)], numQubits: 1)
 
@@ -1814,9 +1829,9 @@ struct MeasurementOptimizationIntegrationTests {
         )
         let partitioner = UnitaryPartitioner(config: config)
 
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z), (qubit: 1, basis: .z)])
+        let ps1 = PauliString(.x(0), .x(1))
+        let ps2 = PauliString(.y(0), .y(1))
+        let ps3 = PauliString(.z(0), .z(1))
 
         let partitions = partitioner.partition(
             terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 0.5, pauliString: ps3)],
@@ -1839,8 +1854,8 @@ struct MeasurementOptimizationIntegrationTests {
         )
         let partitioner = UnitaryPartitioner(config: config)
 
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y)])
+        let ps1 = PauliString(.x(0))
+        let ps2 = PauliString(.y(0))
 
         let partitions = partitioner.partition(
             terms: [(coefficient: 10.0, pauliString: ps1), (coefficient: 0.1, pauliString: ps2)],
@@ -1868,7 +1883,7 @@ struct MeasurementOptimizationIntegrationTests {
             maxOffDiagonalNorm: 0.01
         )
         let partitioner = UnitaryPartitioner(config: config)
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .z)])
+        let ps1 = PauliString(.z(0))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1)], numQubits: 1)
 
         #expect(partitions.count == 1)
@@ -1886,10 +1901,10 @@ struct MeasurementOptimizationIntegrationTests {
         )
         let partitioner = UnitaryPartitioner(config: config)
 
-        let ps1 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .x), (qubit: 2, basis: .x)])
-        let ps2 = PauliString(operators: [(qubit: 0, basis: .y), (qubit: 1, basis: .y), (qubit: 2, basis: .y)])
-        let ps3 = PauliString(operators: [(qubit: 0, basis: .z), (qubit: 1, basis: .z), (qubit: 2, basis: .z)])
-        let ps4 = PauliString(operators: [(qubit: 0, basis: .x), (qubit: 1, basis: .y), (qubit: 2, basis: .z)])
+        let ps1 = PauliString(.x(0), .x(1), .x(2))
+        let ps2 = PauliString(.y(0), .y(1), .y(2))
+        let ps3 = PauliString(.z(0), .z(1), .z(2))
+        let ps4 = PauliString(.x(0), .y(1), .z(2))
 
         let terms: PauliTerms = [
             (coefficient: 1.0, pauliString: ps1),

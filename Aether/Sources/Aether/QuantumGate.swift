@@ -21,28 +21,39 @@ private let invSqrt2: Double = 1.0 / 2.0.squareRoot()
 /// **Gate categories**:
 /// - **Pauli gates**: X (bit flip), Y (bit+phase flip), Z (phase flip)
 /// - **Hadamard**: Creates superposition (basis rotation)
-/// - **Phase gates**: P(θ), S (π/2), T (π/4), U1(λ)
-/// - **Rotation gates**: Rx(θ), Ry(θ), Rz(θ) - parameterized rotations
-/// - **IBM gates**: U1, U2, U3 (universal single-qubit gates)
-/// - **Controlled gates**: CNOT, CZ, CY, CH, controlled rotations
+/// - **Phase gates**: P(θ), S (π/2), T (π/4), U1(λ) - support symbolic parameters
+/// - **Rotation gates**: Rx(θ), Ry(θ), Rz(θ) - parameterized rotations with symbolic/concrete values
+/// - **IBM gates**: U1, U2, U3 (universal single-qubit gates with symbolic parameters)
+/// - **Controlled gates**: CNOT, CZ, CY, CH, controlled rotations (symbolic parameters)
 /// - **Multi-qubit**: SWAP, √SWAP, Toffoli (CCNOT)
 /// - **Custom gates**: User-defined unitaries with validation
 ///
+/// **Parameter support**:
+/// Gates with angles support both symbolic parameters and concrete values via ``ParameterValue``.
+/// This enables building variational circuits once, then binding different parameter values
+/// per optimization iteration without circuit reconstruction.
+///
 /// **Usage patterns**:
-/// - Single-qubit: Apply to specific qubit in circuit
-/// - Controlled gates: Specify control and target qubits
-/// - Matrix access: Use ``matrix()`` to get unitary representation
-/// - Validation: Gates validate qubit indices and matrix unitarity
+/// - **Static circuits**: Use concrete values directly
+/// - **Variational circuits**: Use symbolic ``Parameter`` instances, bind before execution
+/// - **Mixed circuits**: Combine symbolic and concrete gates in same circuit
 ///
 /// Example:
 /// ```swift
+/// // Static circuit with concrete values
 /// var circuit = QuantumCircuit(numQubits: 2)
-/// circuit.append(gate: .hadamard, qubit: 0)
-/// circuit.append(gate: .cnot, qubits: [0, 1])
-/// let bellState = circuit.execute()
+/// circuit.append(.hadamard, to: 0)
+/// circuit.append(.rotationY(.pi/4), to: 1)
+/// circuit.append(.cnot, to: [0, 1])
+///
+/// // Variational circuit with symbolic parameters
+/// let theta = Parameter(name: "theta")
+/// circuit.append(.rotationY(theta), to: 0)
+/// let bound = circuit.binding(["theta": 1.57])
+/// let state = bound.execute()
 /// ```
 ///
-/// - SeeAlso: ``QuantumCircuit``, ``GateApplication``, ``ParameterizedGate``
+/// - SeeAlso: ``QuantumCircuit``, ``GateApplication``, ``Parameter``, ``ParameterValue``
 public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable {
     // MARK: - Single-Qubit Gates
 
@@ -51,15 +62,15 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     case pauliY
     case pauliZ
     case hadamard
-    case phase(angle: Double)
+    case phase(ParameterValue)
     case sGate
     case tGate
-    case rotationX(theta: Double)
-    case rotationY(theta: Double)
-    case rotationZ(theta: Double)
-    case u1(lambda: Double)
-    case u2(phi: Double, lambda: Double)
-    case u3(theta: Double, phi: Double, lambda: Double)
+    case rotationX(ParameterValue)
+    case rotationY(ParameterValue)
+    case rotationZ(ParameterValue)
+    case u1(lambda: ParameterValue)
+    case u2(phi: ParameterValue, lambda: ParameterValue)
+    case u3(theta: ParameterValue, phi: ParameterValue, lambda: ParameterValue)
     case sx
     case sy
     case customSingleQubit(matrix: [[Complex<Double>]])
@@ -70,10 +81,10 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     case cz
     case cy
     case ch
-    case controlledPhase(theta: Double)
-    case controlledRotationX(theta: Double)
-    case controlledRotationY(theta: Double)
-    case controlledRotationZ(theta: Double)
+    case controlledPhase(ParameterValue)
+    case controlledRotationX(ParameterValue)
+    case controlledRotationY(ParameterValue)
+    case controlledRotationZ(ParameterValue)
     case swap
     case sqrtSwap
     case customTwoQubit(matrix: [[Complex<Double>]])
@@ -81,6 +92,140 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     // MARK: - Multi-Qubit Gates
 
     case toffoli
+
+    // MARK: - Convenience Constructors
+
+    /// Create rotation-X gate with concrete angle
+    @inlinable
+    public static func rotationX(_ theta: Double) -> QuantumGate {
+        .rotationX(.value(theta))
+    }
+
+    /// Create rotation-X gate with symbolic parameter
+    @inlinable
+    public static func rotationX(_ param: Parameter) -> QuantumGate {
+        .rotationX(.parameter(param))
+    }
+
+    /// Create rotation-Y gate with concrete angle
+    @inlinable
+    public static func rotationY(_ theta: Double) -> QuantumGate {
+        .rotationY(.value(theta))
+    }
+
+    /// Create rotation-Y gate with symbolic parameter
+    @inlinable
+    public static func rotationY(_ param: Parameter) -> QuantumGate {
+        .rotationY(.parameter(param))
+    }
+
+    /// Create rotation-Z gate with concrete angle
+    @inlinable
+    public static func rotationZ(_ theta: Double) -> QuantumGate {
+        .rotationZ(.value(theta))
+    }
+
+    /// Create rotation-Z gate with symbolic parameter
+    @inlinable
+    public static func rotationZ(_ param: Parameter) -> QuantumGate {
+        .rotationZ(.parameter(param))
+    }
+
+    /// Create phase gate with concrete angle
+    @inlinable
+    public static func phase(_ angle: Double) -> QuantumGate {
+        .phase(.value(angle))
+    }
+
+    /// Create phase gate with symbolic parameter
+    @inlinable
+    public static func phase(_ param: Parameter) -> QuantumGate {
+        .phase(.parameter(param))
+    }
+
+    /// Create controlled-phase gate with concrete angle
+    @inlinable
+    public static func controlledPhase(_ theta: Double) -> QuantumGate {
+        .controlledPhase(.value(theta))
+    }
+
+    /// Create controlled-phase gate with symbolic parameter
+    @inlinable
+    public static func controlledPhase(_ param: Parameter) -> QuantumGate {
+        .controlledPhase(.parameter(param))
+    }
+
+    /// Create controlled-Rx gate with concrete angle
+    @inlinable
+    public static func controlledRotationX(_ theta: Double) -> QuantumGate {
+        .controlledRotationX(.value(theta))
+    }
+
+    /// Create controlled-Rx gate with symbolic parameter
+    @inlinable
+    public static func controlledRotationX(_ param: Parameter) -> QuantumGate {
+        .controlledRotationX(.parameter(param))
+    }
+
+    /// Create controlled-Ry gate with concrete angle
+    @inlinable
+    public static func controlledRotationY(_ theta: Double) -> QuantumGate {
+        .controlledRotationY(.value(theta))
+    }
+
+    /// Create controlled-Ry gate with symbolic parameter
+    @inlinable
+    public static func controlledRotationY(_ param: Parameter) -> QuantumGate {
+        .controlledRotationY(.parameter(param))
+    }
+
+    /// Create controlled-Rz gate with concrete angle
+    @inlinable
+    public static func controlledRotationZ(_ theta: Double) -> QuantumGate {
+        .controlledRotationZ(.value(theta))
+    }
+
+    /// Create controlled-Rz gate with symbolic parameter
+    @inlinable
+    public static func controlledRotationZ(_ param: Parameter) -> QuantumGate {
+        .controlledRotationZ(.parameter(param))
+    }
+
+    /// Create U1 gate with concrete lambda
+    @inlinable
+    public static func u1(lambda: Double) -> QuantumGate {
+        .u1(lambda: .value(lambda))
+    }
+
+    /// Create U1 gate with symbolic parameter
+    @inlinable
+    public static func u1(lambda param: Parameter) -> QuantumGate {
+        .u1(lambda: .parameter(param))
+    }
+
+    /// Create U2 gate with concrete angles
+    @inlinable
+    public static func u2(phi: Double, lambda: Double) -> QuantumGate {
+        .u2(phi: .value(phi), lambda: .value(lambda))
+    }
+
+    /// Create U2 gate with symbolic parameters
+    @inlinable
+    public static func u2(phi phiParam: Parameter, lambda lambdaParam: Parameter) -> QuantumGate {
+        .u2(phi: .parameter(phiParam), lambda: .parameter(lambdaParam))
+    }
+
+    /// Create U3 gate with concrete angles
+    @inlinable
+    public static func u3(theta: Double, phi: Double, lambda: Double) -> QuantumGate {
+        .u3(theta: .value(theta), phi: .value(phi), lambda: .value(lambda))
+    }
+
+    /// Create U3 gate with symbolic parameters
+    @inlinable
+    public static func u3(theta thetaParam: Parameter, phi phiParam: Parameter, lambda lambdaParam: Parameter) -> QuantumGate {
+        .u3(theta: .parameter(thetaParam), phi: .parameter(phiParam), lambda: .parameter(lambdaParam))
+    }
 
     // MARK: - Gate Properties
 
@@ -108,24 +253,126 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         }
     }
 
-    /// Whether gate has parameter(s) that affect its matrix
+    /// Whether gate contains symbolic parameters requiring binding
     ///
-    /// Parameterized gates include rotation gates (Rx, Ry, Rz), phase gates,
-    /// IBM universal gates (U1, U2, U3), and controlled rotations.
-    /// Used for gradient computation and circuit optimization.
+    /// Returns `true` if any ``ParameterValue`` in gate is symbolic (.parameter case).
+    /// Used for circuit validation and parameter tracking.
     ///
     /// Example:
     /// ```swift
-    /// QuantumGate.hadamard.isParameterized  // false
-    /// QuantumGate.rotationY(theta: .pi/4).isParameterized  // true
-    /// QuantumGate.controlledPhase(theta: .pi).isParameterized  // true
+    /// QuantumGate.hadamard.hasSymbolicParameters  // false
+    /// QuantumGate.rotationY(.pi/4).hasSymbolicParameters  // false
+    /// let theta = Parameter(name: "theta")
+    /// QuantumGate.rotationY(theta).hasSymbolicParameters  // true
     /// ```
     @inlinable
-    public var isParameterized: Bool {
+    public var hasSymbolicParameters: Bool {
+        !parameters().isEmpty
+    }
+
+    /// Extract symbolic parameters from gate
+    ///
+    /// Returns all ``Parameter`` instances used in gate. Empty set for non-parameterized
+    /// gates and gates with only concrete values. Used for circuit-level parameter discovery.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let theta = Parameter(name: "theta")
+    /// let phi = Parameter(name: "phi")
+    /// let gate = QuantumGate.u2(phi: .parameter(phi), lambda: .parameter(theta))
+    ///
+    /// gate.parameters()  // {theta, phi}
+    /// ```
+    ///
+    /// - Returns: Set of symbolic parameters
+    /// - Complexity: O(1) - gates have at most 3 parameters
+    @_optimize(speed)
+    @inlinable
+    @_effects(readonly)
+    public func parameters() -> Set<Parameter> {
         switch self {
-        case .phase, .rotationX, .rotationY, .rotationZ, .u1, .u2, .u3,
-             .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ: true
-        default: false
+        case let .phase(angle),
+             let .rotationX(angle),
+             let .rotationY(angle),
+             let .rotationZ(angle),
+             let .controlledPhase(angle),
+             let .controlledRotationX(angle),
+             let .controlledRotationY(angle),
+             let .controlledRotationZ(angle):
+            if let p = angle.parameter { return [p] }
+            return []
+
+        case let .u1(lambda):
+            if let p = lambda.parameter { return [p] }
+            return []
+
+        case let .u2(phi, lambda):
+            var params: [Parameter] = []
+            params.reserveCapacity(2)
+            if let p = phi.parameter { params.append(p) }
+            if let p = lambda.parameter { params.append(p) }
+            return Set(params)
+
+        case let .u3(theta, phi, lambda):
+            var params: [Parameter] = []
+            params.reserveCapacity(3)
+            if let p = theta.parameter { params.append(p) }
+            if let p = phi.parameter { params.append(p) }
+            if let p = lambda.parameter { params.append(p) }
+            return Set(params)
+
+        default: return []
+        }
+    }
+
+    /// Bind symbolic parameters to concrete values
+    ///
+    /// Evaluates all ``ParameterValue`` instances using provided bindings, producing
+    /// gate with only concrete values. Gates without symbolic parameters return unchanged.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let theta = Parameter(name: "theta")
+    /// let gate = QuantumGate.rotationY(theta)
+    ///
+    /// let bound = gate.binding(["theta": .pi / 4])
+    /// // Returns QuantumGate.rotationY(.pi/4)
+    /// ```
+    ///
+    /// - Parameter bindings: Dictionary mapping parameter names to numerical values
+    /// - Returns: Gate with all parameters substituted
+    /// - Precondition: All symbolic parameters must exist in bindings
+    @_optimize(speed)
+    @inlinable
+    @_eagerMove
+    public func binding(_ bindings: [String: Double]) -> QuantumGate {
+        switch self {
+        case let .phase(angle):
+            .phase(.value(angle.evaluate(using: bindings)))
+        case let .rotationX(theta):
+            .rotationX(.value(theta.evaluate(using: bindings)))
+        case let .rotationY(theta):
+            .rotationY(.value(theta.evaluate(using: bindings)))
+        case let .rotationZ(theta):
+            .rotationZ(.value(theta.evaluate(using: bindings)))
+        case let .u1(lambda):
+            .u1(lambda: .value(lambda.evaluate(using: bindings)))
+        case let .u2(phi, lambda):
+            .u2(phi: .value(phi.evaluate(using: bindings)),
+                lambda: .value(lambda.evaluate(using: bindings)))
+        case let .u3(theta, phi, lambda):
+            .u3(theta: .value(theta.evaluate(using: bindings)),
+                phi: .value(phi.evaluate(using: bindings)),
+                lambda: .value(lambda.evaluate(using: bindings)))
+        case let .controlledPhase(theta):
+            .controlledPhase(.value(theta.evaluate(using: bindings)))
+        case let .controlledRotationX(theta):
+            .controlledRotationX(.value(theta.evaluate(using: bindings)))
+        case let .controlledRotationY(theta):
+            .controlledRotationY(.value(theta.evaluate(using: bindings)))
+        case let .controlledRotationZ(theta):
+            .controlledRotationZ(.value(theta.evaluate(using: bindings)))
+        default: self // Non-parameterized gates return unchanged
         }
     }
 
@@ -156,50 +403,85 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// Matrix size depends on gate type: 2x2 for single-qubit, 4x4 for two-qubit,
     /// 8x8 for three-qubit gates. All matrices satisfy U†U = I (unitarity).
     ///
+    /// For gates with symbolic parameters, all values must be concrete before calling.
+    /// Use ``binding(_:)`` to substitute symbolic parameters first.
+    ///
     /// - Returns: 2D array of complex numbers (2x2, 4x4, or 8x8)
-    /// - Complexity: O(1) for fixed-size matrices (2x2, 4x4, 8x8)
+    /// - Complexity: O(1) for fixed-size matrices
+    /// - Precondition: All parameters must be concrete (.value case)
     ///
     /// Example:
     /// ```swift
     /// let h = QuantumGate.hadamard
     /// let matrix = h.matrix()
     /// // [[0.707+0i, 0.707+0i], [0.707+0i, -0.707+0i]]
+    ///
+    /// let theta = Parameter(name: "theta")
+    /// let symbolic = QuantumGate.rotationY(theta)
+    /// let bound = symbolic.binding(["theta": .pi/4])
+    /// let concreteMatrix = bound.matrix()  // OK
+    /// // let fail = symbolic.matrix()  // Precondition failure!
     /// ```
     ///
-    /// - SeeAlso: ``MatrixUtilities``, ``isUnitary(_:)``
+    /// - SeeAlso: ``MatrixUtilities``, ``binding(_:)``
     @_optimize(speed)
     @_eagerMove
     public func matrix() -> [[Complex<Double>]] {
         switch self {
-        case .identity: identityMatrix()
-        case .pauliX: pauliXMatrix()
-        case .pauliY: pauliYMatrix()
-        case .pauliZ: pauliZMatrix()
-        case .hadamard: hadamardMatrix()
-        case .sGate: phaseMatrix(theta: .pi / 2.0)
-        case .tGate: phaseMatrix(theta: .pi / 4.0)
-        case .sx: sxMatrix()
-        case .sy: syMatrix()
-        case .cnot: cnotMatrix()
-        case .cz: czMatrix()
-        case .cy: cyMatrix()
-        case .ch: chMatrix()
-        case .swap: swapMatrix()
-        case .sqrtSwap: sqrtSwapMatrix()
-        case .toffoli: toffoliMatrix()
-        case let .phase(angle): phaseMatrix(theta: angle)
-        case let .rotationX(theta): rotationXMatrix(theta: theta)
-        case let .rotationY(theta): rotationYMatrix(theta: theta)
-        case let .rotationZ(theta): rotationZMatrix(theta: theta)
-        case let .u1(lambda): u1Matrix(lambda: lambda)
-        case let .u2(phi, lambda): u2Matrix(phi: phi, lambda: lambda)
-        case let .u3(theta, phi, lambda): u3Matrix(theta: theta, phi: phi, lambda: lambda)
-        case let .controlledPhase(theta): controlledPhaseMatrix(theta: theta)
-        case let .controlledRotationX(theta): controlledRotationXMatrix(theta: theta)
-        case let .controlledRotationY(theta): controlledRotationYMatrix(theta: theta)
-        case let .controlledRotationZ(theta): controlledRotationZMatrix(theta: theta)
-        case let .customSingleQubit(matrix): matrix
-        case let .customTwoQubit(matrix): matrix
+        case .identity: return identityMatrix()
+        case .pauliX: return pauliXMatrix()
+        case .pauliY: return pauliYMatrix()
+        case .pauliZ: return pauliZMatrix()
+        case .hadamard: return hadamardMatrix()
+        case .sGate: return phaseMatrix(theta: .pi / 2.0)
+        case .tGate: return phaseMatrix(theta: .pi / 4.0)
+        case .sx: return sxMatrix()
+        case .sy: return syMatrix()
+        case .cnot: return cnotMatrix()
+        case .cz: return czMatrix()
+        case .cy: return cyMatrix()
+        case .ch: return chMatrix()
+        case .swap: return swapMatrix()
+        case .sqrtSwap: return sqrtSwapMatrix()
+        case .toffoli: return toffoliMatrix()
+        case let .phase(angle):
+            ValidationUtilities.validateConcrete(angle, name: "phase angle")
+            return phaseMatrix(theta: angle.evaluate(using: [:]))
+        case let .rotationX(theta):
+            ValidationUtilities.validateConcrete(theta, name: "rotation X angle")
+            return rotationXMatrix(theta: theta.evaluate(using: [:]))
+        case let .rotationY(theta):
+            ValidationUtilities.validateConcrete(theta, name: "rotation Y angle")
+            return rotationYMatrix(theta: theta.evaluate(using: [:]))
+        case let .rotationZ(theta):
+            ValidationUtilities.validateConcrete(theta, name: "rotation Z angle")
+            return rotationZMatrix(theta: theta.evaluate(using: [:]))
+        case let .u1(lambda):
+            ValidationUtilities.validateConcrete(lambda, name: "U1 lambda")
+            return u1Matrix(lambda: lambda.evaluate(using: [:]))
+        case let .u2(phi, lambda):
+            ValidationUtilities.validateConcrete(phi, name: "U2 phi")
+            ValidationUtilities.validateConcrete(lambda, name: "U2 lambda")
+            return u2Matrix(phi: phi.evaluate(using: [:]), lambda: lambda.evaluate(using: [:]))
+        case let .u3(theta, phi, lambda):
+            ValidationUtilities.validateConcrete(theta, name: "U3 theta")
+            ValidationUtilities.validateConcrete(phi, name: "U3 phi")
+            ValidationUtilities.validateConcrete(lambda, name: "U3 lambda")
+            return u3Matrix(theta: theta.evaluate(using: [:]), phi: phi.evaluate(using: [:]), lambda: lambda.evaluate(using: [:]))
+        case let .controlledPhase(theta):
+            ValidationUtilities.validateConcrete(theta, name: "controlled phase angle")
+            return controlledPhaseMatrix(theta: theta.evaluate(using: [:]))
+        case let .controlledRotationX(theta):
+            ValidationUtilities.validateConcrete(theta, name: "controlled rotation X angle")
+            return controlledRotationXMatrix(theta: theta.evaluate(using: [:]))
+        case let .controlledRotationY(theta):
+            ValidationUtilities.validateConcrete(theta, name: "controlled rotation Y angle")
+            return controlledRotationYMatrix(theta: theta.evaluate(using: [:]))
+        case let .controlledRotationZ(theta):
+            ValidationUtilities.validateConcrete(theta, name: "controlled rotation Z angle")
+            return controlledRotationZMatrix(theta: theta.evaluate(using: [:]))
+        case let .customSingleQubit(matrix): return matrix
+        case let .customTwoQubit(matrix): return matrix
         }
     }
 
@@ -451,37 +733,6 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
-    // MARK: - Validation
-
-    /// Validate qubit indices for gate application
-    ///
-    /// Checks that qubit array has correct length and all indices are within bounds and distinct.
-    /// Required before applying gate to ensure circuit correctness.
-    ///
-    /// - Parameters:
-    ///   - qubits: Array of qubit indices to validate
-    ///   - maxAllowedQubit: Maximum allowed qubit index (inclusive)
-    /// - Returns: True if qubit array is valid for this gate
-    /// - Complexity: O(n) where n is number of qubits
-    ///
-    /// Example:
-    /// ```swift
-    /// QuantumGate.cnot.validateQubitIndices([0, 1], maxAllowedQubit: 2)  // true
-    /// QuantumGate.cnot.validateQubitIndices([0, 0], maxAllowedQubit: 2)  // false (duplicate)
-    /// QuantumGate.toffoli.validateQubitIndices([0, 1, 2], maxAllowedQubit: 3)  // true
-    /// ```
-    ///
-    /// - SeeAlso: ``ValidationUtilities``
-    @_optimize(speed)
-    @_effects(readonly)
-    public func validateQubitIndices(_ qubits: [Int], maxAllowedQubit: Int) -> Bool {
-        guard qubits.count == qubitsRequired else { return false }
-        guard qubits.allSatisfy({ $0 >= 0 && $0 <= maxAllowedQubit }) else { return false }
-        guard Set(qubits).count == qubits.count else { return false }
-
-        return true
-    }
-
     // MARK: - CustomStringConvertible
 
     /// String representation of the gate
@@ -492,15 +743,15 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         case .pauliY: "Y"
         case .pauliZ: "Z"
         case .hadamard: "H"
-        case let .phase(angle): "P(\(Self.formatAngle(angle)))"
+        case let .phase(angle): "P(\(angle))"
         case .sGate: "S"
         case .tGate: "T"
-        case let .rotationX(theta): "Rx(\(Self.formatAngle(theta)))"
-        case let .rotationY(theta): "Ry(\(Self.formatAngle(theta)))"
-        case let .rotationZ(theta): "Rz(\(Self.formatAngle(theta)))"
-        case let .u1(lambda): "U1(\(Self.formatAngle(lambda)))"
-        case let .u2(phi, lambda): "U2(\(Self.formatAngle(phi)), \(Self.formatAngle(lambda)))"
-        case let .u3(theta, phi, lambda): "U3(\(Self.formatAngle(theta)), \(Self.formatAngle(phi)), \(Self.formatAngle(lambda)))"
+        case let .rotationX(theta): "Rx(\(theta))"
+        case let .rotationY(theta): "Ry(\(theta))"
+        case let .rotationZ(theta): "Rz(\(theta))"
+        case let .u1(lambda): "U1(\(lambda))"
+        case let .u2(phi, lambda): "U2(\(phi), \(lambda))"
+        case let .u3(theta, phi, lambda): "U3(\(theta), \(phi), \(lambda))"
         case .sx: "SX"
         case .sy: "SY"
         case .customSingleQubit: "CustomU(2x2)"
@@ -511,23 +762,12 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         case .swap: "SWAP"
         case .sqrtSwap: "√SWAP"
         case .toffoli: "Toffoli"
-        case let .controlledPhase(theta):
-            "CP(\(Self.formatAngle(theta)))"
-        case let .controlledRotationX(theta):
-            "CRx(\(Self.formatAngle(theta)))"
-        case let .controlledRotationY(theta):
-            "CRy(\(Self.formatAngle(theta)))"
-        case let .controlledRotationZ(theta):
-            "CRz(\(Self.formatAngle(theta)))"
-        case .customTwoQubit:
-            "CustomU(4x4)"
+        case let .controlledPhase(theta): "CP(\(theta))"
+        case let .controlledRotationX(theta): "CRx(\(theta))"
+        case let .controlledRotationY(theta): "CRy(\(theta))"
+        case let .controlledRotationZ(theta): "CRz(\(theta))"
+        case .customTwoQubit: "CustomU(4x4)"
         }
-    }
-
-    private static func formatAngle(_ angle: Double) -> String {
-        let formatted = String(format: "%.6f", angle)
-        let trimmed = formatted.replacingOccurrences(of: #"\.?0+$"#, with: "", options: .regularExpression)
-        return trimmed.isEmpty ? "0" : trimmed
     }
 }
 

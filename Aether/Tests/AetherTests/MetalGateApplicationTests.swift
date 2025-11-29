@@ -41,7 +41,7 @@ struct MetalGateApplicationTests {
         circuit.append(.hadamard, to: 0)
         let superposition = circuit.execute()
 
-        let newState = await metal.apply(.phase(angle: .pi / 2), to: 0, state: superposition)
+        let newState = await metal.apply(.phase(.pi / 2), to: 0, state: superposition)
 
         #expect(newState.isNormalized())
     }
@@ -139,7 +139,7 @@ struct MetalGateApplicationTests {
             .pauliX,
             .pauliY,
             .pauliZ,
-            .phase(angle: .pi / 4),
+            .phase(.pi / 4),
             .sGate,
             .tGate,
         ]
@@ -200,9 +200,9 @@ struct MetalGateApplicationTests {
 
         let state = QuantumState(numQubits: 4)
 
-        let rx = await metal.apply(.rotationX(theta: .pi / 4), to: 0, state: state)
-        let ry = await metal.apply(.rotationY(theta: .pi / 4), to: 0, state: state)
-        let rz = await metal.apply(.rotationZ(theta: .pi / 4), to: 0, state: state)
+        let rx = await metal.apply(.rotationX(.pi / 4), to: 0, state: state)
+        let ry = await metal.apply(.rotationY(.pi / 4), to: 0, state: state)
+        let rz = await metal.apply(.rotationZ(.pi / 4), to: 0, state: state)
 
         #expect(rx.isNormalized())
         #expect(ry.isNormalized())
@@ -218,7 +218,7 @@ struct MetalGateApplicationTests {
         circuit.append(.hadamard, to: 1)
         let state = circuit.execute()
 
-        let newState = await metal.apply(.controlledPhase(theta: .pi / 2), to: [0, 1], state: state)
+        let newState = await metal.apply(.controlledPhase(.pi / 2), to: [0, 1], state: state)
 
         #expect(newState.isNormalized(), "Controlled-phase gate should preserve normalization")
     }
@@ -245,8 +245,8 @@ struct MetalGateApplicationTests {
         circuit.append(.hadamard, to: 1)
         let state = circuit.execute()
 
-        let cpuState = GateApplication.apply(.controlledPhase(theta: .pi / 4), to: [0, 1], state: state)
-        let gpuState = await metal.apply(.controlledPhase(theta: .pi / 4), to: [0, 1], state: state)
+        let cpuState = GateApplication.apply(.controlledPhase(.pi / 4), to: [0, 1], state: state)
+        let gpuState = await metal.apply(.controlledPhase(.pi / 4), to: [0, 1], state: state)
 
         for i in 0 ..< cpuState.stateSpaceSize {
             let cpuAmp = cpuState.amplitude(of: i)

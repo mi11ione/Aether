@@ -458,30 +458,6 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         amplitudes[stateIndex] = amplitude
     }
 
-    // MARK: - Validation
-
-    /// Validate all state invariants
-    ///
-    /// Checks that all amplitudes are finite (no NaN/Inf) and state is normalized within tolerance.
-    /// Used for debugging and testing to ensure state remains physically valid.
-    ///
-    /// **Example**:
-    /// ```swift
-    /// let state = QuantumState(numQubits: 2)
-    /// state.validate()  // true
-    /// ```
-    ///
-    /// - Returns: True if state is valid (all amplitudes finite and normalized)
-    /// - Complexity: O(2^n)
-    /// - SeeAlso: ``isNormalized()`` for normalization check only
-    @_effects(readonly)
-    public func validate() -> Bool {
-        guard amplitudes.allSatisfy(\.isFinite) else { return false }
-        guard isNormalized() else { return false }
-
-        return true
-    }
-
     // MARK: - CustomStringConvertible
 
     /// String representation showing significant amplitudes

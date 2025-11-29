@@ -90,7 +90,7 @@ public struct MixerHamiltonian {
 
         let terms = PauliTerms(unsafeUninitializedCapacity: numQubits) { buffer, count in
             for qubit in 0 ..< numQubits {
-                buffer[qubit] = (coefficient: 1.0, pauliString: PauliString(qubit: qubit, basis: .x))
+                buffer[qubit] = (coefficient: 1.0, pauliString: PauliString(.x(qubit)))
             }
             count = numQubits
         }

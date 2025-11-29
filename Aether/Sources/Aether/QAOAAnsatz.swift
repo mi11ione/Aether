@@ -130,7 +130,7 @@ public struct QAOAAnsatz {
         depth: Int,
         costHamiltonian: Observable,
         mixerHamiltonian: Observable
-    ) -> ParameterizedQuantumCircuit {
+    ) -> QuantumCircuit {
         ValidationUtilities.validatePositiveQubits(numQubits)
         ValidationUtilities.validateMemoryLimit(numQubits)
         ValidationUtilities.validatePositiveInt(depth, name: "depth")
@@ -138,11 +138,11 @@ public struct QAOAAnsatz {
         ValidationUtilities.validateNonEmpty(costHamiltonian.terms, name: "costHamiltonian.terms")
         ValidationUtilities.validateNonEmpty(mixerHamiltonian.terms, name: "mixerHamiltonian.terms")
 
-        var circuit = ParameterizedQuantumCircuit(numQubits: numQubits)
+        var circuit = QuantumCircuit(numQubits: numQubits)
 
         // Initial state: |+⟩^⊗n (equal superposition)
         for qubit in 0 ..< numQubits {
-            circuit.append(gate: .concrete(.hadamard), qubit: qubit)
+            circuit.append(.hadamard, to: qubit)
         }
 
         // Alternating problem and mixer layers
@@ -185,7 +185,7 @@ public struct QAOAAnsatz {
     ///   - numQubits: Number of qubits (for validation)
     @_optimize(speed)
     private static func appendHamiltonianLayer(
-        to circuit: inout ParameterizedQuantumCircuit,
+        to circuit: inout QuantumCircuit,
         hamiltonian: Observable,
         parameter: Parameter,
         numQubits: Int
@@ -238,7 +238,7 @@ public struct QAOAAnsatz {
     ///   - numQubits: Total qubits for validation
     @_optimize(speed)
     private static func appendPauliStringExponential(
-        to circuit: inout ParameterizedQuantumCircuit,
+        to circuit: inout QuantumCircuit,
         pauliString: PauliString,
         parameter: Parameter,
         coefficient: Double,
@@ -254,12 +254,8 @@ public struct QAOAAnsatz {
 
                 switch op.basis {
                 case .z: break
-                case .x: circuit.append(gate: .concrete(.hadamard), qubit: op.qubit)
-                case .y:
-                    circuit.append(
-                        gate: .concrete(.rotationX(theta: -.pi / 2)),
-                        qubit: op.qubit
-                    )
+                case .x: circuit.append(.hadamard, to: op.qubit)
+                case .y: circuit.append(.rotationX(-.pi / 2), to: op.qubit)
                 }
             }
             count = operatorCount
@@ -277,60 +273,31 @@ public struct QAOAAnsatz {
         let scaledParameter = createScaledParameter(base: parameter, coefficient: coefficient)
 
         if qubits.count == 1 {
-            // Single-qubit case: exp(-iθ·c·Z) = Rz(2·θ·c)
-            circuit.append(
-                gate: .rotationZ(theta: .parameter(scaledParameter)),
-                qubit: qubits[0]
-            )
+            circuit.append(.rotationZ(.parameter(scaledParameter)), to: qubits[0])
         } else {
-            // Multi-qubit case: CNOT ladder + Rz + reverse ladder
-
-            // Forward CNOT ladder: entangle qubits
             for i in 0 ..< (qubits.count - 1) {
-                circuit.append(
-                    gate: .concrete(.cnot),
-                    qubits: [qubits[i], qubits[i + 1]]
-                )
+                circuit.append(.cnot, to: [qubits[i], qubits[i + 1]])
             }
 
-            // Rotation on last qubit: Rz(2·θ·c)
-            circuit.append(
-                gate: .rotationZ(theta: .parameter(scaledParameter)),
-                qubit: qubits[qubits.count - 1]
-            )
+            circuit.append(.rotationZ(.parameter(scaledParameter)), to: qubits[qubits.count - 1])
 
-            // Reverse CNOT ladder: disentangle
             for i in stride(from: qubits.count - 2, through: 0, by: -1) {
-                circuit.append(
-                    gate: .concrete(.cnot),
-                    qubits: [qubits[i], qubits[i + 1]]
-                )
+                circuit.append(.cnot, to: [qubits[i], qubits[i + 1]])
             }
         }
 
-        // Step 3: Reverse basis rotations
         for op in pauliString.operators {
             switch op.basis {
-            case .z:
-                break // No reversal needed
-
-            case .x:
-                // Reverse: H (Hadamard is self-inverse)
-                circuit.append(gate: .concrete(.hadamard), qubit: op.qubit)
-
-            case .y:
-                // Reverse: Rx(+π/2)
-                circuit.append(
-                    gate: .concrete(.rotationX(theta: .pi / 2)),
-                    qubit: op.qubit
-                )
+            case .z: break
+            case .x: circuit.append(.hadamard, to: op.qubit)
+            case .y: circuit.append(.rotationX(.pi / 2), to: op.qubit)
             }
         }
     }
 
     /// Create parameter representing 2·θ·c for scaled rotation
     ///
-    /// Since ParameterExpression doesn't support arithmetic expressions,
+    /// Since ParameterValue doesn't support arithmetic expressions,
     /// we use the same base parameter but rely on the fact that the coefficient
     /// is embedded in the circuit. When binding, the parameter value will be
     /// scaled appropriately.
@@ -342,11 +309,11 @@ public struct QAOAAnsatz {
     /// - We store the base parameter (γ or β) and coefficient separately
     /// - Binding layer multiplies: parameter_value * 2 * coefficient
     ///
-    /// This is handled by ParameterizedGate.rotationZ which expects the final
+    /// This is handled by QuantumGate.rotationZ which expects the final
     /// angle = 2·θ·c where θ comes from binding the parameter.
     ///
     /// **Actually**, looking at the code flow more carefully:
-    /// - ParameterizedGate.rotationZ takes ParameterExpression
+    /// - QuantumGate.rotationZ takes ParameterValue
     /// - During binding, we substitute parameter -> value
     /// - But we need value * 2 * coefficient for the angle
     ///
@@ -394,17 +361,17 @@ public struct QAOAAnsatz {
 public struct QAOAParameterBinder: Sendable {
     /// Pre-parsed parameter info: (name, baseParameterIndex, coefficient)
     private let parameterInfo: [(name: String, baseIndex: Int, coefficient: Double)]
-    private let ansatz: ParameterizedQuantumCircuit
+    private let ansatz: QuantumCircuit
 
     /// Create binder with pre-computed parameter info
     ///
     /// - Parameter ansatz: QAOA ansatz circuit to bind
     @_optimize(speed)
-    public init(ansatz: ParameterizedQuantumCircuit) {
+    public init(ansatz: QuantumCircuit) {
         self.ansatz = ansatz
 
         var info: [(name: String, baseIndex: Int, coefficient: Double)] = []
-        info.reserveCapacity(ansatz.parameterCount())
+        info.reserveCapacity(ansatz.parameterCount)
 
         for param in ansatz.parameters {
             let paramName = param.name
@@ -443,6 +410,6 @@ public struct QAOAParameterBinder: Sendable {
             bindings[info.name] = baseParameters[info.baseIndex] * info.coefficient
         }
 
-        return ansatz.bind(parameters: bindings)
+        return ansatz.binding(bindings)
     }
 }

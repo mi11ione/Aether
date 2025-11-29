@@ -14,7 +14,7 @@ struct HardwareEfficientAnsatzTests {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1)
 
         #expect(ansatz.numQubits == 2)
-        #expect(ansatz.parameterCount() == 2)
+        #expect(ansatz.parameterCount == 2)
     }
 
     @Test("Parameter count scales with depth")
@@ -23,9 +23,9 @@ struct HardwareEfficientAnsatzTests {
         let depth2 = HardwareEfficientAnsatz.create(numQubits: 3, depth: 2)
         let depth3 = HardwareEfficientAnsatz.create(numQubits: 3, depth: 3)
 
-        #expect(depth1.parameterCount() == 3)
-        #expect(depth2.parameterCount() == 6)
-        #expect(depth3.parameterCount() == 9)
+        #expect(depth1.parameterCount == 3)
+        #expect(depth2.parameterCount == 6)
+        #expect(depth3.parameterCount == 9)
     }
 
     @Test("Parameter count scales with qubits")
@@ -34,16 +34,16 @@ struct HardwareEfficientAnsatzTests {
         let q4 = HardwareEfficientAnsatz.create(numQubits: 4, depth: 2)
         let q6 = HardwareEfficientAnsatz.create(numQubits: 6, depth: 2)
 
-        #expect(q2.parameterCount() == 4)
-        #expect(q4.parameterCount() == 8)
-        #expect(q6.parameterCount() == 12)
+        #expect(q2.parameterCount == 4)
+        #expect(q4.parameterCount == 8)
+        #expect(q6.parameterCount == 12)
     }
 
     @Test("Ry rotation gates (default)")
     func ryRotationGates() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1, rotationGates: .ry)
 
-        #expect(ansatz.parameterCount() == 2)
+        #expect(ansatz.parameterCount == 2)
         #expect(ansatz.parameters.count == 2)
     }
 
@@ -51,49 +51,49 @@ struct HardwareEfficientAnsatzTests {
     func rxRotationGates() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1, rotationGates: .rx)
 
-        #expect(ansatz.parameterCount() == 2)
+        #expect(ansatz.parameterCount == 2)
     }
 
     @Test("Rz rotation gates")
     func rzRotationGates() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1, rotationGates: .rz)
 
-        #expect(ansatz.parameterCount() == 2)
+        #expect(ansatz.parameterCount == 2)
     }
 
     @Test("Full rotation gates (3x parameters)")
     func fullRotationGates() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1, rotationGates: .full)
 
-        #expect(ansatz.parameterCount() == 6)
+        #expect(ansatz.parameterCount == 6)
     }
 
     @Test("Full rotation scales correctly")
     func fullRotationScalesCorrectly() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 3, depth: 2, rotationGates: .full)
 
-        #expect(ansatz.parameterCount() == 18)
+        #expect(ansatz.parameterCount == 18)
     }
 
     @Test("Linear entangling pattern (default)")
     func linearEntanglingPattern() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 4, depth: 1, entanglingPattern: .linear)
 
-        #expect(ansatz.gateCount() == 7)
+        #expect(ansatz.gateCount == 7)
     }
 
     @Test("Circular entangling pattern")
     func circularEntanglingPattern() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 4, depth: 1, entanglingPattern: .circular)
 
-        #expect(ansatz.gateCount() == 8)
+        #expect(ansatz.gateCount == 8)
     }
 
     @Test("All-to-all entangling pattern")
     func allToAllEntanglingPattern() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 3, depth: 1, entanglingPattern: .allToAll)
 
-        #expect(ansatz.gateCount() == 6)
+        #expect(ansatz.gateCount == 6)
     }
 
     @Test("Parameter naming convention")
@@ -122,7 +122,7 @@ struct HardwareEfficientAnsatzTests {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1)
 
         let params: [Double] = [0.1, 0.2]
-        let boundCircuit = ansatz.bind(parameterVector: params)
+        let boundCircuit = ansatz.binding(vector: params)
 
         #expect(boundCircuit.numQubits == 2)
         #expect(boundCircuit.gateCount > 0)
@@ -133,7 +133,7 @@ struct HardwareEfficientAnsatzTests {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
 
         #expect(ansatz.numQubits == 1)
-        #expect(ansatz.parameterCount() == 1)
+        #expect(ansatz.parameterCount == 1)
     }
 
     @Test("Maximum qubits (30)")
@@ -141,36 +141,36 @@ struct HardwareEfficientAnsatzTests {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 30, depth: 1)
 
         #expect(ansatz.numQubits == 30)
-        #expect(ansatz.parameterCount() == 30)
+        #expect(ansatz.parameterCount == 30)
     }
 
     @Test("Maximum depth (100)")
     func maximumDepth() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 100)
 
-        #expect(ansatz.parameterCount() == 200)
+        #expect(ansatz.parameterCount == 200)
     }
 
     @Test("Minimal ansatz (1 qubit, depth 1)")
     func minimalAnsatz() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
 
-        #expect(ansatz.gateCount() == 1)
-        #expect(ansatz.parameterCount() == 1)
+        #expect(ansatz.gateCount == 1)
+        #expect(ansatz.parameterCount == 1)
     }
 
     @Test("Two-qubit ansatz has CNOT")
     func twoQubitAnsatzHasCNOT() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1)
 
-        #expect(ansatz.gateCount() == 3)
+        #expect(ansatz.gateCount == 3)
     }
 
     @Test("Circular pattern on 2 qubits")
     func circularPatternTwoQubits() {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1, entanglingPattern: .circular)
 
-        #expect(ansatz.gateCount() == 4)
+        #expect(ansatz.gateCount == 4)
     }
 
     @Test("RotationGateSet parameters per qubit")

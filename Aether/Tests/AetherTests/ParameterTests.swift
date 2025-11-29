@@ -73,32 +73,30 @@ struct ParameterTests {
     }
 }
 
-/// Test suite for ParameterExpression type.
+/// Test suite for ParameterValue type.
 /// Validates symbolic and concrete parameter expressions,
 /// evaluation logic, and error handling for unbound parameters.
-@Suite("ParameterExpression")
-struct ParameterExpressionTests {
+@Suite("ParameterValue")
+struct ParameterValueTests {
     @Test("Create symbolic parameter expression")
     func createSymbolicExpression() {
         let param = Parameter(name: "theta")
-        let expr = ParameterExpression.parameter(param)
+        let expr = ParameterValue.parameter(param)
 
-        #expect(expr.isSymbolic())
-        #expect(!expr.isConcrete())
+        #expect(expr.isSymbolic)
     }
 
     @Test("Create concrete value expression")
     func createConcreteExpression() {
-        let expr = ParameterExpression.value(Double.pi / 4.0)
+        let expr = ParameterValue.value(Double.pi / 4.0)
 
-        #expect(expr.isConcrete())
-        #expect(!expr.isSymbolic())
+        #expect(!expr.isSymbolic)
     }
 
     @Test("Evaluate concrete expression")
     func evaluateConcreteExpression() {
-        let expr = ParameterExpression.value(1.5)
-        let result = expr.evaluate(with: [:])
+        let expr = ParameterValue.value(1.5)
+        let result = expr.evaluate(using: [:])
 
         #expect(abs(result - 1.5) < 1e-10)
     }
@@ -106,26 +104,26 @@ struct ParameterExpressionTests {
     @Test("Evaluate symbolic expression with binding")
     func evaluateSymbolicExpressionWithBinding() {
         let param = Parameter(name: "theta")
-        let expr = ParameterExpression.parameter(param)
+        let expr = ParameterValue.parameter(param)
         let bindings = ["theta": 0.5]
 
-        let result = expr.evaluate(with: bindings)
+        let result = expr.evaluate(using: bindings)
         #expect(abs(result - 0.5) < 1e-10)
     }
 
     @Test("Extract parameter from symbolic expression")
     func extractParameterFromSymbolic() {
         let param = Parameter(name: "theta")
-        let expr = ParameterExpression.parameter(param)
+        let expr = ParameterValue.parameter(param)
 
-        let extracted = expr.extractParameter()
+        let extracted = expr.parameter
         #expect(extracted == param)
     }
 
     @Test("Extract parameter from concrete expression returns nil")
     func extractParameterFromConcreteReturnsNil() {
-        let expr = ParameterExpression.value(1.5)
-        let extracted = expr.extractParameter()
+        let expr = ParameterValue.value(1.5)
+        let extracted = expr.parameter
 
         #expect(extracted == nil)
     }
@@ -133,28 +131,28 @@ struct ParameterExpressionTests {
     @Test("Symbolic expression description shows parameter name")
     func symbolicExpressionDescription() {
         let param = Parameter(name: "theta")
-        let expr = ParameterExpression.parameter(param)
+        let expr = ParameterValue.parameter(param)
 
         #expect(expr.description == "theta")
     }
 
     @Test("Concrete expression description shows formatted value")
     func concreteExpressionDescription() {
-        let expr = ParameterExpression.value(1.234)
+        let expr = ParameterValue.value(1.234)
         #expect(expr.description == "1.234")
     }
 
-    @Test("ParameterExpression equality")
-    func parameterExpressionEquality() {
+    @Test("ParameterValue equality")
+    func ParameterValueEquality() {
         let param1 = Parameter(name: "theta")
         let param2 = Parameter(name: "theta")
         let param3 = Parameter(name: "phi")
 
-        let expr1 = ParameterExpression.parameter(param1)
-        let expr2 = ParameterExpression.parameter(param2)
-        let expr3 = ParameterExpression.parameter(param3)
-        let expr4 = ParameterExpression.value(1.0)
-        let expr5 = ParameterExpression.value(1.0)
+        let expr1 = ParameterValue.parameter(param1)
+        let expr2 = ParameterValue.parameter(param2)
+        let expr3 = ParameterValue.parameter(param3)
+        let expr4 = ParameterValue.value(1.0)
+        let expr5 = ParameterValue.value(1.0)
 
         #expect(expr1 == expr2)
         #expect(expr1 != expr3)
@@ -162,13 +160,13 @@ struct ParameterExpressionTests {
         #expect(expr4 == expr5)
     }
 
-    @Test("ParameterExpression hashability")
-    func parameterExpressionHashability() {
+    @Test("ParameterValue hashability")
+    func ParameterValueHashability() {
         let param = Parameter(name: "theta")
-        let expr1 = ParameterExpression.parameter(param)
-        let expr2 = ParameterExpression.value(1.0)
+        let expr1 = ParameterValue.parameter(param)
+        let expr2 = ParameterValue.value(1.0)
 
-        var set = Set<ParameterExpression>()
+        var set = Set<ParameterValue>()
         set.insert(expr1)
         set.insert(expr2)
 

@@ -76,7 +76,7 @@ struct CircuitUnitaryTests {
     @Test("Rotation gate produces correct unitary")
     func rotationGate() {
         var circuit = QuantumCircuit(numQubits: 1)
-        circuit.append(.rotationX(theta: .pi / 2), to: 0)
+        circuit.append(.rotationX(.pi / 2), to: 0)
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         let expected = 1.0 / sqrt(2.0)
@@ -128,7 +128,7 @@ struct CircuitUnitaryTests {
     @Test("Controlled rotation gate")
     func controlledRotation() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(.controlledRotationZ(theta: .pi), to: [0, 1])
+        circuit.append(.controlledRotationZ(.pi), to: [0, 1])
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(unitary.count == 4)
@@ -228,7 +228,7 @@ struct CircuitUnitaryTests {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
-        circuit.append(.rotationZ(theta: .pi / 4), to: 0)
+        circuit.append(.rotationZ(.pi / 4), to: 0)
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
         let conjugateTranspose = MatrixUtilities.hermitianConjugate(unitary)
@@ -326,7 +326,7 @@ struct CircuitUnitaryTests {
     @Test("Controlled phase gate")
     func controlledPhase() {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(.controlledPhase(theta: .pi), to: [0, 1])
+        circuit.append(.controlledPhase(.pi), to: [0, 1])
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
 
         #expect(abs(unitary[3][3].real + 1.0) < 1e-10)

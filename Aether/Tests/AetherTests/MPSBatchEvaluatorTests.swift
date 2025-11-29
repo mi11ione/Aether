@@ -83,7 +83,7 @@ struct MPSBatchEvaluatorTests {
     func batchExpectationValuesObservable() async {
         let hamiltonian = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(operators: [(0, .z)])
+            pauliString: PauliString(.z(0))
         )
 
         let circuit1 = QuantumCircuit(numQubits: 2)
@@ -116,7 +116,7 @@ struct MPSBatchEvaluatorTests {
     func batchExpectationValuesSparse() async {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(operators: [(0, .z)])
+            pauliString: PauliString(.z(0))
         )
         let sparseH = SparseHamiltonian(observable: observable, numQubits: 2)
 
@@ -195,23 +195,21 @@ struct MPSBatchEvaluatorTests {
         let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1)
         let baseParams: [Double] = [0.1, 0.2]
 
-        let (plusVectors, minusVectors) = ansatz.generateGradientParameterVectors(
-            baseParameters: baseParams
-        )
+        let (plusVectors, minusVectors) = ansatz.gradientVectors(base: baseParams)
 
         var allCircuits: [QuantumCircuit] = []
         for params in plusVectors {
-            allCircuits.append(ansatz.bind(parameterVector: params))
+            allCircuits.append(ansatz.binding(vector: params))
         }
         for params in minusVectors {
-            allCircuits.append(ansatz.bind(parameterVector: params))
+            allCircuits.append(ansatz.binding(vector: params))
         }
 
         let unitaries = allCircuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
 
         let hamiltonian = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(operators: [(0, .z)])
+            pauliString: PauliString(.z(0))
         )
 
         let evaluator = MPSBatchEvaluator()
@@ -253,7 +251,7 @@ struct MPSBatchEvaluatorTests {
 
         for angle in angles {
             var circuit = QuantumCircuit(numQubits: 2)
-            circuit.append(.rotationY(theta: angle), to: 0)
+            circuit.append(.rotationY(angle), to: 0)
             circuits.append(circuit)
         }
 
@@ -321,7 +319,7 @@ struct MPSBatchEvaluatorTests {
     func preservesNormalization() async {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(.hadamard, to: 0)
-        circuit.append(.rotationY(theta: .pi / 4), to: 1)
+        circuit.append(.rotationY(.pi / 4), to: 1)
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
         let initialState = QuantumState(numQubits: 2)
@@ -344,12 +342,12 @@ struct MPSBatchEvaluatorTests {
     func multipleHamiltonianMeasurements() async {
         let hamiltonian1 = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(operators: [(0, .z)])
+            pauliString: PauliString(.z(0))
         )
 
         let hamiltonian2 = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(operators: [(1, .z)])
+            pauliString: PauliString(.z(1))
         )
 
         var circuit = QuantumCircuit(numQubits: 2)
@@ -433,7 +431,7 @@ struct MPSBatchEvaluatorTests {
     @Test("Large angle rotation batch")
     func largeAngleRotation() async {
         var circuit = QuantumCircuit(numQubits: 2)
-        circuit.append(.rotationX(theta: 2 * .pi), to: 0)
+        circuit.append(.rotationX(2 * .pi), to: 0)
 
         let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
         let initialState = QuantumState(numQubits: 2)
@@ -452,7 +450,7 @@ struct MPSBatchEvaluatorTests {
         var circuits: [QuantumCircuit] = []
         for i in 0 ..< 5 {
             var circuit = QuantumCircuit(numQubits: 2)
-            circuit.append(.rotationY(theta: Double(i) * .pi / 4), to: 0)
+            circuit.append(.rotationY(Double(i) * .pi / 4), to: 0)
             circuits.append(circuit)
         }
 
@@ -486,7 +484,7 @@ struct MPSBatchEvaluatorTests {
 
         for i in 0 ..< batchSize {
             var circuit = QuantumCircuit(numQubits: 2)
-            circuit.append(.rotationY(theta: Double(i) * 0.01), to: 0)
+            circuit.append(.rotationY(Double(i) * 0.01), to: 0)
             circuits.append(circuit)
         }
 
@@ -542,7 +540,7 @@ struct MPSBatchEvaluatorTests {
         var circuits: [QuantumCircuit] = []
         for i in 0 ..< 25 {
             var circuit = QuantumCircuit(numQubits: 2)
-            circuit.append(.rotationX(theta: Double(i) * 0.1), to: 0)
+            circuit.append(.rotationX(Double(i) * 0.1), to: 0)
             circuit.append(.hadamard, to: 1)
             circuits.append(circuit)
         }

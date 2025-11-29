@@ -96,7 +96,7 @@ public actor VariationalQuantumEigensolver {
     private let hamiltonian: Observable
 
     /// Parameterized quantum circuit (ansatz)
-    private let ansatz: ParameterizedQuantumCircuit
+    private let ansatz: QuantumCircuit
 
     /// Classical optimizer for parameter updates
     private let optimizer: Optimizer
@@ -143,7 +143,7 @@ public actor VariationalQuantumEigensolver {
     ///   - useMetalAcceleration: Use Metal GPU for circuit execution (default: true)
     public init(
         hamiltonian: Observable,
-        ansatz: ParameterizedQuantumCircuit,
+        ansatz: QuantumCircuit,
         optimizer: Optimizer,
         convergenceCriteria: ConvergenceCriteria = .default,
         useSparseBackend: Bool = true,
@@ -224,13 +224,13 @@ public actor VariationalQuantumEigensolver {
         initialParameters: [Double],
         progressCallback: (@Sendable (Int, Double) async -> Void)?
     ) async -> VQEResult {
-        ValidationUtilities.validateArrayCount(initialParameters, expected: ansatz.parameterCount(), name: "initialParameters")
+        ValidationUtilities.validateArrayCount(initialParameters, expected: ansatz.parameterCount, name: "initialParameters")
 
         currentIteration = 0
         currentEnergy = 0.0
 
         let energyFunction: @Sendable ([Double]) async -> Double = { parameters in
-            let concreteCircuit: QuantumCircuit = self.ansatz.bind(parameterVector: parameters)
+            let concreteCircuit: QuantumCircuit = self.ansatz.binding(vector: parameters)
 
             let state: QuantumState = await self.simulator.execute(concreteCircuit)
 

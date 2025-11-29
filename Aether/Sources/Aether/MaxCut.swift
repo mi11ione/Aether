@@ -135,10 +135,7 @@ public struct MaxCut {
             // Sorted order ensures (i,j) and (j,i) produce identical PauliStrings
             let vertex1 = min(i, j)
             let vertex2 = max(i, j)
-            let pauliString = PauliString(operators: [
-                (qubit: vertex1, basis: .z),
-                (qubit: vertex2, basis: .z),
-            ])
+            let pauliString = PauliString(.z(vertex1), .z(vertex2))
 
             terms.append((coefficient: -0.5, pauliString: pauliString))
         }

@@ -6,115 +6,174 @@ import Foundation
 /// Symbolic parameter for variational quantum circuits
 ///
 /// Represents a named symbolic parameter used in parameterized quantum gates.
-/// Parameters are the free variables in variational algorithms (VQE, QAOA) that
-/// are optimized by classical optimizers to minimize objective functions.
+/// Parameters are the free variables in variational algorithms (VQE, QAOA, quantum
+/// machine learning) that are optimized by classical optimizers to minimize objective
+/// functions.
 ///
-/// **Usage in variational algorithms**:
-/// - VQE: Parameters represent rotation angles in hardware-efficient ansätze
-/// - QAOA: Parameters γ and β control problem and mixer Hamiltonian evolution
-/// - Quantum machine learning: Parameters are trainable weights in quantum circuits
+/// **Defer-and-bind pattern**: Build parameterized circuits once with symbolic parameters,
+/// then bind different numerical values per optimization iteration without reconstructing
+/// the circuit. This pattern separates circuit topology from parameter values, enabling
+/// efficient optimization loops.
 ///
-/// **Parameter naming conventions**:
-/// - Use descriptive names: "theta", "phi", "gamma", "beta"
-/// - Greek letters are standard in quantum algorithms
-/// - Numbered parameters: "theta_0", "theta_1" for repeated gates
+/// **Usage workflow**:
+/// 1. Create symbolic parameters with descriptive names
+/// 2. Build parameterized circuit using ``QuantumCircuit``
+/// 3. Classical optimizer proposes parameter values
+/// 4. Bind parameters to concrete values via `binding(_:)`
+/// 5. Execute concrete circuit and measure expectation value
+/// 6. Repeat steps 3-5 until convergence
 ///
-/// Example:
+/// **Naming conventions**:
+/// - Greek letters: "theta", "phi", "gamma", "beta" (standard in quantum algorithms)
+/// - Indexed parameters: "theta_0", "theta_1" for repeated gates
+/// - Descriptive names: "rotation_angle", "phase_shift" for clarity
+///
+/// **Example**:
 /// ```swift
-/// // Create symbolic parameters
 /// let theta = Parameter(name: "theta")
 /// let phi = Parameter(name: "phi")
 ///
-/// // Use in parameterized gates
-/// let gate = ParameterizedGate.rotationY(theta: .parameter(theta))
+/// var circuit = QuantumCircuit(numQubits: 2)
+/// circuit.append(.rotationY(theta), to: 0)
+/// circuit.append(.rotationZ(phi), to: 1)
 ///
-/// // Parameters are identified by name
-/// let theta2 = Parameter(name: "theta")
-/// print(theta == theta2)  // true (same name)
+/// let bindings = ["theta": Double.pi / 4, "phi": Double.pi / 8]
+/// let bound = circuit.binding(bindings)
+/// let state = bound.execute()
 /// ```
-@frozen
+///
+/// - SeeAlso: ``ParameterValue``, ``QuantumCircuit``, ``QuantumGate``
 public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible {
+    /// Parameter name used for identification and binding
     public let name: String
 
     /// Create symbolic parameter with name
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let theta = Parameter(name: "theta")
+    /// let gamma_0 = Parameter(name: "gamma_0")
+    /// ```
+    ///
     /// - Parameter name: Parameter name (must be non-empty)
+    /// - Complexity: O(1)
+    /// - Precondition: Name must be non-empty
     public init(name: String) {
         ValidationUtilities.validateNonEmptyString(name, name: "Parameter name")
         self.name = name
     }
 
-    /// String representation of parameter
     @inlinable
     public var description: String { name }
 }
 
-/// Parameter expression: symbolic parameter or concrete value
+/// Parameter value: symbolic parameter or concrete numerical value
 ///
 /// Represents either a symbolic parameter (to be bound later) or a concrete
-/// numerical value. Enables mixing symbolic and concrete parameters in the
-/// same parameterized circuit.
+/// numerical value. This enables mixing symbolic and concrete parameters in the
+/// same quantum circuit, useful for hybrid optimization where some parameters
+/// are fixed while others vary.
 ///
-/// **Design rationale**:
-/// - Evaluation requires binding dictionary for symbolic parameters
-/// - Type-safe distinction between symbolic and concrete
+/// **Type-safe evaluation**: Symbolic values require binding dictionary at
+/// evaluation time, while concrete values evaluate to themselves. This distinction
+/// prevents accidentally evaluating unbound parameters.
 ///
-/// Example:
+/// **Use cases**:
+/// - **Pure symbolic**: All parameters symbolic, bind before execution
+/// - **Mixed circuits**: Some gates with symbolic parameters, others with concrete angles
+/// - **Partial binding**: Bind subset of parameters, leaving others symbolic for nested optimization
+///
+/// **Example**:
 /// ```swift
-/// // Symbolic parameter
-/// let symbolic = ParameterExpression.parameter(Parameter(name: "theta"))
+/// let theta = Parameter(name: "theta")
+/// let symbolic = ParameterValue.parameter(theta)
+/// let concrete = ParameterValue.value(Double.pi / 4)
+///
 /// print(symbolic.isSymbolic)  // true
+/// print(concrete.isSymbolic)  // false
 ///
-/// // Concrete value
-/// let concrete = ParameterExpression.value(Double.pi / 4)
-/// print(concrete.isConcrete)  // true
-///
-/// // Evaluate with bindings
-/// let bindings = ["theta": 1.57, "phi": 0.785]
-/// let result = symbolic.evaluate(with: bindings)  // 1.57
-///
-/// // Concrete values evaluate to themselves
-/// let concreteResult = concrete.evaluate(with: [:])  // π/4
+/// let bindings = ["theta": 1.57]
+/// let result = symbolic.evaluate(using: bindings)  // 1.57
+/// let fixed = concrete.evaluate(using: [:])        // π/4
 /// ```
-@frozen
-public enum ParameterExpression: Equatable, Hashable, Sendable, CustomStringConvertible {
-    /// Symbolic parameter reference
+///
+/// - SeeAlso: ``Parameter``, ``QuantumGate``
+public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertible {
+    /// Symbolic parameter reference requiring binding at evaluation
     case parameter(Parameter)
 
-    /// Concrete numerical value
+    /// Concrete numerical value (fixed, no binding required)
     case value(Double)
 
-    /// Whether expression is symbolic (contains unbound parameters)
+    /// Whether expression contains symbolic parameter
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let symbolic = ParameterValue.parameter(Parameter(name: "theta"))
+    /// let concrete = ParameterValue.value(1.57)
+    ///
+    /// print(symbolic.isSymbolic)  // true
+    /// print(concrete.isSymbolic)  // false
+    /// ```
+    ///
+    /// - Complexity: O(1)
     @inlinable
-    @_effects(readonly)
-    public func isSymbolic() -> Bool {
+    public var isSymbolic: Bool {
         if case .parameter = self { return true }
         return false
     }
 
-    /// Whether expression is concrete (all parameters bound)
-    @inlinable
-    @_effects(readonly)
-    public func isConcrete() -> Bool { !isSymbolic() }
-
-    /// Evaluate expression with parameter bindings
+    /// Extract symbolic parameter if present
     ///
-    /// Substitutes parameter values from bindings dictionary. Concrete values
-    /// evaluate to themselves. Symbolic parameters require binding.
+    /// Returns the underlying ``Parameter`` if value is symbolic, otherwise `nil`.
+    /// Useful for parameter extraction and circuit introspection.
     ///
-    /// - Parameter bindings: Dictionary mapping parameter names to values
-    /// - Returns: Evaluated numerical value
-    /// - Precondition: Symbolic parameters must have binding in dictionary
-    ///
-    /// Example:
+    /// **Example**:
     /// ```swift
-    /// let expr = ParameterExpression.parameter(Parameter(name: "theta"))
+    /// let theta = Parameter(name: "theta")
+    /// let symbolic = ParameterValue.parameter(theta)
+    /// let concrete = ParameterValue.value(1.57)
+    ///
+    /// print(symbolic.parameter?.name)  // "theta"
+    /// print(concrete.parameter)        // nil
+    /// ```
+    ///
+    /// - Returns: Parameter if symbolic, `nil` if concrete
+    /// - Complexity: O(1)
+    @inlinable
+    public var parameter: Parameter? {
+        if case let .parameter(p) = self { return p }
+        return nil
+    }
+
+    /// Evaluate parameter value with bindings
+    ///
+    /// Substitutes symbolic parameters with concrete values from bindings dictionary.
+    /// Concrete values evaluate to their stored number regardless of bindings.
+    ///
+    /// **Algorithm**:
+    /// - Symbolic: Look up parameter name in bindings, return value
+    /// - Concrete: Return stored value immediately
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let theta = Parameter(name: "theta")
+    /// let expr = ParameterValue.parameter(theta)
     /// let bindings = ["theta": Double.pi / 2, "phi": 0.5]
     ///
-    /// let value = expr.evaluate(with: bindings)  // π/2
+    /// let value = expr.evaluate(using: bindings)  // π/2
+    ///
+    /// let concrete = ParameterValue.value(1.0)
+    /// let fixed = concrete.evaluate(using: [:])   // 1.0 (bindings ignored)
     /// ```
+    ///
+    /// - Parameter bindings: Dictionary mapping parameter names to numerical values
+    /// - Returns: Evaluated numerical value
+    /// - Complexity: O(1) dictionary lookup
+    /// - Precondition: Symbolic parameters must have binding in dictionary
     @_optimize(speed)
     @inlinable
-    public func evaluate(with bindings: [String: Double]) -> Double {
+    public func evaluate(using bindings: [String: Double]) -> Double {
         switch self {
         case let .value(v): return v
         case let .parameter(p):
@@ -123,16 +182,6 @@ public enum ParameterExpression: Equatable, Hashable, Sendable, CustomStringConv
         }
     }
 
-    /// Extract symbolic parameter if present
-    /// - Returns: Parameter if expression is symbolic, nil if concrete
-    @inlinable
-    @_effects(readonly)
-    public func extractParameter() -> Parameter? {
-        if case let .parameter(p) = self { return p }
-        return nil
-    }
-
-    /// String representation of expression
     @inlinable
     public var description: String {
         switch self {

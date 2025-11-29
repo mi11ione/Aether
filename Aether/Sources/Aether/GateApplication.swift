@@ -66,7 +66,7 @@ public enum GateApplication {
     ///   - state: Input quantum state
     /// - Returns: Transformed state with gate applied
     /// - Complexity: O(2^n) time, O(2^n) space
-    /// - Precondition: All qubits must be valid indices for state (validated by ``ValidationUtilities``)
+    /// - Precondition: All qubits must be valid indices for state
     @_effects(readonly)
     @inlinable
     @_eagerMove

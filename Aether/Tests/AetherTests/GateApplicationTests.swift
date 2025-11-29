@@ -317,7 +317,7 @@ struct PhaseGateTests {
     @Test("Phase(0) acts as identity")
     func phaseZeroIsIdentity() {
         let state = QuantumState(qubit: 1)
-        let newState = state.applying(.phase(angle: 0), to: 0)
+        let newState = state.applying(.phase(0), to: 0)
 
         #expect(state == newState)
     }
@@ -473,7 +473,7 @@ struct SwapAndControlledPhaseTests {
         let state = QuantumState(numQubits: 2, amplitudes: amplitudes)
         let theta = Double.pi / 2.0
         let newState = GateApplication.apply(
-            .controlledPhase(theta: theta),
+            .controlledPhase(theta),
             to: [0, 1],
             state: state
         )

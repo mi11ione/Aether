@@ -258,7 +258,7 @@ public struct Observable: CustomStringConvertible, Sendable {
         }
 
         var phase = Complex<Double>(1.0, 0.0)
-        var resultOperators: [(qubit: Int, basis: PauliBasis)] = []
+        var resultOperators: [PauliOperator] = []
         resultOperators.reserveCapacity(pauliMap.count)
 
         for qubit in pauliMap.keys.sorted() {
@@ -272,11 +272,15 @@ public struct Observable: CustomStringConvertible, Sendable {
             phase = phase * localPhase
 
             if let pauli = resultPauli {
-                resultOperators.append((qubit: qubit, basis: pauli))
+                switch pauli {
+                case .x: resultOperators.append(.x(qubit))
+                case .y: resultOperators.append(.y(qubit))
+                case .z: resultOperators.append(.z(qubit))
+                }
             }
         }
 
-        return (phase, PauliString(operators: resultOperators))
+        return (phase, PauliString(resultOperators))
     }
 
     /// Multiply single-qubit Pauli operators with phase

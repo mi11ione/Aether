@@ -72,16 +72,16 @@ struct GateUnitarityTests {
 
     @Test("Phase gate is unitary")
     func phaseUnitary() {
-        let gate = QuantumGate.phase(angle: .pi / 4.0)
+        let gate = QuantumGate.phase(.pi / 4.0)
         let matrix = gate.matrix()
         #expect(QuantumGate.isUnitary(matrix))
     }
 
     @Test("Rotation gates are unitary")
     func rotationGatesUnitary() {
-        let rx = QuantumGate.rotationX(theta: .pi / 3.0)
-        let ry = QuantumGate.rotationY(theta: .pi / 3.0)
-        let rz = QuantumGate.rotationZ(theta: .pi / 3.0)
+        let rx = QuantumGate.rotationX(.pi / 3.0)
+        let ry = QuantumGate.rotationY(.pi / 3.0)
+        let rz = QuantumGate.rotationZ(.pi / 3.0)
 
         #expect(QuantumGate.isUnitary(rx.matrix()))
         #expect(QuantumGate.isUnitary(ry.matrix()))
@@ -149,29 +149,19 @@ struct GatePropertiesTests {
         #expect(QuantumGate.hadamard.qubitsRequired == 1)
         #expect(QuantumGate.pauliX.qubitsRequired == 1)
         #expect(QuantumGate.pauliZ.qubitsRequired == 1)
-        #expect(QuantumGate.phase(angle: 0).qubitsRequired == 1)
+        #expect(QuantumGate.phase(0).qubitsRequired == 1)
     }
 
     @Test("Two-qubit gates require 2 qubits")
     func twoQubitGatesRequireTwo() {
         #expect(QuantumGate.cnot.qubitsRequired == 2)
         #expect(QuantumGate.swap.qubitsRequired == 2)
-        #expect(QuantumGate.controlledPhase(theta: 0).qubitsRequired == 2)
+        #expect(QuantumGate.controlledPhase(0).qubitsRequired == 2)
     }
 
     @Test("Toffoli gate requires 3 qubits")
     func toffoliRequiresThree() {
         #expect(QuantumGate.toffoli.qubitsRequired == 3)
-    }
-
-    @Test("Parameterized gates are identified correctly")
-    func parameterizedGates() {
-        #expect(QuantumGate.phase(angle: 0).isParameterized)
-        #expect(QuantumGate.rotationX(theta: 0).isParameterized)
-        #expect(QuantumGate.rotationY(theta: 0).isParameterized)
-        #expect(QuantumGate.rotationZ(theta: 0).isParameterized)
-        #expect(!QuantumGate.hadamard.isParameterized)
-        #expect(!QuantumGate.pauliX.isParameterized)
     }
 
     @Test("Hermitian gates are identified correctly")
@@ -180,7 +170,7 @@ struct GatePropertiesTests {
         #expect(QuantumGate.pauliY.isHermitian)
         #expect(QuantumGate.pauliZ.isHermitian)
         #expect(QuantumGate.hadamard.isHermitian)
-        #expect(!QuantumGate.phase(angle: .pi / 4.0).isHermitian)
+        #expect(!QuantumGate.phase(.pi / 4.0).isHermitian)
     }
 }
 
@@ -228,7 +218,7 @@ struct SelfInverseGateTests {
 struct ParameterizedGateTests {
     @Test("Phase(0) equals identity")
     func phaseZeroIsIdentity() {
-        let phase = QuantumGate.phase(angle: 0).matrix()
+        let phase = QuantumGate.phase(0).matrix()
         let identity = QuantumGate.identity.matrix()
 
         #expect(QuantumGate.matricesEqual(phase, identity))
@@ -236,7 +226,7 @@ struct ParameterizedGateTests {
 
     @Test("Phase(π) equals Pauli-Z")
     func phasePiIsZ() {
-        let phase = QuantumGate.phase(angle: .pi).matrix()
+        let phase = QuantumGate.phase(.pi).matrix()
         let z = QuantumGate.pauliZ.matrix()
 
         #expect(QuantumGate.matricesEqual(phase, z))
@@ -245,7 +235,7 @@ struct ParameterizedGateTests {
     @Test("S gate equals Phase(π/2)")
     func sGateEqualsPhaseHalfPi() {
         let s = QuantumGate.sGate.matrix()
-        let phase = QuantumGate.phase(angle: .pi / 2.0).matrix()
+        let phase = QuantumGate.phase(.pi / 2.0).matrix()
 
         #expect(QuantumGate.matricesEqual(s, phase))
     }
@@ -253,73 +243,21 @@ struct ParameterizedGateTests {
     @Test("T gate equals Phase(π/4)")
     func tGateEqualsPhaseQuarterPi() {
         let t = QuantumGate.tGate.matrix()
-        let phase = QuantumGate.phase(angle: .pi / 4.0).matrix()
+        let phase = QuantumGate.phase(.pi / 4.0).matrix()
 
         #expect(QuantumGate.matricesEqual(t, phase))
     }
 
     @Test("Rotation(0) equals identity")
     func rotationZeroIsIdentity() {
-        let rx = QuantumGate.rotationX(theta: 0).matrix()
-        let ry = QuantumGate.rotationY(theta: 0).matrix()
-        let rz = QuantumGate.rotationZ(theta: 0).matrix()
+        let rx = QuantumGate.rotationX(0).matrix()
+        let ry = QuantumGate.rotationY(0).matrix()
+        let rz = QuantumGate.rotationZ(0).matrix()
         let identity = QuantumGate.identity.matrix()
 
         #expect(QuantumGate.matricesEqual(rx, identity))
         #expect(QuantumGate.matricesEqual(ry, identity))
         #expect(QuantumGate.matricesEqual(rz, identity))
-    }
-}
-
-/// Test suite for quantum gate validation.
-/// Ensures gate configurations are physically valid and mathematically sound,
-/// preventing invalid quantum circuit constructions.
-@Suite("Gate Validation")
-struct GateValidationTests {
-    @Test("Valid CNOT indices pass validation")
-    func validCNOTIndices() {
-        let gate = QuantumGate.cnot
-        #expect(gate.validateQubitIndices([0, 1], maxAllowedQubit: 1))
-        #expect(gate.validateQubitIndices([0, 1], maxAllowedQubit: 2))
-    }
-
-    @Test("CNOT with control=target fails validation")
-    func cnotSameQubitFails() {
-        let gate = QuantumGate.cnot
-        #expect(!gate.validateQubitIndices([0, 0], maxAllowedQubit: 1))
-    }
-
-    @Test("CNOT with out-of-bounds indices fails validation")
-    func cnotOutOfBoundsFails() {
-        let gate = QuantumGate.cnot
-        #expect(!gate.validateQubitIndices([0, 2], maxAllowedQubit: 1))
-    }
-
-    @Test("Toffoli with distinct qubits passes validation")
-    func validToffoliIndices() {
-        let gate = QuantumGate.toffoli
-        #expect(gate.validateQubitIndices([0, 1, 2], maxAllowedQubit: 2))
-    }
-
-    @Test("Toffoli with duplicate indices fails validation")
-    func toffoliDuplicateFails() {
-        let gate = QuantumGate.toffoli
-        #expect(!gate.validateQubitIndices([0, 0, 2], maxAllowedQubit: 2))
-    }
-
-    @Test("Custom two-qubit gate validates successfully with correct matrix")
-    func customTwoQubitValidMatrix() {
-        let swapMatrix = [
-            [Complex<Double>.one, .zero, .zero, .zero],
-            [.zero, .zero, .one, .zero],
-            [.zero, .one, .zero, .zero],
-            [.zero, .zero, .zero, .one],
-        ]
-
-        let gate = QuantumGate.custom(matrix: swapMatrix, control: 0, target: 1)
-        let matrix = gate.matrix()
-        #expect(matrix.count == 4)
-        #expect(matrix[0].count == 4)
     }
 }
 
@@ -341,12 +279,12 @@ struct GateDescriptionTests {
     @Test("All gate descriptions are non-empty")
     func allGateDescriptionsNonEmpty() {
         #expect(QuantumGate.identity.description == "I")
-        #expect(QuantumGate.phase(angle: 1.234).description.contains("P"))
-        #expect(QuantumGate.phase(angle: 1.234).description.contains("1.234"))
-        #expect(QuantumGate.rotationX(theta: 2.345).description.contains("Rx"))
-        #expect(QuantumGate.rotationY(theta: 3.456).description.contains("Ry"))
-        #expect(QuantumGate.rotationZ(theta: 4.567).description.contains("Rz"))
-        #expect(QuantumGate.controlledPhase(theta: 1.5).description.contains("CP"))
+        #expect(QuantumGate.phase(1.234).description.contains("P"))
+        #expect(QuantumGate.phase(1.234).description.contains("1.234"))
+        #expect(QuantumGate.rotationX(2.345).description.contains("Rx"))
+        #expect(QuantumGate.rotationY(3.456).description.contains("Ry"))
+        #expect(QuantumGate.rotationZ(4.567).description.contains("Rz"))
+        #expect(QuantumGate.controlledPhase(1.5).description.contains("CP"))
         #expect(QuantumGate.cnot.description.contains("CNOT"))
         #expect(QuantumGate.swap.description.contains("SWAP"))
         #expect(QuantumGate.toffoli.description.contains("Toffoli"))

@@ -148,27 +148,6 @@ struct QuantumStateProbabilityTests {
     }
 }
 
-/// Test suite for state validation.
-/// Ensures quantum states maintain mathematical invariants
-/// throughout operations and modifications.
-@Suite("State Validation")
-struct QuantumStateValidationTests {
-    @Test("Valid state passes validation")
-    func validState() {
-        let state = QuantumState(numQubits: 2)
-        #expect(state.validate())
-    }
-
-    @Test("State remains valid after normalization")
-    func validAfterNormalization() {
-        var state = QuantumState(numQubits: 1)
-        state.setAmplitude(0, to: Complex(1.0, 1.0))
-        state.setAmplitude(1, to: Complex(1.0, 1.0))
-        state.normalize()
-        #expect(state.validate())
-    }
-}
-
 /// Test suite for Bell state (entangled) configurations.
 /// Validates maximally entangled two-qubit states
 /// fundamental to quantum algorithms and teleportation.
@@ -344,48 +323,6 @@ struct LargeStateVectorizedTests {
         let state = QuantumState(numQubits: numQubits, amplitudes: amplitudes)
 
         #expect(state.isNormalized())
-    }
-}
-
-/// Test suite for quantum state validation.
-/// Validates state invariants: amplitude count, normalization,
-/// and absence of NaN/Inf values for robust simulation.
-@Suite("Quantum State Validation")
-struct StateValidationTests {
-    @Test("Valid state passes validation")
-    func validStatePassesValidation() {
-        let state = QuantumState(numQubits: 2)
-        #expect(state.validate())
-    }
-
-    @Test("Normalized state passes validation")
-    func normalizedStatePassesValidation() {
-        let invSqrt2 = 1.0 / sqrt(2.0)
-        let amplitudes = [Complex(invSqrt2, 0.0), Complex(invSqrt2, 0.0)]
-        let state = QuantumState(numQubits: 1, amplitudes: amplitudes)
-        #expect(state.validate())
-    }
-
-    @Test("Unnormalized state fails validation")
-    func unnormalizedStateFails() {
-        var state = QuantumState(numQubits: 1)
-        state.setAmplitude(0, to: Complex(2.0, 0.0))
-        state.setAmplitude(1, to: Complex(2.0, 0.0))
-        #expect(!state.validate())
-    }
-
-    @Test("State with NaN fails validation")
-    func stateWithNaNFails() {
-        var state = QuantumState(numQubits: 1)
-        state.setAmplitude(0, to: Complex(Double.nan, 0.0))
-        #expect(!state.validate())
-    }
-
-    @Test("State with Inf fails validation")
-    func stateWithInfFails() {
-        var state = QuantumState(numQubits: 1)
-        state.setAmplitude(1, to: Complex(Double.infinity, 0.0))
-        #expect(!state.validate())
     }
 }
 

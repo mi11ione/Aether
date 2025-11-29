@@ -595,10 +595,11 @@ public enum ValidationUtilities {
     ///   - operations: Array of gate operations to validate
     ///   - numQubits: Number of qubits in the circuit
     /// - Precondition: All operation qubits must be in range [0, numQubits)
-    /// - Precondition: All gates must validate against maxAllowedQubit (29 for 30-qubit limit)
+    /// - Precondition: All gates must have correct qubit count and unique indices
     /// - Complexity: O(n x m) where n = operations count, m = qubits per operation
     @_effects(readonly)
     @inlinable
+    @inline(__always)
     static func validateCircuitOperations(_ operations: [GateOperation], numQubits: Int) {
         let maxAllowedQubit = 29
 
@@ -607,11 +608,15 @@ public enum ValidationUtilities {
                 operation.qubits.allSatisfy { $0 >= 0 && $0 < numQubits },
                 "Circuit operation has qubit index out of bounds [0, \(numQubits))"
             )
-
             precondition(
-                operation.gate.validateQubitIndices(operation.qubits, maxAllowedQubit: maxAllowedQubit),
-                "Gate \(operation.gate) has invalid qubit configuration"
+                operation.qubits.count == operation.gate.qubitsRequired,
+                "Gate \(operation.gate) requires \(operation.gate.qubitsRequired) qubits (got \(operation.qubits.count))"
             )
+            precondition(
+                operation.qubits.allSatisfy { $0 >= 0 && $0 <= maxAllowedQubit },
+                "All qubit indices must be in [0, \(maxAllowedQubit)] (got \(operation.qubits))"
+            )
+            validateUniqueQubits(operation.qubits)
         }
     }
 
@@ -922,6 +927,37 @@ public enum ValidationUtilities {
             precondition(
                 parameterSet.contains(key),
                 "Extra parameter '\(key)' not in circuit"
+            )
+        }
+    }
+
+    /// Validate that parameter value is concrete (not symbolic)
+    ///
+    /// Ensures ``ParameterValue`` is .value case before matrix generation or gate application.
+    /// Symbolic parameters must be bound via ``QuantumCircuit/binding(_:)`` before execution.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let theta = Parameter(name: "theta")
+    /// let symbolic = ParameterValue.parameter(theta)
+    /// let concrete = ParameterValue.value(.pi / 4)
+    ///
+    /// ValidationUtilities.validateConcrete(concrete, name: "rotation angle")  // OK
+    /// ValidationUtilities.validateConcrete(symbolic, name: "rotation angle")  // Crashes
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - value: Parameter value to validate
+    ///   - name: Descriptive name for error message
+    /// - Precondition: value must be .value case (not .parameter)
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateConcrete(_ value: ParameterValue, name: String) {
+        if case let .parameter(param) = value {
+            preconditionFailure(
+                "\(name) must be concrete before matrix generation (symbolic parameter '\(param.name)' requires binding)"
             )
         }
     }
