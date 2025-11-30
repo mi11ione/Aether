@@ -27,7 +27,7 @@ import Foundation
 /// let result = await optimizer.minimize(
 ///     { params in await circuit.bind(params).expectationValue(hamiltonian) },
 ///     from: [0.1, 0.1, 0.1],
-///     using: .default,
+///     using: ConvergenceCriteria(),
 ///     progress: nil
 /// )
 /// print("Optimal energy: \(result.value)")
@@ -87,7 +87,7 @@ public typealias ProgressCallback = @Sendable (_ iteration: Int, _ currentValue:
 /// **Example:**
 /// ```swift
 /// // Default criteria (energy tolerance only)
-/// let criteria = ConvergenceCriteria.default
+/// let criteria = ConvergenceCriteria()
 ///
 /// // Gradient-based optimization with strict convergence
 /// let strict = ConvergenceCriteria(
@@ -146,9 +146,6 @@ public struct ConvergenceCriteria: Sendable {
         self.gradientNormTolerance = gradientNormTolerance
         self.maxIterations = maxIterations
     }
-
-    /// Default convergence criteria (energyTolerance: 1e-6, maxIterations: 1000)
-    public static let `default` = ConvergenceCriteria()
 }
 
 // MARK: - Optimizer Result
@@ -160,7 +157,7 @@ public struct ConvergenceCriteria: Sendable {
 ///
 /// **Example:**
 /// ```swift
-/// let result = await optimizer.minimize(objective, from: initial, using: .default, progress: nil)
+/// let result = await optimizer.minimize(objective, from: initial, using: .init(), progress: nil)
 /// print("Optimal energy: \(result.value)")
 /// print("Converged: \(result.terminationReason == .energyConverged)")
 /// print("Iterations: \(result.iterations), Evaluations: \(result.evaluations)")
@@ -284,7 +281,7 @@ public enum TerminationReason: Sendable, CustomStringConvertible {
 /// **Example:**
 /// ```swift
 /// let optimizer = NelderMeadOptimizer(tolerance: 1e-6)
-/// let result = await optimizer.minimize(objective, from: initial, using: .default, progress: nil)
+/// let result = await optimizer.minimize(objective, from: initial, using: .init(), progress: nil)
 /// print("Optimal energy: \(result.value)")
 /// ```
 ///
@@ -1342,7 +1339,7 @@ public struct SPSAOptimizer: Optimizer {
 /// **Example:**
 /// ```swift
 /// let optimizer = COBYLAOptimizer(initialTrustRadius: 0.5, minTrustRadius: 1e-6)
-/// let result = await optimizer.minimize(objective, from: initial, using: .default, progress: nil)
+/// let result = await optimizer.minimize(objective, from: initial, using: .init(), progress: nil)
 /// print("Ground state energy: \(result.value)")
 /// ```
 ///

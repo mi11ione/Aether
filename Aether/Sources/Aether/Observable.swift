@@ -3,67 +3,48 @@
 
 /// Array of Pauli terms with coefficients.
 ///
-/// Represents weighted Pauli strings used in Hamiltonians and observables.
 /// Each term is a (coefficient, PauliString) pair where the coefficient is real.
+/// Used to represent weighted Pauli strings in Hamiltonians and observables.
 public typealias PauliTerms = [(coefficient: Double, pauliString: PauliString)]
 
-/// Quantum observable (Hermitian operator) for expectation value measurements
+/// Quantum observable represented as a weighted sum of Pauli strings.
 ///
-/// Represents a Hermitian operator as a weighted sum of Pauli strings:
-/// O = Σᵢ cᵢ Pᵢ where Pᵢ ∈ {I,X,Y,Z}^⊗n and cᵢ ∈ ℝ
+/// An observable is a Hermitian operator O = Σᵢ cᵢ Pᵢ where each Pᵢ is a tensor product
+/// of Pauli operators {I,X,Y,Z} and cᵢ are real coefficients. This representation is fundamental
+/// to quantum chemistry, VQE optimization, and measurement theory. Real coefficients ensure
+/// Hermiticity (O† = O), guaranteeing real eigenvalues as required for physical observables.
 ///
-/// **Mathematical Properties:**
-/// - Hermitian: O† = O (real eigenvalues, observable in quantum mechanics)
-/// - Real coefficients ensure Hermiticity when Pauli strings are Hermitian
-/// - Linear combination of Pauli operators spans all Hermitian operators
+/// The Pauli decomposition spans all Hermitian operators on n qubits, making this representation
+/// complete for any measurable quantum property. Common applications include molecular
+/// Hamiltonians in quantum chemistry, where electronic structure problems are mapped to
+/// Pauli string sums via fermion-to-qubit transformations.
 ///
-/// **Use Cases:**
-/// - **VQE (Variational Quantum Eigensolver)**: Minimize ⟨ψ(θ)|H|ψ(θ)⟩
-/// - **Quantum Chemistry**: Molecular Hamiltonians as Pauli decompositions
-/// - **Observable measurements**: Energy, magnetization, correlation functions
-/// - **Algorithm verification**: Compare expected vs measured observables
+/// - SeeAlso: ``PauliString``, ``VQE``, ``SparseHamiltonian``
 ///
-/// **Example - Hydrogen molecule Hamiltonian:**
+/// Example:
 /// ```swift
-/// // H = -1.05·I + 0.39·Z₀ - 0.39·Z₁ - 0.01·Z₀⊗Z₁ + 0.18·X₀⊗X₁
 /// let hamiltonian = Observable(terms: [
-///     (-1.05, PauliString(operators: [])),                    // Identity
-///     (0.39,  PauliString(operators: [(0, .z)])),             // Z₀
-///     (-0.39, PauliString(operators: [(1, .z)])),             // Z₁
-///     (-0.01, PauliString(operators: [(0, .z), (1, .z)])),    // Z₀⊗Z₁
-///     (0.18,  PauliString(operators: [(0, .x), (1, .x)]))     // X₀⊗X₁
+///     (-1.05, PauliString(operators: [])),
+///     (0.39, PauliString(operators: [(0, .z)])),
+///     (-0.01, PauliString(operators: [(0, .z), (1, .z)]))
 /// ])
-///
-/// // Compute ground state energy
-/// let groundState = // ... prepare trial state
 /// let energy = hamiltonian.expectationValue(state: groundState)
 /// ```
-///
-/// **Example - Simple observable:**
-/// ```swift
-/// // Measure Z₀ (Pauli-Z on qubit 0)
-/// let observable = Observable(
-///     coefficient: 1.0,
-///     pauliString: PauliString(operators: [(qubit: 0, basis: .z)])
-/// )
-///
-/// let state = QuantumState(numQubits: 1)  // |0⟩
-/// let expectation = observable.expectationValue(state: state)
-/// // expectation = +1.0 (|0⟩ is +1 eigenstate of Z)
-/// ```
-@frozen
 public struct Observable: CustomStringConvertible, Sendable {
-    /// Terms in the observable: weighted Pauli strings (cᵢ, Pᵢ)
-    /// Coefficients are real (required for Hermiticity)
+    /// Weighted Pauli string terms (cᵢ, Pᵢ) comprising this observable.
+    ///
+    /// Coefficients must be real to ensure Hermiticity.
     public let terms: PauliTerms
 
-    /// Create observable from weighted Pauli string terms
+    /// Create observable from weighted Pauli string terms.
+    ///
     /// - Parameter terms: Array of (coefficient, Pauli string) pairs
     public init(terms: PauliTerms) {
         self.terms = terms
     }
 
-    /// Convenience initializer for single-term observable
+    /// Create single-term observable.
+    ///
     /// - Parameters:
     ///   - coefficient: Real coefficient
     ///   - pauliString: Pauli string operator
@@ -73,31 +54,24 @@ public struct Observable: CustomStringConvertible, Sendable {
 
     // MARK: - Expectation Value
 
-    /// Compute exact expectation value ⟨ψ|O|ψ⟩ from statevector
+    /// Compute exact expectation value ⟨ψ|O|ψ⟩ from statevector.
     ///
-    /// Uses linearity of expectation: ⟨O⟩ = Σᵢ cᵢ⟨Pᵢ⟩
-    /// Each Pauli string expectation computed via basis rotation.
-    ///
-    /// **Algorithm:**
-    /// 1. For each term (cᵢ, Pᵢ):
-    ///    - Rotate state to basis where Pᵢ is diagonal
-    ///    - Compute ⟨Pᵢ⟩ = Σₓ λₓ P(x) where λₓ ∈ {±1}
-    /// 2. Sum weighted contributions: ⟨O⟩ = Σᵢ cᵢ⟨Pᵢ⟩
-    ///
-    /// **Complexity:** O(k·2ⁿ) where k = number of terms, n = qubits
+    /// Uses linearity of expectation to compute ⟨O⟩ = Σᵢ cᵢ⟨Pᵢ⟩ where each Pauli string
+    /// expectation is evaluated by rotating to the measurement basis where Pᵢ is diagonal,
+    /// then computing the weighted sum of eigenvalues ±1 according to the Born rule.
     ///
     /// - Parameter state: Normalized quantum state |ψ⟩
-    /// - Returns: Expectation value ⟨ψ|O|ψ⟩ ∈ ℝ
+    /// - Returns: Real expectation value ⟨ψ|O|ψ⟩
+    /// - Complexity: O(k·2ⁿ) where k is the number of terms and n is the number of qubits
+    /// - Precondition: State must be normalized (Σ|cᵢ|² = 1)
     ///
     /// Example:
     /// ```swift
-    /// // Compute energy of trial state
-    /// let hamiltonian = Observable(terms: [...])
-    /// let trialState = prepareAnsatz(parameters: theta)
+    /// let hamiltonian = Observable(terms: molecularTerms)
     /// let energy = hamiltonian.expectationValue(state: trialState)
     /// ```
     @_optimize(speed)
-    public func expectationValue(state: QuantumState) -> Double {
+    public func expectationValue(of state: QuantumState) -> Double {
         ValidationUtilities.validateNormalizedState(state)
 
         var totalExpectation = 0.0
@@ -105,7 +79,7 @@ public struct Observable: CustomStringConvertible, Sendable {
         for i in 0 ..< terms.count {
             let pauliExpectation = Self.computePauliExpectation(
                 pauliString: terms[i].pauliString,
-                state: state
+                for: state
             )
             totalExpectation += terms[i].coefficient * pauliExpectation
         }
@@ -113,19 +87,19 @@ public struct Observable: CustomStringConvertible, Sendable {
         return totalExpectation
     }
 
-    /// Compute expectation value of single Pauli string: ⟨ψ|P|ψ⟩
+    /// Compute expectation value of single Pauli string ⟨ψ|P|ψ⟩.
     ///
-    /// Applies basis rotations to diagonalize Pauli operator, then computes
-    /// expectation from probability distribution and eigenvalues.
+    /// Rotates state to the basis where the Pauli operator is diagonal, then computes
+    /// expectation from eigenvalues ±1 and probability distribution via the Born rule.
     ///
     /// - Parameters:
     ///   - pauliString: Pauli string operator
     ///   - state: Normalized quantum state
-    /// - Returns: Expectation value ⟨P⟩ ∈ [-1, +1]
+    /// - Returns: Expectation value in range [-1, +1]
     @_optimize(speed)
     static func computePauliExpectation(
         pauliString: PauliString,
-        state: QuantumState
+        for state: QuantumState
     ) -> Double {
         if pauliString.operators.isEmpty { return 1.0 }
 
@@ -155,44 +129,40 @@ public struct Observable: CustomStringConvertible, Sendable {
 
     // MARK: - Variance
 
-    /// Compute variance Var(O) = ⟨O²⟩ - ⟨O⟩²
+    /// Compute variance Var(O) = ⟨O²⟩ - ⟨O⟩².
     ///
-    /// Variance measures uncertainty in observable measurements.
-    /// Used for:
-    /// - Error analysis in VQE
-    /// - Determining required measurement shots
-    /// - Convergence criteria for variational algorithms
+    /// Variance quantifies measurement uncertainty and determines the number of shots
+    /// required for target accuracy. Used in VQE convergence criteria, error analysis,
+    /// and shot allocation strategies where variance-weighted sampling improves efficiency.
     ///
-    /// **Algorithm:**
-    /// 1. Compute ⟨O⟩ = expectation value
-    /// 2. Construct O² by expanding (Σᵢ cᵢ Pᵢ)² = Σᵢⱼ cᵢcⱼ PᵢPⱼ
-    /// 3. Compute ⟨O²⟩ = expectation of squared observable
-    /// 4. Var(O) = ⟨O²⟩ - ⟨O⟩²
-    ///
-    /// **Complexity:** O(k²·2ⁿ) where k = number of terms
+    /// Computed by expanding O² = (Σᵢ cᵢ Pᵢ)² = Σᵢⱼ cᵢcⱼ PᵢPⱼ via Pauli multiplication rules,
+    /// then evaluating ⟨O²⟩ - ⟨O⟩² using standard expectation value computation.
     ///
     /// - Parameter state: Normalized quantum state
-    /// - Returns: Variance Var(O) ≥ 0
+    /// - Returns: Non-negative variance Var(O) ≥ 0
+    /// - Complexity: O(k²·2ⁿ) where k is the number of terms
+    /// - Precondition: State must be normalized
+    /// - SeeAlso: ``ShotAllocator``
     ///
     /// Example:
     /// ```swift
-    /// let variance = hamiltonian.variance(state: state)
-    /// let uncertainty = sqrt(variance)
-    /// // Number of shots needed: O(variance / ε²) for accuracy ε
+    /// let variance = hamiltonian.variance(of: state)
+    /// let shotsNeeded = Int(variance / (targetError * targetError))
     /// ```
     @_optimize(speed)
-    public func variance(state: QuantumState) -> Double {
-        let mean = expectationValue(state: state)
-        let meanSquared = squared().expectationValue(state: state)
+    public func variance(of state: QuantumState) -> Double {
+        let mean = expectationValue(of: state)
+        let meanSquared = squared().expectationValue(of: state)
         return meanSquared - mean * mean
     }
 
-    /// Compute O² by expanding (Σᵢ cᵢ Pᵢ)² = Σᵢⱼ cᵢcⱼ PᵢPⱼ
+    /// Compute O² by expanding (Σᵢ cᵢ Pᵢ)² = Σᵢⱼ cᵢcⱼ PᵢPⱼ.
     ///
-    /// Multiplies all pairs of Pauli strings and combines like terms inline.
-    /// Result is guaranteed Hermitian (real coefficients) if input is Hermitian.
+    /// Multiplies all pairs of Pauli strings using the standard Pauli algebra and combines
+    /// like terms. The result is Hermitian if the input is Hermitian.
     ///
     /// - Returns: Observable representing O²
+    /// - Complexity: O(k²) where k is the number of terms
     @_optimize(speed)
     @_eagerMove
     private func squared() -> Observable {
@@ -223,20 +193,16 @@ public struct Observable: CustomStringConvertible, Sendable {
         return Observable(terms: squaredTerms)
     }
 
-    /// Multiply two Pauli strings with proper phase tracking
+    /// Multiply two Pauli strings with phase tracking.
     ///
-    /// Pauli multiplication rules (per qubit):
-    /// - X·X = Y·Y = Z·Z = I
-    /// - X·Y = iZ,  Y·X = -iZ
-    /// - Y·Z = iX,  Z·Y = -iX
-    /// - Z·X = iY,  X·Z = -iY
-    ///
-    /// For tensor products, multiply qubit-by-qubit and track global phase.
+    /// Applies standard Pauli multiplication rules (X·Y = iZ, Y·Z = iX, Z·X = iY with cyclic
+    /// anticommutation) to each qubit position independently, accumulating the global phase.
+    /// Identity elements (nil Pauli) are handled naturally via guard statements.
     ///
     /// - Parameters:
     ///   - lhs: Left Pauli string
     ///   - rhs: Right Pauli string
-    /// - Returns: (phase, resulting Pauli string)
+    /// - Returns: Tuple of (phase, resulting Pauli string)
     @_optimize(speed)
     @_eagerMove
     private func multiplyPauliStrings(
@@ -283,46 +249,43 @@ public struct Observable: CustomStringConvertible, Sendable {
         return (phase, PauliString(resultOperators))
     }
 
-    /// Multiply single-qubit Pauli operators with phase
+    /// Multiply single-qubit Pauli operators with phase.
     ///
     /// - Parameters:
-    ///   - left: Left Pauli (nil = identity)
-    ///   - right: Right Pauli (nil = identity)
-    /// - Returns: (phase, result Pauli or nil for identity)
+    ///   - left: Left Pauli operator (nil represents identity)
+    ///   - right: Right Pauli operator (nil represents identity)
+    /// - Returns: Tuple of (phase, resulting Pauli or nil for identity)
     @_optimize(speed)
-    @inlinable
-    func multiplySingleQubitPaulis(
+    private func multiplySingleQubitPaulis(
         left: PauliBasis?,
         right: PauliBasis?
     ) -> (phase: Complex<Double>, result: PauliBasis?) {
-        // Handle identity cases
         guard let l = left else { return (Complex(1.0, 0.0), right) }
         guard let r = right else { return (Complex(1.0, 0.0), left) }
 
         switch (l, r) {
         case (.x, .x), (.y, .y), (.z, .z):
-            return (Complex(1.0, 0.0), nil) // P·P = I
+            return (Complex(1.0, 0.0), nil)
         case (.x, .y):
-            return (Complex(0.0, 1.0), .z) // X·Y = iZ
+            return (Complex(0.0, 1.0), .z)
         case (.y, .x):
-            return (Complex(0.0, -1.0), .z) // Y·X = -iZ
+            return (Complex(0.0, -1.0), .z)
         case (.y, .z):
-            return (Complex(0.0, 1.0), .x) // Y·Z = iX
+            return (Complex(0.0, 1.0), .x)
         case (.z, .y):
-            return (Complex(0.0, -1.0), .x) // Z·Y = -iX
+            return (Complex(0.0, -1.0), .x)
         case (.z, .x):
-            return (Complex(0.0, 1.0), .y) // Z·X = iY
+            return (Complex(0.0, 1.0), .y)
         case (.x, .z):
-            return (Complex(0.0, -1.0), .y) // X·Z = -iY
+            return (Complex(0.0, -1.0), .y)
         }
     }
 
-    /// Combine terms with identical Pauli strings
+    /// Combine terms with identical Pauli strings.
     ///
-    /// Groups terms by Pauli string and sums their coefficients.
-    /// Removes terms with near-zero coefficients.
+    /// Groups terms by Pauli string and sums their coefficients, removing near-zero terms.
     ///
-    /// - Parameter terms: Unsimplified terms
+    /// - Parameter terms: Unsimplified Pauli terms
     /// - Returns: Simplified terms with combined coefficients
     @_optimize(speed)
     @_eagerMove
@@ -339,6 +302,67 @@ public struct Observable: CustomStringConvertible, Sendable {
         return coefficientMap.compactMap { key, value in
             abs(value) > 1e-15 ? (coefficient: value, pauliString: key) : nil
         }
+    }
+
+    // MARK: - Convenience Factories
+
+    /// Create Pauli-X observable on a single qubit.
+    ///
+    /// - Parameters:
+    ///   - qubit: Target qubit index
+    ///   - coefficient: Observable coefficient (default: 1.0)
+    /// - Returns: Observable representing coefficient · X
+    ///
+    /// Example:
+    /// ```swift
+    /// let xObs = Observable.pauliX(qubit: 0)
+    /// let expectation = xObs.expectationValue(state: state)
+    /// ```
+    @_effects(readonly)
+    public static func pauliX(qubit: Int, coefficient: Double = 1.0) -> Observable {
+        Observable(
+            coefficient: coefficient,
+            pauliString: PauliString(.x(qubit))
+        )
+    }
+
+    /// Create Pauli-Y observable on a single qubit.
+    ///
+    /// - Parameters:
+    ///   - qubit: Target qubit index
+    ///   - coefficient: Observable coefficient (default: 1.0)
+    /// - Returns: Observable representing coefficient · Y
+    ///
+    /// Example:
+    /// ```swift
+    /// let yObs = Observable.pauliY(qubit: 1)
+    /// ```
+    @_effects(readonly)
+    public static func pauliY(qubit: Int, coefficient: Double = 1.0) -> Observable {
+        Observable(
+            coefficient: coefficient,
+            pauliString: PauliString(.y(qubit))
+        )
+    }
+
+    /// Create Pauli-Z observable on a single qubit.
+    ///
+    /// - Parameters:
+    ///   - qubit: Target qubit index
+    ///   - coefficient: Observable coefficient (default: 1.0)
+    /// - Returns: Observable representing coefficient · Z
+    ///
+    /// Example:
+    /// ```swift
+    /// let zObs = Observable.pauliZ(qubit: 0)
+    /// let expectation = zObs.expectationValue(state: state)
+    /// ```
+    @_effects(readonly)
+    public static func pauliZ(qubit: Int, coefficient: Double = 1.0) -> Observable {
+        Observable(
+            coefficient: coefficient,
+            pauliString: PauliString(.z(qubit))
+        )
     }
 
     // MARK: - CustomStringConvertible

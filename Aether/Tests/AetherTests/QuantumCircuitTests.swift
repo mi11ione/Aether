@@ -751,7 +751,7 @@ struct GroverCircuitTests {
             outcomes.append(result.outcome)
         }
 
-        var counts = ShotAllocation()
+        var counts = [Int: Int]()
         for outcome in outcomes {
             counts[outcome, default: 0] += 1
         }

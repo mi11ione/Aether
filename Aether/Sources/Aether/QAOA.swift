@@ -157,7 +157,7 @@ public actor QAOA {
         numQubits: Int,
         depth: Int,
         optimizer: Optimizer = COBYLAOptimizer(tolerance: 1e-6),
-        convergenceCriteria: ConvergenceCriteria = .default,
+        convergenceCriteria: ConvergenceCriteria = ConvergenceCriteria(),
         useSparseBackend: Bool = true,
         useMetalAcceleration: Bool = true
     ) {
@@ -270,9 +270,9 @@ public actor QAOA {
 
             // Compute cost: ⟨ψ|H_p|ψ⟩
             let cost: Double = if let sparseH = self.sparseHamiltonian {
-                await sparseH.expectationValue(state: state)
+                await sparseH.expectationValue(of: state)
             } else {
-                self.costHamiltonian.expectationValue(state: state)
+                self.costHamiltonian.expectationValue(of: state)
             }
 
             return cost

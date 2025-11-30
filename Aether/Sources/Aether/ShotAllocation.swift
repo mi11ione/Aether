@@ -2,85 +2,92 @@
 // Licensed under the Apache License, Version 2.0
 
 import Accelerate
-import Foundation
 
-/// Maps term or group index to number of measurement shots allocated.
+/// Variance-weighted shot allocation for Hamiltonian expectation value measurements.
 ///
-/// Used in shot allocation to specify how many measurement shots should be
-/// dedicated to each Hamiltonian term or measurement group.
-public typealias ShotAllocation = [Int: Int]
-
-/// Optimal allocation of measurement shots for Hamiltonian expectation values.
+/// Optimally distributes measurement shots across Hamiltonian terms or measurement groups
+/// to minimize total variance for a fixed shot budget. The variance of a Hamiltonian
+/// expectation value ⟨H⟩ = Σᵢ cᵢ⟨Pᵢ⟩ depends on shot allocation nᵢ:
 ///
-/// For shot-based measurements (real hardware or shot-based simulation), the variance
-/// of the Hamiltonian expectation value is:
-///
+/// ```
 /// Var(⟨H⟩) = Σᵢ cᵢ² Var(⟨Pᵢ⟩) / nᵢ
+/// ```
 ///
-/// where nᵢ is the number of shots allocated to term i.
+/// Optimal allocation minimizes this variance by concentrating shots on high-variance,
+/// high-weight terms:
 ///
-/// To minimize total shots N for target variance σ², the optimal allocation is:
+/// ```
+/// nᵢ ∝ |cᵢ| √Var(Pᵢ)
+/// ```
 ///
-/// nᵢ = N x (|cᵢ| √Var(Pᵢ)) / (Σⱼ |cⱼ| √Var(Pⱼ))
+/// Typical reduction: 2-10x fewer shots needed compared to uniform allocation for molecular
+/// Hamiltonians with diverse term weights.
 ///
-/// This reduces shot requirements compared to uniform allocation by concentrating
-/// shots on high-variance, high-weight terms.
-@frozen
+/// **Example:**
+/// ```swift
+/// let allocator = ShotAllocator(minShotsPerTerm: 10)
+/// let allocation = allocator.allocate(
+///     for: hamiltonian.terms,
+///     totalShots: 10000,
+///     state: currentState
+/// )
+/// for (index, shots) in allocation {
+///     print("Term \(index): \(shots) shots")
+/// }
+/// ```
+///
+/// - SeeAlso: ``Observable``, ``QWCGroup``
 public struct ShotAllocator {
-    // MARK: - Configuration
+    /// Minimum shots allocated to each term, preventing zero allocation.
+    ///
+    /// Small-weight terms receive at least this many shots to avoid complete neglect.
+    /// Typical values: 5-20 shots. Higher values reduce risk of missing contributions
+    /// from low-weight terms but decrease overall optimization effectiveness.
+    public let minShotsPerTerm: Int
 
-    @frozen
-    public struct Config: Sendable {
-        /// Minimum shots per term (avoid zero allocation)
-        public let minShotsPerTerm: Int
-
-        /// Whether to round to nearest integer or use fractional shots
-        public let roundToInteger: Bool
-
-        public static let `default` = Config(
-            minShotsPerTerm: 10,
-            roundToInteger: true
-        )
-
-        public init(minShotsPerTerm: Int, roundToInteger: Bool) {
-            self.minShotsPerTerm = minShotsPerTerm
-            self.roundToInteger = roundToInteger
-        }
+    /// Creates a shot allocator with specified minimum shot constraint.
+    ///
+    /// - Parameter minShotsPerTerm: Minimum shots per term. Default 10 provides good
+    ///   balance between optimization and coverage.
+    public init(minShotsPerTerm: Int = 10) {
+        self.minShotsPerTerm = minShotsPerTerm
     }
-
-    public let config: Config
-
-    public init(config: Config = .default) { self.config = config }
 
     // MARK: - Shot Allocation
 
-    /// Allocate shots optimally across Hamiltonian terms.
+    /// Allocates measurement shots optimally across Hamiltonian terms.
     ///
-    /// - Parameters:
-    ///   - terms: Array of (coefficient, PauliString) pairs
-    ///   - totalShots: Total number of shots available
-    ///   - state: Quantum state for variance estimation (optional)
-    /// - Returns: Dictionary mapping term index to number of shots
+    /// Distributes shots using variance-weighted allocation: terms with large coefficients
+    /// and high measurement variance receive proportionally more shots. When state is provided,
+    /// computes exact variances Var(Pᵢ) = 1 - ⟨Pᵢ⟩² for each term. Without state, assumes
+    /// unit variance (conservative worst-case).
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let allocator = ShotAllocator()
     /// let allocation = allocator.allocate(
-    ///     terms: hamiltonian.terms,
+    ///     for: hamiltonian.terms,
     ///     totalShots: 10000,
     ///     state: currentState
     /// )
-    /// // allocation[0] = 250  (high-weight term gets more shots)
-    /// // allocation[1] = 100  (low-weight term gets fewer shots)
     /// ```
+    ///
+    /// - Parameters:
+    ///   - terms: Hamiltonian terms as (coefficient, PauliString) pairs
+    ///   - totalShots: Total measurement shots to distribute
+    ///   - state: Quantum state for variance estimation. If nil, assumes unit variance for all terms.
+    /// - Returns: Dictionary mapping term index to allocated shot count
+    /// - Complexity: O(n) where n is number of terms
+    /// - Precondition: `terms` must be non-empty, `totalShots` must be positive
+    /// - SeeAlso: ``allocate(forGroups:totalShots:state:)`` for group-level allocation
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
     public func allocate(
-        terms: PauliTerms,
+        for terms: PauliTerms,
         totalShots: Int,
         state: QuantumState? = nil
-    ) -> ShotAllocation {
+    ) -> [Int: Int] {
         let termCount: Int = terms.count
         ValidationUtilities.validateNonEmpty(terms, name: "terms")
         ValidationUtilities.validatePositiveInt(totalShots, name: "totalShots")
@@ -101,33 +108,41 @@ public struct ShotAllocator {
         return allocateWithWeights(weights: weights, totalShots: totalShots)
     }
 
-    /// Allocate shots optimally for QWC groups.
+    /// Allocates measurement shots optimally across QWC groups.
     ///
-    /// - Parameters:
-    ///   - groups: Array of QWC groups
-    ///   - totalShots: Total shots available
-    ///   - state: Quantum state for variance estimation (optional)
-    /// - Returns: Dictionary mapping group index to shots
+    /// Treats each qubit-wise commuting group as an atomic measurement unit and distributes
+    /// shots based on aggregate group weight and variance. Combines measurement reduction
+    /// from QWC grouping with variance-weighted allocation for maximum efficiency.
     ///
-    /// Example:
+    /// Group weight is sum of constituent term weights: w_group = Σⱼ |cⱼ| √Var(Pⱼ) for
+    /// terms j in group.
+    ///
+    /// **Example:**
     /// ```swift
     /// let groups = QWCGrouper.group(terms: hamiltonian.terms)
     /// let allocator = ShotAllocator()
-    /// let allocation = allocator.allocateForGroups(
-    ///     groups: groups,
+    /// let allocation = allocator.allocate(
+    ///     forGroups: groups,
     ///     totalShots: 10000,
     ///     state: currentState
     /// )
-    /// // Combines grouping reduction + optimal allocation
     /// ```
+    ///
+    /// - Parameters:
+    ///   - groups: QWC groups from grouping algorithm
+    ///   - totalShots: Total measurement shots to distribute
+    ///   - state: Quantum state for variance estimation. If nil, uses coefficient magnitudes only.
+    /// - Returns: Dictionary mapping group index to allocated shot count
+    /// - Complexity: O(n) where n is total number of terms across all groups
+    /// - SeeAlso: ``allocate(for:totalShots:state:)`` for term-level allocation, ``QWCGroup``
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
-    public func allocateForGroups(
-        groups: [QWCGroup],
+    public func allocate(
+        forGroups groups: [QWCGroup],
         totalShots: Int,
         state: QuantumState? = nil
-    ) -> ShotAllocation {
+    ) -> [Int: Int] {
         let groupCount: Int = groups.count
         guard groupCount > 0, totalShots > 0 else { return [:] }
 
@@ -149,7 +164,6 @@ public struct ShotAllocator {
         return allocateWithWeights(weights: groupWeights, totalShots: totalShots)
     }
 
-    /// Compute group weights with batched variance estimation.
     @_optimize(speed)
     @_effects(readonly)
     private func computeGroupWeightsBatched(
@@ -192,18 +206,10 @@ public struct ShotAllocator {
 
     // MARK: - Variance Estimation
 
-    /// Batch estimate variances for multiple Pauli strings (efficient).
-    ///
-    /// Creates single Observable for all terms to avoid repeated construction.
-    ///
-    /// - Parameters:
-    ///   - terms: Array of (coefficient, PauliString) pairs
-    ///   - state: Quantum state
-    /// - Returns: Array of variances for each term
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
-    func batchEstimateVariances(
+    private func batchEstimateVariances(
         terms: PauliTerms,
         state: QuantumState
     ) -> [Double] {
@@ -212,7 +218,7 @@ public struct ShotAllocator {
             for i in 0 ..< termCount {
                 let expectation = Observable.computePauliExpectation(
                     pauliString: terms[i].pauliString,
-                    state: state
+                    for: state
                 )
                 buffer[i] = 1.0 - expectation * expectation
             }
@@ -222,13 +228,12 @@ public struct ShotAllocator {
 
     // MARK: - Allocation Helpers
 
-    /// Shared allocation logic for both term-based and group-based allocation.
     @_optimize(speed)
     @_effects(readonly)
     private func allocateWithWeights(
         weights: [Double],
         totalShots: Int
-    ) -> ShotAllocation {
+    ) -> [Int: Int] {
         let weightCount: Int = weights.count
 
         var totalWeight = 0.0
@@ -238,11 +243,11 @@ public struct ShotAllocator {
             return uniformAllocation(numTerms: weightCount, totalShots: totalShots)
         }
 
-        var allocation = ShotAllocation(minimumCapacity: weightCount)
+        var allocation = [Int: Int](minimumCapacity: weightCount)
         var shotsRemaining: Int = totalShots
 
         let maxPossibleMin: Int = totalShots / max(weightCount, 1)
-        let effectiveMinShots: Int = min(config.minShotsPerTerm, maxPossibleMin)
+        let effectiveMinShots: Int = min(minShotsPerTerm, maxPossibleMin)
         let shotMultiplier = Double(totalShots) / totalWeight
 
         for index in 0 ..< weightCount {
@@ -272,12 +277,12 @@ public struct ShotAllocator {
     }
 
     @_effects(readonly)
-    private func uniformAllocation(numTerms: Int, totalShots: Int) -> ShotAllocation {
+    private func uniformAllocation(numTerms: Int, totalShots: Int) -> [Int: Int] {
         let maxPossibleMin: Int = totalShots / max(numTerms, 1)
-        let effectiveMinShots: Int = min(config.minShotsPerTerm, maxPossibleMin)
+        let effectiveMinShots: Int = min(minShotsPerTerm, maxPossibleMin)
         let shotsPerTerm: Int = max(totalShots / numTerms, effectiveMinShots)
 
-        var allocation = ShotAllocation(minimumCapacity: numTerms)
+        var allocation = [Int: Int](minimumCapacity: numTerms)
         for i in 0 ..< numTerms {
             allocation[i] = shotsPerTerm
         }
@@ -288,10 +293,10 @@ public struct ShotAllocator {
     @_optimize(speed)
     @_effects(readonly)
     private func distributeRemainingShots(
-        allocation: ShotAllocation,
+        allocation: [Int: Int],
         remaining: Int,
         weights: [Double]
-    ) -> ShotAllocation {
+    ) -> [Int: Int] {
         var newAllocation = allocation
         var shotsToDistribute: Int = remaining
 
@@ -306,7 +311,6 @@ public struct ShotAllocator {
 
         for index in sortedIndices {
             if shotsToDistribute <= 0 { break }
-            // Safe: allocation was built with all indices 0..<weightCount
             newAllocation[index]! += 1
             shotsToDistribute -= 1
         }
@@ -317,11 +321,11 @@ public struct ShotAllocator {
     @_optimize(speed)
     @_effects(readonly)
     private func reduceShots(
-        allocation: ShotAllocation,
+        allocation: [Int: Int],
         excess: Int,
         weights: [Double],
         minShots: Int
-    ) -> ShotAllocation {
+    ) -> [Int: Int] {
         var newAllocation = allocation
         var shotsToRemove: Int = excess
 
@@ -337,7 +341,6 @@ public struct ShotAllocator {
         for index in sortedIndices {
             if shotsToRemove <= 0 { break }
 
-            // Safe: allocation was built with all indices 0..<weightCount
             let currentShots = newAllocation[index]!
             let removable: Int = max(0, currentShots - minShots)
             let toRemove: Int = min(removable, shotsToRemove)
@@ -349,91 +352,42 @@ public struct ShotAllocator {
         return newAllocation
     }
 
-    // MARK: - Statistics
-
-    @frozen
-    public struct AllocationStats {
-        public let totalShots: Int
-        public let numTerms: Int
-        public let minShots: Int
-        public let maxShots: Int
-        public let averageShots: Double
-        public let distribution: ShotAllocation
-
-        public init(totalShots: Int, numTerms: Int, minShots: Int, maxShots: Int, averageShots: Double, distribution: ShotAllocation) {
-            self.totalShots = totalShots
-            self.numTerms = numTerms
-            self.minShots = minShots
-            self.maxShots = maxShots
-            self.averageShots = averageShots
-            self.distribution = distribution
-        }
-
-        public var description: String {
-            """
-            Shot Allocation Statistics:
-            - Total shots: \(totalShots)
-            - Terms: \(numTerms)
-            - Min shots: \(minShots)
-            - Max shots: \(maxShots)
-            - Average: \(String(format: "%.1f", averageShots)) shots/term
-            """
-        }
-    }
-
-    @_effects(readonly)
-    @inlinable
-    public func statistics(for allocation: ShotAllocation) -> AllocationStats {
-        let numTerms: Int = allocation.count
-
-        guard numTerms > 0 else {
-            return AllocationStats(
-                totalShots: 0,
-                numTerms: 0,
-                minShots: 0,
-                maxShots: 0,
-                averageShots: 0.0,
-                distribution: allocation
-            )
-        }
-
-        var totalShots = 0
-        var minShots = Int.max
-        var maxShots = Int.min
-        for shots in allocation.values {
-            totalShots += shots
-            if shots < minShots { minShots = shots }
-            if shots > maxShots { maxShots = shots }
-        }
-
-        let averageShots = Double(totalShots) / Double(numTerms)
-
-        return AllocationStats(
-            totalShots: totalShots,
-            numTerms: numTerms,
-            minShots: minShots,
-            maxShots: maxShots,
-            averageShots: averageShots,
-            distribution: allocation
-        )
-    }
-
     // MARK: - Variance Reduction Estimation
 
-    /// Estimate variance reduction compared to uniform allocation.
+    /// Computes variance reduction factor from optimal allocation compared to uniform distribution.
+    ///
+    /// Calculates ratio of variance from uniform allocation (equal shots per term) to variance
+    /// from optimal weighted allocation. Return value > 1 indicates improvement: 2.0 means optimal
+    /// allocation achieves same accuracy with half the shots, or twice the accuracy with same shots.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let allocator = ShotAllocator()
+    /// let allocation = allocator.allocate(for: terms, totalShots: 1000)
+    /// let uniformShots = 1000 / terms.count
+    /// let reduction = allocator.varianceReduction(
+    ///     for: terms,
+    ///     using: allocation,
+    ///     comparedTo: uniformShots
+    /// )
+    /// print("Optimal allocation is \(reduction)x better")
+    /// ```
     ///
     /// - Parameters:
     ///   - terms: Hamiltonian terms
-    ///   - allocation: Optimal shot allocation
-    ///   - uniformShots: Shots per term with uniform allocation
-    ///   - state: Quantum state for variance estimation (optional)
-    /// - Returns: Variance reduction factor
+    ///   - allocation: Optimal shot allocation from ``allocate(for:totalShots:state:)``
+    ///   - uniformShots: Shots per term under uniform allocation
+    ///   - state: Quantum state for variance estimation. If nil, assumes unit variance.
+    /// - Returns: Variance reduction factor (uniformVariance / optimalVariance). Values > 1 indicate improvement.
+    /// - Complexity: O(n) where n is number of terms
+    /// - Precondition: `allocation` must contain entry for each term index
+    /// - SeeAlso: ``allocate(for:totalShots:state:)``
     @_optimize(speed)
     @_effects(readonly)
-    public func estimateVarianceReduction(
-        terms: PauliTerms,
-        allocation: ShotAllocation,
-        uniformShots: Int,
+    public func varianceReduction(
+        for terms: PauliTerms,
+        using allocation: [Int: Int],
+        comparedTo uniformShots: Int,
         state: QuantumState? = nil
     ) -> Double {
         let termCount: Int = terms.count
@@ -450,7 +404,6 @@ public struct ShotAllocator {
 
         for index in 0 ..< termCount {
             ValidationUtilities.validateAllocationContainsIndex(allocation, index: index)
-            // Safe: validated above
             let shots = Double(allocation[index]!)
             let coeffSquared = terms[index].coefficient * terms[index].coefficient
             let varianceContrib = coeffSquared * variances[index]

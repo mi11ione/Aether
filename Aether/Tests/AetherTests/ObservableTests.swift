@@ -17,7 +17,7 @@ struct ObservableHermitianTests {
         )
 
         let state = QuantumState(numQubits: 2)
-        let expectation = identity.expectationValue(state: state)
+        let expectation = identity.expectationValue(of: state)
 
         #expect(abs(expectation - 1.0) < 1e-10)
     }
@@ -30,7 +30,7 @@ struct ObservableHermitianTests {
         )
 
         let state = QuantumState(numQubits: 1)
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - 1.0) < 1e-10)
     }
@@ -46,7 +46,7 @@ struct ObservableHermitianTests {
         circuit.append(.pauliX, to: 0)
         let state = circuit.execute()
 
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
         #expect(abs(expectation - -1.0) < 1e-10)
     }
 
@@ -61,7 +61,7 @@ struct ObservableHermitianTests {
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
         #expect(abs(expectation - 1.0) < 1e-10)
     }
 
@@ -77,7 +77,7 @@ struct ObservableHermitianTests {
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
         #expect(abs(expectation - -1.0) < 1e-10)
     }
 
@@ -93,7 +93,7 @@ struct ObservableHermitianTests {
         circuit.append(.sGate, to: 0)
         let state = circuit.execute()
 
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
         #expect(abs(expectation - 1.0) < 1e-10)
     }
 
@@ -106,7 +106,7 @@ struct ObservableHermitianTests {
 
         let bell = QuantumCircuit.bellPhiPlus().execute()
 
-        let expectation = observable.expectationValue(state: bell)
+        let expectation = observable.expectationValue(of: bell)
         #expect(abs(expectation - 1.0) < 1e-10)
     }
 
@@ -118,7 +118,7 @@ struct ObservableHermitianTests {
         )
 
         let bell = QuantumCircuit.bellPhiPlus().execute()
-        let expectation = observable.expectationValue(state: bell)
+        let expectation = observable.expectationValue(of: bell)
 
         #expect(abs(expectation - 1.0) < 1e-10)
     }
@@ -131,7 +131,7 @@ struct ObservableHermitianTests {
         ])
 
         let state = QuantumState(numQubits: 2)
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - 5.0) < 1e-10)
     }
@@ -144,7 +144,7 @@ struct ObservableHermitianTests {
         )
 
         let state = QuantumState(numQubits: 1)
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - -1.0) < 1e-10)
     }
@@ -160,7 +160,7 @@ struct ObservableHermitianTests {
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation) < 1e-10)
     }
@@ -176,7 +176,7 @@ struct ObservableHermitianTests {
 
         let state = QuantumState(numQubits: 2)
 
-        let energy = hamiltonian.expectationValue(state: state)
+        let energy = hamiltonian.expectationValue(of: state)
 
         #expect(abs(energy - -1.06) < 1e-10)
     }
@@ -198,7 +198,7 @@ struct ObservableHermitianTests {
     func emptyObservable() {
         let observable = Observable(terms: [])
         let state = QuantumState(numQubits: 2)
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation) < 1e-10)
     }
@@ -217,7 +217,7 @@ struct ObservableVarianceTests {
         )
 
         let state = QuantumState(numQubits: 1)
-        let variance = observable.variance(state: state)
+        let variance = observable.variance(of: state)
 
         #expect(abs(variance) < 1e-10)
     }
@@ -233,7 +233,7 @@ struct ObservableVarianceTests {
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
-        let variance = observable.variance(state: state)
+        let variance = observable.variance(of: state)
 
         #expect(abs(variance - 1.0) < 1e-10)
     }
@@ -250,7 +250,7 @@ struct ObservableVarianceTests {
         circuit.append(.rotationY(0.5), to: 1)
         let state = circuit.execute()
 
-        let variance = observable.variance(state: state)
+        let variance = observable.variance(of: state)
 
         #expect(variance >= -1e-10)
     }
@@ -267,7 +267,7 @@ struct ObservableVarianceTests {
         circuit.append(.hadamard, to: 1)
         let state = circuit.execute()
 
-        let variance = observable.variance(state: state)
+        let variance = observable.variance(of: state)
 
         #expect(abs(variance) < 1e-10)
     }
@@ -284,7 +284,7 @@ struct ObservableVarianceTests {
         circuit.append(.hadamard, to: 1)
         let state = circuit.execute()
 
-        let variance = observable.variance(state: state)
+        let variance = observable.variance(of: state)
 
         #expect(variance > 0)
     }
@@ -303,7 +303,7 @@ struct ObservablePauliMultiplicationTests {
         )
 
         let state = QuantumState(numQubits: 1)
-        let variance = observable.variance(state: state)
+        let variance = observable.variance(of: state)
 
         #expect(abs(variance) < 1e-10)
     }
@@ -319,7 +319,7 @@ struct ObservablePauliMultiplicationTests {
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
-        let variance = observable.variance(state: state)
+        let variance = observable.variance(of: state)
 
         #expect(abs(variance - 9.0) < 1e-10)
     }
@@ -336,7 +336,7 @@ struct ObservablePauliMultiplicationTests {
         circuit.append(.hadamard, to: 1)
         let state = circuit.execute()
 
-        let variance = observable.variance(state: state)
+        let variance = observable.variance(of: state)
 
         #expect(variance >= 0)
     }
@@ -352,7 +352,7 @@ struct ObservablePauliMultiplicationTests {
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
-        let variance = observable.variance(state: state)
+        let variance = observable.variance(of: state)
         #expect(variance >= 0)
     }
 
@@ -364,7 +364,7 @@ struct ObservablePauliMultiplicationTests {
         ])
 
         let state = QuantumState(numQubits: 1)
-        let variance = observable.variance(state: state)
+        let variance = observable.variance(of: state)
         #expect(variance >= 0)
     }
 
@@ -379,7 +379,7 @@ struct ObservablePauliMultiplicationTests {
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
-        let variance = observable.variance(state: state)
+        let variance = observable.variance(of: state)
         #expect(variance >= 0)
     }
 }
@@ -397,7 +397,7 @@ struct ObservableEdgeCasesTests {
         )
 
         let state = QuantumState(numQubits: 1)
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - 1e10) < 1e-5)
     }
@@ -410,7 +410,7 @@ struct ObservableEdgeCasesTests {
         )
 
         let state = QuantumState(numQubits: 1)
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - 1e-10) < 1e-15)
     }
@@ -423,7 +423,7 @@ struct ObservableEdgeCasesTests {
         )
 
         let state = QuantumState(numQubits: 5)
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - 1.0) < 1e-10)
     }
@@ -436,7 +436,7 @@ struct ObservableEdgeCasesTests {
         }
         let observable = Observable(terms: terms)
         let state = QuantumState(numQubits: 5)
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - 5.0) < 1e-10)
     }
@@ -449,7 +449,7 @@ struct ObservableEdgeCasesTests {
         ])
 
         let state = QuantumState(numQubits: 1)
-        let expectation = observable.expectationValue(state: state)
+        let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation) < 1e-10)
     }

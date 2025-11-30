@@ -3,61 +3,49 @@
 
 import Foundation
 
-/// Observable approximation methods for adaptive VQE optimization
+/// Low-rank Hamiltonian approximation for adaptive VQE optimization.
 ///
-/// Provides low-rank Hamiltonian approximation techniques that enable faster VQE
-/// convergence by using cheaper approximations in early iterations and refining
-/// with the full Hamiltonian in later iterations.
+/// Provides coefficient-based filtering techniques that reduce the computational cost of
+/// Hamiltonian expectation values by removing or truncating small-magnitude terms. Enables
+/// adaptive VQE strategies where early optimization iterations use cheap approximations
+/// and later iterations refine with the full Hamiltonian for accurate convergence.
 ///
-/// **Key techniques**:
-/// - **Coefficient truncation**: Remove terms with |cᵢ| < threshold
-/// - **Top-k selection**: Keep only k largest-magnitude terms
-/// - **Adaptive schedules**: Dynamic thresholding based on iteration count
+/// Approximation methods include coefficient truncation (removing terms below a threshold),
+/// top-k selection (keeping only the largest magnitude terms), and adaptive schedules
+/// (dynamic thresholding based on iteration count). Typical use involves aggressive
+/// approximation in the initial exploration phase followed by progressive refinement as
+/// optimization converges.
 ///
-/// **Use cases**:
-/// - Adaptive VQE with progressive refinement
-/// - Fast initial optimization with approximate Hamiltonians
-/// - Memory/computation tradeoffs for large molecular systems
-///
-/// **Typical workflow**:
-/// 1. Early iterations: Use aggressive approximation (threshold = 0.1)
-/// 2. Mid iterations: Moderate approximation (threshold = 0.01)
-/// 3. Final iterations: Full Hamiltonian for accurate convergence
+/// - SeeAlso: ``Observable``, ``VQE``
 ///
 /// Example:
 /// ```swift
-/// let hamiltonian = Observable(terms: molecularTerms)  // 2000 terms
-///
-/// // Adaptive VQE loop
+/// let hamiltonian = Observable(terms: molecularTerms)
 /// for iteration in 0..<100 {
-///     let threshold = iteration < 20 ? 0.1 : iteration < 50 ? 0.01 : 0.0
-///     let approxH = hamiltonian.truncate(threshold: threshold)
-///     // Use approxH for faster energy evaluation
+///     let threshold = iteration < 20 ? 0.1 : 0.0
+///     let approxH = hamiltonian.filtering(coefficientThreshold: threshold)
 /// }
 /// ```
-
-// MARK: - Low-Rank Approximation
-
 public extension Observable {
-    /// Approximate observable by truncating small-coefficient terms.
+    /// Filter observable by removing small-coefficient terms.
     ///
-    /// - Parameter threshold: Minimum absolute coefficient to keep
-    /// - Returns: Approximated observable with fewer terms
+    /// Retains only terms with absolute coefficient above the specified threshold. If all terms
+    /// fall below the threshold, returns the single largest-magnitude term to avoid producing
+    /// an empty observable. Useful for adaptive VQE where early iterations tolerate lower
+    /// accuracy for computational savings.
     ///
-    /// This is useful for adaptive VQE where early iterations can use
-    /// a cheaper approximation and later iterations refine with full Hamiltonian.
+    /// - Parameter threshold: Minimum absolute coefficient to retain
+    /// - Returns: Filtered observable with fewer terms
+    /// - Complexity: O(k) where k is the number of terms
     ///
     /// Example:
     /// ```swift
-    /// // Early VQE iterations
-    /// let approxH = hamiltonian.truncate(threshold: 0.1)  // Fast
-    ///
-    /// // Final iterations
-    /// let energy = hamiltonian.expectationValue(state: state)  // Accurate
+    /// let approxH = hamiltonian.filtering(coefficientThreshold: 0.1)
+    /// let energy = approxH.expectationValue(state: state)
     /// ```
     @_eagerMove
     @_effects(readonly)
-    func truncate(threshold: Double) -> Observable {
+    func filtering(coefficientThreshold threshold: Double) -> Observable {
         var significantTerms: PauliTerms = []
         significantTerms.reserveCapacity(terms.count)
 
@@ -82,21 +70,26 @@ public extension Observable {
         return Observable(terms: significantTerms)
     }
 
-    /// Approximate observable by keeping only top k terms.
+    /// Retain only the largest-coefficient terms.
     ///
-    /// - Parameter k: Number of terms to keep
-    /// - Returns: Observable with k largest-coefficient terms
+    /// Sorts terms by absolute coefficient magnitude and retains the top k entries. If count
+    /// exceeds the number of available terms, returns all terms. Guarantees at least one term
+    /// in the result by returning the largest-magnitude term when count is zero or negative.
+    ///
+    /// - Parameter count: Number of largest terms to keep
+    /// - Returns: Observable with at most count terms
+    /// - Complexity: O(k log k) where k is the number of terms (dominated by sorting)
     ///
     /// Example:
     /// ```swift
-    /// let approxH = hamiltonian.topK(k: 100)  // Keep 100 largest terms
-    /// print("Using \(approxH.terms.count) out of \(hamiltonian.terms.count) terms")
+    /// let approxH = hamiltonian.keepingLargest(100)
+    /// print("Reduced from \(hamiltonian.terms.count) to \(approxH.terms.count)")
     /// ```
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
-    func topK(k: Int) -> Observable {
-        guard k > 0 else {
+    func keepingLargest(_ count: Int) -> Observable {
+        guard count > 0 else {
             if let largest = terms.max(by: { abs($0.coefficient) < abs($1.coefficient) }) {
                 return Observable(terms: [largest])
             }
@@ -105,86 +98,100 @@ public extension Observable {
 
         let sortedTerms = terms.sorted { abs($0.coefficient) > abs($1.coefficient) }
 
-        let count = min(k, sortedTerms.count)
-        let topTerms = PauliTerms(unsafeUninitializedCapacity: count) { buffer, outCount in
-            for i in 0 ..< count {
+        let actualCount = min(count, sortedTerms.count)
+        let topTerms = PauliTerms(unsafeUninitializedCapacity: actualCount) { buffer, outCount in
+            for i in 0 ..< actualCount {
                 buffer[i] = sortedTerms[i]
             }
-            outCount = count
+            outCount = actualCount
         }
 
         return Observable(terms: topTerms)
     }
 
-    /// Compute approximation error relative to exact observable.
+    /// Compute absolute approximation error on a quantum state.
     ///
     /// - Parameters:
     ///   - approximate: Approximated observable
-    ///   - state: Quantum state to evaluate on
+    ///   - state: Quantum state for evaluation
     /// - Returns: Absolute error |⟨H⟩ - ⟨H'⟩|
+    /// - Precondition: State must be normalized
+    ///
+    /// Example:
+    /// ```swift
+    /// let approx = hamiltonian.filtering(coefficientThreshold: 0.1)
+    /// let err = hamiltonian.error(of: approx, state: state)
+    /// ```
     @_effects(readonly)
-    func approximationError(approximate: Observable, state: QuantumState) -> Double {
-        let exactValue: Double = expectationValue(state: state)
-        let approxValue: Double = approximate.expectationValue(state: state)
+    func error(of approximate: Observable, state: QuantumState) -> Double {
+        let exactValue: Double = expectationValue(of: state)
+        let approxValue: Double = approximate.expectationValue(of: state)
         return abs(exactValue - approxValue)
     }
 
-    /// Compute relative approximation error.
+    /// Compute relative approximation error on a quantum state.
+    ///
+    /// Returns zero if the exact expectation value is near zero to avoid division issues.
     ///
     /// - Parameters:
     ///   - approximate: Approximated observable
-    ///   - state: Quantum state to evaluate on
+    ///   - state: Quantum state for evaluation
     /// - Returns: Relative error |⟨H⟩ - ⟨H'⟩| / |⟨H⟩|
+    /// - Precondition: State must be normalized
     @_effects(readonly)
-    func relativeApproximationError(approximate: Observable, state: QuantumState) -> Double {
-        let exactValue: Double = expectationValue(state: state)
+    func relativeError(of approximate: Observable, state: QuantumState) -> Double {
+        let exactValue: Double = expectationValue(of: state)
         guard abs(exactValue) > 1e-10 else { return 0.0 }
 
-        let approxValue: Double = approximate.expectationValue(state: state)
+        let approxValue: Double = approximate.expectationValue(of: state)
         return abs(exactValue - approxValue) / abs(exactValue)
     }
 
     // MARK: - Adaptive Approximation Strategies
 
-    /// Adaptive threshold schedule for VQE optimization.
+    /// Adaptive threshold schedule for progressive refinement during optimization.
+    ///
+    /// Defines an exponential decay schedule from an initial threshold (aggressive truncation)
+    /// to a final threshold (accurate convergence). Typical usage involves starting with high
+    /// threshold values to accelerate early exploration, then gradually reducing the threshold
+    /// as optimization progresses toward convergence.
     @frozen
     struct AdaptiveSchedule: Sendable {
-        /// Initial threshold (largest, most aggressive truncation)
+        /// Initial threshold for early iterations (largest truncation).
         public let initialThreshold: Double
 
-        /// Final threshold (smallest, most accurate)
+        /// Final threshold for late iterations (minimal truncation).
         public let finalThreshold: Double
 
-        /// Decay rate (exponential decay)
+        /// Exponential decay rate controlling convergence speed.
         public let decayRate: Double
 
-        /// Current iteration
-        public var iteration: Int = 0
-
-        /// Get threshold for current iteration.
+        /// Compute threshold for a given optimization iteration.
+        ///
+        /// - Parameter iteration: Current iteration number
+        /// - Returns: Threshold value following exponential decay
         @inlinable
         @_effects(readonly)
-        public func threshold() -> Double {
+        public func threshold(at iteration: Int) -> Double {
             let t = Double(iteration)
             return finalThreshold + (initialThreshold - finalThreshold) * exp(-decayRate * t)
         }
 
-        public mutating func advance() {
-            iteration += 1
-        }
-
+        /// Aggressive schedule: fast decay from 0.5 to 0.0.
         public static let aggressive = AdaptiveSchedule(
             initialThreshold: 0.5,
             finalThreshold: 0.0,
             decayRate: 0.1
         )
 
+        /// Moderate schedule: balanced decay from 0.1 to 0.0.
         public static let moderate = AdaptiveSchedule(
             initialThreshold: 0.1,
             finalThreshold: 0.0,
             decayRate: 0.05
         )
 
+        /// Conservative schedule: slow decay from 0.01 to 0.0.
         public static let conservative = AdaptiveSchedule(
             initialThreshold: 0.01,
             finalThreshold: 0.0,
@@ -192,26 +199,45 @@ public extension Observable {
         )
     }
 
-    /// Apply adaptive truncation based on schedule.
+    /// Apply adaptive filtering based on iteration-dependent schedule.
     ///
-    /// - Parameter schedule: Adaptive threshold schedule
-    /// - Returns: Truncated observable for current iteration
+    /// - Parameters:
+    ///   - schedule: Adaptive threshold schedule
+    ///   - iteration: Current optimization iteration
+    /// - Returns: Filtered observable for this iteration
+    ///
+    /// Example:
+    /// ```swift
+    /// let approxH = hamiltonian.applying(schedule: .moderate, iteration: iteration)
+    /// ```
     @_eagerMove
     @_effects(readonly)
-    func adaptiveTruncate(schedule: AdaptiveSchedule) -> Observable {
-        let threshold: Double = schedule.threshold()
-        return truncate(threshold: threshold)
+    func applying(schedule: AdaptiveSchedule, iteration: Int) -> Observable {
+        let threshold: Double = schedule.threshold(at: iteration)
+        return filtering(coefficientThreshold: threshold)
     }
 
     // MARK: - Approximation Statistics
 
+    /// Statistics describing the quality of a Hamiltonian approximation.
     @frozen
-    struct ApproximationStats {
+    struct ApproximationStats: CustomStringConvertible {
+        /// Number of terms in original observable.
         public let originalTerms: Int
+
+        /// Number of terms in approximation.
         public let approximateTerms: Int
+
+        /// Ratio of original to approximate term count.
         public let reductionFactor: Double
+
+        /// Sum of absolute coefficients in original observable.
         public let coefficientSumOriginal: Double
+
+        /// Sum of absolute coefficients in approximation.
         public let coefficientSumApproximate: Double
+
+        /// Fraction of coefficient magnitude retained by approximation.
         public let coefficientRetention: Double
 
         public var description: String {
@@ -225,7 +251,10 @@ public extension Observable {
         }
     }
 
-    /// Compute approximation statistics.
+    /// Compute statistics comparing approximation quality to original observable.
+    ///
+    /// - Parameter approximate: Approximated observable
+    /// - Returns: Statistics structure with reduction metrics
     @_eagerMove
     @_effects(readonly)
     func approximationStatistics(approximate: Observable) -> ApproximationStats {
@@ -257,30 +286,37 @@ public extension Observable {
 
     // MARK: - Validation
 
-    /// Validate that approximation meets error tolerance.
+    /// Check whether approximation satisfies error tolerance on a test state.
     ///
     /// - Parameters:
     ///   - approximate: Approximated observable
-    ///   - state: Test state
+    ///   - state: Test state for error evaluation
     ///   - tolerance: Maximum acceptable absolute error
     /// - Returns: True if error is within tolerance
+    /// - Precondition: State must be normalized
     @_effects(readonly)
-    func validateApproximation(
-        approximate: Observable,
+    func meetsAccuracy(
+        _ approximate: Observable,
         state: QuantumState,
         tolerance: Double
     ) -> Bool {
-        let error: Double = approximationError(approximate: approximate, state: state)
-        return error <= tolerance
+        let errorValue: Double = error(of: approximate, state: state)
+        return errorValue <= tolerance
     }
 
-    /// Find minimum threshold that meets error tolerance.
+    /// Find minimum threshold satisfying error tolerance via binary search.
+    ///
+    /// Performs binary search over the coefficient range to identify the smallest threshold
+    /// that produces an approximation meeting the specified error tolerance. Useful for
+    /// determining the optimal trade-off between accuracy and computational cost.
     ///
     /// - Parameters:
-    ///   - state: Test state
+    ///   - state: Test state for error evaluation
     ///   - maxError: Maximum acceptable error
-    ///   - searchSteps: Number of binary search steps
+    ///   - searchSteps: Number of binary search iterations (default: 20)
     /// - Returns: Minimum threshold meeting error tolerance
+    /// - Complexity: O(searchSteps · k · 2ⁿ) where k is the number of terms
+    /// - Precondition: State must be normalized
     @_optimize(speed)
     func findOptimalThreshold(
         state: QuantumState,
@@ -294,17 +330,17 @@ public extension Observable {
         }
         if high == 0.0 { high = 1.0 }
 
-        let exactValue = expectationValue(state: state)
+        let exactValue = expectationValue(of: state)
 
         var low = 0.0
 
         for _ in 0 ..< searchSteps {
             let mid = (low + high) / 2.0
-            let approx = truncate(threshold: mid)
-            let approxValue = approx.expectationValue(state: state)
-            let error = abs(exactValue - approxValue)
+            let approx = filtering(coefficientThreshold: mid)
+            let approxValue = approx.expectationValue(of: state)
+            let errorValue = abs(exactValue - approxValue)
 
-            if error <= maxError { low = mid } else { high = mid }
+            if errorValue <= maxError { low = mid } else { high = mid }
         }
 
         return low

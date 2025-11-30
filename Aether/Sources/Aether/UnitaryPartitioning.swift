@@ -39,7 +39,7 @@ public struct UnitaryPartition: Sendable {
     /// Measurement basis for all terms in partition (all qubits measured in Z basis).
     ///
     /// Computed once at initialization for efficient repeated measurements.
-    public let measurementBasis: MeasurementBasis
+    public let measurementBasis: [Int: PauliBasis]
 
     /// Number of qubits (derived from matrix dimension)
     private var numQubits: Int { unitaryMatrix.count.trailingZeroBitCount }
@@ -49,7 +49,7 @@ public struct UnitaryPartition: Sendable {
         self.terms = terms
         self.unitaryMatrix = unitaryMatrix
 
-        var basis: MeasurementBasis = [:]
+        var basis: [Int: PauliBasis] = [:]
         for term in terms {
             for op in term.pauliString.operators {
                 basis[op.qubit] = .z
@@ -98,7 +98,7 @@ public struct UnitaryPartition: Sendable {
 /// ```
 ///
 /// - Complexity: O(groups² x iterations x depth x 2^(2n)) worst-case variational optimization
-/// - SeeAlso: ``UnitaryPartition``, ``QWCGrouper``, ``VariationalQuantumEigensolver``, ``Observable``
+/// - SeeAlso: ``UnitaryPartition``, ``QWCGrouper``, ``VQE``, ``Observable``
 public struct UnitaryPartitioner {
     // MARK: - Configuration
 
@@ -137,19 +137,24 @@ public struct UnitaryPartitioner {
         /// to QWC grouping. Default 0.1 accepts nearly-diagonal results.
         public let diagonalityThreshold: Double
 
-        /// Default configuration balancing quality and performance for typical use cases.
-        public static let `default` = Config(
-            maxIterations: 100,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 3,
-            useAdaptiveDepth: true,
-            diagonalityThreshold: 0.1
-        )
+        public init(
+            maxIterations: Int = 100,
+            convergenceTolerance: Double = 1e-6,
+            circuitDepth: Int = 3,
+            useAdaptiveDepth: Bool = true,
+            diagonalityThreshold: Double = 0.1
+        ) {
+            self.maxIterations = maxIterations
+            self.convergenceTolerance = convergenceTolerance
+            self.circuitDepth = circuitDepth
+            self.useAdaptiveDepth = useAdaptiveDepth
+            self.diagonalityThreshold = diagonalityThreshold
+        }
     }
 
     public let config: Config
 
-    public init(config: Config = .default) { self.config = config }
+    public init(config: Config = .init()) { self.config = config }
 
     // MARK: - Target Operator Construction
 
@@ -205,7 +210,7 @@ public struct UnitaryPartitioner {
     @_eagerMove
     public func partition(terms: PauliTerms) -> [UnitaryPartition] {
         let numQubits = terms.map { $0.pauliString.operators.map(\.qubit).max() ?? 0 }.max().map { $0 + 1 } ?? 0
-        let qwcGroups: [QWCGroup] = QWCGrouper.group(terms: terms)
+        let qwcGroups: [QWCGroup] = QWCGrouper.group(terms)
         var partitions: [UnitaryPartition] = []
         var remainingGroups: [QWCGroup] = qwcGroups
 

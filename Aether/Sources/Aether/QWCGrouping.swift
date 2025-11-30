@@ -4,62 +4,103 @@
 import Foundation
 
 /// A group of qubit-wise commuting Pauli strings that can be measured simultaneously.
-@frozen
+///
+/// Groups are produced by ``QWCGrouper/group(_:)`` via graph coloring. All Pauli strings within a group
+/// satisfy the qubit-wise commutation criterion, enabling simultaneous measurement in a shared basis.
+/// This reduces the number of measurement circuits needed for expectation value computation.
+///
+/// Example:
+/// ```swift
+/// let hamiltonian = Observable(terms: molecularTerms)
+/// let groups = QWCGrouper.group(hamiltonian.terms)
+/// for group in groups {
+///     let expectation = measure(state, in: group.measurementBasis)
+///     // All terms in this group measured simultaneously
+/// }
+/// ```
+///
+/// - SeeAlso: ``QWCGrouper/group(_:)``, ``PauliCommutation/areQWC(_:_:)``
 public struct QWCGroup: Sendable {
-    /// Pauli strings in this group with their coefficients
+    /// Pauli terms in this group with their coefficients.
+    ///
+    /// All terms are guaranteed to be qubit-wise commuting with each other.
     public let terms: PauliTerms
 
-    /// Measurement basis for each qubit
-    /// Maps qubit index -> Pauli basis to measure in
-    public let measurementBasis: MeasurementBasis
+    /// The measurement basis for each qubit that appears in this group's Pauli strings.
+    ///
+    /// Dictionary is sparse: only includes qubits referenced by the group's terms.
+    /// For qubits not in the dictionary, measurement basis is arbitrary (typically Z).
+    public let measurementBasis: [Int: PauliBasis]
 
-    /// Total weight of this group (sum of absolute coefficients)
+    /// Total weight of this group, computed as the sum of absolute coefficients.
+    ///
+    /// Used for variance-weighted shot allocation in measurement optimization.
+    ///
+    /// - Complexity: O(n) where n is the number of terms in the group
     @inlinable
-    @_effects(readonly)
-    public func weight() -> Double {
+    public var weight: Double {
         terms.reduce(0.0) { $0 + abs($1.coefficient) }
     }
 
-    public init(terms: PauliTerms, measurementBasis: MeasurementBasis) {
+    /// Creates a qubit-wise commuting group.
+    ///
+    /// - Parameters:
+    ///   - terms: Pauli terms in this group
+    ///   - measurementBasis: The measurement basis for each qubit
+    /// - Precondition: All terms must be qubit-wise commuting with each other
+    public init(terms: PauliTerms, measurementBasis: [Int: PauliBasis]) {
         self.terms = terms
         self.measurementBasis = measurementBasis
     }
 }
 
-/// Groups Pauli strings using qubit-wise commutation (QWC) criterion.
+/// Groups Pauli terms using graph coloring for measurement optimization.
 ///
-/// This implementation uses graph coloring to find an optimal grouping of Pauli terms
-/// such that terms in each group can be measured simultaneously.
+/// Qubit-wise commuting (QWC) Pauli strings can be measured simultaneously in a shared basis.
+/// This grouping reduces the number of measurement circuits needed for Hamiltonian expectation values,
+/// typically achieving reductions from thousands of terms to tens or hundreds of groups.
 ///
-/// Algorithm:
-/// 1. Build conflict graph: nodes = Pauli strings, edges = non-QWC pairs
-/// 2. Color graph using DSATUR (degree of saturation) algorithm
-/// 3. Each color represents one measurement group
+/// The grouper uses the DSATUR graph coloring algorithm on a conflict graph where nodes represent
+/// Pauli strings and edges connect non-QWC pairs. The algorithm produces near-optimal groupings
+/// with better performance than simple greedy methods.
 ///
-/// DSATUR is a greedy algorithm that provides near-optimal coloring:
-/// - Select uncolored vertex with highest saturation degree (most distinct colors in neighbors)
-/// - Assign smallest available color
-/// - Ties broken by highest degree
+/// Example:
+/// ```swift
+/// let hamiltonian = Observable(terms: molecularTerms)
+/// let groups = QWCGrouper.group(hamiltonian.terms)
+/// let stats = QWCGrouper.statistics(for: groups)
+/// print(stats)
+/// // QWC Grouping Statistics:
+/// // - Terms: 2000
+/// // - Groups: 48
+/// // - Reduction: 41.7x
+/// ```
 ///
-/// For typical molecular Hamiltonians with 2000 terms, this reduces to ~50-200 groups.
+/// - SeeAlso: ``QWCGroup``, ``PauliCommutation``, ``Observable``
 public enum QWCGrouper {
     // MARK: - Main Grouping Algorithm
 
-    /// Group Pauli terms by qubit-wise commutation.
+    /// Groups Pauli terms into sets that can be measured simultaneously.
     ///
-    /// - Parameter terms: Array of (coefficient, PauliString) pairs
-    /// - Returns: Array of QWC groups
+    /// Uses graph coloring to partition terms into qubit-wise commuting groups. Each group shares
+    /// a measurement basis, enabling all terms in the group to be measured with a single circuit.
+    /// Empty input returns empty array.
     ///
     /// Example:
     /// ```swift
-    /// let hamiltonian = Observable(terms: molecularTerms)  // 2000 terms
-    /// let groups = QWCGrouper.group(terms: hamiltonian.terms)
+    /// let hamiltonian = Observable(terms: molecularTerms)
+    /// let groups = QWCGrouper.group(hamiltonian.terms)
     /// print("Reduced \(hamiltonian.terms.count) terms to \(groups.count) groups")
-    /// // Output: Reduced 2000 terms to 48 groups (41x reduction)
+    /// // Reduced 2000 terms to 48 groups
     /// ```
+    ///
+    /// - Parameter terms: Pauli terms to group
+    /// - Returns: Array of QWC groups, each with a shared measurement basis
+    /// - Complexity: O(n² + n log n) where n is the number of terms
+    /// - SeeAlso: ``statistics(for:)`` to analyze grouping quality
     @_optimize(speed)
     @_eagerMove
-    public static func group(terms: PauliTerms) -> [QWCGroup] {
+    public static func group(_ terms: PauliTerms) -> [QWCGroup] {
         guard !terms.isEmpty else { return [] }
 
         let graph: [[Int]] = buildConflictGraph(terms: terms)
@@ -70,7 +111,6 @@ public enum QWCGrouper {
 
     // MARK: - Graph Construction
 
-    /// Build conflict graph where edges represent non-QWC pairs.
     @_optimize(speed)
     @_eagerMove
     private static func buildConflictGraph(terms: PauliTerms) -> [[Int]] {
@@ -79,7 +119,7 @@ public enum QWCGrouper {
 
         for i in 0 ..< n {
             for j in (i + 1) ..< n {
-                if !PauliCommutation.qubitWiseCommute(terms[i].pauliString, terms[j].pauliString) {
+                if !PauliCommutation.areQWC(terms[i].pauliString, terms[j].pauliString) {
                     adjacencyList[i].append(j)
                     adjacencyList[j].append(i)
                 }
@@ -91,13 +131,6 @@ public enum QWCGrouper {
 
     // MARK: - Graph Coloring (DSATUR Algorithm)
 
-    /// Color graph using DSATUR (Degree of Saturation) algorithm with priority queue.
-    ///
-    /// - Parameter graph: Adjacency list representation
-    /// - Returns: Tuple of (colors array, number of colors used)
-    ///
-    /// DSATUR provides better coloring than simple greedy for most graphs.
-    /// Time complexity: O(n log n) using priority queue for vertex selection
     @_optimize(speed)
     @_eagerMove
     private static func colorGraphDSATUR(graph: [[Int]]) -> (colors: [Int], numColors: Int) {
@@ -136,7 +169,6 @@ public enum QWCGrouper {
 
     // MARK: - Priority Queue for DSATUR
 
-    /// Max-heap for DSATUR vertex selection with O(log n) operations
     private struct DSATURHeap {
         private var heap: [(saturation: Int, degree: Int, vertex: Int)]
         private var vertexToIndex: [Int]
@@ -247,7 +279,6 @@ public enum QWCGrouper {
 
     // MARK: - Group Building
 
-    /// Build QWC groups from coloring.
     @_optimize(speed)
     @_eagerMove
     private static func buildGroups(
@@ -266,10 +297,7 @@ public enum QWCGrouper {
 
         for groupTerms in colorToTerms where !groupTerms.isEmpty {
             let pauliStrings: [PauliString] = groupTerms.map(\.pauliString)
-
-            // Safe: Graph coloring guarantees all strings in same color are QWC,
-            // so measurementBasis always succeeds
-            let basis: MeasurementBasis = PauliCommutation.measurementBasis(for: pauliStrings)!
+            let basis: [Int: PauliBasis] = PauliCommutation.measurementBasis(of: pauliStrings)!
 
             groups.append(QWCGroup(terms: groupTerms, measurementBasis: basis))
         }
@@ -279,47 +307,78 @@ public enum QWCGrouper {
 
     // MARK: - Statistics
 
-    /// Compute grouping statistics.
-    @frozen
-    public struct GroupingStats {
-        public let numTerms: Int
-        public let numGroups: Int
-        public let reductionFactor: Double
-        public let largestGroupSize: Int
-        public let averageGroupSize: Double
-        public let groupSizes: [Int]
-
-        @inlinable
-        public var description: String {
-            """
-            QWC Grouping Statistics:
-            - Terms: \(numTerms)
-            - Groups: \(numGroups)
-            - Reduction: \(String(format: "%.1f", reductionFactor))x
-            - Largest group: \(largestGroupSize) terms
-            - Average group: \(String(format: "%.1f", averageGroupSize)) terms
-            """
-        }
-    }
-
-    /// Compute statistics for a grouping.
+    /// Statistical summary of a QWC grouping.
     ///
-    /// - Parameter groups: Array of QWC groups
-    /// - Returns: Statistics about the grouping
+    /// Provides metrics for analyzing grouping quality, including reduction factor and group size distribution.
+    /// Use ``QWCGrouper/statistics(for:)`` to compute these statistics from a grouping.
     ///
     /// Example:
     /// ```swift
-    /// let groups = QWCGrouper.group(terms: hamiltonian.terms)
+    /// let groups = QWCGrouper.group(hamiltonian.terms)
     /// let stats = QWCGrouper.statistics(for: groups)
-    /// print(stats.description)
+    /// print("Reduced \(stats.numTerms) terms to \(stats.numGroups) groups")
+    /// print("Reduction factor: \(stats.reductionFactor)x")
+    /// ```
+    ///
+    /// - SeeAlso: ``QWCGrouper/statistics(for:)``
+    public struct GroupingStats {
+        /// Total number of Pauli terms across all groups.
+        public let numTerms: Int
+
+        /// Number of QWC groups.
+        public let numGroups: Int
+
+        /// Reduction factor, computed as `numTerms / numGroups`.
+        public let reductionFactor: Double
+
+        /// Size of the largest group.
+        public let largestGroupSize: Int
+
+        /// Average group size.
+        public let averageGroupSize: Double
+
+        /// Size of each group.
+        public let groupSizes: [Int]
+    }
+}
+
+extension QWCGrouper.GroupingStats: CustomStringConvertible {
+    @inlinable
+    public var description: String {
+        """
+        QWC Grouping Statistics:
+        - Terms: \(numTerms)
+        - Groups: \(numGroups)
+        - Reduction: \(String(format: "%.1f", reductionFactor))x
+        - Largest group: \(largestGroupSize) terms
+        - Average group: \(String(format: "%.1f", averageGroupSize)) terms
+        """
+    }
+}
+
+public extension QWCGrouper {
+    /// Computes statistical metrics for a QWC grouping.
+    ///
+    /// Analyzes a grouping to determine the number of terms, groups, reduction factor, and
+    /// group size distribution. Returns default values for empty input.
+    ///
+    /// Example:
+    /// ```swift
+    /// let groups = QWCGrouper.group(hamiltonian.terms)
+    /// let stats = QWCGrouper.statistics(for: groups)
+    /// print(stats)
     /// // QWC Grouping Statistics:
     /// // - Terms: 2000
     /// // - Groups: 48
     /// // - Reduction: 41.7x
     /// ```
+    ///
+    /// - Parameter groups: QWC groups to analyze
+    /// - Returns: Statistical summary including reduction factor and group sizes
+    /// - Complexity: O(n) where n is the number of groups
     @_optimize(speed)
     @_eagerMove
-    public static func statistics(for groups: [QWCGroup]) -> GroupingStats {
+    static func statistics(for groups: [QWCGroup]) -> GroupingStats {
         let numGroups: Int = groups.count
 
         guard numGroups > 0 else {

@@ -15,7 +15,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer()
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
@@ -32,7 +32,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
@@ -64,7 +64,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
@@ -90,7 +90,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
@@ -114,7 +114,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 2, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
@@ -133,7 +133,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
@@ -151,7 +151,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = GradientDescentOptimizer(learningRate: 0.5)
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
@@ -172,7 +172,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = LBFGSBOptimizer(tolerance: 1e-3)
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
@@ -193,7 +193,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = SPSAOptimizer(initialStepSize: 0.1)
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
@@ -211,7 +211,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer()
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
@@ -228,7 +228,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer()
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
@@ -246,7 +246,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
@@ -265,7 +265,7 @@ struct VariationalQuantumEigensolverTests {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
-        let vqe = VariationalQuantumEigensolver(
+        let vqe = VQE(
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,

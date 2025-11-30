@@ -20,8 +20,8 @@ struct SparseHamiltonianCorrectnessTests {
 
         let state = QuantumState(numQubits: 1)
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-6)
     }
@@ -36,8 +36,8 @@ struct SparseHamiltonianCorrectnessTests {
 
         let state = QuantumState(numQubits: 1)
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-6)
     }
@@ -54,8 +54,8 @@ struct SparseHamiltonianCorrectnessTests {
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-6)
     }
@@ -73,8 +73,8 @@ struct SparseHamiltonianCorrectnessTests {
         circuit.append(.sGate, to: 0)
         let state = circuit.execute()
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-6)
     }
@@ -89,8 +89,8 @@ struct SparseHamiltonianCorrectnessTests {
 
         let bell = QuantumCircuit.bellPhiPlus().execute()
 
-        let expectedValue = observable.expectationValue(state: bell)
-        let sparseValue = await sparseH.expectationValue(state: bell)
+        let expectedValue = observable.expectationValue(of: bell)
+        let sparseValue = await sparseH.expectationValue(of: bell)
 
         #expect(abs(sparseValue - expectedValue) < 1e-6)
     }
@@ -105,8 +105,8 @@ struct SparseHamiltonianCorrectnessTests {
 
         let bell = QuantumCircuit.bellPhiPlus().execute()
 
-        let expectedValue = observable.expectationValue(state: bell)
-        let sparseValue = await sparseH.expectationValue(state: bell)
+        let expectedValue = observable.expectationValue(of: bell)
+        let sparseValue = await sparseH.expectationValue(of: bell)
 
         #expect(abs(sparseValue - expectedValue) < 1e-6)
     }
@@ -125,8 +125,8 @@ struct SparseHamiltonianCorrectnessTests {
         circuit.append(.rotationY(0.5), to: 1)
         let state = circuit.execute()
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-6)
     }
@@ -144,8 +144,8 @@ struct SparseHamiltonianCorrectnessTests {
 
         let state = QuantumState(numQubits: 2)
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-6)
     }
@@ -160,8 +160,8 @@ struct SparseHamiltonianCorrectnessTests {
 
         let state = QuantumState(numQubits: 1)
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-6)
     }
@@ -180,8 +180,8 @@ struct SparseHamiltonianCorrectnessTests {
         circuit.append(.cnot, to: [0, 1])
         let state = circuit.execute()
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-6)
     }
@@ -222,7 +222,7 @@ struct SparseHamiltonianBackendTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         let state = QuantumState(numQubits: 1)
-        let value = await sparseH.expectationValue(state: state)
+        let value = await sparseH.expectationValue(of: state)
 
         #expect(abs(value) < 1e-10)
     }
@@ -235,7 +235,7 @@ struct SparseHamiltonianBackendTests {
         #expect(backendDesc.contains("non-zero"))
 
         let state = QuantumState(numQubits: 1)
-        let value = await sparseH.expectationValue(state: state)
+        let value = await sparseH.expectationValue(of: state)
         #expect(abs(value) < 1e-10)
     }
 }
@@ -254,7 +254,7 @@ struct SparseHamiltonianSparsityTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         #expect(sparseH.nnz == sparseH.dimension)
-        #expect(sparseH.sparsity() == Double(sparseH.dimension) / Double(sparseH.dimension * sparseH.dimension))
+        #expect(sparseH.sparsity == Double(sparseH.dimension) / Double(sparseH.dimension * sparseH.dimension))
     }
 
     @Test("Single Pauli-X is sparse")
@@ -266,7 +266,7 @@ struct SparseHamiltonianSparsityTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         #expect(sparseH.nnz == sparseH.dimension)
-        #expect(sparseH.sparsity() < 1.0)
+        #expect(sparseH.sparsity < 1.0)
     }
 
     @Test("Multi-term Hamiltonian has low sparsity")
@@ -279,7 +279,7 @@ struct SparseHamiltonianSparsityTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        #expect(sparseH.sparsity() < 0.5)
+        #expect(sparseH.sparsity < 0.5)
         #expect(sparseH.nnz > 0)
     }
 
@@ -291,8 +291,8 @@ struct SparseHamiltonianSparsityTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        #expect(sparseH.sparsity() >= 0.0)
-        #expect(sparseH.sparsity() <= 1.0)
+        #expect(sparseH.sparsity >= 0.0)
+        #expect(sparseH.sparsity <= 1.0)
     }
 }
 
@@ -309,12 +309,12 @@ struct SparseHamiltonianStatisticsTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let stats = await sparseH.getStatistics()
+        let stats = await sparseH.statistics
 
         #expect(stats.numQubits == sparseH.numQubits)
         #expect(stats.dimension == sparseH.dimension)
         #expect(stats.nonZeros == sparseH.nnz)
-        #expect(abs(stats.sparsity - sparseH.sparsity()) < 1e-10)
+        #expect(abs(stats.sparsity - sparseH.sparsity) < 1e-10)
     }
 
     @Test("Backend description is non-empty")
@@ -339,7 +339,7 @@ struct SparseHamiltonianStatisticsTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let stats = await sparseH.getStatistics()
+        let stats = await sparseH.statistics
         let description = stats.description
 
         #expect(description.contains("Sparse Hamiltonian"))
@@ -355,7 +355,7 @@ struct SparseHamiltonianStatisticsTests {
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let stats = await sparseH.getStatistics()
+        let stats = await sparseH.statistics
 
         #expect(stats.memoryBytes > 0)
 
@@ -377,7 +377,7 @@ struct SparseHamiltonianStatisticsTests {
         let observable = Observable(terms: terms)
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let description = await sparseH.getStatistics().description
+        let description = await sparseH.statistics.description
         #expect(description.contains("Qubits: 12"))
         #expect(description.contains("Non-zeros:"))
     }
@@ -398,8 +398,8 @@ struct SparseHamiltonianEdgeCasesTests {
 
         let state = QuantumState(numQubits: 1)
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-3) // Relaxed tolerance for large values
     }
@@ -414,8 +414,8 @@ struct SparseHamiltonianEdgeCasesTests {
 
         let state = QuantumState(numQubits: 1)
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-10)
     }
@@ -431,8 +431,8 @@ struct SparseHamiltonianEdgeCasesTests {
 
         let state = QuantumState(numQubits: 5)
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-6)
     }
@@ -447,7 +447,7 @@ struct SparseHamiltonianEdgeCasesTests {
 
         let state = QuantumState(numQubits: 1)
 
-        let value = await sparseH.expectationValue(state: state)
+        let value = await sparseH.expectationValue(of: state)
         #expect(abs(value) < 1e-6)
     }
 
@@ -468,8 +468,8 @@ struct SparseHamiltonianEdgeCasesTests {
         circuit.append(.cnot, to: [1, 2])
         let state = circuit.execute()
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-6)
     }
@@ -488,8 +488,8 @@ struct SparseHamiltonianEdgeCasesTests {
         circuit.append(.hadamard, to: 7)
         let state = circuit.execute()
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-5)
     }
@@ -510,8 +510,8 @@ struct SparseHamiltonianEdgeCasesTests {
         circuit.append(.hadamard, to: 9)
         let state = circuit.execute()
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-5)
     }
@@ -539,8 +539,8 @@ struct SparseHamiltonianEdgeCasesTests {
         circuit.append(.rotationY(0.5), to: 4)
         let state = circuit.execute()
 
-        let expectedValue = observable.expectationValue(state: state)
-        let sparseValue = await sparseH.expectationValue(state: state)
+        let expectedValue = observable.expectationValue(of: state)
+        let sparseValue = await sparseH.expectationValue(of: state)
 
         #expect(abs(sparseValue - expectedValue) < 1e-5)
     }

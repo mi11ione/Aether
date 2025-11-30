@@ -62,29 +62,29 @@ struct PauliCommutationTests {
     func qwcMatchingOperators() {
         let ps1 = PauliString(.x(0), .y(1))
         let ps2 = PauliString(.x(0), .y(1))
-        #expect(PauliCommutation.qubitWiseCommute(ps1, ps2))
+        #expect(PauliCommutation.areQWC(ps1, ps2))
     }
 
     @Test("Qubit-wise commuting strings with identity gaps")
     func qwcWithIdentityGaps() {
         let ps1 = PauliString(.x(0), .z(2))
         let ps2 = PauliString(.x(0), .y(1))
-        #expect(PauliCommutation.qubitWiseCommute(ps1, ps2))
+        #expect(PauliCommutation.areQWC(ps1, ps2))
     }
 
     @Test("Non-qubit-wise commuting strings with conflicting operators")
     func nonQwcConflictingOperators() {
         let ps1 = PauliString(.x(0), .y(1))
         let ps2 = PauliString(.y(0), .x(1))
-        #expect(!PauliCommutation.qubitWiseCommute(ps1, ps2))
+        #expect(!PauliCommutation.areQWC(ps1, ps2))
     }
 
     @Test("Measurement basis for single Pauli string")
     func measurementBasisSingleString() {
         let ps = PauliString(.x(0), .z(1))
-        let basis = PauliCommutation.measurementBasis(for: [ps])
-        #expect(basis?[0] == .x)
-        #expect(basis?[1] == .z)
+        let basis = PauliCommutation.measurementBasis(of: ps)
+        #expect(basis[0] == .x)
+        #expect(basis[1] == .z)
     }
 
     @Test("Measurement basis for QWC group")
@@ -92,7 +92,7 @@ struct PauliCommutationTests {
         let ps1 = PauliString(.x(0), .y(1))
         let ps2 = PauliString(.x(0))
         let ps3 = PauliString(.y(1))
-        let basis = PauliCommutation.measurementBasis(for: [ps1, ps2, ps3])
+        let basis = PauliCommutation.measurementBasis(of: [ps1, ps2, ps3])
         #expect(basis?[0] == .x)
         #expect(basis?[1] == .y)
     }
@@ -101,13 +101,13 @@ struct PauliCommutationTests {
     func measurementBasisNonQwc() {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
-        let basis = PauliCommutation.measurementBasis(for: [ps1, ps2])
+        let basis = PauliCommutation.measurementBasis(of: [ps1, ps2])
         #expect(basis == nil)
     }
 
     @Test("Measurement basis for empty array")
     func measurementBasisEmptyArray() {
-        let basis = PauliCommutation.measurementBasis(for: [])
+        let basis = PauliCommutation.measurementBasis(of: [])
         #expect(basis?.isEmpty == true)
     }
 }
@@ -125,13 +125,13 @@ struct QWCGroupingTests {
             terms: [(coefficient: 2.0, pauliString: ps1), (coefficient: -3.5, pauliString: ps2)],
             measurementBasis: [0: .x, 1: .y]
         )
-        #expect(abs(group.weight() - 5.5) < 1e-10)
+        #expect(abs(group.weight - 5.5) < 1e-10)
     }
 
     @Test("Grouping single Pauli term")
     func groupingSingleTerm() {
         let ps = PauliString(.x(0))
-        let groups = QWCGrouper.group(terms: [(coefficient: 1.0, pauliString: ps)])
+        let groups = QWCGrouper.group([(coefficient: 1.0, pauliString: ps)])
         #expect(groups.count == 1)
         #expect(groups[0].terms.count == 1)
     }
@@ -141,7 +141,7 @@ struct QWCGroupingTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.x(0), .y(1))
         let ps3 = PauliString(.y(1))
-        let groups = QWCGrouper.group(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3)])
+        let groups = QWCGrouper.group([(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3)])
         #expect(groups.count == 1)
         #expect(groups[0].terms.count == 3)
     }
@@ -151,7 +151,7 @@ struct QWCGroupingTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let ps3 = PauliString(.z(0))
-        let groups = QWCGrouper.group(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3)])
+        let groups = QWCGrouper.group([(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3)])
         #expect(groups.count == 3)
     }
 
@@ -161,13 +161,13 @@ struct QWCGroupingTests {
         let ps2 = PauliString(.x(0))
         let ps3 = PauliString(.y(0))
         let ps4 = PauliString(.y(1))
-        let groups = QWCGrouper.group(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3), (coefficient: 4.0, pauliString: ps4)])
+        let groups = QWCGrouper.group([(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3), (coefficient: 4.0, pauliString: ps4)])
         #expect(groups.count == 2)
     }
 
     @Test("Grouping empty terms array")
     func groupingEmptyTerms() {
-        let groups = QWCGrouper.group(terms: [])
+        let groups = QWCGrouper.group([])
         #expect(groups.isEmpty)
     }
 
@@ -175,7 +175,7 @@ struct QWCGroupingTests {
     func groupsHaveValidMeasurementBasis() {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
-        let groups = QWCGrouper.group(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
+        let groups = QWCGrouper.group([(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         for group in groups {
             #expect(!group.measurementBasis.isEmpty)
         }
@@ -196,7 +196,7 @@ struct QWCGroupingTests {
     func statisticsMultipleGroups() {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
-        let groups = QWCGrouper.group(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps1), (coefficient: 3.0, pauliString: ps2)])
+        let groups = QWCGrouper.group([(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps1), (coefficient: 3.0, pauliString: ps2)])
         let stats = QWCGrouper.statistics(for: groups)
         #expect(stats.numTerms == 3)
         #expect(stats.numGroups == 2)
@@ -233,7 +233,7 @@ struct ShotAllocationTests {
         let allocator = ShotAllocator()
         let ps = PauliString(.x(0))
         let terms = [(coefficient: 0.0, pauliString: ps), (coefficient: 0.0, pauliString: ps), (coefficient: 0.0, pauliString: ps)]
-        let allocation = allocator.allocate(terms: terms, totalShots: 300, state: nil)
+        let allocation = allocator.allocate(for: terms, totalShots: 300, state: nil)
         #expect(allocation.count == 3)
         for shots in allocation.values {
             #expect(shots >= 90)
@@ -246,18 +246,17 @@ struct ShotAllocationTests {
         let allocator = ShotAllocator()
         let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps), (coefficient: 3.0, pauliString: ps)]
-        let allocation = allocator.allocate(terms: terms, totalShots: 600, state: nil)
+        let allocation = allocator.allocate(for: terms, totalShots: 600, state: nil)
         #expect(allocation[2]! > allocation[1]!)
         #expect(allocation[1]! > allocation[0]!)
     }
 
     @Test("Minimum shots per term enforced")
     func minimumShotsEnforced() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 50, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 50)
         let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 100.0, pauliString: ps)]
-        let allocation = allocator.allocate(terms: terms, totalShots: 200, state: nil)
+        let allocation = allocator.allocate(for: terms, totalShots: 200, state: nil)
         #expect(allocation[0]! >= 50)
         #expect(allocation[1]! >= 50)
     }
@@ -267,7 +266,7 @@ struct ShotAllocationTests {
         let allocator = ShotAllocator()
         let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps), (coefficient: 3.0, pauliString: ps), (coefficient: 4.0, pauliString: ps)]
-        let allocation = allocator.allocate(terms: terms, totalShots: 1000, state: nil)
+        let allocation = allocator.allocate(for: terms, totalShots: 1000, state: nil)
         let total = allocation.values.reduce(0, +)
         #expect(abs(total - 1000) <= 4)
     }
@@ -279,42 +278,9 @@ struct ShotAllocationTests {
         let ps2 = PauliString(.y(0))
         let group1 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps1)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 3.0, pauliString: ps2)], measurementBasis: [0: .y])
-        let allocation = allocator.allocateForGroups(groups: [group1, group2], totalShots: 400, state: nil)
+        let allocation = allocator.allocate(forGroups: [group1, group2], totalShots: 400, state: nil)
         #expect(allocation.count == 2)
         #expect(allocation[1]! > allocation[0]!)
-    }
-
-    @Test("Allocation statistics computation")
-    func allocationStatistics() {
-        let allocator = ShotAllocator()
-        let allocation = [0: 100, 1: 200, 2: 300]
-        let stats = allocator.statistics(for: allocation)
-        #expect(stats.totalShots == 600)
-        #expect(stats.numTerms == 3)
-        #expect(stats.minShots == 100)
-        #expect(stats.maxShots == 300)
-        #expect(abs(stats.averageShots - 200.0) < 1e-10)
-    }
-
-    @Test("Allocation statistics for empty allocation")
-    func statisticsEmptyAllocation() {
-        let allocator = ShotAllocator()
-        let stats = allocator.statistics(for: [:])
-        #expect(stats.totalShots == 0)
-        #expect(stats.numTerms == 0)
-        #expect(stats.minShots == 0)
-        #expect(stats.maxShots == 0)
-    }
-
-    @Test("Allocation statistics description format")
-    func statisticsDescription() {
-        let allocator = ShotAllocator()
-        let allocation = [0: 100]
-        let stats = allocator.statistics(for: allocation)
-        let description = stats.description
-        #expect(description.contains("Shot Allocation Statistics"))
-        #expect(description.contains("Total shots:"))
-        #expect(description.contains("Terms:"))
     }
 
     @Test("Variance reduction estimation")
@@ -322,31 +288,29 @@ struct ShotAllocationTests {
         let allocator = ShotAllocator()
         let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 10.0, pauliString: ps)]
-        let allocation = allocator.allocate(terms: terms, totalShots: 1000, state: nil)
-        let reduction = allocator.estimateVarianceReduction(
-            terms: terms,
-            allocation: allocation,
-            uniformShots: 500
+        let allocation = allocator.allocate(for: terms, totalShots: 1000, state: nil)
+        let reduction = allocator.varianceReduction(
+            for: terms,
+            using: allocation,
+            comparedTo: 500
         )
         #expect(reduction >= 1.0)
     }
 
     @Test("Custom configuration")
     func customConfiguration() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 100, roundToInteger: false)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 100)
         let ps = PauliString(.x(0))
-        let allocation = allocator.allocate(terms: [(coefficient: 1.0, pauliString: ps)], totalShots: 500, state: nil)
+        let allocation = allocator.allocate(for: [(coefficient: 1.0, pauliString: ps)], totalShots: 500, state: nil)
         #expect(allocation[0]! >= 100)
     }
 
     @Test("Allocation enforces effective minimum to prevent over-allocation")
     func allocationEnforcesMinimum() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 400, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 400)
         let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 1.0, pauliString: ps)]
-        let allocation = allocator.allocate(terms: terms, totalShots: 500, state: nil)
+        let allocation = allocator.allocate(for: terms, totalShots: 500, state: nil)
 
         for shots in allocation.values {
             #expect(shots >= 250)
@@ -357,8 +321,7 @@ struct ShotAllocationTests {
 
     @Test("Shot reduction when minShots causes over-allocation")
     func shotReductionFromOverAllocation() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 30, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 30)
         let ps = PauliString(.x(0))
 
         let terms = [
@@ -369,7 +332,7 @@ struct ShotAllocationTests {
             (coefficient: 1.0, pauliString: ps),
         ]
 
-        let allocation = allocator.allocate(terms: terms, totalShots: 100, state: nil)
+        let allocation = allocator.allocate(for: terms, totalShots: 100, state: nil)
 
         let total = allocation.values.reduce(0, +)
         #expect(total == 100)
@@ -381,14 +344,13 @@ struct ShotAllocationTests {
 
     @Test("Shot reduction removes excess shots iteratively")
     func shotReductionIterativeRemoval() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 25, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 25)
         let ps = PauliString(.x(0))
 
         var terms: [(Double, PauliString)] = []
         terms += [(10.0, ps), (10.0, ps), (10.0, ps)]
         terms += Array(repeating: (1.0, ps), count: 12)
-        let allocation = allocator.allocate(terms: terms, totalShots: 200, state: nil)
+        let allocation = allocator.allocate(for: terms, totalShots: 200, state: nil)
 
         let total = allocation.values.reduce(0, +)
         #expect(total == 200)
@@ -400,8 +362,7 @@ struct ShotAllocationTests {
 
     @Test("Shot reduction with groups when minShots causes over-allocation")
     func groupShotReductionFromOverAllocation() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 40, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 40)
 
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(1))
@@ -410,7 +371,7 @@ struct ShotAllocationTests {
         let group1 = QWCGroup(terms: [(coefficient: 10.0, pauliString: ps1)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps2)], measurementBasis: [1: .y])
         let group3 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps3)], measurementBasis: [2: .z])
-        let allocation = allocator.allocateForGroups(groups: [group1, group2, group3], totalShots: 100, state: nil)
+        let allocation = allocator.allocate(forGroups: [group1, group2, group3], totalShots: 100, state: nil)
 
         let total = allocation.values.reduce(0, +)
         #expect(total == 100)
@@ -422,8 +383,7 @@ struct ShotAllocationTests {
 
     @Test("Shot reduction respects minimum when removing excess")
     func shotReductionRespectsMinimum() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 30, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 30)
         let ps = PauliString(.x(0))
 
         let terms = [
@@ -434,7 +394,7 @@ struct ShotAllocationTests {
             (coefficient: 1.0, pauliString: ps),
         ]
 
-        let allocation = allocator.allocate(terms: terms, totalShots: 150, state: nil)
+        let allocation = allocator.allocate(for: terms, totalShots: 150, state: nil)
 
         let total = allocation.values.reduce(0, +)
         #expect(total == 150)
@@ -446,8 +406,7 @@ struct ShotAllocationTests {
 
     @Test("Shot reduction break when quota met mid-loop")
     func shotReductionBreaksMidLoop() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 10, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 10)
         let ps = PauliString(.x(0))
 
         let mixedTerms = [
@@ -460,7 +419,7 @@ struct ShotAllocationTests {
             (coefficient: 1.0, pauliString: ps),
         ]
 
-        let allocation = allocator.allocate(terms: mixedTerms, totalShots: 100, state: nil)
+        let allocation = allocator.allocate(for: mixedTerms, totalShots: 100, state: nil)
         let total = allocation.values.reduce(0, +)
         #expect(total == 100)
     }
@@ -511,7 +470,7 @@ struct UnitaryPartitioningTests {
 
     @Test("Default configuration values")
     func defaultConfiguration() {
-        let config = UnitaryPartitioner.Config.default
+        let config = UnitaryPartitioner.Config()
         #expect(config.maxIterations > 0)
         #expect(config.convergenceTolerance > 0)
         #expect(config.circuitDepth > 0)
@@ -701,7 +660,7 @@ struct ObservableApproximationTests {
         let ps2 = PauliString(.y(0))
         let ps3 = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.1, pauliString: ps2), (coefficient: 0.01, pauliString: ps3)])
-        let truncated = observable.truncate(threshold: 0.05)
+        let truncated = observable.filtering(coefficientThreshold: 0.05)
         #expect(truncated.terms.count == 2)
     }
 
@@ -710,7 +669,7 @@ struct ObservableApproximationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 0.01, pauliString: ps1), (coefficient: 0.02, pauliString: ps2)])
-        let truncated = observable.truncate(threshold: 0.1)
+        let truncated = observable.filtering(coefficientThreshold: 0.1)
         #expect(truncated.terms.count == 1)
         #expect(abs(truncated.terms[0].coefficient - 0.02) < 1e-10)
     }
@@ -719,14 +678,14 @@ struct ObservableApproximationTests {
     func truncateZeroThreshold() {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: 0.1, pauliString: ps)])
-        let truncated = observable.truncate(threshold: 0.0)
+        let truncated = observable.filtering(coefficientThreshold: 0.0)
         #expect(truncated.terms.count == 2)
     }
 
     @Test("Truncate empty observable")
     func truncateEmptyObservable() {
         let observable = Observable(terms: [])
-        let truncated = observable.truncate(threshold: 0.1)
+        let truncated = observable.filtering(coefficientThreshold: 0.1)
         #expect(truncated.terms.isEmpty)
     }
 
@@ -736,7 +695,7 @@ struct ObservableApproximationTests {
         let ps2 = PauliString(.y(0))
         let ps3 = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 3.0, pauliString: ps2), (coefficient: 2.0, pauliString: ps3)])
-        let topK = observable.topK(k: 2)
+        let topK = observable.keepingLargest(2)
         #expect(topK.terms.count == 2)
         #expect(abs(topK.terms[0].coefficient) >= abs(topK.terms[1].coefficient))
     }
@@ -745,7 +704,7 @@ struct ObservableApproximationTests {
     func topKLargerThanCount() {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps)])
-        let topK = observable.topK(k: 10)
+        let topK = observable.keepingLargest(10)
         #expect(topK.terms.count == 2)
     }
 
@@ -753,7 +712,7 @@ struct ObservableApproximationTests {
     func topKZero() {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let topK = observable.topK(k: 0)
+        let topK = observable.keepingLargest(0)
         #expect(topK.terms.count == 1)
     }
 
@@ -763,7 +722,7 @@ struct ObservableApproximationTests {
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 0.9, pauliString: ps)])
         let state = QuantumState(numQubits: 1)
-        let error = full.approximationError(approximate: approximate, state: state)
+        let error = full.error(of: approximate, state: state)
         #expect(error >= 0.0)
     }
 
@@ -772,49 +731,8 @@ struct ObservableApproximationTests {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let state = QuantumState(numQubits: 1)
-        let error = observable.approximationError(approximate: observable, state: state)
+        let error = observable.error(of: observable, state: state)
         #expect(abs(error) < 1e-10)
-    }
-
-    @Test("Adaptive schedule initial threshold")
-    func adaptiveScheduleInitial() {
-        let schedule = Observable.AdaptiveSchedule(
-            initialThreshold: 1.0,
-            finalThreshold: 0.01,
-            decayRate: 0.1
-        )
-        let threshold = schedule.threshold()
-        #expect(abs(threshold - 1.0) < 1e-10)
-    }
-
-    @Test("Adaptive schedule decay over iterations")
-    func adaptiveScheduleDecay() {
-        var schedule = Observable.AdaptiveSchedule(
-            initialThreshold: 1.0,
-            finalThreshold: 0.01,
-            decayRate: 1.0
-        )
-        let t0 = schedule.threshold()
-        schedule.advance()
-        let t1 = schedule.threshold()
-        schedule.advance()
-        let t2 = schedule.threshold()
-        #expect(t1 < t0)
-        #expect(t2 < t1)
-    }
-
-    @Test("Adaptive schedule converges to final threshold")
-    func adaptiveScheduleConvergence() {
-        var schedule = Observable.AdaptiveSchedule(
-            initialThreshold: 1.0,
-            finalThreshold: 0.01,
-            decayRate: 1.0
-        )
-        for _ in 0 ..< 100 {
-            schedule.advance()
-        }
-        let threshold = schedule.threshold()
-        #expect(abs(threshold - 0.01) < 0.05)
     }
 
     @Test("Approximation statistics computation")
@@ -855,7 +773,7 @@ struct ObservableApproximationTests {
         let full = Observable(terms: [(coefficient: 2.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 1.8, pauliString: ps)])
         let state = QuantumState(numQubits: 1)
-        let relError = full.relativeApproximationError(approximate: approximate, state: state)
+        let relError = full.relativeError(of: approximate, state: state)
         #expect(relError >= 0.0)
         #expect(relError <= 1.0)
     }
@@ -866,22 +784,8 @@ struct ObservableApproximationTests {
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: -1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let state = QuantumState(numQubits: 1)
-        let relError = full.relativeApproximationError(approximate: approximate, state: state)
+        let relError = full.relativeError(of: approximate, state: state)
         #expect(abs(relError) < 1e-9)
-    }
-
-    @Test("Adaptive truncate with schedule")
-    func adaptiveTruncate() {
-        let ps1 = PauliString(.x(0))
-        let ps2 = PauliString(.y(0))
-        let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.1, pauliString: ps2)])
-        let schedule = Observable.AdaptiveSchedule(
-            initialThreshold: 0.5,
-            finalThreshold: 0.01,
-            decayRate: 0.1
-        )
-        let truncated = observable.adaptiveTruncate(schedule: schedule)
-        #expect(truncated.terms.count <= observable.terms.count)
     }
 
     @Test("Validate approximation within tolerance")
@@ -890,7 +794,7 @@ struct ObservableApproximationTests {
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 0.99, pauliString: ps)])
         let state = QuantumState(numQubits: 1)
-        let valid = full.validateApproximation(approximate: approximate, state: state, tolerance: 0.1)
+        let valid = full.meetsAccuracy(approximate, state: state, tolerance: 0.1)
         #expect(valid)
     }
 
@@ -900,7 +804,7 @@ struct ObservableApproximationTests {
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 0.5, pauliString: ps)])
         let state = QuantumState(numQubits: 1)
-        let valid = full.validateApproximation(approximate: approximate, state: state, tolerance: 0.01)
+        let valid = full.meetsAccuracy(approximate, state: state, tolerance: 0.01)
         #expect(!valid)
     }
 
@@ -924,15 +828,15 @@ struct ObservableApproximationTests {
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.3, pauliString: ps2), (coefficient: 0.1, pauliString: ps3)])
         let state = QuantumState(numQubits: 1)
         let threshold = observable.findOptimalThreshold(state: state, maxError: 0.01, searchSteps: 20)
-        let approx = observable.truncate(threshold: threshold)
-        let error = observable.approximationError(approximate: approx, state: state)
+        let approx = observable.filtering(coefficientThreshold: threshold)
+        let error = observable.error(of: approx, state: state)
         #expect(error <= 0.02)
     }
 
     @Test("topK with k=0 on empty observable returns empty")
     func topKZeroEmptyObservable() {
         let observable = Observable(terms: [])
-        let result = observable.topK(k: 0)
+        let result = observable.keepingLargest(0)
         #expect(result.terms.isEmpty)
     }
 
@@ -965,7 +869,7 @@ struct ObservableApproximationTests {
             (coefficient: -2.0, pauliString: PauliString(.y(2))),
         ])
 
-        let approx = observable.topK(k: 0)
+        let approx = observable.keepingLargest(0)
 
         #expect(approx.terms.count == 1)
         #expect(abs(approx.terms[0].coefficient - 3.5) < 1e-10)
@@ -974,7 +878,7 @@ struct ObservableApproximationTests {
     @Test("topK with k=0 on empty observable returns empty")
     func topKZeroEmptyReturnsEmpty() {
         let observable = Observable(terms: [])
-        let approx = observable.topK(k: 0)
+        let approx = observable.keepingLargest(0)
 
         #expect(approx.terms.count == 0)
     }
@@ -986,7 +890,7 @@ struct ObservableApproximationTests {
             (coefficient: 2.0, pauliString: PauliString(.x(1))),
         ])
 
-        let approx = observable.topK(k: -1)
+        let approx = observable.keepingLargest(-1)
 
         #expect(approx.terms.count == 1)
         #expect(abs(abs(approx.terms[0].coefficient) - 5.0) < 1e-10)
@@ -1000,7 +904,7 @@ struct ObservableApproximationTests {
             (coefficient: -2.0, pauliString: PauliString(.y(2))),
         ])
 
-        let approx = observable.topK(k: 1)
+        let approx = observable.keepingLargest(1)
 
         #expect(approx.terms.count == 1)
         #expect(abs(approx.terms[0].coefficient - 4.0) < 1e-10)
@@ -1015,7 +919,7 @@ struct ObservableApproximationTests {
             (coefficient: 2.0, pauliString: PauliString(.x(3))),
         ])
 
-        let approx = observable.topK(k: 2)
+        let approx = observable.keepingLargest(2)
 
         #expect(approx.terms.count == 2)
 
@@ -1031,7 +935,7 @@ struct ObservableApproximationTests {
             (coefficient: 2.0, pauliString: PauliString(.z(1))),
         ])
 
-        let approx = observable.topK(k: 10)
+        let approx = observable.keepingLargest(10)
 
         #expect(approx.terms.count == 2)
     }
@@ -1044,7 +948,7 @@ struct ObservableApproximationTests {
             (coefficient: 3.0, pauliString: PauliString(.y(2))),
         ])
 
-        let approx = observable.topK(k: 1)
+        let approx = observable.keepingLargest(1)
 
         #expect(approx.terms.count == 1)
         #expect(abs(abs(approx.terms[0].coefficient) - 5.0) < 1e-10)
@@ -1124,8 +1028,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 3.0, pauliString: ps2)])
-        let config = ShotAllocator.Config.default
-        let allocation = observable.allocateShots(totalShots: 1000, state: nil, config: config)
+        let allocation = observable.allocateShots(totalShots: 1000, state: nil)
         #expect(allocation.count == 2)
         #expect(allocation.values.reduce(0, +) <= 1000)
     }
@@ -1135,8 +1038,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.x(0), .y(1))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
-        let config = ShotAllocator.Config.default
-        let allocation = await observable.allocateShotsForGroups(totalShots: 1000, state: nil, config: config)
+        let allocation = await observable.allocateShotsForGroups(totalShots: 1000, state: nil)
         #expect(!allocation.isEmpty)
     }
 
@@ -1145,7 +1047,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
-        let stats = await observable.measurementOptimizationStatistics()
+        let stats = await observable.optimizationStatistics()
         #expect(stats.numTerms == 2)
         #expect(stats.numQWCGroups > 0)
     }
@@ -1154,7 +1056,7 @@ struct MeasurementOptimizationIntegrationTests {
     func measurementOptimizationStatisticsDescription() async {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let stats = await observable.measurementOptimizationStatistics()
+        let stats = await observable.optimizationStatistics()
         let description = stats.description
         #expect(description.contains("Measurement Optimization Statistics"))
         #expect(description.contains("Hamiltonian terms:"))
@@ -1164,7 +1066,7 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Measurement optimization statistics for empty observable")
     func measurementOptimizationStatisticsEmpty() async {
         let observable = Observable(terms: [])
-        let stats = await observable.measurementOptimizationStatistics()
+        let stats = await observable.optimizationStatistics()
         #expect(stats.numTerms == 0)
         #expect(stats.numQWCGroups == 0)
     }
@@ -1189,8 +1091,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 100.0, pauliString: ps2)])
-        let config = ShotAllocator.Config(minShotsPerTerm: 50, roundToInteger: true)
-        let allocation = observable.allocateShots(totalShots: 500, state: nil, config: config)
+        let allocation = observable.allocateShots(totalShots: 500, minShotsPerTerm: 50, state: nil)
         for shots in allocation.values {
             #expect(shots >= 50)
         }
@@ -1226,7 +1127,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
-        let count = await observable.measurementCircuits(strategy: .termByTerm)
+        let count = await observable.measureCircuitCount(for: .termByTerm)
         #expect(count == 2)
     }
 
@@ -1235,7 +1136,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
-        let count = await observable.measurementCircuits(strategy: .qwcGrouping)
+        let count = await observable.measureCircuitCount(for: .qwcGrouping)
         #expect(count == 1)
     }
 
@@ -1250,7 +1151,7 @@ struct MeasurementOptimizationIntegrationTests {
             useAdaptiveDepth: false,
             diagonalityThreshold: 0.1
         )
-        let count = await observable.measurementCircuits(strategy: .unitaryPartitioning(config: config))
+        let count = await observable.measureCircuitCount(for: .unitaryPartitioning(config: config))
         #expect(count >= 1)
     }
 
@@ -1258,7 +1159,7 @@ struct MeasurementOptimizationIntegrationTests {
     func measurementCircuitsAutomatic() async {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let count = await observable.measurementCircuits(strategy: .automatic)
+        let count = await observable.measureCircuitCount(for: .automatic)
         #expect(count >= 1)
     }
 
@@ -1269,8 +1170,7 @@ struct MeasurementOptimizationIntegrationTests {
         var circuit = QuantumCircuit(numQubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
-        let config = ShotAllocator.Config.default
-        let allocation = observable.allocateShots(totalShots: 1000, state: state, config: config)
+        let allocation = observable.allocateShots(totalShots: 1000, state: state)
         #expect(allocation.count == 2)
     }
 
@@ -1282,8 +1182,7 @@ struct MeasurementOptimizationIntegrationTests {
         var circuit = QuantumCircuit(numQubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
-        let config = ShotAllocator.Config.default
-        let allocation = await observable.allocateShotsForGroups(totalShots: 1000, state: state, config: config)
+        let allocation = await observable.allocateShotsForGroups(totalShots: 1000, state: state)
         #expect(!allocation.isEmpty)
     }
 
@@ -1302,19 +1201,18 @@ struct MeasurementOptimizationIntegrationTests {
             terms.append((coefficient: 1.0, pauliString: ps))
         }
         let observable = Observable(terms: terms)
-        let count = await observable.measurementCircuits(strategy: .automatic)
+        let count = await observable.measureCircuitCount(for: .automatic)
         #expect(count >= 1)
     }
 
     @Test("Shot allocation with remaining shots distribution")
     func shotAllocationWithRemainingShots() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 1, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 1)
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let ps3 = PauliString(.z(0))
         let terms = [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3)]
-        let allocation = allocator.allocate(terms: terms, totalShots: 100, state: nil)
+        let allocation = allocator.allocate(for: terms, totalShots: 100, state: nil)
         #expect(allocation.count == 3)
         let total = allocation.values.reduce(0, +)
         #expect(total == 100)
@@ -1322,14 +1220,13 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Shot allocation distributes exact remainder evenly")
     func shotAllocationDistributesRemainder() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 1, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 1)
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let ps3 = PauliString(.z(0))
         let ps4 = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3), (coefficient: 1.0, pauliString: ps4)]
-        let allocation = allocator.allocate(terms: terms, totalShots: 97, state: nil)
+        let allocation = allocator.allocate(for: terms, totalShots: 97, state: nil)
         #expect(allocation.count == 4)
         let total = allocation.values.reduce(0, +)
         #expect(total == 97)
@@ -1337,15 +1234,14 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Shot allocation for groups with remaining shots distribution")
     func shotAllocationGroupsWithRemainingShots() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 1, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 1)
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let ps3 = PauliString(.z(0))
         let group1 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps1)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps2)], measurementBasis: [0: .y])
         let group3 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps3)], measurementBasis: [0: .z])
-        let allocation = allocator.allocateForGroups(groups: [group1, group2, group3], totalShots: 100, state: nil)
+        let allocation = allocator.allocate(forGroups: [group1, group2, group3], totalShots: 100, state: nil)
         #expect(allocation.count == 3)
         let total = allocation.values.reduce(0, +)
         #expect(total == 100)
@@ -1353,15 +1249,14 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Shot allocation for groups distributes exact remainder")
     func shotAllocationGroupsDistributesRemainder() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 1, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 1)
         let ps = PauliString(.x(0))
         let group1 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps)], measurementBasis: [0: .y])
         let group3 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps)], measurementBasis: [0: .z])
         let group4 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps)], measurementBasis: [0: .x])
         let group5 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps)], measurementBasis: [0: .y])
-        let allocation = allocator.allocateForGroups(groups: [group1, group2, group3, group4, group5], totalShots: 102, state: nil)
+        let allocation = allocator.allocate(forGroups: [group1, group2, group3, group4, group5], totalShots: 102, state: nil)
         #expect(allocation.count == 5)
         let total = allocation.values.reduce(0, +)
         #expect(total == 102)
@@ -1373,20 +1268,19 @@ struct MeasurementOptimizationIntegrationTests {
         let ps = PauliString(.x(0))
         let group1 = QWCGroup(terms: [(coefficient: 0.0, pauliString: ps)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 0.0, pauliString: ps)], measurementBasis: [0: .y])
-        let allocation = allocator.allocateForGroups(groups: [group1, group2], totalShots: 1000, state: nil)
+        let allocation = allocator.allocate(forGroups: [group1, group2], totalShots: 1000, state: nil)
         #expect(allocation.count == 2)
         #expect(allocation[0]! + allocation[1]! == 1000)
     }
 
     @Test("Shot allocation for groups enforces effective minimum to prevent over-allocation")
     func shotAllocationGroupsShotsReduction() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 400, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 400)
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let group1 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps1)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps2)], measurementBasis: [0: .y])
-        let allocation = allocator.allocateForGroups(groups: [group1, group2], totalShots: 500, state: nil)
+        let allocation = allocator.allocate(forGroups: [group1, group2], totalShots: 500, state: nil)
 
         #expect(allocation.count == 2)
         for shots in allocation.values {
@@ -1625,8 +1519,7 @@ struct MeasurementOptimizationIntegrationTests {
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
-        let config = ShotAllocator.Config.default
-        let allocation = observable.allocateShots(totalShots: 1000, state: state, config: config)
+        let allocation = observable.allocateShots(totalShots: 1000, state: state)
 
         #expect(allocation.count == 2)
         let total = allocation.values.reduce(0, +)
@@ -1644,11 +1537,11 @@ struct MeasurementOptimizationIntegrationTests {
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
-        let allocation = allocator.allocate(terms: terms, totalShots: 1000, state: state)
-        let reduction = allocator.estimateVarianceReduction(
-            terms: terms,
-            allocation: allocation,
-            uniformShots: 500,
+        let allocation = allocator.allocate(for: terms, totalShots: 1000, state: state)
+        let reduction = allocator.varianceReduction(
+            for: terms,
+            using: allocation,
+            comparedTo: 500,
             state: state
         )
 
@@ -1660,11 +1553,11 @@ struct MeasurementOptimizationIntegrationTests {
         let allocator = ShotAllocator()
         let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 10.0, pauliString: ps)]
-        let allocation = allocator.allocate(terms: terms, totalShots: 1000, state: nil)
-        let reduction = allocator.estimateVarianceReduction(
-            terms: terms,
-            allocation: allocation,
-            uniformShots: 500,
+        let allocation = allocator.allocate(for: terms, totalShots: 1000, state: nil)
+        let reduction = allocator.varianceReduction(
+            for: terms,
+            using: allocation,
+            comparedTo: 500,
             state: nil
         )
 
@@ -1694,12 +1587,11 @@ struct MeasurementOptimizationIntegrationTests {
 
     @Test("Effective minimum shots prevents over-allocation in edge cases")
     func effectiveMinimumPreventsOverAllocation() {
-        let config = ShotAllocator.Config(minShotsPerTerm: 1000, roundToInteger: true)
-        let allocator = ShotAllocator(config: config)
+        let allocator = ShotAllocator(minShotsPerTerm: 1000)
         let ps = PauliString(.x(0))
 
         let terms = Array(repeating: (coefficient: 1.0, pauliString: ps), count: 10)
-        let allocation = allocator.allocate(terms: terms, totalShots: 1000, state: nil)
+        let allocation = allocator.allocate(for: terms, totalShots: 1000, state: nil)
 
         #expect(allocation.count == 10)
         let total = allocation.values.reduce(0, +)

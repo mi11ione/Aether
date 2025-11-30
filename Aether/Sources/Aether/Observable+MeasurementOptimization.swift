@@ -1,52 +1,35 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-/// Observable measurement optimization for efficient Hamiltonian expectation values
+/// Measurement optimization for efficient Hamiltonian expectation values.
 ///
-/// Provides advanced measurement grouping techniques that dramatically reduce the number
-/// of quantum circuits required to measure Hamiltonian expectation values. Integrates
-/// QWC grouping and unitary partitioning with automatic strategy selection and caching.
+/// Provides advanced grouping techniques that reduce the number of quantum circuits required
+/// to measure Hamiltonian expectation values. Integrates qubit-wise commuting (QWC) grouping
+/// and unitary partitioning with actor-based caching and automatic strategy selection.
 ///
-/// **Optimization strategies**:
-/// - **QWC grouping**: Group qubit-wise commuting Pauli strings
-/// - **Unitary partitioning**: Find unitaries to diagonalize non-commuting terms
-/// - **Shot allocation**: Variance-weighted distribution of measurement shots
+/// QWC grouping reduces typical molecular Hamiltonians from thousands of terms to tens or
+/// hundreds of measurement groups by identifying Pauli strings that can be measured
+/// simultaneously. Unitary partitioning extends this further by finding optimal unitary
+/// transformations that diagonalize multiple non-commuting terms together.
 ///
-/// **Performance improvements**:
-/// - Typical Hamiltonian (2000 terms) -> 50-200 QWC groups -> 10-20 unitary partitions
-/// - Reduces number of quantum circuits required for expectation values
-/// - Thread-safe caching: Actor-based isolation prevents redundant computation
+/// Thread-safe caching via Swift actor isolation prevents redundant computation of expensive
+/// grouping algorithms. Automatic strategy selection chooses between term-by-term measurement,
+/// QWC grouping, or unitary partitioning based on problem size.
 ///
-/// **Automatic strategy selection**:
-/// - Small observables (< 100 terms): Direct measurement
-/// - Medium observables (100-500 terms): QWC grouping
-/// - Large observables (> 500 terms): Unitary partitioning if beneficial
-///
-/// **Use cases**:
-/// - VQE energy estimation with minimal circuit overhead
-/// - Quantum chemistry Hamiltonian measurements
-/// - Observable expectation value estimation on quantum hardware
+/// - SeeAlso: ``QWCGrouper``, ``UnitaryPartitioner``, ``ShotAllocator``
 ///
 /// Example:
 /// ```swift
-/// let hamiltonian = Observable(terms: molecularTerms)  // 2000 Pauli terms
-///
-/// // Automatic optimization
-/// let groups = hamiltonian.qwcGroups()
-/// print("Reduced \(hamiltonian.terms.count) terms to \(groups.count) measurement circuits")
-/// // Output: "Reduced 2000 terms to 87 measurement circuits"
-///
-/// // With shot allocation
-/// let allocation = hamiltonian.allocateShots(totalShots: 10000, strategy: .qwc)
+/// let hamiltonian = Observable(terms: molecularTerms)
+/// let groups = await hamiltonian.qwcGroups()
+/// print("Reduced \(hamiltonian.terms.count) terms to \(groups.count) groups")
 /// ```
-
-// MARK: - Measurement Optimization Integration
-
 public extension Observable {
-    /// Thread-safe cache for expensive grouping computations using Swift actor isolation.
+    /// Thread-safe cache for expensive grouping computations.
     ///
-    /// Actor provides compiler-enforced data isolation without manual lock management.
-    /// All cache access is serialized automatically by the Swift runtime.
+    /// Uses Swift actor isolation to provide automatic serialization of cache access
+    /// without manual lock management. All methods are isolated to the actor, ensuring
+    /// thread-safe reads and writes.
     private actor GroupingCache {
         private struct CacheEntry<T> {
             let terms: PauliTerms
@@ -113,13 +96,12 @@ public extension Observable {
 
     // MARK: - Cache Key Generation
 
-    /// Compute stable hash for terms array.
+    /// Compute stable hash for Pauli terms array.
     ///
-    /// Used as cache key for Observable.
-    /// Combines coefficient and Pauli operator hashes.
-    @inlinable
+    /// Combines coefficient bit patterns and Pauli operator hashes to produce a consistent
+    /// cache key. Hash collisions are detected by comparing actual terms.
     @_effects(readonly)
-    func termsHash() -> Int {
+    private func termsHash() -> Int {
         var hasher = 0
         for i in 0 ..< terms.count {
             let bits = terms[i].coefficient.bitPattern
@@ -131,20 +113,20 @@ public extension Observable {
 
     // MARK: - Cached Groupings
 
-    /// Get or compute QWC groups (cached, thread-safe).
+    /// Compute or retrieve QWC groups from cache.
     ///
-    /// Groups are cached based on terms hash and recomputed only if needed.
-    /// Hash collisions are detected by comparing actual terms.
-    /// This is safe because Observable is effectively immutable after creation.
+    /// Groups are cached based on terms hash and recomputed only when the hash changes
+    /// or a collision is detected by comparing actual terms. Actor-based caching ensures
+    /// thread-safe access without manual lock management.
     ///
-    /// **Actor-based caching**: Cache access is automatically serialized by Swift runtime.
-    /// No manual lock management required, eliminating race conditions.
+    /// - Returns: Array of QWC groups where terms within each group commute qubit-wise
     ///
     /// Example:
     /// ```swift
-    /// let hamiltonian = Observable(terms: molecularTerms)
-    /// let groups = await hamiltonian.qwcGroups()  // Fast: cached after first call
-    /// print("Reduced to \(groups.count) groups")
+    /// let groups = await hamiltonian.qwcGroups()
+    /// for group in groups {
+    ///     let basis = group.measurementBasis
+    /// }
     /// ```
     @_eagerMove
     func qwcGroups() async -> [QWCGroup] {
@@ -154,30 +136,27 @@ public extension Observable {
             return cached
         }
 
-        let groups: [QWCGroup] = QWCGrouper.group(terms: terms)
+        let groups: [QWCGroup] = QWCGrouper.group(terms)
         await Self.cache.setQWCGroups(hash: hash, terms: terms, groups: groups)
         return groups
     }
 
-    /// Get or compute unitary partitions (cached, thread-safe).
+    /// Compute or retrieve unitary partitions from cache.
     ///
-    /// Uses optimal unitary transformations to group terms more efficiently than QWC.
-    /// This is computationally expensive, so caching is essential.
-    /// Hash collisions are detected by comparing actual terms.
+    /// Uses optimal unitary transformations to group terms more efficiently than QWC grouping.
+    /// This is computationally expensive, so caching is essential for practical use. Hash
+    /// collisions are detected by comparing actual terms.
     ///
-    /// **Actor-based caching**: Expensive unitary optimization results are cached safely.
-    ///
-    /// - Parameter config: Partitioner configuration
-    /// - Returns: Array of unitary partitions
+    /// - Parameter config: Partitioner configuration controlling depth and convergence
+    /// - Returns: Array of unitary partitions where each partition defines a measurement circuit
     ///
     /// Example:
     /// ```swift
-    /// let hamiltonian = Observable(terms: molecularTerms)
     /// let partitions = await hamiltonian.unitaryPartitions()
-    /// print("Reduced to \(partitions.count) partitions")
+    /// print("Reduced to \(partitions.count) measurement circuits")
     /// ```
     @_eagerMove
-    func unitaryPartitions(config: UnitaryPartitioner.Config = .default) async -> [UnitaryPartition] {
+    func unitaryPartitions(config: UnitaryPartitioner.Config = .init()) async -> [UnitaryPartition] {
         let hash = termsHash()
 
         if let cached = await Self.cache.getUnitaryPartitions(hash: hash, terms: terms) {
@@ -190,7 +169,9 @@ public extension Observable {
         return partitions
     }
 
-    /// Clear all cached groupings (useful for testing or memory management).
+    /// Clear all cached groupings.
+    ///
+    /// Useful for testing or memory management when working with many different Hamiltonians.
     static func clearGroupingCaches() async { await cache.clear() }
 
     // MARK: - Measurement Strategies
@@ -198,38 +179,33 @@ public extension Observable {
     /// Strategy for measuring Hamiltonian expectation values.
     @frozen
     enum MeasurementStrategy {
-        /// Measure each term independently (no optimization)
+        /// Measure each term independently without optimization.
         case termByTerm
 
-        /// Use qubit-wise commuting groups
+        /// Group qubit-wise commuting terms for simultaneous measurement.
         case qwcGrouping
 
-        /// Use unitary partitioning (computationally expensive)
+        /// Use variational unitary optimization for maximal grouping.
         case unitaryPartitioning(config: UnitaryPartitioner.Config)
 
-        /// Automatically select best strategy based on problem size
+        /// Automatically select best strategy based on problem size.
         case automatic
     }
 
-    /// Get effective number of measurement circuits for a strategy.
+    /// Compute effective number of measurement circuits for a strategy.
     ///
-    /// - Parameter strategy: Measurement strategy
-    /// - Returns: Number of measurement circuits needed
-    func measurementCircuits(strategy: MeasurementStrategy) async -> Int {
+    /// - Parameter strategy: Measurement strategy to evaluate
+    /// - Returns: Number of quantum circuits required
+    func measureCircuitCount(for strategy: MeasurementStrategy) async -> Int {
         switch strategy {
         case .termByTerm: terms.count
-
         case .qwcGrouping: await qwcGroups().count
-
-        case let .unitaryPartitioning(config):
-            await unitaryPartitions(config: config).count
-
-        case .automatic:
-            await measurementCircuits(strategy: selectOptimalStrategy())
+        case let .unitaryPartitioning(config): await unitaryPartitions(config: config).count
+        case .automatic: await measureCircuitCount(for: selectOptimalStrategy())
         }
     }
 
-    /// Select optimal measurement strategy automatically.
+    /// Select optimal measurement strategy based on Hamiltonian size.
     @_effects(readonly)
     private func selectOptimalStrategy() -> MeasurementStrategy {
         let numTerms: Int = terms.count
@@ -237,19 +213,23 @@ public extension Observable {
         if numTerms < 20 { return .termByTerm }
         if numTerms < 500 { return .qwcGrouping }
 
-        // Large Hamiltonians: unitary partitioning may be beneficial
-        return .unitaryPartitioning(config: .default)
+        return .unitaryPartitioning(config: .init())
     }
 
     // MARK: - Shot Allocation
 
     /// Allocate measurement shots optimally across terms.
     ///
+    /// Distributes total shots using variance-weighted allocation where high-variance terms
+    /// receive proportionally more shots to minimize total estimation error. Optionally uses
+    /// a test state to estimate variances accurately.
+    ///
     /// - Parameters:
-    ///   - totalShots: Total shots available
+    ///   - totalShots: Total measurement shots available
+    ///   - minShotsPerTerm: Min shot configuration
     ///   - state: Quantum state for variance estimation (optional)
-    ///   - config: Shot allocation configuration
-    /// - Returns: Dictionary mapping term index to shot count
+    /// - Returns: Shot allocation mapping term indices to shot counts
+    /// - SeeAlso: ``ShotAllocator``
     ///
     /// Example:
     /// ```swift
@@ -257,25 +237,28 @@ public extension Observable {
     ///     totalShots: 10000,
     ///     state: currentState
     /// )
-    /// // Variance-weighted: high-impact terms get more shots
     /// ```
     @_eagerMove
     func allocateShots(
         totalShots: Int,
-        state: QuantumState? = nil,
-        config: ShotAllocator.Config = .default
-    ) -> ShotAllocation {
-        let allocator = ShotAllocator(config: config)
-        return allocator.allocate(terms: terms, totalShots: totalShots, state: state)
+        minShotsPerTerm: Int = 10,
+        state: QuantumState? = nil
+    ) -> [Int: Int] {
+        let allocator = ShotAllocator(minShotsPerTerm: minShotsPerTerm)
+        return allocator.allocate(for: terms, totalShots: totalShots, state: state)
     }
 
-    /// Allocate shots optimally across QWC groups.
+    /// Allocate measurement shots optimally across QWC groups.
+    ///
+    /// Combines QWC grouping with variance-weighted shot allocation to minimize total shots
+    /// required for target accuracy. Groups are treated as atomic measurement units with
+    /// variance determined from constituent terms.
     ///
     /// - Parameters:
-    ///   - totalShots: Total shots available
+    ///   - totalShots: Total measurement shots available
+    ///   - minShotsPerTerm: Minimum shots per term (avoid zero allocation)
     ///   - state: Quantum state for variance estimation (optional)
-    ///   - config: Shot allocation configuration
-    /// - Returns: Dictionary mapping group index to shot count
+    /// - Returns: Shot allocation mapping group indices to shot counts
     ///
     /// Example:
     /// ```swift
@@ -283,29 +266,42 @@ public extension Observable {
     ///     totalShots: 10000,
     ///     state: currentState
     /// )
-    /// // Combines QWC grouping + optimal shot allocation
     /// ```
     @_eagerMove
     func allocateShotsForGroups(
         totalShots: Int,
-        state: QuantumState? = nil,
-        config: ShotAllocator.Config = .default
-    ) async -> ShotAllocation {
-        let allocator = ShotAllocator(config: config)
+        minShotsPerTerm: Int = 10,
+        state: QuantumState? = nil
+    ) async -> [Int: Int] {
+        let allocator = ShotAllocator(minShotsPerTerm: minShotsPerTerm)
         let groups: [QWCGroup] = await qwcGroups()
-        return allocator.allocateForGroups(groups: groups, totalShots: totalShots, state: state)
+        return allocator.allocate(forGroups: groups, totalShots: totalShots, state: state)
     }
 
     // MARK: - Comprehensive Statistics
 
+    /// Statistics describing measurement optimization effectiveness.
     @frozen
-    struct MeasurementOptimizationStats {
+    struct MeasurementOptimizationStats: CustomStringConvertible {
+        /// Number of Hamiltonian terms.
         public let numTerms: Int
+
+        /// Number of QWC groups.
         public let numQWCGroups: Int
+
+        /// Number of unitary partitions (if computed).
         public let numUnitaryPartitions: Int?
+
+        /// Reduction factor from QWC grouping.
         public let qwcReduction: Double
+
+        /// Reduction factor from unitary partitioning (if computed).
         public let unitaryReduction: Double?
+
+        /// Estimated speedup from QWC grouping.
         public let estimatedSpeedupQWC: Double
+
+        /// Estimated speedup from unitary partitioning (if computed).
         public let estimatedSpeedupUnitary: Double?
 
         public var description: String {
@@ -335,10 +331,10 @@ public extension Observable {
 
     /// Compute comprehensive measurement optimization statistics.
     ///
-    /// - Parameter includeUnitary: Whether to compute unitary partitioning stats (expensive)
-    /// - Returns: Detailed statistics
+    /// - Parameter includeUnitary: Whether to compute expensive unitary partitioning statistics
+    /// - Returns: Statistics structure with reduction factors and speedup estimates
     @_eagerMove
-    func measurementOptimizationStatistics(includeUnitary: Bool = false) async -> MeasurementOptimizationStats {
+    func optimizationStatistics(includeUnitary: Bool = false) async -> MeasurementOptimizationStats {
         let numTerms: Int = terms.count
         let groups: [QWCGroup] = await qwcGroups()
         let numGroups: Int = groups.count

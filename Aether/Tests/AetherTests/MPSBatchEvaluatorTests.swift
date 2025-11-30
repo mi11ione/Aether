@@ -105,8 +105,8 @@ struct MPSBatchEvaluatorTests {
 
         #expect(energies.count == 2)
 
-        let expected1 = hamiltonian.expectationValue(state: circuit1.execute())
-        let expected2 = hamiltonian.expectationValue(state: circuit2.execute())
+        let expected1 = hamiltonian.expectationValue(of: circuit1.execute())
+        let expected2 = hamiltonian.expectationValue(of: circuit2.execute())
 
         #expect(abs(energies[0] - expected1) < 1e-5)
         #expect(abs(energies[1] - expected2) < 1e-5)
@@ -118,7 +118,7 @@ struct MPSBatchEvaluatorTests {
             coefficient: 1.0,
             pauliString: PauliString(.z(0))
         )
-        let sparseH = SparseHamiltonian(observable: observable, numQubits: 2)
+        let sparseH = SparseHamiltonian(observable: observable, systemSize: 2)
 
         let circuit1 = QuantumCircuit(numQubits: 2)
         var circuit2 = QuantumCircuit(numQubits: 2)
@@ -139,8 +139,8 @@ struct MPSBatchEvaluatorTests {
 
         #expect(energies.count == 2)
 
-        let expected1 = await sparseH.expectationValue(state: circuit1.execute())
-        let expected2 = await sparseH.expectationValue(state: circuit2.execute())
+        let expected1 = await sparseH.expectationValue(of: circuit1.execute())
+        let expected2 = await sparseH.expectationValue(of: circuit2.execute())
 
         #expect(abs(energies[0] - expected1) < 1e-5)
         #expect(abs(energies[1] - expected2) < 1e-5)
@@ -374,8 +374,8 @@ struct MPSBatchEvaluatorTests {
         #expect(energies2.count == 1)
 
         let state = circuit.execute()
-        let expected1 = hamiltonian1.expectationValue(state: state)
-        let expected2 = hamiltonian2.expectationValue(state: state)
+        let expected1 = hamiltonian1.expectationValue(of: state)
+        let expected2 = hamiltonian2.expectationValue(of: state)
 
         #expect(abs(energies1[0] - expected1) < 1e-5)
         #expect(abs(energies2[0] - expected2) < 1e-5)

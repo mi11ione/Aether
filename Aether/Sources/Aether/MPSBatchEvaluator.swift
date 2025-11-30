@@ -230,7 +230,7 @@ public actor MPSBatchEvaluator {
             from: initialState
         )
 
-        let sparseH = SparseHamiltonian(observable: observable, numQubits: initialState.numQubits)
+        let sparseH = SparseHamiltonian(observable: observable, systemSize: initialState.numQubits)
 
         return await computeExpectationValues(states: states, hamiltonian: sparseH)
     }
@@ -284,7 +284,7 @@ public actor MPSBatchEvaluator {
         }
 
         for i in 0 ..< states.count {
-            energies[i] = await hamiltonian.expectationValue(state: states[i])
+            energies[i] = await hamiltonian.expectationValue(of: states[i])
         }
 
         return energies

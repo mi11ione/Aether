@@ -49,7 +49,7 @@ import Foundation
 /// let ansatz = HardwareEfficientAnsatz(qubits: 2, depth: 2)
 ///
 /// // 3. Configure VQE
-/// let vqe = await VariationalQuantumEigensolver(
+/// let vqe = await VQE(
 ///     hamiltonian: hamiltonian,
 ///     ansatz: ansatz,
 ///     optimizer: NelderMeadOptimizer(tolerance: 1e-6),
@@ -73,7 +73,7 @@ import Foundation
 ///
 /// **Example - Progress tracking for UI:**
 /// ```swift
-/// let vqe = await VariationalQuantumEigensolver(...)
+/// let vqe = await VQE(...)
 ///
 /// let result = await vqe.runWithProgress(initialParameters: initialGuess) { iteration, energy in
 ///     await MainActor.run {
@@ -89,7 +89,7 @@ import Foundation
 /// - SparseHamiltonian: GPU/Accelerate hardware acceleration
 /// - Observable fallback: Guaranteed correctness if sparse construction fails
 /// - Progress tracking: Real-time energy updates
-public actor VariationalQuantumEigensolver {
+public actor VQE {
     // MARK: - Configuration
 
     /// Hamiltonian to minimize
@@ -145,7 +145,7 @@ public actor VariationalQuantumEigensolver {
         hamiltonian: Observable,
         ansatz: HardwareEfficientAnsatz,
         optimizer: Optimizer,
-        convergenceCriteria: ConvergenceCriteria = .default,
+        convergenceCriteria: ConvergenceCriteria = .init(),
         useSparseBackend: Bool = true,
         useMetalAcceleration: Bool = true
     ) {
@@ -235,9 +235,9 @@ public actor VariationalQuantumEigensolver {
             let state: QuantumState = await self.simulator.execute(concreteCircuit)
 
             let energy: Double = if let sparseH = self.sparseHamiltonian {
-                await sparseH.expectationValue(state: state)
+                await sparseH.expectationValue(of: state)
             } else {
-                self.hamiltonian.expectationValue(state: state)
+                self.hamiltonian.expectationValue(of: state)
             }
 
             return energy

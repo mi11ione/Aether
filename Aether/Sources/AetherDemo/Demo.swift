@@ -95,7 +95,7 @@ func demoLargeHamiltonian() async {
     }
 
     let state = circuit.execute()
-    let energy = await sparseH.expectationValue(state: state)
+    let energy = await sparseH.expectationValue(of: state)
     let elapsed = Date().timeIntervalSince(start)
 
     print("Ground state energy: \(String(format: "%.6f", energy)) Ha")

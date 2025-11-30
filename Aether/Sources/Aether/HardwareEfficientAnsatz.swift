@@ -21,7 +21,7 @@
 /// let ansatz = HardwareEfficientAnsatz(qubits: 4, depth: 2)
 /// print(ansatz.parameterCount)  // 8 (4 qubits x 2 layers x 1 Ry per qubit)
 ///
-/// let vqe = await VariationalQuantumEigensolver(
+/// let vqe = await VQE(
 ///     hamiltonian: hamiltonian,
 ///     ansatz: ansatz,
 ///     optimizer: COBYLAOptimizer()
@@ -29,7 +29,7 @@
 /// let result = await vqe.run(initialParameters: Array(repeating: 0.01, count: ansatz.parameterCount))
 /// ```
 ///
-/// - SeeAlso: ``VariationalQuantumEigensolver``, ``QuantumCircuit``, ``Parameter``
+/// - SeeAlso: ``VQE``, ``QuantumCircuit``, ``Parameter``
 public struct HardwareEfficientAnsatz: Sendable {
     /// Single-qubit rotation gate choices affecting circuit expressivity and parameter count
     ///

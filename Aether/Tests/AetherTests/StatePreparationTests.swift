@@ -11,7 +11,7 @@ import Testing
 struct StatePreparationTests {
     @Test("Prepare basis state |0⟩ for single qubit")
     func basisStateSingleQubitZero() {
-        let state = QuantumState.basisState(numQubits: 1, basisStateIndex: 0)
+        let state = QuantumState.basis(qubits: 1, state: 0)
 
         #expect(state.numQubits == 1)
         #expect(state.amplitudes.count == 2)
@@ -22,7 +22,7 @@ struct StatePreparationTests {
 
     @Test("Prepare basis state |1⟩ for single qubit")
     func basisStateSingleQubitOne() {
-        let state = QuantumState.basisState(numQubits: 1, basisStateIndex: 1)
+        let state = QuantumState.basis(qubits: 1, state: 1)
 
         #expect(state.numQubits == 1)
         #expect(state.amplitudes.count == 2)
@@ -33,7 +33,7 @@ struct StatePreparationTests {
 
     @Test("Prepare basis state |101⟩ (index 5)")
     func basisStateThreeQubits() {
-        let state = QuantumState.basisState(numQubits: 3, basisStateIndex: 5)
+        let state = QuantumState.basis(qubits: 3, state: 5)
 
         #expect(state.numQubits == 3)
         #expect(state.amplitudes.count == 8)
@@ -53,7 +53,7 @@ struct StatePreparationTests {
         let numQubits = 4
         let maxIndex = (1 << numQubits) - 1
 
-        let state = QuantumState.basisState(numQubits: numQubits, basisStateIndex: maxIndex)
+        let state = QuantumState.basis(qubits: numQubits, state: maxIndex)
 
         #expect(state.amplitude(of: maxIndex) == .one)
         #expect(state.isNormalized())
@@ -65,7 +65,7 @@ struct StatePreparationTests {
 
     @Test("Basis state circuit creates correct state")
     func basisStateCircuitCorrectness() {
-        let circuit = QuantumCircuit.basisStateCircuit(numQubits: 4, basisStateIndex: 11)
+        let circuit = QuantumCircuit.basis(qubits: 4, state: 11)
         let finalState = circuit.execute()
 
         #expect(finalState.amplitude(of: 11).magnitude > 0.99)
@@ -77,7 +77,7 @@ struct StatePreparationTests {
 
     @Test("Basis state circuit applies correct number of X gates")
     func basisStateCircuitGateCount() {
-        let circuit = QuantumCircuit.basisStateCircuit(numQubits: 4, basisStateIndex: 10)
+        let circuit = QuantumCircuit.basis(qubits: 4, state: 10)
 
         let xGateCount = circuit.gates.count(where: {
             if case .pauliX = $0.gate { true } else { false }
@@ -191,7 +191,7 @@ struct BellStateVariantsTests {
 struct WStateTests {
     @Test("W state for 2 qubits: |W₂⟩ = (|01⟩ + |10⟩)/√2")
     func wStateTwoQubits() {
-        let state = QuantumCircuit.wState(numQubits: 2)
+        let state = QuantumState.w(qubits: 2)
 
         #expect(state.numQubits == 2)
         #expect(state.isNormalized())
@@ -208,7 +208,7 @@ struct WStateTests {
 
     @Test("W state for 3 qubits: |W₃⟩ = (|100⟩ + |010⟩ + |001⟩)/√3")
     func wStateThreeQubits() {
-        let state = QuantumCircuit.wState(numQubits: 3)
+        let state = QuantumState.w(qubits: 3)
 
         #expect(state.numQubits == 3)
         #expect(state.isNormalized())
@@ -230,7 +230,7 @@ struct WStateTests {
 
     @Test("W state for 4 qubits has correct structure")
     func wStateFourQubits() {
-        let state = QuantumCircuit.wState(numQubits: 4)
+        let state = QuantumState.w(qubits: 4)
 
         #expect(state.numQubits == 4)
         #expect(state.isNormalized())
@@ -249,7 +249,7 @@ struct WStateTests {
     @Test("W state probabilities sum to 1")
     func wStateProbabilitiesSumToOne() {
         for n in 2 ... 6 {
-            let state = QuantumCircuit.wState(numQubits: n)
+            let state = QuantumState.w(qubits: n)
 
             let totalProb = state.probabilities().reduce(0.0, +)
             #expect(abs(totalProb - 1.0) < 1e-10, "Probabilities must sum to 1 for \(n) qubits")
@@ -264,7 +264,7 @@ struct WStateTests {
 struct DickeStateTests {
     @Test("Dicke state |D₀³⟩ = |000⟩")
     func dickeStateAllZeros() {
-        let state = QuantumCircuit.dickeState(numQubits: 3, numOnes: 0)
+        let state = QuantumState.dicke(qubits: 3, ones: 0)
 
         #expect(state.isNormalized())
         #expect(state.amplitude(of: 0) == .one, "Only |000⟩ should have amplitude 1")
@@ -276,7 +276,7 @@ struct DickeStateTests {
 
     @Test("Dicke state |D₃³⟩ = |111⟩")
     func dickeStateAllOnes() {
-        let state = QuantumCircuit.dickeState(numQubits: 3, numOnes: 3)
+        let state = QuantumState.dicke(qubits: 3, ones: 3)
 
         #expect(state.isNormalized())
         #expect(state.amplitude(of: 7) == .one, "Only |111⟩ should have amplitude 1")
@@ -288,7 +288,7 @@ struct DickeStateTests {
 
     @Test("Dicke state |D₁³⟩ = (|001⟩ + |010⟩ + |100⟩)/√3")
     func dickeStateOneOfThree() {
-        let state = QuantumCircuit.dickeState(numQubits: 3, numOnes: 1)
+        let state = QuantumState.dicke(qubits: 3, ones: 1)
 
         #expect(state.isNormalized())
 
@@ -305,7 +305,7 @@ struct DickeStateTests {
 
     @Test("Dicke state |D₂⁴⟩ has 6 equal-amplitude states")
     func dickeTwoOfFour() {
-        let state = QuantumCircuit.dickeState(numQubits: 4, numOnes: 2)
+        let state = QuantumState.dicke(qubits: 4, ones: 2)
 
         #expect(state.isNormalized())
 
@@ -332,7 +332,7 @@ struct DickeStateTests {
 
     @Test("Dicke state amplitudes are equal")
     func dickeStateEqualAmplitudes() {
-        let state = QuantumCircuit.dickeState(numQubits: 5, numOnes: 2)
+        let state = QuantumState.dicke(qubits: 5, ones: 2)
 
         var magnitudes: [Double] = []
 
@@ -350,7 +350,7 @@ struct DickeStateTests {
 
     @Test("Dicke state is symmetric under qubit permutation")
     func dickeStateSymmetry() {
-        let state = QuantumCircuit.dickeState(numQubits: 3, numOnes: 1)
+        let state = QuantumState.dicke(qubits: 3, ones: 1)
 
         let prob1 = state.probability(of: 1)
         let prob2 = state.probability(of: 2)
@@ -402,7 +402,7 @@ struct EdgeCasesAndValidationTests {
 
     @Test("Large Dicke state is properly normalized")
     func largeDickeStateNormalization() {
-        let state = QuantumCircuit.dickeState(numQubits: 10, numOnes: 5)
+        let state = QuantumState.dicke(qubits: 10, ones: 5)
 
         #expect(state.isNormalized(), "Large Dicke state must be normalized")
 
@@ -417,13 +417,13 @@ struct EdgeCasesAndValidationTests {
 
     @Test("State preparation methods preserve qubit count")
     func qubitCountPreservation() {
-        let basisState = QuantumState.basisState(numQubits: 5, basisStateIndex: 10)
+        let basisState = QuantumState.basis(qubits: 5, state: 10)
         #expect(basisState.numQubits == 5)
 
-        let dicke = QuantumCircuit.dickeState(numQubits: 4, numOnes: 2)
+        let dicke = QuantumState.dicke(qubits: 4, ones: 2)
         #expect(dicke.numQubits == 4)
 
-        let wState = QuantumCircuit.wState(numQubits: 6)
+        let wState = QuantumState.w(qubits: 6)
         #expect(wState.numQubits == 6)
     }
 }

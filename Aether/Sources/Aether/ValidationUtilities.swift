@@ -762,7 +762,7 @@ public enum ValidationUtilities {
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateAllocationContainsIndex(_ allocation: ShotAllocation, index: Int) {
+    static func validateAllocationContainsIndex(_ allocation: [Int: Int], index: Int) {
         precondition(allocation[index] != nil, "Allocation must contain entry for term index \(index)")
     }
 

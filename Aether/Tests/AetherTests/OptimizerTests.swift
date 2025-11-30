@@ -33,7 +33,7 @@ struct ConvergenceCriteriaTests {
 
     @Test("Default convergence criteria")
     func defaultCriteria() {
-        let criteria = ConvergenceCriteria.default
+        let criteria = ConvergenceCriteria()
 
         #expect(criteria.energyTolerance == 1e-6)
         #expect(criteria.maxIterations == 1000)

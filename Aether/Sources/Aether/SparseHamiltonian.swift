@@ -3,64 +3,23 @@
 
 import Accelerate
 
-/// Sparse Hamiltonian: High-performance expectation value computation
+/// Sparse Hamiltonian representation for accelerated expectation value computation in variational algorithms.
 ///
-/// Solves the VQE performance bottleneck by converting Hamiltonians H = Σᵢ cᵢ Pᵢ
-/// to sparse matrix format. Achieves high speedup over term-by-term
-/// measurement for molecular Hamiltonians.
+/// Converts Pauli decomposition H = Σᵢ cᵢ Pᵢ into sparse matrix format for efficient computation. Molecular Hamiltonians exhibit 0.01% to 1% sparsity, storing only non-zero elements enables orders of magnitude speedup over term-by-term measurement in VQE and QAOA.
 ///
-/// **The Problem:**
-/// - Molecular Hamiltonian H = Σᵢ cᵢ Pᵢ with 2000 terms
-/// - Current approach: measure each Pᵢ separately (2000 circuit executions)
-/// - VQE iteration needs 100+ expectation values
-/// - Total: 200,000 circuit executions per VQE iteration
-/// - Makes VQE unusably slow
+/// Backend selection occurs automatically at initialization. Metal GPU backend activates for n ≥ 8 qubits when Metal is available, using custom CSR kernels with Float32 precision. Accelerate Sparse backend handles smaller systems using AMX-accelerated sparse BLAS on decomposed real/imaginary components. Observable backend provides guaranteed fallback with term-by-term measurement.
 ///
-/// **The Solution:**
-/// - Convert H = Σᵢ cᵢ Pᵢ to sparse matrix format
-/// - Molecular Hamiltonians are 0.01%-1% non-zero
-/// - Example: 10-qubit H₂O has ~8000 non-zeros out of 1M elements
-/// - Store only (row, col, value) triplets -> massive memory savings
-/// - Use custom Metal kernel for GPU-accelerated H|ψ⟩
-/// - Compute ⟨ψ|H|ψ⟩ = ⟨ψ|(H|ψ⟩) as inner product
-///
-/// **Three-Tier Performance Architecture:**
-/// 1. **Metal GPU** (fastest): Custom CSR sparse kernel with native complex support
-///    - Used when: Metal available AND numQubits ≥ 8
-///    - GPU-accelerated sparse matrix-vector multiplication
-///    - Primary path for VQE on modern Macs (M1/M2/M3)
-///
-/// 2. **Accelerate Sparse (AMX)**: Apple's optimized sparse BLAS
-///    - Used when: Metal unavailable OR numQubits < 8 (GPU overhead too high)
-///    - Hardware-accelerated via AMX coprocessor
-///    - Complex arithmetic: H = A + iB -> 4 real SpMV operations
-///    - Automatic vectorization, cache blocking, and AMX acceleration
-///
-/// 3. **Observable** (baseline): Existing term-by-term measurement
-///    - Used when: Sparse construction fails (fallback path)
-///    - Guaranteed to work, used for correctness testing
-///
-/// **Example - VQE with sparse Hamiltonian:**
 /// ```swift
-/// // Build sparse Hamiltonian once
-/// let hamiltonian = Observable(terms: [...])  // 2000 terms
-/// let sparseH = SparseHamiltonian(observable: hamiltonian)
-/// print(sparseH.backend)  // "Metal GPU (8142 non-zeros, 0.79% sparse)"
+/// let hamiltonian = Observable(terms: [...])
+/// let sparse = SparseHamiltonian(observable: hamiltonian)
 ///
-/// // VQE optimization loop
-/// var params = [0.1, 0.2, 0.3, 0.4]
-/// for iteration in 0..<100 {
-///     let state = prepareAnsatz(parameters: params)
-///     let energy = sparseH.expectationValue(state: state)
-///
-///     let gradient = computeGradient(energy)
-///     params = updateParameters(params, gradient)
-/// }
+/// let state = ansatz.bind(parameterVector: [0.1, 0.2, 0.3])
+/// let energy = sparse.expectationValue(of: state)
 /// ```
+///
+/// - SeeAlso: ``Observable``, ``VQE``, ``QAOA``
 public actor SparseHamiltonian {
-    /// Performance backend for expectation value computation
     private enum Backend {
-        /// Metal GPU backend: Custom CSR sparse kernel with native complex support
         case metalGPU(
             device: MTLDevice,
             commandQueue: MTLCommandQueue,
@@ -70,14 +29,12 @@ public actor SparseHamiltonian {
             values: MTLBuffer
         )
 
-        /// CPU sparse backend: Accelerate-optimized sparse operations with AMX acceleration
         case accelerateSparse(
             realMatrix: SparseMatrix_Double,
             imagMatrix: SparseMatrix_Double,
             dimension: Int
         )
 
-        /// Observable backend: Term-by-term measurement (fallback)
         case observable(Observable)
 
         var description: String {
@@ -91,45 +48,40 @@ public actor SparseHamiltonian {
 
     // MARK: - Properties
 
-    /// Number of qubits in the Hamiltonian
+    /// Number of qubits in the quantum system.
     public nonisolated let numQubits: Int
 
-    /// Dimension of the Hilbert space (2^numQubits)
+    /// Hilbert space dimension 2^numQubits.
     public nonisolated let dimension: Int
 
-    /// Number of non-zero elements in sparse representation
+    /// Count of non-zero matrix elements, typically 0.01% to 1% of dimension² for molecular Hamiltonians.
     public nonisolated let nnz: Int
 
-    /// Sparsity ratio (non-zeros / total elements)
+    /// Sparsity ratio (nnz / dimension²).
     @inlinable
-    @_effects(readonly)
-    public nonisolated func sparsity() -> Double {
+    public nonisolated var sparsity: Double {
         Double(nnz) / Double(dimension * dimension)
     }
 
-    /// Selected performance backend
     private let backend: Backend
-
-    /// Original observable (kept for diagnostics and fallback)
     private let observable: Observable
 
     // MARK: - Initialization
 
-    /// Create sparse Hamiltonian from Observable with automatic backend selection
+    /// Creates sparse Hamiltonian representation with automatic backend selection.
     ///
-    /// **Backend Selection Logic:**
-    /// 1. Try Metal GPU (fastest) if Metal available and numQubits ≥ 8
-    /// 2. Fall back to CPU sparse if Metal unavailable or small system
-    /// 3. Fall back to Observable if sparse construction fails
+    /// Backend selection priority: Metal GPU (n ≥ 8 qubits) -> Accelerate Sparse (n < 8) -> Observable fallback. The sparse representation persists across all VQE iterations, amortizing construction cost over the entire optimization.
     ///
-    /// **Performance:**
-    /// - Memory: Store only non-zeros (~0.01%-1% of full matrix)
-    /// - Reuse for all VQE iterations
+    /// ```swift
+    /// let h = Observable(terms: [(1.0, PauliString([.z(0)]))])
+    /// let sparse = SparseHamiltonian(observable: h)
+    /// print(sparse.backendDescription)
+    /// ```
     ///
     /// - Parameters:
-    ///   - observable: Quantum observable H = Σᵢ cᵢ Pᵢ
-    ///   - numQubits: Total system size (optional). If nil, inferred from observable
-    public init(observable: Observable, numQubits: Int? = nil) {
+    ///   - observable: Quantum observable H = Σᵢ cᵢ Pᵢ.
+    ///   - systemSize: Total qubits in system. When nil, inferred from maximum qubit index in observable.
+    public init(observable: Observable, systemSize: Int? = nil) {
         self.observable = observable
 
         var maxQubit: Int = -1
@@ -139,13 +91,13 @@ public actor SparseHamiltonian {
             }
         }
 
-        self.numQubits = numQubits ?? max(maxQubit + 1, 1)
-        dimension = 1 << self.numQubits
+        numQubits = systemSize ?? max(maxQubit + 1, 1)
+        dimension = 1 << numQubits
 
         let cooMatrix: [COOElement] = Self.buildCOOMatrix(from: observable, dimension: dimension)
         nnz = cooMatrix.count
 
-        if self.numQubits >= 8, let metalBackend = Self.tryMetalGPUBackend(
+        if numQubits >= 8, let metalBackend = Self.tryMetalGPUBackend(
             cooMatrix: cooMatrix,
             dimension: dimension
         ) {
@@ -162,29 +114,13 @@ public actor SparseHamiltonian {
 
     // MARK: - Sparse Matrix Construction (COO Format)
 
-    @frozen
-    public struct COOElement {
+    struct COOElement {
         let row: Int
         let col: Int
         let value: Complex<Double>
     }
 
-    /// Build sparse matrix in COO (Coordinate) format from Observable
-    ///
-    /// **Algorithm:**
-    /// 1. For each Pauli term (cᵢ, Pᵢ): Convert Pᵢ to sparse matrix
-    /// 2. Accumulate: H[i,j] += cᵢ * Pᵢ[i,j]
-    /// 3. Filter near-zero elements (numerical cancellation)
-    ///
-    /// **Sparsity:**
-    /// - Single Pauli string: at most 2ⁿ non-zeros
-    /// - Molecular Hamiltonians: 0.01%-1% non-zero after cancellation
-    /// - Example: H₂O (10 qubits) -> 8K non-zeros out of 1M elements
-    ///
-    /// - Parameters:
-    ///   - observable: Observable with Pauli decomposition
-    ///   - dimension: Hilbert space dimension (2^numQubits)
-    /// - Returns: Array of COO elements (row, col, value)
+    /// - Complexity: O(terms x 2ⁿ) construction, O(nnz log nnz) sorting
     @_optimize(speed)
     @_eagerMove
     private static func buildCOOMatrix(
@@ -220,25 +156,7 @@ public actor SparseHamiltonian {
         }
     }
 
-    /// Convert Pauli string to sparse matrix representation
-    ///
-    /// **Algorithm:**
-    /// - Pauli string P = P₀ ⊗ P₁ ⊗ ... ⊗ Pₙ₋₁
-    /// - For each row, compute column and phase directly:
-    ///   - Identity I: column = row, phase = 1
-    ///   - Pauli X: column = row with bit flipped, phase = 1
-    ///   - Pauli Y: column = row with bit flipped, phase = ±i
-    ///   - Pauli Z: column = row, phase = ±1
-    /// - Complexity: O(2ⁿ x n) instead of O(4ⁿ x n)
-    ///
-    /// **Sparsity:**
-    /// - All Pauli strings: exactly 2ⁿ non-zeros (one per row)
-    /// - 1000x faster for 10-qubit systems
-    ///
-    /// - Parameters:
-    ///   - pauliString: Pauli operators (sparse: only non-identity qubits)
-    ///   - dimension: Hilbert space dimension
-    /// - Returns: Sparse matrix as COO elements
+    /// - Complexity: O(2ⁿ) for all Pauli strings (exactly 2ⁿ non-zeros per string)
     @_optimize(speed)
     @_eagerMove
     private static func pauliStringToSparseMatrix(
@@ -258,27 +176,6 @@ public actor SparseHamiltonian {
 
     // MARK: - Backend Construction
 
-    /// Try to create Metal GPU backend with custom CSR sparse kernel
-    ///
-    /// **Requirements:**
-    /// - Metal device available
-    /// - numQubits ≥ 8 (GPU overhead too high for small systems)
-    ///
-    /// **Algorithm:**
-    /// 1. Load and compile csrSparseMatVec kernel from QuantumGPU.metal
-    /// 2. Convert COO to CSR (Compressed Sparse Row) format
-    /// 3. Create Metal buffers for CSR sparse data
-    /// 4. Store pipeline state and buffers for kernel dispatch
-    ///
-    /// **Native Complex Support:**
-    /// - Uses Metal's ComplexFloat (float2: real, imaginary)
-    /// - Converts Swift's Complex<Double> to Float32 for GPU
-    /// - Acceptable precision loss: 64-bit -> 32-bit (~7 digits)
-    ///
-    /// - Parameters:
-    ///   - cooMatrix: Sparse matrix in COO format
-    ///   - dimension: Hilbert space dimension
-    /// - Returns: Metal GPU backend or nil if unavailable
     private static func tryMetalGPUBackend(
         cooMatrix: [COOElement],
         dimension: Int
@@ -312,7 +209,6 @@ public actor SparseHamiltonian {
             }
         }
 
-        // Use .storageModeShared for Apple Silicon zero-copy
         let storageMode: MTLResourceOptions = .storageModeShared
 
         guard let rowPointerBuffer = device.makeBuffer(
@@ -343,24 +239,7 @@ public actor SparseHamiltonian {
         )
     }
 
-    /// Convert COO format to CSR (Compressed Sparse Row) format
-    ///
-    /// **CSR Format:**
-    /// - rowPointers[i] = index in columnIndices where row i starts
-    /// - rowPointers[i+1] - rowPointers[i] = number of non-zeros in row i
-    /// - columnIndices[k] = column index of k-th non-zero
-    /// - values[k] = value of k-th non-zero
-    ///
-    /// **Example:**
-    /// ```
-    /// COO: [(0,1,2.0), (0,2,3.0), (1,1,4.0)]
-    /// CSR: rowPointers=[0,2,3], columnIndices=[1,2,1], values=[2.0,3.0,4.0]
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - cooMatrix: COO elements (must be sorted by row then column)
-    ///   - numRows: Number of rows in matrix
-    /// - Returns: (rowPointers, columnIndices, values) in CSR format
+    /// - Complexity: O(nnz) linear pass with prefix sum
     @_optimize(speed)
     @_eagerMove
     private static func convertCOOtoCSR(
@@ -395,21 +274,6 @@ public actor SparseHamiltonian {
         return (rowPointers, columnIndices, values)
     }
 
-    /// Try to create Accelerate Sparse backend with AMX optimization
-    ///
-    /// **Algorithm:**
-    /// - Split complex matrix H = A + iB into real (A) and imaginary (B) components
-    /// - Build two Accelerate sparse matrices using coordinate format
-    /// - Accelerate uses AMX coprocessor on Apple Silicon for 10-20x speedup
-    ///
-    /// **Complex arithmetic:**
-    /// - (A + iB)(x + iy) = (Ax - By) + i(Ay + Bx)
-    /// - 4 real SpMV operations, heavily optimized by Accelerate
-    ///
-    /// - Parameters:
-    ///   - cooMatrix: Sparse matrix in COO format (complex values)
-    ///   - dimension: Hilbert space dimension
-    /// - Returns: Accelerate sparse backend or nil if construction fails
     private static func tryAccelerateSparseBackend(
         cooMatrix: [COOElement],
         dimension: Int
@@ -466,8 +330,6 @@ public actor SparseHamiltonian {
             dimension: dimension
         )
 
-        // Safe force-unwrap: buildAccelerateSparseMatrix always returns a value
-        // (handles empty case by creating dummy matrix with single zero element)
         return .accelerateSparse(
             realMatrix: realMatrix!,
             imagMatrix: imagMatrix!,
@@ -475,24 +337,6 @@ public actor SparseHamiltonian {
         )
     }
 
-    /// Build Accelerate sparse matrix from coordinate format
-    ///
-    /// **Accelerate Sparse Format:**
-    /// - Uses SparseMatrix_Double (opaque type)
-    /// - Coordinate format: arrays of (row, col, value) triplets
-    /// - Internally converted to optimized storage (CSR/CSC) by Accelerate
-    ///
-    /// **API:**
-    /// - SparseConvertFromCoordinate: Creates sparse matrix from triplets
-    /// - Handles duplicate entries by summing (safe for our use case)
-    /// - Optimizes storage format for SpMV operations
-    ///
-    /// - Parameters:
-    ///   - rows: Row indices (Int32 array)
-    ///   - cols: Column indices (Int32 array)
-    ///   - values: Matrix values (Double array)
-    ///   - dimension: Matrix dimension (NxN)
-    /// - Returns: Accelerate sparse matrix or nil if construction fails
     @_eagerMove
     private static func buildAccelerateSparseMatrix(
         rows: [Int32],
@@ -549,20 +393,20 @@ public actor SparseHamiltonian {
 
     // MARK: - Expectation Value Computation
 
-    /// Compute expectation value ⟨ψ|H|ψ⟩ using selected backend
+    /// Computes ⟨ψ|H|ψ⟩ using sparse matrix-vector multiplication.
     ///
-    /// **Algorithm:**
-    /// 1. Compute |φ⟩ = H|ψ⟩ via sparse matrix-vector multiply
-    /// 2. Compute ⟨ψ|φ⟩ = Σᵢ ψᵢ* · φᵢ (inner product)
-    /// 3. Return real part (imaginary part is numerical noise for Hermitian H)
+    /// Performs H|ψ⟩ via sparse matvec, then computes inner product ⟨ψ|H|ψ⟩. Thread-safe for concurrent calls with different states.
     ///
-    /// **Thread Safety:**
-    /// - Read-only operations, safe to call from multiple threads
-    /// - Each call creates temporary buffers, no shared state
+    /// ```swift
+    /// let state = QuantumState(numQubits: 4)
+    /// let energy = sparse.expectationValue(of: state)
+    /// ```
     ///
-    /// - Parameter state: Normalized quantum state |ψ⟩
-    /// - Returns: Expectation value ⟨ψ|H|ψ⟩ ∈ ℝ
-    public func expectationValue(state: QuantumState) -> Double {
+    /// - Parameter state: Normalized quantum state |ψ⟩.
+    /// - Returns: Real expectation value ⟨ψ|H|ψ⟩.
+    /// - Complexity: O(nnz) for sparse matvec, O(2ⁿ) for inner product
+    /// - Precondition: State must have ``numQubits`` qubits and be normalized
+    public func expectationValue(of state: QuantumState) -> Double {
         ValidationUtilities.validateStateQubitCount(state, required: numQubits, exact: true)
         ValidationUtilities.validateNormalizedState(state)
 
@@ -587,28 +431,10 @@ public actor SparseHamiltonian {
             )
 
         case let .observable(obs):
-            return obs.expectationValue(state: state)
+            return obs.expectationValue(of: state)
         }
     }
 
-    /// Compute expectation value using Metal GPU backend with custom CSR kernel
-    ///
-    /// **Algorithm:**
-    /// 1. Convert Complex<Double> state to Float32 pairs for Metal
-    /// 2. Create Metal buffers for input/output vectors
-    /// 3. Dispatch csrSparseMatVec kernel (GPU computes H|ψ⟩)
-    /// 4. Wait for completion and read result from GPU
-    /// 5. Convert back to Complex<Double> and compute inner product ⟨ψ|H|ψ⟩
-    ///
-    /// - Parameters:
-    ///   - state: Quantum state
-    ///   - device: Metal device
-    ///   - commandQueue: Metal command queue
-    ///   - pipelineState: Compiled kernel pipeline state
-    ///   - rowPointers: CSR row pointers buffer
-    ///   - columnIndices: CSR column indices buffer
-    ///   - values: CSR complex values buffer
-    /// - Returns: Expectation value
     @_optimize(speed)
     private func computeMetalGPU(
         state: QuantumState,
@@ -640,15 +466,15 @@ public actor SparseHamiltonian {
             bytes: float32State,
             length: dimension * MemoryLayout<(Float, Float)>.stride,
             options: .storageModeShared
-        ) else { return observable.expectationValue(state: state) }
+        ) else { return observable.expectationValue(of: state) }
 
         guard let outputBuffer = device.makeBuffer(
             length: dimension * MemoryLayout<(Float, Float)>.stride,
             options: .storageModeShared
-        ) else { return observable.expectationValue(state: state) }
+        ) else { return observable.expectationValue(of: state) }
 
         guard let (commandBuffer, encoder) = MetalUtilities.createCommandEncoder(queue: commandQueue) else {
-            return observable.expectationValue(state: state)
+            return observable.expectationValue(of: state)
         }
 
         encoder.setComputePipelineState(pipelineState)
@@ -713,30 +539,6 @@ public actor SparseHamiltonian {
         return realDot1 + realDot2
     }
 
-    /// Compute expectation value using Accelerate sparse backend with AMX optimization
-    ///
-    /// **Algorithm:**
-    /// 1. Split complex state |ψ⟩ = x + iy into real (x) and imaginary (y) vectors
-    /// 2. Compute complex SpMV using 4 real operations:
-    ///    - (A + iB)(x + iy) = (Ax - By) + i(Ay + Bx)
-    ///    - Ax: Real matrix x real vector (Accelerate SpMV)
-    ///    - By: Imaginary matrix x imaginary vector (Accelerate SpMV)
-    ///    - Ay: Real matrix x imaginary vector (Accelerate SpMV)
-    ///    - Bx: Imaginary matrix x real vector (Accelerate SpMV)
-    /// 3. Combine: H|ψ⟩ = (Ax - By) + i(Ay + Bx)
-    /// 4. Inner product: ⟨ψ|H|ψ⟩ = Σᵢ ψᵢ* · (H|ψ⟩)ᵢ
-    ///
-    /// **Performance:**
-    /// - Accelerate uses AMX coprocessor on Apple Silicon (M1/M2/M3)
-    /// - 10-20x faster than manual loops for n<8 qubits
-    /// - BLAS Level 2 optimizations: cache blocking, vectorization
-    ///
-    /// - Parameters:
-    ///   - state: Quantum state |ψ⟩
-    ///   - realMatrix: Real part of Hamiltonian (A)
-    ///   - imagMatrix: Imaginary part of Hamiltonian (B)
-    ///   - dimension: Hilbert space dimension
-    /// - Returns: Expectation value ⟨ψ|H|ψ⟩ ∈ ℝ
     @_optimize(speed)
     private func computeAccelerateSparse(
         state: QuantumState,
@@ -811,17 +613,19 @@ public actor SparseHamiltonian {
 
     // MARK: - Diagnostics
 
+    /// Backend name with sparsity statistics.
     public var backendDescription: String {
-        "\(backend.description) (\(nnz) non-zeros, \(String(format: "%.2f%%", sparsity() * 100)) sparse)"
+        "\(backend.description) (\(nnz) non-zeros, \(String(format: "%.2f%%", sparsity * 100)) sparse)"
     }
 
+    /// Detailed sparse matrix statistics including memory usage and compression ratio.
     @_eagerMove
-    public func getStatistics() -> SparseMatrixStatistics {
+    public var statistics: SparseMatrixStatistics {
         SparseMatrixStatistics(
             numQubits: numQubits,
             dimension: dimension,
             nonZeros: nnz,
-            sparsity: sparsity(),
+            sparsity: sparsity,
             backend: backend.description,
             memoryBytes: estimatedMemoryUsage()
         )
@@ -829,7 +633,6 @@ public actor SparseHamiltonian {
 
     @_effects(readonly)
     private func estimatedMemoryUsage() -> Int {
-        // CSR format: rowPointers (dimension+1) + columnIndices (nnz) + values (nnz)
         let rowPointerBytes: Int = (dimension + 1) * MemoryLayout<UInt32>.stride
         let columnIndexBytes: Int = nnz * MemoryLayout<UInt32>.stride
         let valueBytes: Int = nnz * MemoryLayout<Complex<Double>>.stride
@@ -840,24 +643,33 @@ public actor SparseHamiltonian {
 
 // MARK: - Supporting Types
 
-/// Matrix index (row, column) for sparse accumulation
-@frozen
-public struct MatrixIndex: Hashable {
-    public let row: Int
-    public let col: Int
+struct MatrixIndex: Hashable {
+    let row: Int
+    let col: Int
 }
 
-/// Statistics about sparse Hamiltonian
+/// Diagnostic statistics for sparse Hamiltonian representation.
 @frozen
 public struct SparseMatrixStatistics: CustomStringConvertible, Sendable {
+    /// Number of qubits.
     public let numQubits: Int
+
+    /// Hilbert space dimension 2^numQubits.
     public let dimension: Int
+
+    /// Count of non-zero matrix elements.
     public let nonZeros: Int
+
+    /// Sparsity ratio.
     public let sparsity: Double
+
+    /// Backend name.
     public let backend: String
+
+    /// Total memory in bytes.
     public let memoryBytes: Int
 
-    public init(numQubits: Int, dimension: Int, nonZeros: Int, sparsity: Double, backend: String, memoryBytes: Int) {
+    init(numQubits: Int, dimension: Int, nonZeros: Int, sparsity: Double, backend: String, memoryBytes: Int) {
         self.numQubits = numQubits
         self.dimension = dimension
         self.nonZeros = nonZeros
