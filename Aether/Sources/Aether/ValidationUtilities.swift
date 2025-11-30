@@ -600,7 +600,7 @@ public enum ValidationUtilities {
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateCircuitOperations(_ operations: [GateOperation], numQubits: Int) {
+    static func validateCircuitOperations(_ operations: [Gate], numQubits: Int) {
         let maxAllowedQubit = 29
 
         for operation in operations {
@@ -878,6 +878,34 @@ public enum ValidationUtilities {
         precondition(QuantumGate.isUnitary(matrix), "Matrix is not unitary (U†U ≠ I)")
     }
 
+    /// Validate custom gate matrix: size (2x2 or 4x4) and unitarity
+    ///
+    /// Validates that a custom gate matrix is either 2x2 (single-qubit) or 4x4 (two-qubit)
+    /// and satisfies the unitary condition U†U = I. Combines size and unitarity checks
+    /// for ``QuantumGate/custom(matrix:)`` factory method.
+    ///
+    /// - Parameter matrix: Matrix to validate
+    /// - Precondition: Matrix must be 2x2 or 4x4, square, and unitary
+    /// - Complexity: O(n³) for unitarity check where n ∈ {2, 4}
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateCustomGateMatrix(_ matrix: [[Complex<Double>]]) {
+        let size = matrix.count
+        precondition(
+            size == 2 || size == 4,
+            "Custom gate matrix must be 2x2 (single-qubit) or 4x4 (two-qubit), got \(size)x\(size)"
+        )
+
+        if size == 2 {
+            validate2x2Matrix(matrix)
+        } else {
+            validate4x4Matrix(matrix)
+        }
+
+        validateUnitary(matrix)
+    }
+
     /// Validate that parameter bindings contain a specific parameter
     ///
     /// Used for gradient computation where base bindings must include
@@ -942,8 +970,8 @@ public enum ValidationUtilities {
     /// let symbolic = ParameterValue.parameter(theta)
     /// let concrete = ParameterValue.value(.pi / 4)
     ///
-    /// ValidationUtilities.validateConcrete(concrete, name: "rotation angle")  // OK
-    /// ValidationUtilities.validateConcrete(symbolic, name: "rotation angle")  // Crashes
+    /// ValidationUtilities.validateConcrete(concrete, name: "rotation angle")
+    /// ValidationUtilities.validateConcrete(symbolic, name: "rotation angle")
     /// ```
     ///
     /// - Parameters:
@@ -960,5 +988,24 @@ public enum ValidationUtilities {
                 "\(name) must be concrete before matrix generation (symbolic parameter '\(param.name)' requires binding)"
             )
         }
+    }
+
+    /// Validate that circuit contains only concrete parameters (no symbolic)
+    ///
+    /// Ensures circuit can be executed directly without requiring parameter binding.
+    /// Circuits with symbolic ``Parameter`` instances must use ``QuantumCircuit/binding(_:)``
+    /// or ``QuantumCircuit/bound(with:)`` before execution.
+    ///
+    /// - Parameter parameterCount: Number of symbolic parameters in circuit
+    /// - Precondition: parameterCount must be 0
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateConcreteCircuit(_ parameterCount: Int) {
+        precondition(
+            parameterCount == 0,
+            "Cannot execute circuit with symbolic parameters. Use binding(_:) or bound(with:) first."
+        )
     }
 }

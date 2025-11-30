@@ -46,7 +46,7 @@ import Foundation
 /// ])
 ///
 /// // 2. Build hardware-efficient ansatz
-/// let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 2)
+/// let ansatz = HardwareEfficientAnsatz(qubits: 2, depth: 2)
 ///
 /// // 3. Configure VQE
 /// let vqe = await VariationalQuantumEigensolver(
@@ -61,7 +61,7 @@ import Foundation
 ///
 /// // 4. Run optimization with progress tracking
 /// let result = await vqe.runWithProgress(
-///     initialParameters: Array(repeating: 0.01, count: ansatz.parameterCount())
+///     initialParameters: Array(repeating: 0.01, count: ansatz.parameterCount)
 /// ) { iteration, energy in
 ///     print("Iteration \(iteration): E = \(energy) Hartree")
 /// }
@@ -95,8 +95,8 @@ public actor VariationalQuantumEigensolver {
     /// Hamiltonian to minimize
     private let hamiltonian: Observable
 
-    /// Parameterized quantum circuit (ansatz)
-    private let ansatz: QuantumCircuit
+    /// Hardware-efficient Ansatz
+    private let ansatz: HardwareEfficientAnsatz
 
     /// Classical optimizer for parameter updates
     private let optimizer: Optimizer
@@ -136,14 +136,14 @@ public actor VariationalQuantumEigensolver {
     ///
     /// - Parameters:
     ///   - hamiltonian: Molecular or optimization Hamiltonian
-    ///   - ansatz: Parameterized quantum circuit
+    ///   - ansatz: Hardware-efficient Ansatz
     ///   - optimizer: Classical optimization algorithm
     ///   - convergenceCriteria: Termination conditions (default: ε=1e-6, maxIter=1000)
     ///   - useSparseBackend: Use SparseHamiltonian acceleration (default: true)
     ///   - useMetalAcceleration: Use Metal GPU for circuit execution (default: true)
     public init(
         hamiltonian: Observable,
-        ansatz: QuantumCircuit,
+        ansatz: HardwareEfficientAnsatz,
         optimizer: Optimizer,
         convergenceCriteria: ConvergenceCriteria = .default,
         useSparseBackend: Bool = true,
@@ -177,7 +177,7 @@ public actor VariationalQuantumEigensolver {
     ///
     /// Example:
     /// ```swift
-    /// let initialGuess = Array(repeating: 0.01, count: ansatz.parameterCount())
+    /// let initialGuess = Array(repeating: 0.01, count: ansatz.parameterCount)
     /// let result = await vqe.run(initialParameters: initialGuess)
     ///
     /// print("Ground state: \(result.optimalEnergy) Hartree")
@@ -230,7 +230,7 @@ public actor VariationalQuantumEigensolver {
         currentEnergy = 0.0
 
         let energyFunction: @Sendable ([Double]) async -> Double = { parameters in
-            let concreteCircuit: QuantumCircuit = self.ansatz.binding(vector: parameters)
+            let concreteCircuit: QuantumCircuit = self.ansatz.circuit.bound(with: parameters)
 
             let state: QuantumState = await self.simulator.execute(concreteCircuit)
 
@@ -249,19 +249,19 @@ public actor VariationalQuantumEigensolver {
         }
 
         let optimizerResult: OptimizerResult = await optimizer.minimize(
-            objectiveFunction: energyFunction,
-            initialParameters: initialParameters,
-            convergenceCriteria: convergenceCriteria,
-            progressCallback: optimizerProgressCallback
+            energyFunction,
+            from: initialParameters,
+            using: convergenceCriteria,
+            progress: optimizerProgressCallback
         )
 
         return VQEResult(
-            optimalEnergy: optimizerResult.optimalValue,
-            optimalParameters: optimizerResult.optimalParameters,
-            energyHistory: optimizerResult.valueHistory,
+            optimalEnergy: optimizerResult.value,
+            optimalParameters: optimizerResult.parameters,
+            energyHistory: optimizerResult.history,
             iterations: optimizerResult.iterations,
-            convergenceReason: optimizerResult.convergenceReason,
-            functionEvaluations: optimizerResult.functionEvaluations
+            convergenceReason: optimizerResult.terminationReason,
+            functionEvaluations: optimizerResult.evaluations
         )
     }
 
@@ -337,7 +337,7 @@ public struct VQEResult: Sendable, CustomStringConvertible {
     public let iterations: Int
 
     /// Why optimization terminated
-    public let convergenceReason: ConvergenceReason
+    public let convergenceReason: TerminationReason
 
     /// Total objective function evaluations (includes gradient computations)
     public let functionEvaluations: Int
@@ -347,7 +347,7 @@ public struct VQEResult: Sendable, CustomStringConvertible {
         optimalParameters: [Double],
         energyHistory: [Double],
         iterations: Int,
-        convergenceReason: ConvergenceReason,
+        convergenceReason: TerminationReason,
         functionEvaluations: Int
     ) {
         self.optimalEnergy = optimalEnergy

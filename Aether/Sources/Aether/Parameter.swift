@@ -19,7 +19,7 @@ import Foundation
 /// 1. Create symbolic parameters with descriptive names
 /// 2. Build parameterized circuit using ``QuantumCircuit``
 /// 3. Classical optimizer proposes parameter values
-/// 4. Bind parameters to concrete values via `binding(_:)`
+/// 4. Bind parameters to concrete values via ``QuantumCircuit/binding(_:)``
 /// 5. Execute concrete circuit and measure expectation value
 /// 6. Repeat steps 3-5 until convergence
 ///
@@ -188,5 +188,44 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
         case let .parameter(p): p.name
         case let .value(v): String(format: "%.3f", v)
         }
+    }
+}
+
+// MARK: - Protocol Conformances
+
+extension ParameterValue: ExpressibleByFloatLiteral {
+    /// Create concrete parameter value from float literal
+    ///
+    /// Enables implicit conversion from numeric literals to concrete parameter values.
+    /// Allows writing `.rotationX(1.57)` instead of `.rotationX(.value(1.57))`.
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let gate: QuantumGate = .rotationY(1.57)  // Implicit .value(1.57)
+    /// ```
+    ///
+    /// - Parameter value: Float literal value
+    @inlinable
+    public init(floatLiteral value: Double) {
+        self = .value(value)
+    }
+}
+
+public extension ParameterValue {
+    /// Create symbolic parameter value from parameter
+    ///
+    /// Enables implicit conversion from ``Parameter`` to symbolic parameter value.
+    /// Allows writing `.rotationX(theta)` instead of `.rotationX(.parameter(theta))`.
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let theta = Parameter(name: "theta")
+    /// let gate: QuantumGate = .rotationY(theta)  // Implicit .parameter(theta)
+    /// ```
+    ///
+    /// - Parameter parameter: Symbolic parameter to wrap
+    @inlinable
+    init(_ parameter: Parameter) {
+        self = .parameter(parameter)
     }
 }

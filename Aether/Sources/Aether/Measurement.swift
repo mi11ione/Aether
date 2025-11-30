@@ -362,8 +362,8 @@ public struct MeasurementOutcome: Equatable {
 /// let result = Measurement.measure(zz, in: bell)
 ///
 /// // Bell state: (|00⟩ + |11⟩)/√2
-/// // 50% |00⟩: λ₀=+1, λ₁=+1 → product=+1
-/// // 50% |11⟩: λ₀=-1, λ₁=-1 → product=+1
+/// // 50% |00⟩: λ₀=+1, λ₁=+1 -> product=+1
+/// // 50% |11⟩: λ₀=-1, λ₁=-1 -> product=+1
 /// // result.eigenvalue: +1 (deterministic!)
 /// ```
 ///
@@ -509,7 +509,7 @@ public struct ChiSquaredResult {
 /// // Seeded measurement for reproducibility
 /// let r1 = Measurement.measure(bell, seed: 123)
 /// let r2 = Measurement.measure(bell, seed: 123)
-/// // r1.outcome == r2.outcome (same seed → same result)
+/// // r1.outcome == r2.outcome (same seed -> same result)
 ///
 /// // Non-destructive snapshot
 /// let snapshot = Measurement.snapshot(of: bell, label: "Bell state")
@@ -676,11 +676,11 @@ public enum Measurement {
     /// expectation values and quantum chemistry applications.
     ///
     /// **Implementation**:
-    /// - X basis: Apply H, measure Z, map 0→+1, 1→-1, apply H†
-    /// - Y basis: Apply S†H, measure Z, map 0→+1, 1→-1, apply HS
+    /// - X basis: Apply H, measure Z, map 0->+1, 1->-1, apply H†
+    /// - Y basis: Apply S†H, measure Z, map 0->+1, 1->-1, apply HS
     /// - Z basis: Measure Z directly (computational basis)
     ///
-    /// **Eigenvalue mapping**: outcome 0 → +1 (positive eigenstate), 1 → -1 (negative eigenstate)
+    /// **Eigenvalue mapping**: outcome 0 -> +1 (positive eigenstate), 1 -> -1 (negative eigenstate)
     ///
     /// **Example**:
     /// ```swift
@@ -728,7 +728,7 @@ public enum Measurement {
     /// **Algorithm**:
     /// 1. Apply basis rotations to diagonalize each Pauli operator
     /// 2. Measure all qubits in computational basis
-    /// 3. Map each outcome to eigenvalue: 0→+1, 1→-1
+    /// 3. Map each outcome to eigenvalue: 0->+1, 1->-1
     /// 4. Compute product eigenvalue: λ = ∏ᵢ λᵢ
     /// 5. Rotate collapsed state back to original basis
     ///
@@ -737,8 +737,8 @@ public enum Measurement {
     /// let zz = PauliString(.z(0), .z(1))
     /// let bell = QuantumCircuit.bellPhiPlus().execute()  // (|00⟩ + |11⟩)/√2
     /// let result = Measurement.measure(zz, in: bell)
-    /// // 50% |00⟩: λ₀=+1, λ₁=+1 → product=+1
-    /// // 50% |11⟩: λ₀=-1, λ₁=-1 → product=+1
+    /// // 50% |00⟩: λ₀=+1, λ₁=+1 -> product=+1
+    /// // 50% |11⟩: λ₀=-1, λ₁=-1 -> product=+1
     /// // result.eigenvalue: +1 (deterministic!)
     /// ```
     ///
@@ -807,7 +807,7 @@ public enum Measurement {
     /// constructed via unitarity.
     ///
     /// **Algorithm**:
-    /// 1. Construct unitary U rotating |ψ⟩ → |0⟩
+    /// 1. Construct unitary U rotating |ψ⟩ -> |0⟩
     /// 2. Apply U to state
     /// 3. Measure in computational basis
     /// 4. Apply U† to collapsed state

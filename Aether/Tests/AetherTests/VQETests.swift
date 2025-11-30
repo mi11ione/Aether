@@ -12,7 +12,7 @@ struct VariationalQuantumEigensolverTests {
     @Test("Create VQE without sparse backend")
     func createVQEWithoutSparseBackend() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer()
 
         let vqe = VariationalQuantumEigensolver(
@@ -29,7 +29,7 @@ struct VariationalQuantumEigensolverTests {
     @Test("VQE finds ground state of simple Hamiltonian")
     func findGroundStateSimpleHamiltonian() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
         let vqe = VariationalQuantumEigensolver(
@@ -61,7 +61,7 @@ struct VariationalQuantumEigensolverTests {
         }
 
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
         let vqe = VariationalQuantumEigensolver(
@@ -87,7 +87,7 @@ struct VariationalQuantumEigensolverTests {
     @Test("VQE tracks progress")
     func vqeTracksProgress() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
         let vqe = VariationalQuantumEigensolver(
@@ -111,7 +111,7 @@ struct VariationalQuantumEigensolverTests {
             (1.0, PauliString(.z(1))),
         ])
 
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 2, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
         let vqe = VariationalQuantumEigensolver(
@@ -130,7 +130,7 @@ struct VariationalQuantumEigensolverTests {
     @Test("VQE convergence via energy tolerance")
     func convergenceViaEnergyTolerance() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
         let vqe = VariationalQuantumEigensolver(
@@ -142,13 +142,13 @@ struct VariationalQuantumEigensolverTests {
 
         let result = await vqe.run(initialParameters: [0.1])
 
-        #expect(result.convergenceReason == .energyTolerance)
+        #expect(result.convergenceReason == .energyConverged)
     }
 
     @Test("VQE with gradient descent optimizer")
     func vqeWithGradientDescent() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = GradientDescentOptimizer(learningRate: 0.5)
 
         let vqe = VariationalQuantumEigensolver(
@@ -169,7 +169,7 @@ struct VariationalQuantumEigensolverTests {
     @Test("VQE with L-BFGS-B optimizer")
     func vqeWithLBFGSB() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = LBFGSBOptimizer(tolerance: 1e-3)
 
         let vqe = VariationalQuantumEigensolver(
@@ -190,7 +190,7 @@ struct VariationalQuantumEigensolverTests {
     @Test("VQE with SPSA optimizer")
     func vqeWithSPSA() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = SPSAOptimizer(initialStepSize: 0.1)
 
         let vqe = VariationalQuantumEigensolver(
@@ -208,7 +208,7 @@ struct VariationalQuantumEigensolverTests {
     @Test("VQE backend info with sparse")
     func backendInfoWithSparse() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer()
 
         let vqe = VariationalQuantumEigensolver(
@@ -225,7 +225,7 @@ struct VariationalQuantumEigensolverTests {
     @Test("VQE backend info without sparse")
     func backendInfoWithoutSparse() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer()
 
         let vqe = VariationalQuantumEigensolver(
@@ -243,7 +243,7 @@ struct VariationalQuantumEigensolverTests {
     @Test("VQE without Metal acceleration")
     func vqeWithoutMetalAcceleration() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
         let vqe = VariationalQuantumEigensolver(
@@ -262,7 +262,7 @@ struct VariationalQuantumEigensolverTests {
     @Test("VQE tracks function evaluations")
     func vqeTracksFunctionEvaluations() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 1, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
 
         let vqe = VariationalQuantumEigensolver(
@@ -290,7 +290,7 @@ struct VQEResultTests {
             optimalParameters: [0.5, 1.0, 1.5],
             energyHistory: [-2.0, -1.5, -1.234],
             iterations: 3,
-            convergenceReason: .energyTolerance,
+            convergenceReason: .energyConverged,
             functionEvaluations: 15
         )
 
@@ -298,7 +298,7 @@ struct VQEResultTests {
         #expect(result.optimalParameters == [0.5, 1.0, 1.5])
         #expect(result.energyHistory == [-2.0, -1.5, -1.234])
         #expect(result.iterations == 3)
-        #expect(result.convergenceReason == .energyTolerance)
+        #expect(result.convergenceReason == .energyConverged)
         #expect(result.functionEvaluations == 15)
     }
 
@@ -309,7 +309,7 @@ struct VQEResultTests {
             optimalParameters: [0.5, 1.0],
             energyHistory: [-1.234],
             iterations: 10,
-            convergenceReason: .energyTolerance,
+            convergenceReason: .energyConverged,
             functionEvaluations: 50
         )
 
@@ -329,7 +329,7 @@ struct VQEResultTests {
             optimalParameters: [1.0, 2.0, 3.0, 4.0, 5.0],
             energyHistory: [-1.0],
             iterations: 5,
-            convergenceReason: .maxIterations,
+            convergenceReason: .maxIterationsReached,
             functionEvaluations: 20
         )
 
@@ -345,11 +345,11 @@ struct VQEResultTests {
             optimalParameters: [0.5],
             energyHistory: [-1.0],
             iterations: 5,
-            convergenceReason: .gradientNorm,
+            convergenceReason: .gradientConverged,
             functionEvaluations: 25
         )
 
-        #expect(result.convergenceReason == .gradientNorm)
+        #expect(result.convergenceReason == .gradientConverged)
         #expect(result.description.contains("Gradient"))
     }
 }

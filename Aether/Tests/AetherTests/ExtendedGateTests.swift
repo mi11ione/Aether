@@ -237,7 +237,7 @@ struct CustomUnitaryGatesTests {
             [.zero, .zero, .one, .zero],
         ]
 
-        let gate = QuantumGate.custom(matrix: validMatrix, control: 0, target: 1)
+        let gate = QuantumGate.custom(matrix: validMatrix)
         #expect(gate.qubitsRequired == 2)
     }
 
@@ -391,7 +391,7 @@ struct GatePropertyTests {
             [.zero, .zero, .zero, .one],
             [.zero, .zero, .one, .zero],
         ]
-        let customTwoGate = QuantumGate.custom(matrix: customTwoMatrix, control: 0, target: 1)
+        let customTwoGate = QuantumGate.custom(matrix: customTwoMatrix)
         #expect(customTwoGate.description.contains("CustomU"))
     }
 }

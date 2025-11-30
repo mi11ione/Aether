@@ -5,76 +5,52 @@ import Accelerate
 import Metal
 import MetalPerformanceShaders
 
-/// Batched circuit evaluation using Metal Performance Shaders matrix operations
+/// Batched circuit evaluation using Metal Performance Shaders for GPU acceleration.
 ///
-/// Accelerates VQE parameter space exploration by batching multiple circuit evaluations
-/// into single GPU operation. Uses MPS high-level matrix primitives (MPSMatrix,
-/// MPSMatrixVectorMultiplication) to execute 100+ matrix-vector multiplies in parallel
-/// across thousands of GPU cores.
+/// Evaluates multiple quantum circuits in parallel on the GPU by converting each circuit to
+/// its unitary matrix representation and executing all matrix-vector multiplications simultaneously.
+/// Uses Metal Performance Shaders framework primitives (MPSMatrix, MPSMatrixVectorMultiplication)
+/// to leverage thousands of GPU cores in parallel. Particularly effective for VQE gradient
+/// computation and QAOA parameter grid search where many circuit variations must be evaluated
+/// with the same initial state.
 ///
-/// **Performance characteristics:**
-/// - Sequential: N x (circuit_time + measurement_time) where N = 100
-/// - Batched MPS: unitary_conversion_time + batch_execution_time
-/// - Single CPU-GPU round-trip for entire batch
-/// - Parallel execution across GPU cores
+/// The evaluator converts each circuit to a 2ⁿ x 2ⁿ unitary matrix once, uploads all matrices
+/// to GPU memory in a single transfer, executes all matrix-vector products in parallel, and
+/// downloads only the results (either full quantum states or scalar expectation values). This
+/// eliminates per-circuit CPU-GPU transfer overhead and enables substantial speedup over
+/// sequential gate-by-gate execution.
 ///
-/// **Algorithm Overview:**
-/// 1. **One-time cost**: Convert each circuit to unitary matrix Uᵢ (CPU-bound)
-/// 2. **GPU upload**: Transfer all Uᵢ matrices + initial state to GPU (single copy)
-/// 3. **Parallel execution**: GPU computes all |ψᵢ⟩ = Uᵢ|ψ₀⟩ simultaneously
-/// 4. **Expectation values**: Compute all ⟨ψᵢ|H|ψᵢ⟩ in parallel (if Hamiltonian provided)
-/// 5. **GPU download**: Transfer results back to CPU (single copy)
+/// Metal Performance Shaders provides high-level GPU primitives optimized for Apple Silicon
+/// architecture. MPSMatrix handles 2D matrix storage on GPU with automatic memory management
+/// via shared storage mode (zero-copy on unified memory systems). MPSMatrixVectorMultiplication
+/// performs batched matrix-vector operations with memory coalescing and parallel execution
+/// across GPU compute units.
 ///
-/// **Metal Performance Shaders (MPS) Framework:**
-/// - High-level GPU primitives for linear algebra
-/// - MPSMatrix: 2D matrix storage on GPU
-/// - MPSMatrixVectorMultiplication: Batched matvec kernel
-/// - Automatic optimization for Apple Silicon GPU architecture
-/// - Memory management via shared storage mode (zero-copy on unified memory)
+/// Memory requirements scale as dimension² x batch size x 4 bytes for Float32 precision.
+/// A 10-qubit batch of 100 circuits requires approximately 400 MB GPU memory. The evaluator
+/// queries available GPU memory and computes maximum feasible batch size dynamically, automatically
+/// splitting large batches into chunks when necessary. GPU computation uses Float32 (7 decimal
+/// digit precision) while CPU maintains Float64, introducing ~1e-7 relative error acceptable
+/// for typical VQE convergence tolerances (1e-6).
 ///
-/// **Memory Management:**
-/// - Each unitary: 2ⁿ x 2ⁿ x 4 bytes (Float32) = dimension² x 4
-/// - 10 qubits: 1024x1024 x 4 = 4 MB per unitary
-/// - Batch of 100: 400 MB for unitaries + minimal for states
-/// - Dynamic batch size: Query GPU memory, compute max feasible batch
-/// - Automatic batching: Split large requests into chunks if needed
+/// Batched evaluation provides greatest benefit when batch size exceeds 10 circuits (amortizes
+/// unitary conversion cost), qubit count stays below 14 (memory constraint: 16K x 16K matrix = 1 GB),
+/// and all circuits share the same initial state. For single circuit evaluations or states larger
+/// than GPU memory capacity, use ``QuantumSimulator`` directly. When Metal GPU is unavailable,
+/// the evaluator automatically falls back to sequential CPU evaluation using BLAS matrix operations.
 ///
-/// **Precision:**
-/// - GPU uses Float32 (7 decimal digits)
-/// - CPU uses Float64 (15 decimal digits)
-/// - Precision loss: ~1e-7 relative error
-/// - Acceptable for VQE (energy convergence typically 1e-6)
+/// Typical applications include VQE gradient computation (all θᵢ±π/2 parameter shifts evaluated
+/// simultaneously), QAOA grid search over (γ,β) parameter space, population-based optimizers
+/// requiring parallel fitness evaluation, hyperparameter tuning across multiple ansatz configurations,
+/// and error mitigation techniques like zero-noise extrapolation at multiple noise levels.
 ///
-/// **Use Cases:**
-/// 1. **VQE gradient computation**: All θᵢ±π/2 circuits in parallel
-/// 2. **Grid search**: Evaluate all (γ,β) combinations simultaneously
-/// 3. **Population optimizers**: Genetic algorithms with parallel fitness
-/// 4. **Hyperparameter tuning**: Test multiple ansätze at once
-/// 5. **Error mitigation**: Zero-noise extrapolation with multiple noise levels
-///
-/// **When to use batched evaluation:**
-/// - Batch size ≥ 10 (amortize conversion cost)
-/// - numQubits ≤ 14 (memory constraints: 16K x 16K x 4 = 1 GB per unitary)
-/// - Same initial state for all evaluations
-/// - Metal GPU available (Apple Silicon or AMD GPU on Mac)
-///
-/// **When NOT to use:**
-/// - Single circuit evaluation (use QuantumSimulator directly)
-/// - numQubits > 14 (memory explosion: 2ⁿ x 2ⁿ matrix)
-/// - Deep circuits with different structures (can't reuse unitaries)
-/// - Metal unavailable (no GPU acceleration)
-///
-/// Example - VQE gradient via batched evaluation:
+/// Example:
 /// ```swift
-/// // 1. Build parameterized ansatz
 /// let ansatz = HardwareEfficientAnsatz.create(numQubits: 8, depth: 3)
-/// let numParams = ansatz.parameterCount()  // 24 parameters
+/// let baseParams: [Double] = Array(repeating: 0.1, count: ansatz.parameterCount())
 ///
-/// // 2. Generate all shifted circuits for gradient
-/// let baseParams: [Double] = Array(repeating: 0.1, count: numParams)
 /// var allCircuits: [QuantumCircuit] = []
-///
-/// for i in 0..<numParams {
+/// for i in 0..<ansatz.parameterCount() {
 ///     let (plus, minus) = ansatz.generateShiftedCircuits(
 ///         parameterIndex: i,
 ///         baseVector: baseParams,
@@ -83,172 +59,114 @@ import MetalPerformanceShaders
 ///     allCircuits.append(plus)
 ///     allCircuits.append(minus)
 /// }
-/// // Total: 48 circuits (2 per parameter)
 ///
-/// // 3. Convert all circuits to unitaries (one-time cost)
 /// let unitaries = allCircuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
-///
-/// // 4. Batch evaluate all expectation values in parallel
 /// let evaluator = await MPSBatchEvaluator()
-/// let hamiltonian = Observable(terms: [...])  // Molecular Hamiltonian
-/// let energies = await evaluator.evaluateExpectationValues(
-///     unitaries: unitaries,
-///     initialState: QuantumState(numQubits: 8),
-///     hamiltonian: hamiltonian
+/// let energies = await evaluator.expectationValues(
+///     for: unitaries,
+///     from: QuantumState(numQubits: 8),
+///     observable: hamiltonian
 /// )
 ///
-/// // 5. Extract gradients
 /// var gradients: [Double] = []
-/// for i in 0..<numParams {
-///     let energyPlus = energies[2 * i]
-///     let energyMinus = energies[2 * i + 1]
-///     gradients.append((energyPlus - energyMinus) / 2.0)
+/// for i in 0..<ansatz.parameterCount() {
+///     gradients.append((energies[2 * i] - energies[2 * i + 1]) / 2.0)
 /// }
-///
-/// print("Gradient: \(gradients)")
-/// // Computed 48 circuit evaluations in ~0.2s instead of ~15s sequential
 /// ```
 ///
-/// Example - Grid search for QAOA:
-/// ```swift
-/// // 1. Define parameter grid
-/// let gammaValues = stride(from: 0.0, through: .pi, by: .pi / 20)  // 21 values
-/// let betaValues = stride(from: 0.0, through: .pi, by: .pi / 20)   // 21 values
-///
-/// // 2. Build all circuits (21 x 21 = 441 circuits)
-/// var circuits: [QuantumCircuit] = []
-/// for gamma in gammaValues {
-///     for beta in betaValues {
-///         let circuit = qaoaAnsatz.bind(parameterVector: [gamma, beta])
-///         circuits.append(circuit)
-///     }
-/// }
-///
-/// // 3. Convert to unitaries
-/// let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
-///
-/// // 4. Batch evaluate all grid points
-/// let evaluator = await MPSBatchEvaluator()
-/// let energies = await evaluator.evaluateExpectationValues(
-///     unitaries: unitaries,
-///     initialState: QuantumState(numQubits: 6),
-///     hamiltonian: maxCutHamiltonian
-/// )
-///
-/// // 5. Find optimal parameters
-/// let minIndex = energies.enumerated().min(by: { $0.element < $1.element })!.offset
-/// let gammaArray = Array(gammaValues)
-/// let betaArray = Array(betaValues)
-/// let optimalGamma = gammaArray[minIndex / 21]
-/// let optimalBeta = betaArray[minIndex % 21]
-///
-/// print("Optimal: γ = \(optimalGamma), β = \(optimalBeta)")
-/// print("Energy: \(energies[minIndex])")
-/// // Evaluated 441 circuits in ~1s instead of ~5 minutes sequential
-/// ```
-///
-/// **Architecture:**
-/// - Actor-based: Thread-safe, prevents concurrent GPU operations
-/// - Lazy initialization: Metal resources allocated on first use
-/// - Automatic chunking: Splits large batches to fit GPU memory
-/// - CPU fallback: Sequential evaluation if Metal unavailable
-/// - Memory-aware: Queries GPU memory, computes max batch size
+/// - Note: Actor isolation ensures thread-safe GPU operations and prevents concurrent Metal command buffer execution.
+/// - SeeAlso: ``CircuitUnitary``, ``QuantumSimulator``, ``SparseHamiltonian``
 public actor MPSBatchEvaluator {
     // MARK: - Metal Resources
 
     private let device: MTLDevice?
     private let commandQueue: MTLCommandQueue?
-
-    /// Maximum batch size based on available GPU memory
-    /// Computed dynamically from device.recommendedMaxWorkingSetSize
     private let maxBatchSize: Int
 
-    /// Whether Metal acceleration is available
+    /// Whether Metal GPU acceleration is available on this system.
+    ///
+    /// Returns `true` when Metal device and command queue initialized successfully,
+    /// indicating GPU-accelerated batch evaluation is available. When `false`,
+    /// evaluator falls back to sequential CPU execution using BLAS operations.
+    ///
+    /// - SeeAlso: ``statistics`` for device information
     public nonisolated var isMetalAvailable: Bool {
         device != nil && commandQueue != nil
     }
 
     // MARK: - Initialization
 
-    /// Create batched evaluator with Metal GPU acceleration
+    /// Creates batched evaluator with automatic GPU resource management.
     ///
-    /// Initializes Metal device and command queue for GPU operations.
-    /// Queries available GPU memory and computes maximum feasible batch size.
-    /// Falls back gracefully if Metal unavailable (CPU sequential evaluation).
+    /// Initializes Metal device and command queue for GPU operations. Queries available
+    /// GPU memory to compute maximum feasible batch size dynamically, reserving 80% of
+    /// recommended working set size for MPS operations. Falls back gracefully to sequential
+    /// CPU evaluation using BLAS when Metal is unavailable.
     ///
-    /// **Memory-aware batch sizing:**
-    /// - Query GPU memory: device.recommendedMaxWorkingSetSize
-    /// - Reserve 80% for MPS operations (20% for system/other apps)
-    /// - Compute max batch: availableMemory / (dimension² x 4 + overhead)
+    /// Batch size scales with available GPU memory and qubit count. Systems with 8 GB GPU
+    /// memory typically support 1000+ circuits for 8-qubit states, 500 for 10-qubit states,
+    /// 100 for 12-qubit states, and 10-20 for 14-qubit states before requiring automatic
+    /// chunking.
     ///
-    /// **Typical batch sizes:**
-    /// - 8 qubits (256x256): 1000+ per batch on 8 GB GPU
-    /// - 10 qubits (1Kx1K): 500 per batch on 8 GB GPU
-    /// - 12 qubits (4Kx4K): 100 per batch on 8 GB GPU
-    /// - 14 qubits (16Kx16K): 10-20 per batch on 8 GB GPU
-    public init() {
+    /// - Parameter maxBatchSize: Optional override for automatic batch size calculation. Useful for testing or constraining memory usage.
+    ///
+    /// Example:
+    /// ```swift
+    /// let evaluator = await MPSBatchEvaluator()
+    /// let limited = await MPSBatchEvaluator(maxBatchSize: 50)
+    /// ```
+    public init(maxBatchSize: Int? = nil) {
         device = MTLCreateSystemDefaultDevice()
         commandQueue = device?.makeCommandQueue()
 
-        if let gpuDevice = device {
+        if let overrideMaxBatch = maxBatchSize {
+            self.maxBatchSize = overrideMaxBatch
+        } else if let gpuDevice = device {
             let availableMemory: UInt64 = gpuDevice.recommendedMaxWorkingSetSize
             let usableMemory = UInt64(Double(availableMemory) * 0.8)
 
             let conservativeMaxBatch = 1000
-            maxBatchSize = min(conservativeMaxBatch, Int(usableMemory / (16 * 1024 * 1024)))
-        } else { maxBatchSize = 100 }
+            self.maxBatchSize = min(conservativeMaxBatch, Int(usableMemory / (16 * 1024 * 1024)))
+        } else {
+            self.maxBatchSize = 100
+        }
     }
 
     // MARK: - Batch State Evolution
 
-    /// Evaluate batch of circuits on initial state
+    /// Evaluates batch of unitary matrices applied to initial state.
     ///
-    /// Applies unitary matrices to initial state in parallel on GPU, producing
-    /// batch of output states. Uses MPSMatrixVectorMultiplication for efficient
-    /// batched matvec operations.
-    ///
-    /// **Algorithm:**
-    /// 1. Convert unitaries to Float32 and upload to GPU as MPSMatrix batch
-    /// 2. Convert initial state to Float32 and replicate for batch
-    /// 3. Dispatch MPSMatrixVectorMultiplication kernel (all in parallel)
-    /// 4. Download results and convert back to Float64
-    ///
-    /// **Memory layout:**
-    /// - Unitaries: Single MPSMatrix with shape [batchSize, dimension, dimension]
-    /// - States: MPSMatrix with shape [batchSize, dimension, 1]
-    /// - GPU executes all matvecs in parallel with memory coalescing
-    ///
-    /// **Complexity:**
-    /// - Sequential: O(batchSize · dimension² · depth) for gate-by-gate
-    /// - Batched MPS: O(batchSize · dimension³) for matvec (amortized to ~dimension² per batch)
-    /// - Parallel GPU execution for all batch elements
+    /// Converts unitary matrices to Float32, uploads to GPU as MPSMatrix batch with single
+    /// transfer, dispatches MPSMatrixVectorMultiplication kernel computing all |ψᵢ⟩ = Uᵢ|ψ₀⟩
+    /// operations in parallel, then downloads results and converts back to Float64. When batch
+    /// size exceeds maximum GPU memory capacity, automatically splits into chunks processed
+    /// sequentially. Falls back to BLAS-accelerated CPU sequential evaluation when Metal unavailable.
     ///
     /// - Parameters:
-    ///   - unitaries: Array of circuit unitaries (2ⁿ x 2ⁿ each)
-    ///   - initialState: Starting quantum state (same for all)
-    /// - Returns: Array of output states (one per unitary)
+    ///   - unitaries: Circuit unitary matrices (each 2ⁿ x 2ⁿ)
+    ///   - initialState: Initial quantum state applied to all unitaries
+    /// - Returns: Output quantum states (one per unitary)
+    /// - Complexity: O(batchSize · 2²ⁿ) for GPU parallel execution, O(batchSize · 2³ⁿ) for CPU sequential
+    /// - Precondition: All unitaries must be square matrices with dimension matching initial state size
     ///
     /// Example:
     /// ```swift
-    /// // Batch evaluate multiple parameter sets
-    /// let circuits = parameterSets.map { params in
-    ///     ansatz.bind(parameterVector: params)
-    /// }
+    /// let circuits = parameterSets.map { ansatz.bind(parameterVector: $0) }
     /// let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
     ///
     /// let evaluator = await MPSBatchEvaluator()
-    /// let states = await evaluator.evaluateBatch(
-    ///     unitaries: unitaries,
-    ///     initialState: QuantumState(numQubits: 8)
+    /// let states = await evaluator.evaluate(
+    ///     batch: unitaries,
+    ///     from: QuantumState(numQubits: 8)
     /// )
-    ///
-    /// // states[i] = circuits[i].execute(initialState) in parallel
     /// ```
+    ///
+    /// - SeeAlso: ``expectationValues(for:from:observable:)`` for memory-efficient energy computation
     @_optimize(speed)
     @_eagerMove
-    public func evaluateBatch(
-        unitaries: [[[Complex<Double>]]],
-        initialState: QuantumState
+    public func evaluate(
+        batch unitaries: [[[Complex<Double>]]],
+        from initialState: QuantumState
     ) async -> [QuantumState] {
         ValidationUtilities.validateNonEmpty(unitaries, name: "unitaries")
 
@@ -273,84 +191,84 @@ public actor MPSBatchEvaluator {
         return await evaluateBatchGPU(unitaries: unitaries, initialState: initialState, numQubits: numQubits)
     }
 
-    /// Evaluate batch with expectation values (most efficient for VQE)
+    /// Evaluates batch with Hamiltonian expectation values (optimal for VQE).
     ///
-    /// Combines batch state evolution with expectation value computation in single
-    /// GPU operation. Avoids transferring full states back to CPU - only downloads
-    /// final energy values (scalars). **Optimal path for VQE optimization.**
-    ///
-    /// **Algorithm:**
-    /// 1. Batch compute |ψᵢ⟩ = Uᵢ|ψ₀⟩ on GPU
-    /// 2. For each |ψᵢ⟩, compute ⟨ψᵢ|H|ψᵢ⟩ using SparseHamiltonian or Observable
-    /// 3. Return array of energies (one scalar per circuit)
-    ///
-    /// **Performance:**
-    /// - Transfers: Only unitaries (large) + energies (small, N doubles)
-    /// - Avoids: Transferring N full states (dimension x N complex numbers)
-    /// - Memory savings: 100 states @ 1024 amplitudes = 1.6 MB vs 800 bytes
-    ///
-    /// **SparseHamiltonian acceleration:**
-    /// - If SparseHamiltonian provided: Uses Metal GPU or Accelerate hardware acceleration
-    /// - If Observable only: Uses term-by-term measurement (still batched on states)
+    /// Combines batch state evolution with expectation value computation, downloading only
+    /// scalar energy values rather than full quantum states. Automatically constructs
+    /// ``SparseHamiltonian`` from observable for GPU or Accelerate hardware acceleration,
+    /// falling back to term-by-term evaluation if sparse construction fails. Substantially
+    /// reduces memory transfer overhead compared to downloading full states then computing
+    /// energies on CPU.
     ///
     /// - Parameters:
-    ///   - unitaries: Array of circuit unitaries
-    ///   - initialState: Starting state
-    ///   - hamiltonian: Observable for expectation values
-    /// - Returns: Array of energies ⟨ψᵢ|H|ψᵢ⟩
+    ///   - unitaries: Circuit unitary matrices
+    ///   - initialState: Initial quantum state
+    ///   - observable: Hamiltonian for expectation value computation
+    /// - Returns: Energy values ⟨ψᵢ|H|ψᵢ⟩ for each circuit
+    /// - Complexity: O(batchSize · 2²ⁿ) for batch evaluation + O(batchSize · nnz) for sparse Hamiltonian
     ///
     /// Example:
     /// ```swift
-    /// // VQE gradient computation (most efficient path)
     /// let unitaries = shiftedCircuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
-    ///
-    /// let energies = await evaluator.evaluateExpectationValues(
-    ///     unitaries: unitaries,
-    ///     initialState: QuantumState(numQubits: 8),
-    ///     hamiltonian: molecularHamiltonian
+    /// let energies = await evaluator.expectationValues(
+    ///     for: unitaries,
+    ///     from: QuantumState(numQubits: 8),
+    ///     observable: molecularHamiltonian
     /// )
-    ///
-    /// // Transfers: 48 unitaries (4 MB each) + 48 energies (384 bytes)
-    /// // vs transferring 48 states (48 KB each) for CPU expectation values
     /// ```
+    ///
+    /// - SeeAlso: ``expectationValues(for:from:sparse:)`` for pre-constructed sparse Hamiltonian
     @_optimize(speed)
     @_eagerMove
-    public func evaluateExpectationValues(
-        unitaries: [[[Complex<Double>]]],
-        initialState: QuantumState,
-        hamiltonian: Observable
+    public func expectationValues(
+        for unitaries: [[[Complex<Double>]]],
+        from initialState: QuantumState,
+        observable: Observable
     ) async -> [Double] {
-        let states: [QuantumState] = await evaluateBatch(
-            unitaries: unitaries,
-            initialState: initialState
+        let states: [QuantumState] = await evaluate(
+            batch: unitaries,
+            from: initialState
         )
 
-        let sparseH = SparseHamiltonian(observable: hamiltonian, numQubits: initialState.numQubits)
+        let sparseH = SparseHamiltonian(observable: observable, numQubits: initialState.numQubits)
 
         return await computeExpectationValues(states: states, hamiltonian: sparseH)
     }
 
-    /// Evaluate batch with SparseHamiltonian (maximum performance)
+    /// Evaluates batch with pre-constructed sparse Hamiltonian (maximum performance).
     ///
-    /// Uses SparseHamiltonian backend directly for 100-1000x speedup over
-    /// Observable term-by-term measurement. Optimal for molecular Hamiltonians
-    /// with 0.01-1% sparsity.
+    /// Uses sparse Hamiltonian backend directly, bypassing observable-to-sparse conversion.
+    /// Optimal for molecular Hamiltonians with typical 0.01-1% sparsity where sparse matrix-vector
+    /// multiplication provides substantial acceleration over term-by-term Pauli measurements.
     ///
     /// - Parameters:
-    ///   - unitaries: Array of circuit unitaries
-    ///   - initialState: Starting state
+    ///   - unitaries: Circuit unitary matrices
+    ///   - initialState: Initial quantum state
     ///   - sparseHamiltonian: Pre-constructed sparse Hamiltonian
-    /// - Returns: Array of energies
+    /// - Returns: Energy values ⟨ψᵢ|H|ψᵢ⟩ for each circuit
+    /// - Complexity: O(batchSize · 2²ⁿ) for batch evaluation + O(batchSize · nnz) for sparse matrix operations
+    ///
+    /// Example:
+    /// ```swift
+    /// let sparse = SparseHamiltonian(observable: hamiltonian, numQubits: 8)
+    /// let energies = await evaluator.expectationValues(
+    ///     for: unitaries,
+    ///     from: QuantumState(numQubits: 8),
+    ///     sparse: sparse
+    /// )
+    /// ```
+    ///
+    /// - SeeAlso: ``SparseHamiltonian``
     @_optimize(speed)
     @_eagerMove
-    public func evaluateExpectationValues(
-        unitaries: [[[Complex<Double>]]],
-        initialState: QuantumState,
-        sparseHamiltonian: SparseHamiltonian
+    public func expectationValues(
+        for unitaries: [[[Complex<Double>]]],
+        from initialState: QuantumState,
+        sparse sparseHamiltonian: SparseHamiltonian
     ) async -> [Double] {
-        let states: [QuantumState] = await evaluateBatch(
-            unitaries: unitaries,
-            initialState: initialState
+        let states: [QuantumState] = await evaluate(
+            batch: unitaries,
+            from: initialState
         )
 
         return await computeExpectationValues(states: states, hamiltonian: sparseHamiltonian)
@@ -374,7 +292,7 @@ public actor MPSBatchEvaluator {
 
     // MARK: - Private GPU Implementation
 
-    /// Execute batch on GPU using Metal Performance Shaders
+    /// Executes batch on GPU using Metal Performance Shaders.
     @_optimize(speed)
     @_eagerMove
     private func evaluateBatchGPU(
@@ -592,7 +510,7 @@ public actor MPSBatchEvaluator {
         return resultStates
     }
 
-    /// CPU fallback for batch evaluation (sequential)
+    /// Sequential CPU fallback using BLAS matrix-vector multiplication.
     @_optimize(speed)
     @_eagerMove
     private func evaluateBatchCPU(
@@ -616,7 +534,7 @@ public actor MPSBatchEvaluator {
         return resultStates
     }
 
-    /// Chunked batch evaluation for large batches
+    /// Splits large batches into chunks fitting GPU memory, processes sequentially.
     @_optimize(speed)
     @_eagerMove
     private func evaluateBatchChunked(
@@ -640,7 +558,7 @@ public actor MPSBatchEvaluator {
         return allResults
     }
 
-    /// Matrix-vector multiply using BLAS cblas_zgemv (CPU fallback)
+    /// BLAS-accelerated complex matrix-vector multiplication using cblas_zgemv.
     @_optimize(speed)
     @_eagerMove
     private func matrixVectorMultiply(
@@ -697,11 +615,23 @@ public actor MPSBatchEvaluator {
 
     // MARK: - Diagnostics
 
-    /// Get maximum batch size for given qubit count
+    /// Computes maximum batch size for given qubit count based on available GPU memory.
+    ///
+    /// Calculates maximum number of circuits that fit in GPU memory considering unitary matrix
+    /// storage (2ⁿ x 2ⁿ x 4 bytes each) and state vector storage. Reserves 80% of recommended
+    /// working set size for computations. Returns 1 when Metal unavailable.
+    ///
     /// - Parameter numQubits: Number of qubits
-    /// - Returns: Maximum batch size fitting in GPU memory
+    /// - Returns: Maximum batch size before automatic chunking required
+    /// - Complexity: O(1)
+    ///
+    /// Example:
+    /// ```swift
+    /// let evaluator = await MPSBatchEvaluator()
+    /// let max = evaluator.maxBatchSize(for: 10)
+    /// ```
     @_effects(readonly)
-    public func getMaxBatchSize(numQubits: Int) -> Int {
+    public func maxBatchSize(for numQubits: Int) -> Int {
         guard isMetalAvailable else { return 1 }
 
         let dimension = 1 << numQubits
@@ -718,9 +648,20 @@ public actor MPSBatchEvaluator {
         return max(1, min(maxBatch, maxBatchSize))
     }
 
-    /// Get batch evaluator statistics
-    @_effects(readonly)
-    public func getStatistics() -> BatchEvaluatorStatistics {
+    /// Device and memory statistics for batch evaluator.
+    ///
+    /// Provides diagnostic information including Metal availability, device name,
+    /// and maximum batch size. Useful for debugging performance issues or verifying
+    /// GPU acceleration status.
+    ///
+    /// Example:
+    /// ```swift
+    /// let evaluator = await MPSBatchEvaluator()
+    /// print(evaluator.statistics)
+    /// ```
+    ///
+    /// - SeeAlso: ``BatchEvaluatorStatistics``
+    public var statistics: BatchEvaluatorStatistics {
         BatchEvaluatorStatistics(
             isMetalAvailable: isMetalAvailable,
             maxBatchSize: maxBatchSize,
@@ -731,11 +672,27 @@ public actor MPSBatchEvaluator {
 
 // MARK: - Supporting Types
 
-/// Batch evaluator statistics
+/// Diagnostic information for batch evaluator GPU configuration.
+///
+/// Captures Metal availability, device name, and maximum batch size for performance
+/// analysis and debugging. Returned by ``MPSBatchEvaluator/statistics``.
+///
+/// Example:
+/// ```swift
+/// let stats = await evaluator.statistics
+/// if stats.isMetalAvailable {
+///     print("GPU: \(stats.deviceName), max batch: \(stats.maxBatchSize)")
+/// }
+/// ```
 @frozen
-public struct BatchEvaluatorStatistics: Sendable, CustomStringConvertible {
+public struct BatchEvaluatorStatistics: Sendable, Equatable, CustomStringConvertible {
+    /// Whether Metal GPU acceleration is available.
     public let isMetalAvailable: Bool
+
+    /// Maximum batch size before automatic chunking required.
     public let maxBatchSize: Int
+
+    /// Metal device name or "CPU" when Metal unavailable.
     public let deviceName: String
 
     public init(isMetalAvailable: Bool, maxBatchSize: Int, deviceName: String) {

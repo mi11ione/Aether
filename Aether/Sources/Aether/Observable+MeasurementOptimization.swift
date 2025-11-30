@@ -167,27 +167,25 @@ public extension Observable {
     ///
     /// **Actor-based caching**: Expensive unitary optimization results are cached safely.
     ///
-    /// - Parameters:
-    ///   - numQubits: Number of qubits
-    ///   - config: Partitioner configuration
+    /// - Parameter config: Partitioner configuration
     /// - Returns: Array of unitary partitions
     ///
     /// Example:
     /// ```swift
     /// let hamiltonian = Observable(terms: molecularTerms)
-    /// let partitions = await hamiltonian.unitaryPartitions(numQubits: 10)
+    /// let partitions = await hamiltonian.unitaryPartitions()
     /// print("Reduced to \(partitions.count) partitions")
     /// ```
     @_eagerMove
-    func unitaryPartitions(numQubits: Int, config: UnitaryPartitioner.Config = .default) async -> [UnitaryPartition] {
-        let hash = termsHash() &* 31 &+ numQubits
+    func unitaryPartitions(config: UnitaryPartitioner.Config = .default) async -> [UnitaryPartition] {
+        let hash = termsHash()
 
         if let cached = await Self.cache.getUnitaryPartitions(hash: hash, terms: terms) {
             return cached
         }
 
         let partitioner = UnitaryPartitioner(config: config)
-        let partitions: [UnitaryPartition] = partitioner.partition(terms: terms, numQubits: numQubits)
+        let partitions: [UnitaryPartition] = partitioner.partition(terms: terms)
         await Self.cache.setUnitaryPartitions(hash: hash, terms: terms, partitions: partitions)
         return partitions
     }
@@ -207,10 +205,10 @@ public extension Observable {
         case qwcGrouping
 
         /// Use unitary partitioning (computationally expensive)
-        case unitaryPartitioning(numQubits: Int, config: UnitaryPartitioner.Config)
+        case unitaryPartitioning(config: UnitaryPartitioner.Config)
 
         /// Automatically select best strategy based on problem size
-        case automatic(numQubits: Int)
+        case automatic
     }
 
     /// Get effective number of measurement circuits for a strategy.
@@ -223,29 +221,24 @@ public extension Observable {
 
         case .qwcGrouping: await qwcGroups().count
 
-        case let .unitaryPartitioning(numQubits, config):
-            await unitaryPartitions(numQubits: numQubits, config: config).count
+        case let .unitaryPartitioning(config):
+            await unitaryPartitions(config: config).count
 
-        case let .automatic(numQubits):
-            await measurementCircuits(strategy: selectOptimalStrategy(numQubits: numQubits))
+        case .automatic:
+            await measurementCircuits(strategy: selectOptimalStrategy())
         }
     }
 
     /// Select optimal measurement strategy automatically.
     @_effects(readonly)
-    private func selectOptimalStrategy(numQubits: Int) -> MeasurementStrategy {
+    private func selectOptimalStrategy() -> MeasurementStrategy {
         let numTerms: Int = terms.count
 
         if numTerms < 20 { return .termByTerm }
-        if numTerms < 500 || numQubits > 15 { return .qwcGrouping }
+        if numTerms < 500 { return .qwcGrouping }
 
-        // Large Hamiltonians with small qubit count: unitary partitioning
-        // (Only practical for small systems due to exponential matrix size)
-        if numQubits <= 10 {
-            return .unitaryPartitioning(numQubits: numQubits, config: .default)
-        }
-
-        return .qwcGrouping
+        // Large Hamiltonians: unitary partitioning may be beneficial
+        return .unitaryPartitioning(config: .default)
     }
 
     // MARK: - Shot Allocation
@@ -342,10 +335,10 @@ public extension Observable {
 
     /// Compute comprehensive measurement optimization statistics.
     ///
-    /// - Parameter numQubits: Number of qubits (optional, for unitary partitioning)
+    /// - Parameter includeUnitary: Whether to compute unitary partitioning stats (expensive)
     /// - Returns: Detailed statistics
     @_eagerMove
-    func measurementOptimizationStatistics(numQubits: Int? = nil) async -> MeasurementOptimizationStats {
+    func measurementOptimizationStatistics(includeUnitary: Bool = false) async -> MeasurementOptimizationStats {
         let numTerms: Int = terms.count
         let groups: [QWCGroup] = await qwcGroups()
         let numGroups: Int = groups.count
@@ -357,9 +350,8 @@ public extension Observable {
         var unitaryReduction: Double?
         var unitarySpeedup: Double?
 
-        if let nQubits = numQubits, nQubits <= 12 {
-            // Only compute for small systems (exponential cost)
-            let partitions = await unitaryPartitions(numQubits: nQubits)
+        if includeUnitary {
+            let partitions = await unitaryPartitions()
             numPartitions = partitions.count
             unitaryReduction = numTerms > 0 ? Double(numTerms) / Double(max(partitions.count, 1)) : 1.0
             unitarySpeedup = unitaryReduction

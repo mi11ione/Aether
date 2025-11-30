@@ -3,30 +3,51 @@
 
 import Accelerate
 
-/// A partition of Pauli terms grouped by a unitary transformation.
+/// A group of Pauli terms measurable simultaneously via a unitary transformation.
 ///
-/// Terms in this partition can be measured simultaneously after applying
-/// the unitary transformation U, which approximately diagonalizes all terms.
-@frozen
+/// Applies unitary U† before measurement, transforming all terms into diagonal operators
+/// that share a common Z measurement basis. Enables single-shot measurement of multiple
+/// non-commuting terms by diagonalizing them via the unitary transformation.
+///
+/// The unitary U is found such that U†PᵢU are diagonal for all Pauli terms Pᵢ in the partition.
+/// This is achieved through eigendecomposition or variational optimization with hardware-efficient ansatz.
+///
+/// **Example**:
+/// ```swift
+/// let partitioner = UnitaryPartitioner()
+/// let partitions = partitioner.partition(terms: hamiltonian.terms)
+///
+/// for partition in partitions {
+///     let transformedState = applyUnitary(partition.unitaryMatrix, to: state)
+///     let outcomes = measure(transformedState, basis: partition.measurementBasis)
+///     let expectation = computeExpectation(partition.terms, outcomes: outcomes)
+/// }
+/// ```
+///
+/// - Complexity: O(n³) eigendecomposition or O(iterations x depth x 2^(2n)) variational optimization
+/// - SeeAlso: ``UnitaryPartitioner``, ``QWCGroup``, ``Observable``
 public struct UnitaryPartition: Sendable {
-    /// Pauli strings with their coefficients
+    /// Pauli terms with coefficients that can be measured simultaneously after applying the unitary transformation.
     public let terms: PauliTerms
 
-    /// Unitary transformation matrix (2^n x 2^n) that diagonalizes the terms
-    /// After applying U†, all Pauli operators in the partition become (nearly) diagonal
-    public let unitaryMatrix: [[Complex<Double>]]
+    /// Unitary transformation matrix (2^n x 2^n) that diagonalizes the terms.
+    ///
+    /// After applying U†, all Pauli operators in the partition become (nearly) diagonal,
+    /// sharing a common Z measurement basis.
+    let unitaryMatrix: [[Complex<Double>]]
 
-    /// Number of qubits
-    public let numQubits: Int
-
-    /// Cached measurement basis (computed once at init)
+    /// Measurement basis for all terms in partition (all qubits measured in Z basis).
+    ///
+    /// Computed once at initialization for efficient repeated measurements.
     public let measurementBasis: MeasurementBasis
 
+    /// Number of qubits (derived from matrix dimension)
+    private var numQubits: Int { unitaryMatrix.count.trailingZeroBitCount }
+
     /// Initialize with precomputed measurement basis
-    public init(terms: PauliTerms, unitaryMatrix: [[Complex<Double>]], numQubits: Int) {
+    init(terms: PauliTerms, unitaryMatrix: [[Complex<Double>]]) {
         self.terms = terms
         self.unitaryMatrix = unitaryMatrix
-        self.numQubits = numQubits
 
         var basis: MeasurementBasis = [:]
         for term in terms {
@@ -37,55 +58,92 @@ public struct UnitaryPartition: Sendable {
         measurementBasis = basis
     }
 
-    /// Total weight (sum of absolute coefficients)
+    /// Total weight of partition (sum of absolute coefficients).
+    ///
+    /// Used for partition ordering and shot allocation. Higher weight partitions
+    /// contribute more to total expectation value and should receive more measurements.
+    ///
+    /// - Complexity: O(n) where n is number of terms in partition
     @inlinable
-    @_effects(readonly)
-    public func weight() -> Double {
+    public var weight: Double {
         terms.reduce(0.0) { $0 + abs($1.coefficient) }
     }
 }
 
-/// Finds optimal unitary transformations to group Pauli terms for measurement.
+/// Reduces measurement overhead by finding unitary transformations that diagonalize Pauli terms.
 ///
-/// This is more powerful than QWC grouping: it finds a unitary U such that
-/// U†PᵢU are all diagonal (or nearly diagonal), allowing simultaneous measurement
-/// of terms that don't qubit-wise commute.
+/// Use this for large Hamiltonians where measurement dominates VQE runtime. QWC grouping alone
+/// may leave many groups requiring separate circuits. Unitary partitioning further reduces groups
+/// via variational optimization, cutting measurement cost at the expense of optimization overhead.
 ///
-/// Algorithm:
-/// 1. Start with QWC groups (baseline)
-/// 2. For each group, try to merge with other groups by finding a unitary U
-/// 3. Parameterize U as a quantum circuit (variational ansatz)
-/// 4. Minimize: C(U) = Σᵢ wᵢ ||off-diagonal(U†PᵢU)||²
-/// 5. Use L-BFGS-B for optimization
+/// Starts with QWC groups, then greedily merges groups by finding unitary U that minimizes
+/// the off-diagonal norm ||off-diagonal(U†PᵢU)||². Uses eigendecomposition when possible (fast, exact)
+/// or variational ansatz optimization when needed (slower, approximate). Accepts partition if
+/// off-diagonal norm falls below threshold (default 0.1).
 ///
-/// This can reduce 2000 terms -> 50 QWC groups -> 10-20 unitary partitions.
-@frozen
+/// The optimization uses LAPACK zheev for eigendecomposition (O(n³)) or L-BFGS-B with hardware-efficient
+/// ansatz for variational approach (O(iterations x depth x 2^(2n))). Convergence occurs when gradient
+/// norm drops below tolerance (default 1e-6) or max iterations reached (default 100).
+///
+/// **Example**:
+/// ```swift
+/// let config = UnitaryPartitioner.Config(
+///     maxIterations: 200,
+///     circuitDepth: 5,
+///     diagonalityThreshold: 0.05
+/// )
+/// let partitioner = UnitaryPartitioner(config: config)
+/// let partitions = partitioner.partition(terms: hamiltonian.terms)
+/// print("Reduced \(hamiltonian.terms.count) terms to \(partitions.count) partitions")
+/// ```
+///
+/// - Complexity: O(groups² x iterations x depth x 2^(2n)) worst-case variational optimization
+/// - SeeAlso: ``UnitaryPartition``, ``QWCGrouper``, ``VariationalQuantumEigensolver``, ``Observable``
 public struct UnitaryPartitioner {
     // MARK: - Configuration
 
-    @frozen
+    /// Configuration for unitary partitioning optimization.
+    ///
+    /// Balances optimization quality against runtime. More iterations and stricter thresholds
+    /// improve diagonalization but increase cost. Default values work well for typical molecular
+    /// Hamiltonians.
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let aggressive = Config(maxIterations: 200, diagonalityThreshold: 0.05)
+    /// let fast = Config(maxIterations: 50, diagonalityThreshold: 0.2)
+    /// ```
     public struct Config: Sendable {
-        /// Maximum number of optimization iterations
+        /// Maximum number of L-BFGS-B iterations before giving up.
         public let maxIterations: Int
 
-        /// Convergence tolerance for gradient norm
-        public let tolerance: Double
+        /// Convergence tolerance for gradient norm in L-BFGS-B optimization.
+        ///
+        /// Optimization stops when ||∇C|| < tolerance. Default 1e-6 is standard for L-BFGS.
+        public let convergenceTolerance: Double
 
-        /// Number of layers in variational ansatz
-        public let ansatzDepth: Int
+        /// Number of layers in hardware-efficient variational ansatz.
+        ///
+        /// Each layer adds 3n parameters (n = number of qubits). Default 3 layers balances
+        /// expressivity with optimization difficulty.
+        public let circuitDepth: Int
 
-        /// Whether to use adaptive layer depth
-        public let adaptiveDepth: Bool
+        /// Whether to use adaptive layer depth (currently unused, reserved for future optimization).
+        public let useAdaptiveDepth: Bool
 
-        /// Maximum off-diagonal norm to accept a partition (lower = stricter)
-        public let maxOffDiagonalNorm: Double
+        /// Maximum off-diagonal norm to accept partition (lower = stricter).
+        ///
+        /// Partitions with ||off-diagonal(U†HU)|| > threshold are rejected and fall back
+        /// to QWC grouping. Default 0.1 accepts nearly-diagonal results.
+        public let diagonalityThreshold: Double
 
+        /// Default configuration balancing quality and performance for typical use cases.
         public static let `default` = Config(
             maxIterations: 100,
-            tolerance: 1e-6,
-            ansatzDepth: 3,
-            adaptiveDepth: true,
-            maxOffDiagonalNorm: 0.1
+            convergenceTolerance: 1e-6,
+            circuitDepth: 3,
+            useAdaptiveDepth: true,
+            diagonalityThreshold: 0.1
         )
     }
 
@@ -119,29 +177,34 @@ public struct UnitaryPartitioner {
 
     // MARK: - Main Partitioning Algorithm
 
-    /// Partition Pauli terms using unitary transformations.
+    /// Groups Pauli terms into partitions diagonalizable by unitary transformations.
     ///
-    /// - Parameters:
-    ///   - terms: Array of (coefficient, PauliString) pairs
-    ///   - numQubits: Number of qubits
-    /// - Returns: Array of unitary partitions
+    /// Starts with QWC groups, then greedily merges groups where optimization finds a diagonalizing
+    /// unitary. Falls back to identity matrix if optimization fails (returns QWC group as-is).
     ///
-    /// Example:
+    /// Computes QWC groups as baseline, then for each seed group attempts to merge remaining groups.
+    /// Optimization tries eigendecomposition first (fast, exact), then variational approach if needed
+    /// (slower, approximate). Accepts merge if off-diagonal norm falls below threshold. Non-mergeable
+    /// groups remain as separate partitions.
+    ///
+    /// **Example**:
     /// ```swift
     /// let partitioner = UnitaryPartitioner()
-    /// let partitions = partitioner.partition(
-    ///     terms: hamiltonian.terms,
-    ///     numQubits: 10
-    /// )
-    /// print("Reduced \(hamiltonian.terms.count) terms to \(partitions.count) partitions")
-    /// // Output: Reduced 2000 terms to 12 partitions (166x reduction)
+    /// let partitions = partitioner.partition(terms: hamiltonian.terms)
+    ///
+    /// for (index, partition) in partitions.enumerated() {
+    ///     print("Partition \(index): \(partition.terms.count) terms, weight \(partition.weight)")
+    /// }
     /// ```
+    ///
+    /// - Parameter terms: Pauli terms with coefficients from ``Observable``
+    /// - Returns: Unitary partitions (order depends on greedy merging, not sorted by weight)
+    /// - Complexity: O(groups² x iterations x depth x 2^(2n)) worst-case, O(groups x n³) best-case
+    /// - SeeAlso: ``UnitaryPartition``, ``Config``
     @_optimize(speed)
     @_eagerMove
-    public func partition(
-        terms: PauliTerms,
-        numQubits: Int
-    ) -> [UnitaryPartition] {
+    public func partition(terms: PauliTerms) -> [UnitaryPartition] {
+        let numQubits = terms.map { $0.pauliString.operators.map(\.qubit).max() ?? 0 }.max().map { $0 + 1 } ?? 0
         let qwcGroups: [QWCGroup] = QWCGrouper.group(terms: terms)
         var partitions: [UnitaryPartition] = []
         var remainingGroups: [QWCGroup] = qwcGroups
@@ -171,15 +234,13 @@ public struct UnitaryPartitioner {
             if let unitary = lastUnitary ?? findDiagonalizingUnitary(terms: currentTerms, numQubits: numQubits) {
                 partitions.append(UnitaryPartition(
                     terms: currentTerms,
-                    unitaryMatrix: unitary,
-                    numQubits: numQubits
+                    unitaryMatrix: unitary
                 ))
             } else {
                 let identity: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: 1 << numQubits)
                 partitions.append(UnitaryPartition(
                     terms: currentTerms,
-                    unitaryMatrix: identity,
-                    numQubits: numQubits
+                    unitaryMatrix: identity
                 ))
             }
         }
@@ -209,7 +270,7 @@ public struct UnitaryPartitioner {
                 unitary: eigenvectors
             )
 
-            if offDiagNorm < config.maxOffDiagonalNorm {
+            if offDiagNorm < config.diagonalityThreshold {
                 return eigenvectors
             }
         }
@@ -226,7 +287,7 @@ public struct UnitaryPartitioner {
     ) -> [[Complex<Double>]]? {
         let pauliMatrices: [[[Complex<Double>]]] = terms.map { $0.pauliString.toMatrix(numQubits: numQubits) }
 
-        let numParams: Int = variationalParameterCount(numQubits: numQubits, depth: config.ansatzDepth)
+        let numParams: Int = parameterCount(numQubits: numQubits, depth: config.circuitDepth)
         let parameters = [Double](unsafeUninitializedCapacity: numParams) { buffer, count in
             for i in 0 ..< numParams {
                 buffer[i] = Double.random(in: -Double.pi ... Double.pi)
@@ -234,7 +295,7 @@ public struct UnitaryPartitioner {
             count = numParams
         }
 
-        let result: OptimizationResult = lbfgsb(
+        let result: UnitaryOptimizationResult = lbfgsb(
             initialParameters: parameters,
             costFunction: { params in
                 costFunctionCached(
@@ -253,20 +314,20 @@ public struct UnitaryPartitioner {
                 )
             },
             maxIterations: config.maxIterations,
-            tolerance: config.tolerance
+            tolerance: config.convergenceTolerance
         )
 
         let unitary: [[Complex<Double>]] = buildVariationalUnitary(
             parameters: result.parameters,
             numQubits: numQubits,
-            depth: config.ansatzDepth
+            depth: config.circuitDepth
         )
 
         let targetOperator = buildTargetOperator(terms: terms, numQubits: numQubits)
 
         let offDiagNorm: Double = computeOffDiagonalNorm(operator: targetOperator, unitary: unitary)
 
-        return offDiagNorm < config.maxOffDiagonalNorm ? unitary : nil
+        return offDiagNorm < config.diagonalityThreshold ? unitary : nil
     }
 
     // MARK: - Cost and Gradient Functions
@@ -281,7 +342,7 @@ public struct UnitaryPartitioner {
         let unitary = buildVariationalUnitary(
             parameters: parameters,
             numQubits: numQubits,
-            depth: config.ansatzDepth
+            depth: config.circuitDepth
         )
 
         let dimension = 1 << numQubits
@@ -358,16 +419,38 @@ public struct UnitaryPartitioner {
 
     // MARK: - Variational Ansatz
 
-    /// Count parameters in variational ansatz.
-    @inlinable
+    /// Counts parameters in variational ansatz (depth x numQubits x 3).
+    ///
+    /// Each layer has 3 parameters per qubit (Rz-Ry-Rz Euler angles for U3 gate).
+    ///
+    /// - Complexity: O(1)
     @_effects(readonly)
-    func variationalParameterCount(numQubits: Int, depth: Int) -> Int {
-        // Each layer: single-qubit rotations (3 params per qubit) + CNOT ladder
+    private func parameterCount(numQubits: Int, depth: Int) -> Int {
         depth * numQubits * 3
     }
 
-    /// Build unitary from variational parameters.
-    /// Precomputes CNOT matrices (constant per qubit pair) to avoid redundant construction.
+    /// Constructs unitary matrix from variational ansatz parameters.
+    ///
+    /// Uses hardware-efficient ansatz with depth layers. Each layer applies U3 rotations (Rz-Ry-Rz Euler angles)
+    /// to all qubits, then a linear CNOT chain for entanglement. Total parameters: depth x numQubits x 3.
+    ///
+    /// The ansatz structure repeats depth times: U3(θ, φ, λ) = Rz(λ) Ry(θ) Rz(φ) on each qubit, followed
+    /// by CNOT ladder q₀->q₁, q₁->q₂, ..., qₙ₋₂->qₙ₋₁. CNOT matrices are precomputed once per qubit pair to
+    /// avoid redundant construction.
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let params = [0.5, 1.2, -0.3, 0.8, 0.1, 0.7]
+    /// let unitary = buildVariationalUnitary(parameters: params, numQubits: 2, depth: 1)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - parameters: Rotation angles (length = depth x numQubits x 3)
+    ///   - numQubits: Number of qubits
+    ///   - depth: Number of ansatz layers
+    /// - Returns: Unitary matrix (2^numQubits x 2^numQubits)
+    /// - Complexity: O(depth x numQubits x 2^(2n)) for matrix composition
+    /// - Precondition: `parameters.count == depth x numQubits x 3`
     @_optimize(speed)
     @_eagerMove
     private func buildVariationalUnitary(
@@ -511,10 +594,28 @@ public struct UnitaryPartitioner {
 
     // MARK: - Eigendecomposition
 
-    /// Compute eigendecomposition of Hermitian matrix using LAPACK's zheev.
+    /// Diagonalizes Hermitian matrix via eigendecomposition using LAPACK's zheev.
     ///
-    /// - Parameter matrix: Hermitian matrix (n x n)
-    /// - Returns: Eigenvalues (real, sorted) and eigenvectors (columns), or nil if decomposition fails
+    /// For Hermitian operators, eigenvectors form a unitary basis that diagonalizes the operator.
+    /// Given H, finds U such that U†HU = diag(λ₀, λ₁, ..., λₙ₋₁) where U has eigenvectors as columns.
+    /// This is the exact solution for unitary partitioning when it succeeds.
+    ///
+    /// Returns nil on LAPACK errors (singular matrix, numerical instability, memory allocation failure).
+    /// Algorithm assumes Hermiticity without validation. Caller should fall back to variational optimization
+    /// on failure.
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let hamiltonian = buildTargetOperator(terms: terms, numQubits: 3)
+    /// if let (eigenvalues, eigenvectors) = eigendecompose(hamiltonian) {
+    ///     let diagonal = conjugateByUnitary(hamiltonian, unitary: eigenvectors)
+    /// }
+    /// ```
+    ///
+    /// - Parameter matrix: Hermitian matrix (n x n) in row-major order
+    /// - Returns: (eigenvalues sorted ascending, eigenvectors as columns) or nil if LAPACK fails
+    /// - Complexity: O(n³) time, O(n²) space via LAPACK zheev
+    /// - Precondition: Matrix must be Hermitian (no validation performed)
     @_optimize(speed)
     @_eagerMove
     private func eigendecompose(_ matrix: [[Complex<Double>]]) -> (eigenvalues: [Double], eigenvectors: [[Complex<Double>]])? {
@@ -534,8 +635,8 @@ public struct UnitaryPartitioner {
 
         var w = [Double](unsafeUninitializedCapacity: n) { _, count in count = n }
 
-        var jobz = CChar(Character("V").asciiValue!) // Compute eigenvectors
-        var uplo = CChar(Character("U").asciiValue!) // Upper triangle
+        var jobz = CChar(Character("V").asciiValue!)
+        var uplo = CChar(Character("U").asciiValue!)
         var nn = __LAPACK_int(n)
         var lda = __LAPACK_int(n)
         var lwork = __LAPACK_int(-1)
@@ -613,26 +714,44 @@ public struct UnitaryPartitioner {
 
     // MARK: - L-BFGS-B Optimizer
 
-    @frozen
-    public struct OptimizationResult {
+    public struct UnitaryOptimizationResult {
         public let parameters: [Double]
         public let finalCost: Double
         public let iterations: Int
         public let converged: Bool
     }
 
-    /// L-BFGS optimizer (Limited-memory Broyden-Fletcher-Goldfarb-Shanno).
+    /// Minimizes cost function using limited-memory quasi-Newton method (L-BFGS-B).
     ///
-    /// Uses two-loop recursion to compute search directions with limited memory.
-    /// Implements backtracking line search with Wolfe conditions.
+    /// Approximates Hessian via gradient history (last 10 steps), avoiding full storage of quasi-Newton
+    /// methods. Uses two-loop recursion for search direction and backtracking line search with Wolfe
+    /// conditions for step size. Converges when gradient norm drops below tolerance or max iterations
+    /// reached. Line search may fail on non-descent directions.
+    ///
+    /// Faster convergence than gradient descent for smooth landscapes, but requires gradient evaluations
+    /// which are costly for variational unitary optimization. Uses Wolfe constants c1=1e-4 (sufficient
+    /// decrease) and c2=0.9 (curvature condition).
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let result = lbfgsb(
+    ///     initialParameters: randomAngles,
+    ///     costFunction: { params in offDiagonalCost(params, terms: terms) },
+    ///     gradientFunction: { params in finiteDifferenceGradient(params) },
+    ///     maxIterations: 100,
+    ///     tolerance: 1e-6
+    /// )
+    /// print("Converged: \(result.converged), iterations: \(result.iterations)")
+    /// ```
     ///
     /// - Parameters:
-    ///   - initialParameters: Starting point
-    ///   - costFunction: Objective function to minimize
-    ///   - gradientFunction: Gradient of objective
-    ///   - maxIterations: Maximum iterations
-    ///   - tolerance: Convergence tolerance on gradient norm
-    /// - Returns: Optimization result with final parameters and convergence info
+    ///   - initialParameters: Starting point (typically random angles in [-π, π])
+    ///   - costFunction: Objective to minimize (off-diagonal norm for unitary partitioning)
+    ///   - gradientFunction: Gradient of objective (finite differences, epsilon=1e-7)
+    ///   - maxIterations: Maximum iterations before giving up
+    ///   - tolerance: Convergence threshold on gradient norm
+    /// - Returns: Optimization result with final parameters, cost, iterations, convergence status
+    /// - Complexity: O(iterations x n x cost_eval) where cost_eval = O(depth x 2^(2n)) for variational unitary
     @_optimize(speed)
     @_eagerMove
     private func lbfgsb(
@@ -641,15 +760,14 @@ public struct UnitaryPartitioner {
         gradientFunction: ([Double]) -> [Double],
         maxIterations: Int,
         tolerance: Double
-    ) -> OptimizationResult {
-        let c1 = 1e-4 // Wolfe condition constant
-        let c2 = 0.9 // Curvature condition constant
+    ) -> UnitaryOptimizationResult {
+        let c1 = 1e-4
+        let c2 = 0.9
 
         var params = initialParameters
         var gradient = gradientFunction(params)
         var cost = costFunction(params)
 
-        // History buffers for s_k and y_k
         var sHistory: [[Double]] = []
         var yHistory: [[Double]] = []
         var rhoHistory: [Double] = []
@@ -662,11 +780,6 @@ public struct UnitaryPartitioner {
             vDSP_svesqD(gradient, 1, &gradNormSq, vDSP_Length(gradient.count))
             let gradNorm = sqrt(gradNormSq)
 
-            /// This convergence check is standard L-BFGS stopping criterion.
-            /// In practice, eigendecomposition succeeds for most Hamiltonians,
-            /// so variational optimization is rarely reached. However, when
-            /// eigendecomposition fails (LAPACK errors, numerical instability),
-            /// this convergence check is essential.
             if gradNorm < tolerance {
                 converged = true
                 break
@@ -725,7 +838,7 @@ public struct UnitaryPartitioner {
             iteration += 1
         }
 
-        return OptimizationResult(
+        return UnitaryOptimizationResult(
             parameters: params,
             finalCost: cost,
             iterations: iteration,
@@ -835,7 +948,22 @@ public extension PauliString {
         return (col, phase)
     }
 
-    /// Convert Pauli string to matrix representation.
+    /// Converts Pauli string to dense matrix representation (2^n x 2^n).
+    ///
+    /// Applies ``applyToRow(row:)`` to all basis states to construct full matrix. Used by ``UnitaryPartitioner``
+    /// to build target operators H = Σᵢ cᵢ Pᵢ for optimization. Result has exactly 2^numQubits non-zero entries
+    /// (one per row).
+    ///
+    /// **Example**:
+    /// ```swift
+    /// let xGate = PauliString(operators: [(qubit: 0, basis: .x)])
+    /// let matrix = xGate.toMatrix(numQubits: 1)
+    /// ```
+    ///
+    /// - Parameter numQubits: Total number of qubits in system
+    /// - Returns: Dense matrix representation (2^numQubits x 2^numQubits)
+    /// - Complexity: O(2^(2n)) time and space
+    /// - SeeAlso: ``applyToRow(row:)``
     @_optimize(speed)
     @_eagerMove
     func toMatrix(numQubits: Int) -> [[Complex<Double>]] {

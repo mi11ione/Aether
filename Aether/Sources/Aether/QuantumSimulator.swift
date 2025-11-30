@@ -128,7 +128,7 @@ public actor QuantumSimulator {
         from initialState: QuantumState? = nil,
         progressHandler: (@isolated(any) @Sendable (Double) async -> Void)? = nil
     ) async -> QuantumState {
-        let operationCount: Int = circuit.gateCount
+        let operationCount: Int = circuit.count
 
         let startState: QuantumState = if let initialState {
             initialState

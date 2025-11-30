@@ -475,14 +475,14 @@ struct UnitaryPartitioningTests {
     func partitionSingleTerm() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 10,
-            tolerance: 1e-6,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.1
+            convergenceTolerance: 1e-6,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.1
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps = PauliString(.x(0))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)], numQubits: 1)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)])
         #expect(partitions.count >= 1)
     }
 
@@ -490,22 +490,22 @@ struct UnitaryPartitioningTests {
     func partitionQwcTerms() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 10,
-            tolerance: 1e-6,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.1
+            convergenceTolerance: 1e-6,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.1
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.x(0), .y(1))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)], numQubits: 2)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         #expect(partitions.count >= 1)
     }
 
     @Test("Partition empty terms")
     func partitionEmptyTerms() {
         let partitioner = UnitaryPartitioner()
-        let partitions = partitioner.partition(terms: [], numQubits: 2)
+        let partitions = partitioner.partition(terms: [])
         #expect(partitions.isEmpty)
     }
 
@@ -513,22 +513,22 @@ struct UnitaryPartitioningTests {
     func defaultConfiguration() {
         let config = UnitaryPartitioner.Config.default
         #expect(config.maxIterations > 0)
-        #expect(config.tolerance > 0)
-        #expect(config.ansatzDepth > 0)
+        #expect(config.convergenceTolerance > 0)
+        #expect(config.circuitDepth > 0)
     }
 
     @Test("Custom configuration")
     func customConfiguration() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 50,
-            tolerance: 1e-8,
-            ansatzDepth: 3,
-            adaptiveDepth: true,
-            maxOffDiagonalNorm: 0.05
+            convergenceTolerance: 1e-8,
+            circuitDepth: 3,
+            useAdaptiveDepth: true,
+            diagonalityThreshold: 0.05
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps = PauliString(.x(0))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)], numQubits: 1)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)])
         #expect(!partitions.isEmpty)
     }
 
@@ -538,8 +538,7 @@ struct UnitaryPartitioningTests {
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
-                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]],
-            numQubits: 1
+                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]]
         )
         #expect(partition.unitaryMatrix.count == 2)
         #expect(partition.unitaryMatrix[0].count == 2)
@@ -552,14 +551,12 @@ struct UnitaryPartitioningTests {
         let partition1 = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps1)],
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
-                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]],
-            numQubits: 1
+                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]]
         )
         let partition2 = UnitaryPartition(
             terms: [(coefficient: 2.0, pauliString: ps2)],
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
-                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]],
-            numQubits: 1
+                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]]
         )
         let totalTerms = partition1.terms.count + partition2.terms.count
         #expect(totalTerms == 2)
@@ -570,27 +567,25 @@ struct UnitaryPartitioningTests {
         let ps = PauliString(.x(0))
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
-            unitaryMatrix: [[Complex(1.0, 0.0)]],
-            numQubits: 1
+            unitaryMatrix: [[Complex(1.0, 0.0)]]
         )
-        let expectedDim = 1 << partition.numQubits
-        #expect(partition.unitaryMatrix.count <= expectedDim)
+        #expect(partition.unitaryMatrix.count == 1, "1x1 matrix for 0-qubit system")
     }
 
     @Test("Partition preserves all terms")
     func partitionPreservesTerms() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 10,
-            tolerance: 1e-6,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.1
+            convergenceTolerance: 1e-6,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.1
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let inputTerms = [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)]
-        let partitions = partitioner.partition(terms: inputTerms, numQubits: 1)
+        let partitions = partitioner.partition(terms: inputTerms)
         let totalTerms = partitions.reduce(0) { $0 + $1.terms.count }
         #expect(totalTerms == inputTerms.count)
     }
@@ -600,10 +595,12 @@ struct UnitaryPartitioningTests {
         let ps = PauliString(.x(0), .y(1))
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
-            unitaryMatrix: [[Complex(1.0, 0.0)]],
-            numQubits: 2
+            unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0)],
+                            [Complex(0.0, 0.0), Complex(1.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0)],
+                            [Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(1.0, 0.0), Complex(0.0, 0.0)],
+                            [Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(1.0, 0.0)]]
         )
-        #expect(partition.numQubits == 2)
+        #expect(partition.unitaryMatrix.count == 4, "4x4 matrix for 2-qubit system")
     }
 
     @Test("Unitary partition stores terms correctly")
@@ -611,8 +608,8 @@ struct UnitaryPartitioningTests {
         let ps = PauliString(.x(0))
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
-            unitaryMatrix: [[Complex(1.0, 0.0)]],
-            numQubits: 1
+            unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
+                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]]
         )
         #expect(partition.terms.count == 1)
         #expect(abs(partition.terms[0].coefficient - 1.0) < 1e-10)
@@ -623,8 +620,10 @@ struct UnitaryPartitioningTests {
         let ps = PauliString(.x(0), .y(1))
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
-            unitaryMatrix: [[Complex(1.0, 0.0)]],
-            numQubits: 2
+            unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0)],
+                            [Complex(0.0, 0.0), Complex(1.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0)],
+                            [Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(1.0, 0.0), Complex(0.0, 0.0)],
+                            [Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(1.0, 0.0)]]
         )
         let basis = partition.measurementBasis
         #expect(basis[0] == .z)
@@ -637,25 +636,25 @@ struct UnitaryPartitioningTests {
         let ps2 = PauliString(.y(0))
         let partition = UnitaryPartition(
             terms: [(coefficient: 2.0, pauliString: ps1), (coefficient: -3.5, pauliString: ps2)],
-            unitaryMatrix: [[Complex(1.0, 0.0)]],
-            numQubits: 1
+            unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
+                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]]
         )
-        #expect(abs(partition.weight() - 5.5) < 1e-10)
+        #expect(abs(partition.weight - 5.5) < 1e-10)
     }
 
     @Test("Partition with adaptive depth enabled")
     func partitionWithAdaptiveDepth() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 10,
-            tolerance: 1e-6,
-            ansatzDepth: 2,
-            adaptiveDepth: true,
-            maxOffDiagonalNorm: 0.1
+            convergenceTolerance: 1e-6,
+            circuitDepth: 2,
+            useAdaptiveDepth: true,
+            diagonalityThreshold: 0.1
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)], numQubits: 1)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)])
         #expect(!partitions.isEmpty)
     }
 
@@ -663,15 +662,15 @@ struct UnitaryPartitioningTests {
     func partitionMultipleQubits() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 5,
-            tolerance: 1e-6,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.2
+            convergenceTolerance: 1e-6,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.2
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1))
         let ps2 = PauliString(.y(0), .x(1))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)], numQubits: 2)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)])
         #expect(!partitions.isEmpty)
     }
 
@@ -679,14 +678,14 @@ struct UnitaryPartitioningTests {
     func partitionHighAnsatzDepth() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 3,
-            tolerance: 1e-6,
-            ansatzDepth: 3,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.15
+            convergenceTolerance: 1e-6,
+            circuitDepth: 3,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.15
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps = PauliString(.z(0))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)], numQubits: 1)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)])
         #expect(!partitions.isEmpty)
     }
 }
@@ -1095,13 +1094,13 @@ struct MeasurementOptimizationIntegrationTests {
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let config = UnitaryPartitioner.Config(
             maxIterations: 5,
-            tolerance: 1e-6,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.1
+            convergenceTolerance: 1e-6,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.1
         )
-        let partitions1 = await observable.unitaryPartitions(numQubits: 1, config: config)
-        let partitions2 = await observable.unitaryPartitions(numQubits: 1, config: config)
+        let partitions1 = await observable.unitaryPartitions(config: config)
+        let partitions2 = await observable.unitaryPartitions(config: config)
         #expect(partitions1.count == partitions2.count)
     }
 
@@ -1111,12 +1110,12 @@ struct MeasurementOptimizationIntegrationTests {
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let config = UnitaryPartitioner.Config(
             maxIterations: 5,
-            tolerance: 1e-6,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.1
+            convergenceTolerance: 1e-6,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.1
         )
-        let partitions = await observable.unitaryPartitions(numQubits: 1, config: config)
+        let partitions = await observable.unitaryPartitions(config: config)
         #expect(!partitions.isEmpty)
     }
 
@@ -1146,7 +1145,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
-        let stats = await observable.measurementOptimizationStatistics(numQubits: 1)
+        let stats = await observable.measurementOptimizationStatistics()
         #expect(stats.numTerms == 2)
         #expect(stats.numQWCGroups > 0)
     }
@@ -1155,7 +1154,7 @@ struct MeasurementOptimizationIntegrationTests {
     func measurementOptimizationStatisticsDescription() async {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let stats = await observable.measurementOptimizationStatistics(numQubits: 1)
+        let stats = await observable.measurementOptimizationStatistics()
         let description = stats.description
         #expect(description.contains("Measurement Optimization Statistics"))
         #expect(description.contains("Hamiltonian terms:"))
@@ -1165,7 +1164,7 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Measurement optimization statistics for empty observable")
     func measurementOptimizationStatisticsEmpty() async {
         let observable = Observable(terms: [])
-        let stats = await observable.measurementOptimizationStatistics(numQubits: 1)
+        let stats = await observable.measurementOptimizationStatistics()
         #expect(stats.numTerms == 0)
         #expect(stats.numQWCGroups == 0)
     }
@@ -1246,12 +1245,12 @@ struct MeasurementOptimizationIntegrationTests {
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let config = UnitaryPartitioner.Config(
             maxIterations: 5,
-            tolerance: 1e-6,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.1
+            convergenceTolerance: 1e-6,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.1
         )
-        let count = await observable.measurementCircuits(strategy: .unitaryPartitioning(numQubits: 1, config: config))
+        let count = await observable.measurementCircuits(strategy: .unitaryPartitioning(config: config))
         #expect(count >= 1)
     }
 
@@ -1259,7 +1258,7 @@ struct MeasurementOptimizationIntegrationTests {
     func measurementCircuitsAutomatic() async {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let count = await observable.measurementCircuits(strategy: .automatic(numQubits: 1))
+        let count = await observable.measurementCircuits(strategy: .automatic)
         #expect(count >= 1)
     }
 
@@ -1303,28 +1302,8 @@ struct MeasurementOptimizationIntegrationTests {
             terms.append((coefficient: 1.0, pauliString: ps))
         }
         let observable = Observable(terms: terms)
-        let count = await observable.measurementCircuits(strategy: .automatic(numQubits: 5))
+        let count = await observable.measurementCircuits(strategy: .automatic)
         #expect(count >= 1)
-    }
-
-    @Test("Automatic strategy selection for very large qubit count")
-    func automaticStrategyLargeQubitCount() async {
-        var terms: [(Double, PauliString)] = []
-        for i in 0 ..< 600 {
-            let qubit = i % 20
-            let basis: PauliBasis = [.x, .y, .z][i % 3]
-            let op = switch basis {
-            case .x: PauliOperator.x(qubit)
-            case .y: PauliOperator.y(qubit)
-            case .z: PauliOperator.z(qubit)
-            }
-            let ps = PauliString(op)
-            terms.append((coefficient: Double(i % 10 + 1) * 0.1, pauliString: ps))
-        }
-        let observable = Observable(terms: terms)
-        #expect(observable.terms.count == 600)
-        let count = await observable.measurementCircuits(strategy: .automatic(numQubits: 20))
-        #expect(count > 0)
     }
 
     @Test("Shot allocation with remaining shots distribution")
@@ -1418,40 +1397,20 @@ struct MeasurementOptimizationIntegrationTests {
         #expect(total <= 500)
     }
 
-    @Test("Automatic strategy fallback for large qubits beyond threshold")
-    func automaticStrategyLargeQubitsThreshold() async {
-        var terms: [(Double, PauliString)] = []
-        for i in 0 ..< 600 {
-            let qubit = i % 12
-            let basis: PauliBasis = [.x, .y, .z][i % 3]
-            let op = switch basis {
-            case .x: PauliOperator.x(qubit)
-            case .y: PauliOperator.y(qubit)
-            case .z: PauliOperator.z(qubit)
-            }
-            let ps = PauliString(op)
-            terms.append((coefficient: Double(i % 10 + 1) * 0.1, pauliString: ps))
-        }
-        let observable = Observable(terms: terms)
-        #expect(observable.terms.count == 600)
-        let count = await observable.measurementCircuits(strategy: .automatic(numQubits: 12))
-        #expect(count > 0)
-    }
-
     @Test("Unitary partitioning with variational optimization")
     func unitaryPartitioningVariationalOptimization() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 20,
-            tolerance: 1e-6,
-            ansatzDepth: 2,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.5
+            convergenceTolerance: 1e-6,
+            circuitDepth: 2,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.5
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let ps3 = PauliString(.z(0))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.8, pauliString: ps2), (coefficient: 0.6, pauliString: ps3)], numQubits: 1)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.8, pauliString: ps2), (coefficient: 0.6, pauliString: ps3)])
         #expect(!partitions.isEmpty)
     }
 
@@ -1459,16 +1418,16 @@ struct MeasurementOptimizationIntegrationTests {
     func unitaryPartitioningOptimizationFailure() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 1,
-            tolerance: 1e-10,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 1e-15
+            convergenceTolerance: 1e-10,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 1e-15
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1))
         let ps2 = PauliString(.y(0), .x(1))
         let ps3 = PauliString(.z(0), .z(1))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3)], numQubits: 2)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3)])
         #expect(partitions.count >= 1)
     }
 
@@ -1476,17 +1435,17 @@ struct MeasurementOptimizationIntegrationTests {
     func unitaryPartitioningMergeFailure() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 2,
-            tolerance: 1e-6,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 1e-15
+            convergenceTolerance: 1e-6,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 1e-15
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let ps3 = PauliString(.z(0))
         let ps4 = PauliString(.x(1))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3), (coefficient: 1.0, pauliString: ps4)], numQubits: 2)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3), (coefficient: 1.0, pauliString: ps4)])
 
         #expect(partitions.count >= 2)
 
@@ -1498,17 +1457,17 @@ struct MeasurementOptimizationIntegrationTests {
     func unitaryPartitioningLbfgsOptimization() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 30,
-            tolerance: 1e-5,
-            ansatzDepth: 2,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.2
+            convergenceTolerance: 1e-5,
+            circuitDepth: 2,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.2
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1))
         let ps2 = PauliString(.y(0), .z(1))
         let ps3 = PauliString(.z(0), .x(1))
         let ps4 = PauliString(.x(0), .z(1))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.9, pauliString: ps2), (coefficient: 0.8, pauliString: ps3), (coefficient: 0.7, pauliString: ps4)], numQubits: 2)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.9, pauliString: ps2), (coefficient: 0.8, pauliString: ps3), (coefficient: 0.7, pauliString: ps4)])
         #expect(!partitions.isEmpty)
     }
 
@@ -1516,16 +1475,16 @@ struct MeasurementOptimizationIntegrationTests {
     func unitaryPartitioningDeepAnsatz() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 25,
-            tolerance: 1e-4,
-            ansatzDepth: 4,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.25
+            convergenceTolerance: 1e-4,
+            circuitDepth: 4,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.25
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .x(1))
         let ps2 = PauliString(.y(0), .y(1))
         let ps3 = PauliString(.z(0), .z(1))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.95, pauliString: ps2), (coefficient: 0.85, pauliString: ps3)], numQubits: 2)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.95, pauliString: ps2), (coefficient: 0.85, pauliString: ps3)])
         #expect(!partitions.isEmpty)
     }
 
@@ -1533,16 +1492,16 @@ struct MeasurementOptimizationIntegrationTests {
     func unitaryPartitioningForcesVariational() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 20,
-            tolerance: 1e-5,
-            ansatzDepth: 3,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.15
+            convergenceTolerance: 1e-5,
+            circuitDepth: 3,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.15
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1), .z(2))
         let ps2 = PauliString(.y(0), .z(1), .x(2))
         let ps3 = PauliString(.z(0), .x(1), .y(2))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.9, pauliString: ps2), (coefficient: 0.8, pauliString: ps3)], numQubits: 3)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.9, pauliString: ps2), (coefficient: 0.8, pauliString: ps3)])
         #expect(!partitions.isEmpty)
     }
 
@@ -1550,15 +1509,15 @@ struct MeasurementOptimizationIntegrationTests {
     func unitaryPartitioningIdentityFallback() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 1,
-            tolerance: 1e-8,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 1e-16
+            convergenceTolerance: 1e-8,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 1e-16
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1), .z(2))
         let ps2 = PauliString(.y(0), .z(1), .x(2))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)], numQubits: 3)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)])
         #expect(partitions.count >= 1)
     }
 
@@ -1566,15 +1525,15 @@ struct MeasurementOptimizationIntegrationTests {
     func lbfgsEarlyConvergence() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 100,
-            tolerance: 0.5,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.8
+            convergenceTolerance: 0.5,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.8
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.5, pauliString: ps2)], numQubits: 1)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.5, pauliString: ps2)])
         #expect(!partitions.isEmpty)
     }
 
@@ -1582,17 +1541,17 @@ struct MeasurementOptimizationIntegrationTests {
     func lbfgsHistoryBufferOverflow() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 50,
-            tolerance: 1e-6,
-            ansatzDepth: 2,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.2
+            convergenceTolerance: 1e-6,
+            circuitDepth: 2,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.2
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1))
         let ps2 = PauliString(.y(0), .z(1))
         let ps3 = PauliString(.z(0), .x(1))
         let ps4 = PauliString(.x(0), .x(1))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.9, pauliString: ps2), (coefficient: 0.8, pauliString: ps3), (coefficient: 0.7, pauliString: ps4)], numQubits: 2)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.9, pauliString: ps2), (coefficient: 0.8, pauliString: ps3), (coefficient: 0.7, pauliString: ps4)])
         #expect(!partitions.isEmpty)
     }
 
@@ -1600,10 +1559,10 @@ struct MeasurementOptimizationIntegrationTests {
     func lbfgsComputeSearchDirection() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 40,
-            tolerance: 1e-5,
-            ansatzDepth: 3,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.18
+            convergenceTolerance: 1e-5,
+            circuitDepth: 3,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.18
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1), .z(2))
@@ -1612,8 +1571,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps4 = PauliString(.x(0), .x(1), .x(2))
         let ps5 = PauliString(.y(0), .y(1), .y(2))
         let partitions = partitioner.partition(
-            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.95, pauliString: ps2), (coefficient: 0.9, pauliString: ps3), (coefficient: 0.85, pauliString: ps4), (coefficient: 0.8, pauliString: ps5)],
-            numQubits: 3
+            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.95, pauliString: ps2), (coefficient: 0.9, pauliString: ps3), (coefficient: 0.85, pauliString: ps4), (coefficient: 0.8, pauliString: ps5)]
         )
         #expect(!partitions.isEmpty)
     }
@@ -1622,10 +1580,10 @@ struct MeasurementOptimizationIntegrationTests {
     func lbfgsLineSearchBacktracking() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 35,
-            tolerance: 1e-6,
-            ansatzDepth: 2,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.22
+            convergenceTolerance: 1e-6,
+            circuitDepth: 2,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.22
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1))
@@ -1634,8 +1592,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps4 = PauliString(.x(0), .z(1))
         let ps5 = PauliString(.y(0), .z(1))
         let partitions = partitioner.partition(
-            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.92, pauliString: ps2), (coefficient: 0.88, pauliString: ps3), (coefficient: 0.84, pauliString: ps4), (coefficient: 0.8, pauliString: ps5)],
-            numQubits: 2
+            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.92, pauliString: ps2), (coefficient: 0.88, pauliString: ps3), (coefficient: 0.84, pauliString: ps4), (coefficient: 0.8, pauliString: ps5)]
         )
         #expect(!partitions.isEmpty)
     }
@@ -1718,17 +1675,17 @@ struct MeasurementOptimizationIntegrationTests {
     func unitaryPartitioningCachesPauliMatrices() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 10,
-            tolerance: 1e-6,
-            ansatzDepth: 2,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.2
+            convergenceTolerance: 1e-6,
+            circuitDepth: 2,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.2
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let ps3 = PauliString(.z(0))
 
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.9, pauliString: ps2), (coefficient: 0.8, pauliString: ps3)], numQubits: 1)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.9, pauliString: ps2), (coefficient: 0.8, pauliString: ps3)])
 
         #expect(!partitions.isEmpty)
         let totalTerms = partitions.reduce(0) { $0 + $1.terms.count }
@@ -1775,10 +1732,10 @@ struct MeasurementOptimizationIntegrationTests {
     func costFunctionDecreasesDuringOptimization() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 50,
-            tolerance: 1e-6,
-            ansatzDepth: 2,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.15
+            convergenceTolerance: 1e-6,
+            circuitDepth: 2,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.15
         )
         let partitioner = UnitaryPartitioner(config: config)
 
@@ -1787,8 +1744,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps3 = PauliString(.z(0))
 
         let partitions = partitioner.partition(
-            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3)],
-            numQubits: 1
+            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3)]
         )
 
         #expect(!partitions.isEmpty)
@@ -1801,17 +1757,17 @@ struct MeasurementOptimizationIntegrationTests {
     func gradientFunctionProducesValidDerivatives() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 30,
-            tolerance: 1e-5,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.2
+            convergenceTolerance: 1e-5,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.2
         )
         let partitioner = UnitaryPartitioner(config: config)
 
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
 
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)], numQubits: 1)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)])
 
         #expect(!partitions.isEmpty)
         let totalTerms = partitions.reduce(0) { $0 + $1.terms.count }
@@ -1822,10 +1778,10 @@ struct MeasurementOptimizationIntegrationTests {
     func costAndGradientHandleMultiQubitSystems() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 40,
-            tolerance: 1e-5,
-            ansatzDepth: 2,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.25
+            convergenceTolerance: 1e-5,
+            circuitDepth: 2,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.25
         )
         let partitioner = UnitaryPartitioner(config: config)
 
@@ -1834,8 +1790,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps3 = PauliString(.z(0), .z(1))
 
         let partitions = partitioner.partition(
-            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 0.5, pauliString: ps3)],
-            numQubits: 2
+            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 0.5, pauliString: ps3)]
         )
 
         #expect(!partitions.isEmpty)
@@ -1847,10 +1802,10 @@ struct MeasurementOptimizationIntegrationTests {
     func optimizationHandlesWeightedCoefficients() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 40,
-            tolerance: 1e-5,
-            ansatzDepth: 2,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.3
+            convergenceTolerance: 1e-5,
+            circuitDepth: 2,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.3
         )
         let partitioner = UnitaryPartitioner(config: config)
 
@@ -1858,8 +1813,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps2 = PauliString(.y(0))
 
         let partitions = partitioner.partition(
-            terms: [(coefficient: 10.0, pauliString: ps1), (coefficient: 0.1, pauliString: ps2)],
-            numQubits: 1
+            terms: [(coefficient: 10.0, pauliString: ps1), (coefficient: 0.1, pauliString: ps2)]
         )
 
         #expect(!partitions.isEmpty)
@@ -1877,14 +1831,14 @@ struct MeasurementOptimizationIntegrationTests {
     func gradientComputationConvergesForIdentity() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 20,
-            tolerance: 1e-6,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 0.01
+            convergenceTolerance: 1e-6,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 0.01
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.z(0))
-        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1)], numQubits: 1)
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1)])
 
         #expect(partitions.count == 1)
         #expect(partitions[0].terms.count == 1)
@@ -1894,10 +1848,10 @@ struct MeasurementOptimizationIntegrationTests {
     func optimizationFailureIdentityFallback() {
         let config = UnitaryPartitioner.Config(
             maxIterations: 1,
-            tolerance: 1e-10,
-            ansatzDepth: 1,
-            adaptiveDepth: false,
-            maxOffDiagonalNorm: 1e-18
+            convergenceTolerance: 1e-10,
+            circuitDepth: 1,
+            useAdaptiveDepth: false,
+            diagonalityThreshold: 1e-18
         )
         let partitioner = UnitaryPartitioner(config: config)
 
@@ -1913,7 +1867,7 @@ struct MeasurementOptimizationIntegrationTests {
             (coefficient: 0.7, pauliString: ps4),
         ]
 
-        let partitions = partitioner.partition(terms: terms, numQubits: 3)
+        let partitions = partitioner.partition(terms: terms)
 
         #expect(!partitions.isEmpty,
                 "Partitioner should create at least one partition even when optimization fails")

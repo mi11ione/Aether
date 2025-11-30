@@ -13,7 +13,7 @@ struct MPSBatchEvaluatorTests {
     @Test("Evaluator initializes successfully")
     func initializeEvaluator() async {
         let evaluator = MPSBatchEvaluator()
-        let stats = await evaluator.getStatistics()
+        let stats = await evaluator.statistics
 
         #expect(stats.maxBatchSize > 0)
     }
@@ -23,13 +23,13 @@ struct MPSBatchEvaluatorTests {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(.hadamard, to: 0)
 
-        let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
+        let unitary = CircuitUnitary.unitary(for: circuit)
         let initialState = QuantumState(numQubits: 2)
 
         let evaluator = MPSBatchEvaluator()
-        let results = await evaluator.evaluateBatch(
-            unitaries: [unitary],
-            initialState: initialState
+        let results = await evaluator.evaluate(
+            batch: [unitary],
+            from: initialState
         )
 
         #expect(results.count == 1)
@@ -54,16 +54,16 @@ struct MPSBatchEvaluatorTests {
         circuit3.append(.pauliZ, to: 1)
 
         let unitaries = [
-            CircuitUnitary.computeUnitary(circuit: circuit1),
-            CircuitUnitary.computeUnitary(circuit: circuit2),
-            CircuitUnitary.computeUnitary(circuit: circuit3),
+            CircuitUnitary.unitary(for: circuit1),
+            CircuitUnitary.unitary(for: circuit2),
+            CircuitUnitary.unitary(for: circuit3),
         ]
 
         let initialState = QuantumState(numQubits: 2)
         let evaluator = MPSBatchEvaluator()
-        let results = await evaluator.evaluateBatch(
-            unitaries: unitaries,
-            initialState: initialState
+        let results = await evaluator.evaluate(
+            batch: unitaries,
+            from: initialState
         )
 
         #expect(results.count == 3)
@@ -91,16 +91,16 @@ struct MPSBatchEvaluatorTests {
         circuit2.append(.pauliX, to: 0)
 
         let unitaries = [
-            CircuitUnitary.computeUnitary(circuit: circuit1),
-            CircuitUnitary.computeUnitary(circuit: circuit2),
+            CircuitUnitary.unitary(for: circuit1),
+            CircuitUnitary.unitary(for: circuit2),
         ]
 
         let initialState = QuantumState(numQubits: 2)
         let evaluator = MPSBatchEvaluator()
-        let energies = await evaluator.evaluateExpectationValues(
-            unitaries: unitaries,
-            initialState: initialState,
-            hamiltonian: hamiltonian
+        let energies = await evaluator.expectationValues(
+            for: unitaries,
+            from: initialState,
+            observable: hamiltonian
         )
 
         #expect(energies.count == 2)
@@ -125,16 +125,16 @@ struct MPSBatchEvaluatorTests {
         circuit2.append(.hadamard, to: 0)
 
         let unitaries = [
-            CircuitUnitary.computeUnitary(circuit: circuit1),
-            CircuitUnitary.computeUnitary(circuit: circuit2),
+            CircuitUnitary.unitary(for: circuit1),
+            CircuitUnitary.unitary(for: circuit2),
         ]
 
         let initialState = QuantumState(numQubits: 2)
         let evaluator = MPSBatchEvaluator()
-        let energies = await evaluator.evaluateExpectationValues(
-            unitaries: unitaries,
-            initialState: initialState,
-            sparseHamiltonian: sparseH
+        let energies = await evaluator.expectationValues(
+            for: unitaries,
+            from: initialState,
+            sparse: sparseH
         )
 
         #expect(energies.count == 2)
@@ -152,13 +152,13 @@ struct MPSBatchEvaluatorTests {
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
 
-        let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
+        let unitary = CircuitUnitary.unitary(for: circuit)
         let initialState = QuantumState(numQubits: 3)
 
         let evaluator = MPSBatchEvaluator()
-        let results = await evaluator.evaluateBatch(
-            unitaries: [unitary],
-            initialState: initialState
+        let results = await evaluator.evaluate(
+            batch: [unitary],
+            from: initialState
         )
 
         #expect(results.count == 1)
@@ -173,8 +173,8 @@ struct MPSBatchEvaluatorTests {
     @Test("Batch size query returns reasonable value")
     func batchSizeQuery() async {
         let evaluator = MPSBatchEvaluator()
-        let maxBatch8 = await evaluator.getMaxBatchSize(numQubits: 8)
-        let maxBatch10 = await evaluator.getMaxBatchSize(numQubits: 10)
+        let maxBatch8 = await evaluator.maxBatchSize(for: 8)
+        let maxBatch10 = await evaluator.maxBatchSize(for: 10)
 
         #expect(maxBatch8 > 0)
         #expect(maxBatch10 > 0)
@@ -184,7 +184,7 @@ struct MPSBatchEvaluatorTests {
     @Test("Statistics provide device information")
     func statistics() async {
         let evaluator = MPSBatchEvaluator()
-        let stats = await evaluator.getStatistics()
+        let stats = await evaluator.statistics
 
         #expect(!stats.deviceName.isEmpty)
         #expect(stats.maxBatchSize > 0)
@@ -192,20 +192,20 @@ struct MPSBatchEvaluatorTests {
 
     @Test("VQE gradient parameter set batch evaluation")
     func vqeGradientBatch() async {
-        let ansatz = HardwareEfficientAnsatz.create(numQubits: 2, depth: 1)
+        let ansatz = HardwareEfficientAnsatz(qubits: 2, depth: 1)
         let baseParams: [Double] = [0.1, 0.2]
 
-        let (plusVectors, minusVectors) = ansatz.gradientVectors(base: baseParams)
+        let (plusVectors, minusVectors) = ansatz.circuit.gradientVectors(base: baseParams)
 
         var allCircuits: [QuantumCircuit] = []
         for params in plusVectors {
-            allCircuits.append(ansatz.binding(vector: params))
+            allCircuits.append(ansatz.circuit.bound(with: params))
         }
         for params in minusVectors {
-            allCircuits.append(ansatz.binding(vector: params))
+            allCircuits.append(ansatz.circuit.bound(with: params))
         }
 
-        let unitaries = allCircuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
+        let unitaries = allCircuits.map { CircuitUnitary.unitary(for: $0) }
 
         let hamiltonian = Observable(
             coefficient: 1.0,
@@ -213,10 +213,10 @@ struct MPSBatchEvaluatorTests {
         )
 
         let evaluator = MPSBatchEvaluator()
-        let energies = await evaluator.evaluateExpectationValues(
-            unitaries: unitaries,
-            initialState: QuantumState(numQubits: 2),
-            hamiltonian: hamiltonian
+        let energies = await evaluator.expectationValues(
+            for: unitaries,
+            from: QuantumState(numQubits: 2),
+            observable: hamiltonian
         )
 
         #expect(energies.count == 4)
@@ -228,13 +228,13 @@ struct MPSBatchEvaluatorTests {
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
 
-        let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
+        let unitary = CircuitUnitary.unitary(for: circuit)
         let initialState = QuantumState(numQubits: 2)
 
         let evaluator = MPSBatchEvaluator()
-        let results = await evaluator.evaluateBatch(
-            unitaries: [unitary],
-            initialState: initialState
+        let results = await evaluator.evaluate(
+            batch: [unitary],
+            from: initialState
         )
 
         let inv_sqrt2 = 1.0 / sqrt(2.0)
@@ -255,11 +255,11 @@ struct MPSBatchEvaluatorTests {
             circuits.append(circuit)
         }
 
-        let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
+        let unitaries = circuits.map { CircuitUnitary.unitary(for: $0) }
         let evaluator = MPSBatchEvaluator()
-        let results = await evaluator.evaluateBatch(
-            unitaries: unitaries,
-            initialState: QuantumState(numQubits: 2)
+        let results = await evaluator.evaluate(
+            batch: unitaries,
+            from: QuantumState(numQubits: 2)
         )
 
         #expect(results.count == 5)
@@ -277,13 +277,13 @@ struct MPSBatchEvaluatorTests {
         var circuit = QuantumCircuit(numQubits: 4)
         circuit.append(.hadamard, to: 0)
 
-        let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
+        let unitary = CircuitUnitary.unitary(for: circuit)
         let initialState = QuantumState(numQubits: 4)
 
         let evaluator = MPSBatchEvaluator()
-        let results = await evaluator.evaluateBatch(
-            unitaries: [unitary],
-            initialState: initialState
+        let results = await evaluator.evaluate(
+            batch: [unitary],
+            from: initialState
         )
 
         #expect(results.count == 1)
@@ -296,15 +296,15 @@ struct MPSBatchEvaluatorTests {
         let circuit2 = QuantumCircuit(numQubits: 2)
 
         let unitaries = [
-            CircuitUnitary.computeUnitary(circuit: circuit1),
-            CircuitUnitary.computeUnitary(circuit: circuit2),
+            CircuitUnitary.unitary(for: circuit1),
+            CircuitUnitary.unitary(for: circuit2),
         ]
 
         let initialState = QuantumState(numQubits: 2)
         let evaluator = MPSBatchEvaluator()
-        let results = await evaluator.evaluateBatch(
-            unitaries: unitaries,
-            initialState: initialState
+        let results = await evaluator.evaluate(
+            batch: unitaries,
+            from: initialState
         )
 
         #expect(results.count == 2)
@@ -321,13 +321,13 @@ struct MPSBatchEvaluatorTests {
         circuit.append(.hadamard, to: 0)
         circuit.append(.rotationY(.pi / 4), to: 1)
 
-        let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
+        let unitary = CircuitUnitary.unitary(for: circuit)
         let initialState = QuantumState(numQubits: 2)
 
         let evaluator = MPSBatchEvaluator()
-        let results = await evaluator.evaluateBatch(
-            unitaries: [unitary],
-            initialState: initialState
+        let results = await evaluator.evaluate(
+            batch: [unitary],
+            from: initialState
         )
 
         var norm = 0.0
@@ -353,21 +353,21 @@ struct MPSBatchEvaluatorTests {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(.hadamard, to: 0)
 
-        let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
+        let unitary = CircuitUnitary.unitary(for: circuit)
         let initialState = QuantumState(numQubits: 2)
 
         let evaluator = MPSBatchEvaluator()
 
-        let energies1 = await evaluator.evaluateExpectationValues(
-            unitaries: [unitary],
-            initialState: initialState,
-            hamiltonian: hamiltonian1
+        let energies1 = await evaluator.expectationValues(
+            for: [unitary],
+            from: initialState,
+            observable: hamiltonian1
         )
 
-        let energies2 = await evaluator.evaluateExpectationValues(
-            unitaries: [unitary],
-            initialState: initialState,
-            hamiltonian: hamiltonian2
+        let energies2 = await evaluator.expectationValues(
+            for: [unitary],
+            from: initialState,
+            observable: hamiltonian2
         )
 
         #expect(energies1.count == 1)
@@ -388,13 +388,13 @@ struct MPSBatchEvaluatorTests {
         circuit.append(.pauliX, to: 1)
         circuit.append(.toffoli, to: [0, 1, 2])
 
-        let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
+        let unitary = CircuitUnitary.unitary(for: circuit)
         let initialState = QuantumState(numQubits: 3)
 
         let evaluator = MPSBatchEvaluator()
-        let results = await evaluator.evaluateBatch(
-            unitaries: [unitary],
-            initialState: initialState
+        let results = await evaluator.evaluate(
+            batch: [unitary],
+            from: initialState
         )
 
         let expected = circuit.execute()
@@ -412,12 +412,12 @@ struct MPSBatchEvaluatorTests {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(.hadamard, to: 1)
 
-        let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
+        let unitary = CircuitUnitary.unitary(for: circuit)
 
         let evaluator = MPSBatchEvaluator()
-        let results = await evaluator.evaluateBatch(
-            unitaries: [unitary],
-            initialState: initialState
+        let results = await evaluator.evaluate(
+            batch: [unitary],
+            from: initialState
         )
 
         prepCircuit.append(.hadamard, to: 1)
@@ -433,13 +433,13 @@ struct MPSBatchEvaluatorTests {
         var circuit = QuantumCircuit(numQubits: 2)
         circuit.append(.rotationX(2 * .pi), to: 0)
 
-        let unitary = CircuitUnitary.computeUnitary(circuit: circuit)
+        let unitary = CircuitUnitary.unitary(for: circuit)
         let initialState = QuantumState(numQubits: 2)
 
         let evaluator = MPSBatchEvaluator()
-        let results = await evaluator.evaluateBatch(
-            unitaries: [unitary],
-            initialState: initialState
+        let results = await evaluator.evaluate(
+            batch: [unitary],
+            from: initialState
         )
 
         #expect(abs(results[0].amplitudes[0].real + 1.0) < 1e-5)
@@ -454,13 +454,13 @@ struct MPSBatchEvaluatorTests {
             circuits.append(circuit)
         }
 
-        let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
+        let unitaries = circuits.map { CircuitUnitary.unitary(for: $0) }
         let initialState = QuantumState(numQubits: 2)
 
         let evaluator = MPSBatchEvaluator()
-        let batchResults = await evaluator.evaluateBatch(
-            unitaries: unitaries,
-            initialState: initialState
+        let batchResults = await evaluator.evaluate(
+            batch: unitaries,
+            from: initialState
         )
 
         #expect(batchResults.count == 5)
@@ -488,12 +488,12 @@ struct MPSBatchEvaluatorTests {
             circuits.append(circuit)
         }
 
-        let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
+        let unitaries = circuits.map { CircuitUnitary.unitary(for: $0) }
         let initialState = QuantumState(numQubits: 2)
 
-        let results = await evaluator.evaluateBatch(
-            unitaries: unitaries,
-            initialState: initialState
+        let results = await evaluator.evaluate(
+            batch: unitaries,
+            from: initialState
         )
 
         #expect(results.count == batchSize)
@@ -511,7 +511,7 @@ struct MPSBatchEvaluatorTests {
     @Test("BatchEvaluatorStatistics description formats correctly")
     func statisticsDescription() async {
         let evaluator = MPSBatchEvaluator()
-        let stats = await evaluator.getStatistics()
+        let stats = await evaluator.statistics
         let description = stats.description
 
         #expect(description.contains("Metal Available"), "Should show Metal availability")
@@ -545,12 +545,12 @@ struct MPSBatchEvaluatorTests {
             circuits.append(circuit)
         }
 
-        let unitaries = circuits.map { CircuitUnitary.computeUnitary(circuit: $0) }
+        let unitaries = circuits.map { CircuitUnitary.unitary(for: $0) }
         let initialState = QuantumState(numQubits: 2)
 
-        let results = await evaluator.evaluateBatch(
-            unitaries: unitaries,
-            initialState: initialState
+        let results = await evaluator.evaluate(
+            batch: unitaries,
+            from: initialState
         )
 
         #expect(results.count == 25, "All circuits should be evaluated")
@@ -571,10 +571,10 @@ struct MPSBatchEvaluatorTests {
     func maxBatchSizeDifferentQubits() async {
         let evaluator = MPSBatchEvaluator()
 
-        let batch2 = await evaluator.getMaxBatchSize(numQubits: 2)
-        let batch4 = await evaluator.getMaxBatchSize(numQubits: 4)
-        let batch6 = await evaluator.getMaxBatchSize(numQubits: 6)
-        let batch8 = await evaluator.getMaxBatchSize(numQubits: 8)
+        let batch2 = await evaluator.maxBatchSize(for: 2)
+        let batch4 = await evaluator.maxBatchSize(for: 4)
+        let batch6 = await evaluator.maxBatchSize(for: 6)
+        let batch8 = await evaluator.maxBatchSize(for: 8)
 
         #expect(batch2 > 0, "2-qubit batch size should be positive")
         #expect(batch4 > 0, "4-qubit batch size should be positive")

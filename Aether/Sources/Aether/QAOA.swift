@@ -292,25 +292,25 @@ public actor QAOA {
 
         // Run classical optimization
         let optimizerResult: OptimizerResult = await optimizer.minimize(
-            objectiveFunction: costFunction,
-            initialParameters: initialParameters,
-            convergenceCriteria: convergenceCriteria,
-            progressCallback: optimizerProgressCallback
+            costFunction,
+            from: initialParameters,
+            using: convergenceCriteria,
+            progress: optimizerProgressCallback
         )
 
         // Compute final solution probabilities
-        let finalCircuit: QuantumCircuit = parameterBinder.bind(baseParameters: optimizerResult.optimalParameters)
+        let finalCircuit: QuantumCircuit = parameterBinder.bind(baseParameters: optimizerResult.parameters)
         let finalState: QuantumState = await simulator.execute(finalCircuit)
         let solutionProbabilities: [Int: Double] = extractSolutionProbabilities(state: finalState)
 
         return QAOAResult(
-            optimalCost: optimizerResult.optimalValue,
-            optimalParameters: optimizerResult.optimalParameters,
+            optimalCost: optimizerResult.value,
+            optimalParameters: optimizerResult.parameters,
             solutionProbabilities: solutionProbabilities,
-            costHistory: optimizerResult.valueHistory,
+            costHistory: optimizerResult.history,
             iterations: optimizerResult.iterations,
-            convergenceReason: optimizerResult.convergenceReason,
-            functionEvaluations: optimizerResult.functionEvaluations
+            convergenceReason: optimizerResult.terminationReason,
+            functionEvaluations: optimizerResult.evaluations
         )
     }
 
@@ -418,7 +418,7 @@ public struct QAOAResult: Sendable, CustomStringConvertible {
     public let iterations: Int
 
     /// Why optimization terminated
-    public let convergenceReason: ConvergenceReason
+    public let convergenceReason: TerminationReason
 
     /// Total objective function evaluations
     public let functionEvaluations: Int
@@ -429,7 +429,7 @@ public struct QAOAResult: Sendable, CustomStringConvertible {
         solutionProbabilities: [Int: Double],
         costHistory: [Double],
         iterations: Int,
-        convergenceReason: ConvergenceReason,
+        convergenceReason: TerminationReason,
         functionEvaluations: Int
     ) {
         self.optimalCost = optimalCost

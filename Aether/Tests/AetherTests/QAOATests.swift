@@ -368,7 +368,7 @@ struct QAOAConvergenceTests {
         #expect(result.iterations <= maxIter)
 
         if result.iterations == maxIter {
-            #expect(result.convergenceReason == .maxIterations)
+            #expect(result.convergenceReason == .maxIterationsReached)
         }
     }
 }

@@ -1,99 +1,69 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-/// Hardware-efficient ansatz builder for variational quantum algorithms
+/// Parameterized quantum circuit optimized for variational algorithms on near-term hardware
 ///
-/// Constructs parameterized quantum circuits optimized for near-term quantum hardware.
-/// This is the **PRIMARY ansatz** for general VQE problems
+/// Hardware-efficient ansatz minimizes circuit depth while maintaining expressivity through
+/// layered rotations and entangling gates. Primary choice for VQE applications without
+/// domain-specific structure (chemistry, optimization, condensed matter).
 ///
-/// **Design Philosophy:**
-/// - Layers of single-qubit rotations followed by entangling gates
-/// - Minimal circuit depth (NISQ-compatible)
-/// - Works for any Hamiltonian without domain-specific structure
-/// - Expressivity scales with depth: more layers = more parameters = better approximation
+/// Each layer applies single-qubit rotations to all qubits followed by two-qubit entangling
+/// gates. Depth controls expressivity: more layers represent more quantum states but increase
+/// optimization difficulty and susceptibility to barren plateaus.
 ///
-/// **Architecture:**
-/// Each layer consists of:
-/// 1. **Rotation layer**: Apply parameterized rotation gates to all qubits
-/// 2. **Entangling layer**: Create entanglement via two-qubit gates (CNOT chain default)
+/// **Performance:**
+/// - Construction: O(depth x numQubits) gates
+/// - Parameter count: depth x numQubits x rotations.parametersPerQubit
+/// - Circuit depth: O(depth x numQubits) for linear/circular, O(depth x numQubits²) for all-to-all
 ///
-/// **Trade-offs:**
-/// - More layers -> more expressivity but harder optimization (barren plateaus risk)
-/// - More parameters -> can represent more states but longer optimization time
-/// - Circuit depth -> coherence time constraints on real hardware
-///
-/// **Mathematical Form:**
-/// For depth p, numQubits n:
-/// - Total parameters: p x n (for single rotation gate per qubit per layer)
-/// - Circuit: [Rotation layer] -> [Entangling layer] -> repeat p times
-/// - Ansatz |ψ(θ)⟩ = U_p(θ_{p-1}) ... U_2(θ_1) U_1(θ_0) |0⟩^⊗n
-///
-/// **Example - 4-qubit, depth=2 ansatz:**
+/// **Example:**
 /// ```swift
-/// // Creates parameterized circuit with 8 parameters (4 qubits x 2 layers)
-/// let ansatz = HardwareEfficientAnsatz.create(numQubits: 4, depth: 2)
+/// let ansatz = HardwareEfficientAnsatz(qubits: 4, depth: 2)
+/// print(ansatz.parameterCount)  // 8 (4 qubits x 2 layers x 1 Ry per qubit)
 ///
-/// // Structure:
-/// // Layer 0: Ry(θ0) on q0, Ry(θ1) on q1, Ry(θ2) on q2, Ry(θ3) on q3
-/// //          CNOT(q0->q1), CNOT(q1->q2), CNOT(q2->q3)
-/// // Layer 1: Ry(θ4) on q0, Ry(θ5) on q1, Ry(θ6) on q2, Ry(θ7) on q3
-/// //          CNOT(q0->q1), CNOT(q1->q2), CNOT(q2->q3)
-///
-/// print(ansatz.parameterCount())  // 8
-/// print(ansatz.gateCount())       // 20 gates (8 Ry + 6 CNOT x 2 layers)
-///
-/// // Use in VQE
 /// let vqe = await VariationalQuantumEigensolver(
 ///     hamiltonian: hamiltonian,
 ///     ansatz: ansatz,
-///     optimizer: NelderMeadOptimizer()
+///     optimizer: COBYLAOptimizer()
 /// )
+/// let result = await vqe.run(initialParameters: Array(repeating: 0.01, count: ansatz.parameterCount))
 /// ```
 ///
-/// **Customization:**
-/// ```swift
-/// // Use Rx rotations instead of Ry
-/// let rxAnsatz = HardwareEfficientAnsatz.create(
-///     numQubits: 4,
-///     depth: 3,
-///     rotationGates: .rx
-/// )
-///
-/// // Full rotations (all three axes)
-/// let fullAnsatz = HardwareEfficientAnsatz.create(
-///     numQubits: 4,
-///     depth: 2,
-///     rotationGates: .full  // Rz-Ry-Rz per qubit (3x more parameters)
-/// )
-///
-/// // Custom entangling pattern
-/// let customAnsatz = HardwareEfficientAnsatz.create(
-///     numQubits: 4,
-///     depth: 2,
-///     entanglingPattern: .circular  // Includes CNOT(q3->q0) for circular topology
-/// )
-/// ```
-@frozen
-public struct HardwareEfficientAnsatz {
-    /// Rotation gate choices for single-qubit layers
-    @frozen
-    public enum RotationGateSet: Sendable {
-        /// Ry rotations only (most common, 1 parameter per qubit per layer)
+/// - SeeAlso: ``VariationalQuantumEigensolver``, ``QuantumCircuit``, ``Parameter``
+public struct HardwareEfficientAnsatz: Sendable {
+    /// Single-qubit rotation gate choices affecting circuit expressivity and parameter count
+    ///
+    /// Rotation gates control how many parameters are needed per qubit per layer. Single-axis
+    /// rotations (Rx, Ry, Rz) use one parameter each. Full rotations (Rz-Ry-Rz sequence) provide
+    /// maximum single-qubit expressivity at the cost of 3x parameters.
+    ///
+    /// **Typical usage:** Ry rotations (default) balance expressivity and parameter efficiency.
+    /// Use full rotations when additional expressivity is needed and parameter count is acceptable.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let standard = HardwareEfficientAnsatz(qubits: 4, depth: 2, rotations: .ry)
+    /// print(standard.parameterCount)  // 8
+    ///
+    /// let expressive = HardwareEfficientAnsatz(qubits: 4, depth: 2, rotations: .full)
+    /// print(expressive.parameterCount)  // 24 (3x parameters)
+    /// ```
+    public enum Rotations: Sendable {
+        /// Ry rotations (1 parameter per qubit per layer)
         case ry
 
-        /// Rx rotations only (1 parameter per qubit per layer)
+        /// Rx rotations (1 parameter per qubit per layer)
         case rx
 
-        /// Rz rotations only (1 parameter per qubit per layer)
+        /// Rz rotations (1 parameter per qubit per layer)
         case rz
 
-        /// Full rotation: Rz-Ry-Rz sequence (3 parameters per qubit per layer)
-        /// Most expressive but 3x more parameters
+        /// Rz-Ry-Rz sequence (3 parameters per qubit per layer)
         case full
 
+        /// Number of parameters required per qubit per layer
         @inlinable
-        @_effects(readonly)
-        func parametersPerQubit() -> Int {
+        public var parametersPerQubit: Int {
             switch self {
             case .ry, .rx, .rz: 1
             case .full: 3
@@ -101,59 +71,89 @@ public struct HardwareEfficientAnsatz {
         }
     }
 
-    /// Entangling gate pattern for two-qubit layers
-    @frozen
-    public enum EntanglingPattern: Sendable {
-        /// Linear chain: CNOT(i -> i+1) for i=0..n-2
+    /// Two-qubit entangling gate patterns controlling connectivity and circuit depth
+    ///
+    /// Entangling patterns determine which qubits interact via CNOT gates. Linear and circular
+    /// patterns create nearest-neighbor connectivity suitable for most quantum hardware. All-to-all
+    /// creates full connectivity but produces deep circuits unsuitable for NISQ devices.
+    ///
+    /// **Typical usage:** Linear (default) for hardware compatibility. Circular adds one CNOT
+    /// connecting first and last qubits. Avoid all-to-all except for small qubit counts.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let linear = HardwareEfficientAnsatz(qubits: 4, depth: 1, entanglement: .linear)
+    /// print(linear.circuit.count)  // 7 gates (4 Ry + 3 CNOT)
+    ///
+    /// let circular = HardwareEfficientAnsatz(qubits: 4, depth: 1, entanglement: .circular)
+    /// print(circular.circuit.count)  // 8 gates (4 Ry + 4 CNOT)
+    /// ```
+    public enum Entanglement: Sendable {
+        /// CNOT chain: i->(i+1) for i=0..n-2
         case linear
 
-        /// Circular chain: Linear + CNOT(n-1 -> 0)
+        /// Linear chain plus CNOT from last to first qubit
         case circular
 
-        /// All-to-all: CNOT between every qubit pair (expensive, deep circuits)
+        /// CNOT between every qubit pair (deep circuits, avoid for n>5)
         case allToAll
     }
 
-    // MARK: - Primary Interface
+    // MARK: - Properties
 
-    /// Create hardware-efficient ansatz
+    /// Parameterized quantum circuit implementing this ansatz
+    public let circuit: QuantumCircuit
+
+    /// Number of rotation-entanglement layers
+    public let depth: Int
+
+    /// Rotation gate type used in each layer
+    public let rotations: Rotations
+
+    /// Two-qubit gate connectivity pattern
+    public let entanglement: Entanglement
+
+    /// Total parameters in circuit
     ///
-    /// Builds parameterized circuit with specified depth and rotation gates.
-    /// Parameters are auto-named: "theta_{layer}_{qubit}_{axis}" for traceability.
+    /// Computed as depth x numQubits x parametersPerQubit. Use this count when
+    /// initializing parameter vectors for optimization.
     ///
-    /// **Performance:**
-    /// - Circuit construction: O(depth x numQubits)
-    /// - Gate count: depth x (numQubits x rotations + (numQubits - 1) x CNOTs)
+    /// - Complexity: O(1)
+    /// - SeeAlso: ``Rotations/parametersPerQubit``
+    public var parameterCount: Int {
+        depth * circuit.numQubits * rotations.parametersPerQubit
+    }
+
+    // MARK: - Initialization
+
+    /// Creates hardware-efficient ansatz with specified configuration
+    ///
+    /// Constructs parameterized circuit by alternating rotation and entangling layers.
+    /// Parameters are automatically named "theta_{layer}_{qubit}" for single rotations or
+    /// "theta_{layer}_{qubit}_{axis}" for full rotations to enable gradient tracing.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let ansatz = HardwareEfficientAnsatz(qubits: 6, depth: 3)
+    /// let params = Array(repeating: 0.01, count: ansatz.parameterCount)
+    /// let circuit = ansatz.circuit.bound(with: params)
+    /// ```
     ///
     /// - Parameters:
-    ///   - numQubits: Number of qubits (1-30)
-    ///   - depth: Number of ansatz layers (typically 1-10)
-    ///   - rotationGates: Choice of rotation gates (default: Ry)
-    ///   - entanglingPattern: Entangling gate topology (default: linear)
-    /// - Returns: Parameterized quantum circuit ready for VQE
+    ///   - numQubits: System size
+    ///   - depth: Number of rotation-entanglement layer pairs
+    ///   - rotations: Single-qubit gate choice (default: Ry)
+    ///   - entanglement: Two-qubit connectivity (default: linear)
     ///
-    /// Example:
-    /// ```swift
-    /// // Standard VQE ansatz for 6-qubit system
-    /// let ansatz = HardwareEfficientAnsatz.create(numQubits: 6, depth: 3)
-    ///
-    /// // Use with VQE
-    /// let initialParams = Array(repeating: 0.01, count: ansatz.parameterCount())
-    /// let vqe = await VariationalQuantumEigensolver(
-    ///     hamiltonian: hamiltonian,
-    ///     ansatz: ansatz,
-    ///     optimizer: NelderMeadOptimizer()
-    /// )
-    /// let result = await vqe.run(initialParameters: initialParams)
-    /// ```
+    /// - Complexity: O(depth x numQubits) gates constructed
+    /// - Precondition: `numQubits` must be positive and ≤30, `depth` must be positive and ≤100
     @_optimize(speed)
-    @_eagerMove
-    public static func create(
-        numQubits: Int,
+    public init(
+        qubits numQubits: Int,
         depth: Int,
-        rotationGates: RotationGateSet = .ry,
-        entanglingPattern: EntanglingPattern = .linear
-    ) -> QuantumCircuit {
+        rotations: Rotations = .ry,
+        entanglement: Entanglement = .linear
+    ) {
         ValidationUtilities.validatePositiveQubits(numQubits)
         ValidationUtilities.validateMemoryLimit(numQubits)
         ValidationUtilities.validatePositiveInt(depth, name: "depth")
@@ -162,66 +162,58 @@ public struct HardwareEfficientAnsatz {
         var circuit = QuantumCircuit(numQubits: numQubits)
 
         for layerIndex in 0 ..< depth {
-            appendRotationLayer(
+            Self.addRotations(
                 to: &circuit,
-                numQubits: numQubits,
-                layerIndex: layerIndex,
-                rotationGates: rotationGates
+                qubits: numQubits,
+                layer: layerIndex,
+                type: rotations
             )
 
-            appendEntanglingLayer(
+            Self.addEntanglement(
                 to: &circuit,
-                numQubits: numQubits,
-                pattern: entanglingPattern
+                qubits: numQubits,
+                pattern: entanglement
             )
         }
 
-        return circuit
+        self.circuit = circuit
+        self.depth = depth
+        self.rotations = rotations
+        self.entanglement = entanglement
     }
 
-    // MARK: - Layer Construction
+    // MARK: - Private Helpers
 
-    /// Append parameterized rotation layer to circuit
-    ///
-    /// Adds rotation gates to all qubits with unique symbolic parameters.
-    /// Parameter naming: "theta_{layer}_{qubit}" for single rotations,
-    /// "theta_{layer}_{qubit}_{axis}" for full rotations.
-    ///
-    /// - Parameters:
-    ///   - circuit: Circuit to modify (inout for performance)
-    ///   - numQubits: Number of qubits
-    ///   - layerIndex: Current layer index (for parameter naming)
-    ///   - rotationGates: Type of rotation gates to apply
     @_optimize(speed)
-    private static func appendRotationLayer(
+    private static func addRotations(
         to circuit: inout QuantumCircuit,
-        numQubits: Int,
-        layerIndex: Int,
-        rotationGates: RotationGateSet
+        qubits: Int,
+        layer: Int,
+        type: Rotations
     ) {
-        let layerPrefix = "theta_\(layerIndex)_"
+        let layerPrefix = "theta_\(layer)_"
 
-        switch rotationGates {
+        switch type {
         case .ry:
-            for qubit in 0 ..< numQubits {
+            for qubit in 0 ..< qubits {
                 let param = Parameter(name: layerPrefix + String(qubit))
                 circuit.append(.rotationY(.parameter(param)), to: qubit)
             }
 
         case .rx:
-            for qubit in 0 ..< numQubits {
+            for qubit in 0 ..< qubits {
                 let param = Parameter(name: layerPrefix + String(qubit))
                 circuit.append(.rotationX(.parameter(param)), to: qubit)
             }
 
         case .rz:
-            for qubit in 0 ..< numQubits {
+            for qubit in 0 ..< qubits {
                 let param = Parameter(name: layerPrefix + String(qubit))
                 circuit.append(.rotationZ(.parameter(param)), to: qubit)
             }
 
         case .full:
-            for qubit in 0 ..< numQubits {
+            for qubit in 0 ..< qubits {
                 let qubitStr = String(qubit)
                 let paramZ1 = Parameter(name: layerPrefix + qubitStr + "_z1")
                 let paramY = Parameter(name: layerPrefix + qubitStr + "_y")
@@ -234,38 +226,24 @@ public struct HardwareEfficientAnsatz {
         }
     }
 
-    /// Append entangling layer to circuit
-    ///
-    /// Adds two-qubit gates to create entanglement between qubits.
-    /// Uses CNOT gates (standard for most hardware platforms).
-    ///
-    /// **Patterns:**
-    /// - Linear: q0->q1, q1->q2, ..., q(n-2)->q(n-1)
-    /// - Circular: Linear + q(n-1)->q0
-    /// - All-to-all: Every pair (i->j) for i<j
-    ///
-    /// - Parameters:
-    ///   - circuit: Circuit to modify
-    ///   - numQubits: Number of qubits
-    ///   - pattern: Entangling topology
     @_optimize(speed)
-    private static func appendEntanglingLayer(
+    private static func addEntanglement(
         to circuit: inout QuantumCircuit,
-        numQubits: Int,
-        pattern: EntanglingPattern
+        qubits: Int,
+        pattern: Entanglement
     ) {
         switch pattern {
         case .linear, .circular:
-            for i in 0 ..< (numQubits - 1) {
+            for i in 0 ..< (qubits - 1) {
                 circuit.append(.cnot, to: [i, i + 1])
             }
-            if pattern == .circular, numQubits >= 2 {
-                circuit.append(.cnot, to: [numQubits - 1, 0])
+            if pattern == .circular, qubits >= 2 {
+                circuit.append(.cnot, to: [qubits - 1, 0])
             }
 
         case .allToAll:
-            for i in 0 ..< numQubits {
-                for j in (i + 1) ..< numQubits {
+            for i in 0 ..< qubits {
+                for j in (i + 1) ..< qubits {
                     circuit.append(.cnot, to: [i, j])
                 }
             }

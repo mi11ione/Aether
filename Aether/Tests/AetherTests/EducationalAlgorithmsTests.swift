@@ -460,6 +460,6 @@ struct AlgorithmsEdgeCasesTests {
 
         oracle([], 0, &circuit)
 
-        #expect(circuit.gateCount == 0, "Oracle should not add gates when inputQubits is empty")
+        #expect(circuit.count == 0, "Oracle should not add gates when inputQubits is empty")
     }
 }
