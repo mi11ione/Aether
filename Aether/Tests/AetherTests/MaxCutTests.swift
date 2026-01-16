@@ -98,8 +98,8 @@ struct MaxCutExampleGraphsTests {
     }
 
     @Test("Complete K₄ graph has 6 edges")
-    func completeK4Graph() {
-        let edges = MaxCut.Examples.completeK4()
+    func complete4Graph() {
+        let edges = MaxCut.Examples.complete4()
         let hamiltonian = MaxCut.hamiltonian(edges: edges)
 
         #expect(edges.count == 6)
@@ -108,7 +108,7 @@ struct MaxCutExampleGraphsTests {
 
     @Test("Linear chain has n-1 edges")
     func linearChain() {
-        let edges = MaxCut.Examples.linearChain(numVertices: 6)
+        let edges = MaxCut.Examples.linearChain(vertices: 6)
         let hamiltonian = MaxCut.hamiltonian(edges: edges)
 
         #expect(edges.count == 5)
@@ -121,7 +121,7 @@ struct MaxCutExampleGraphsTests {
 
     @Test("Linear chain with minimum vertices")
     func linearChainMinimum() {
-        let edges = MaxCut.Examples.linearChain(numVertices: 2)
+        let edges = MaxCut.Examples.linearChain(vertices: 2)
 
         #expect(edges.count == 1)
         #expect(edges[0] == (0, 1))
@@ -129,7 +129,7 @@ struct MaxCutExampleGraphsTests {
 
     @Test("Star graph has n-1 edges from center")
     func starGraph() {
-        let edges = MaxCut.Examples.star(numVertices: 5)
+        let edges = MaxCut.Examples.star(vertices: 5)
         let hamiltonian = MaxCut.hamiltonian(edges: edges)
 
         #expect(edges.count == 4)
@@ -142,10 +142,108 @@ struct MaxCutExampleGraphsTests {
 
     @Test("Star graph with minimum vertices")
     func starGraphMinimum() {
-        let edges = MaxCut.Examples.star(numVertices: 2)
+        let edges = MaxCut.Examples.star(vertices: 2)
 
         #expect(edges.count == 1)
         #expect(edges[0] == (0, 1))
+    }
+
+    @Test("Cycle graph has n edges forming ring")
+    func cycleGraph() {
+        let edges = MaxCut.Examples.cycle(vertices: 6)
+        let hamiltonian = MaxCut.hamiltonian(edges: edges)
+
+        #expect(edges.count == 6)
+        #expect(hamiltonian.terms.count == 6)
+
+        for i in 0 ..< 5 {
+            #expect(edges[i] == (i, i + 1))
+        }
+        #expect(edges[5] == (5, 0))
+    }
+
+    @Test("Cycle graph with minimum vertices")
+    func cycleGraphMinimum() {
+        let edges = MaxCut.Examples.cycle(vertices: 3)
+
+        #expect(edges.count == 3)
+        #expect(edges[0] == (0, 1))
+        #expect(edges[1] == (1, 2))
+        #expect(edges[2] == (2, 0))
+    }
+
+    @Test("Cycle graph matches square for 4 vertices")
+    func cycleMatchesSquare() {
+        let cycleEdges = MaxCut.Examples.cycle(vertices: 4)
+        let squareEdges = MaxCut.Examples.square()
+
+        #expect(cycleEdges.count == squareEdges.count)
+
+        for i in 0 ..< cycleEdges.count {
+            #expect(cycleEdges[i] == squareEdges[i])
+        }
+    }
+
+    @Test("Cycle graph matches pentagon for 5 vertices")
+    func cycleMatchesPentagon() {
+        let cycleEdges = MaxCut.Examples.cycle(vertices: 5)
+        let pentagonEdges = MaxCut.Examples.pentagon()
+
+        #expect(cycleEdges.count == pentagonEdges.count)
+
+        for i in 0 ..< cycleEdges.count {
+            #expect(cycleEdges[i] == pentagonEdges[i])
+        }
+    }
+
+    @Test("Complete graph has n(n-1)/2 edges")
+    func completeGraph() {
+        let edges = MaxCut.Examples.complete(vertices: 5)
+        let hamiltonian = MaxCut.hamiltonian(edges: edges)
+
+        #expect(edges.count == 10)
+        #expect(hamiltonian.terms.count == 10)
+
+        var edgeSet: Set<String> = []
+        for (i, j) in edges {
+            #expect(i < j)
+            edgeSet.insert("\(i)-\(j)")
+        }
+        #expect(edgeSet.count == 10)
+    }
+
+    @Test("Complete graph with minimum vertices")
+    func completeGraphMinimum() {
+        let edges = MaxCut.Examples.complete(vertices: 2)
+
+        #expect(edges.count == 1)
+        #expect(edges[0] == (0, 1))
+    }
+
+    @Test("Complete graph matches triangle for 3 vertices")
+    func completeMatchesTriangle() {
+        let completeEdges = MaxCut.Examples.complete(vertices: 3)
+        let triangleEdges = MaxCut.Examples.triangle()
+
+        #expect(completeEdges.count == triangleEdges.count)
+
+        let completeSet = Set(completeEdges.map { "\(min($0.0, $0.1))-\(max($0.0, $0.1))" })
+        let triangleSet = Set(triangleEdges.map { "\(min($0.0, $0.1))-\(max($0.0, $0.1))" })
+
+        #expect(completeSet == triangleSet)
+    }
+
+    @Test("Complete graph matches complete4 for 4 vertices")
+    func completeMatchesComplete4() {
+        let completeEdges = MaxCut.Examples.complete(vertices: 4)
+        let complete4Edges = MaxCut.Examples.complete4()
+
+        #expect(completeEdges.count == complete4Edges.count)
+
+        let completeSet = Set(completeEdges.map { "\(min($0.0, $0.1))-\(max($0.0, $0.1))" })
+        let complete4Set = Set(complete4Edges.map { "\(min($0.0, $0.1))-\(max($0.0, $0.1))" })
+
+        #expect(completeSet == complete4Set)
     }
 }
 

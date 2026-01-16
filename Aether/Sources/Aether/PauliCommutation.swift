@@ -24,7 +24,8 @@
 /// }
 /// ```
 ///
-/// - SeeAlso: ``QWCGrouper``, ``Observable``
+/// - SeeAlso: ``QWCGrouper``
+/// - SeeAlso: ``Observable``
 public enum PauliCommutation {
     // MARK: - Single-Qubit Commutation
 
@@ -158,9 +159,11 @@ public enum PauliCommutation {
     /// - Returns: Dictionary mapping qubit indices to measurement bases, or `nil` if strings conflict
     /// - Complexity: O(total operators across all strings)
     /// - Note: Empty array returns empty dictionary (vacuously true QWC property)
-    /// - SeeAlso: ``areQWC(_:_:)``, ``QWCGrouper``
+    /// - SeeAlso: ``areQWC(_:_:)``
+    /// - SeeAlso: ``QWCGrouper``
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     public static func measurementBasis(of strings: [PauliString]) -> [Int: PauliBasis]? {
         guard !strings.isEmpty else { return [:] }
 
@@ -201,6 +204,7 @@ public enum PauliCommutation {
     /// - Complexity: O(n) where n is the number of operators in the string
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     public static func measurementBasis(of string: PauliString) -> [Int: PauliBasis] {
         var basis: [Int: PauliBasis] = [:]
 

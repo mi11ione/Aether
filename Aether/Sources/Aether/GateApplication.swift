@@ -1,35 +1,19 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-/// CPU-based gate execution using optimized matrix-vector multiplication
+/// CPU-based gate execution using optimized matrix-vector multiplication.
 ///
-/// Transforms quantum states by applying gate matrices without computing full 2^n x 2^n tensor products.
-/// The core classical simulation algorithm that makes n-qubit systems tractable: a Hadamard gate on qubit 0
-/// of a 20-qubit state processes 2^19 amplitude pairs in milliseconds rather than constructing a million-by-million
-/// matrix.
+/// Transforms quantum states by applying gate matrices without computing full 2^n × 2^n tensor products.
+/// Single-qubit gates apply 2×2 matrices to 2^(n-1) amplitude pairs, two-qubit gates apply 4×4 matrices
+/// to 2^(n-2) quartets. CNOT, CZ, and Toffoli use conditional swaps instead of matrix multiplication.
 ///
-/// **How it works**:
-/// - Single-qubit gates: Apply 2x2 matrix to 2^(n-1) amplitude pairs where target qubit differs
-/// - Two-qubit gates: Apply 4x4 matrix to 2^(n-2) amplitude quartets where control/target bits vary
-/// - Special cases: CNOT/CZ/Toffoli use conditional swaps instead of matrix multiplication (2-3x faster)
+/// Uses little-endian qubit indexing where qubit 0 is LSB in basis state index. Complexity is O(2^n)
+/// per gate, optimal for classical simulation. Best for circuits under 10 qubits; use
+/// ``MetalGateApplication`` for larger circuits.
 ///
-/// **Mathematical foundation**:
-/// State transformation |ψ'⟩ = U|ψ⟩ where U is unitary. For single-qubit gate on qubit q, only amplitudes
-/// at indices differing in bit q are coupled. This reduces full O(4^n) tensor product to O(2^n) targeted updates.
-///
-/// **Qubit indexing (little-endian)**:
-/// Qubit 0 is LSB in basis state index. State |01⟩ has index 1 in binary:
-/// - Bit 0 (qubit 0) = 1 -> qubit is |1⟩
-/// - Bit 1 (qubit 1) = 0 -> qubit is |0⟩
-///
-/// **Performance characteristics**:
-/// - Complexity: O(2^n) per gate (optimal for classical simulation)
-/// - Best for: n < 10 qubits (pure CPU, no GPU overhead)
-/// - See ``MetalGateApplication`` for n ≥ 10 qubits (GPU provides 2-10x speedup)
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
-/// let state = QuantumState(numQubits: 2)  // |00⟩
+/// let state = QuantumState(qubits: 2)  // |00⟩
 ///
 /// // Single-qubit gate: Hadamard on qubit 0
 /// let superposition = GateApplication.apply(.hadamard, to: 0, state: state)
@@ -40,10 +24,12 @@
 /// // (|00⟩ + |11⟩)/√2 - Bell state
 ///
 /// // Convenience method on QuantumState
-/// let rotated = state.applying(.rotationY(angle: .pi / 4), to: 1)
+/// let rotated = state.applying(.rotationY(.pi / 4), to: 1)
 /// ```
 ///
-/// - SeeAlso: ``MetalGateApplication``, ``QuantumSimulator``, ``QuantumCircuit``
+/// - SeeAlso: ``MetalGateApplication``
+/// - SeeAlso: ``QuantumSimulator``
+/// - SeeAlso: ``QuantumCircuit``
 public enum GateApplication {
     // MARK: - Main Application Function
 
@@ -53,9 +39,9 @@ public enum GateApplication {
     /// For single-qubit gates, pass one index. For two-qubit gates (CNOT, CZ, SWAP), pass two.
     /// For Toffoli, pass three [control1, control2, target].
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let state = QuantumState(numQubits: 3)
+    /// let state = QuantumState(qubits: 3)
     /// let withH = GateApplication.apply(.hadamard, to: 0, state: state)
     /// let withCNOT = GateApplication.apply(.cnot, to: [0, 1], state: withH)
     /// ```
@@ -71,7 +57,7 @@ public enum GateApplication {
     @inlinable
     @_eagerMove
     public static func apply(_ gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {
-        ValidationUtilities.validateOperationQubits(qubits, numQubits: state.numQubits)
+        ValidationUtilities.validateOperationQubits(qubits, numQubits: state.qubits)
 
         switch gate {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
@@ -102,9 +88,9 @@ public enum GateApplication {
     /// Wraps qubit index in array and delegates to main apply method.
     /// Cleaner syntax for single-qubit gates.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let state = QuantumState(numQubits: 2)
+    /// let state = QuantumState(qubits: 2)
     /// let result = GateApplication.apply(.hadamard, to: 0, state: state)
     /// ```
     ///
@@ -138,7 +124,7 @@ public enum GateApplication {
     static func applySingleQubitGate(
         gate: QuantumGate,
         qubit: Int,
-        state: QuantumState
+        state: QuantumState,
     ) -> QuantumState {
         let gateMatrix = gate.matrix()
         let g00: Complex<Double> = gateMatrix[0][0]
@@ -162,7 +148,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 
     // MARK: - Two-Qubit Gate Application
@@ -182,7 +168,7 @@ public enum GateApplication {
         gate: QuantumGate,
         control: Int,
         target: Int,
-        state: QuantumState
+        state: QuantumState,
     ) -> QuantumState {
         let gateMatrix = gate.matrix()
         let stateSize = state.stateSpaceSize
@@ -216,20 +202,17 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 
     // MARK: - CNOT
 
-    /// Apply CNOT via conditional amplitude swap
+    /// Apply CNOT via conditional amplitude swap.
     ///
-    /// When control qubit is |1⟩, flips target qubit (X gate). When control is |0⟩, does nothing.
-    /// Implemented as conditional swap: if bit(i, control)==1, swap amplitudes[i] <-> amplitudes[i⊕target].
-    /// No matrix multiplication needed - just conditional index calculation and assignment.
+    /// Flips target qubit when control is |1⟩, does nothing when |0⟩. Implemented as conditional swap
+    /// without matrix multiplication, avoiding 16 complex multiplications per quartet.
     ///
-    /// **Performance**: 2-3x faster than general 4x4 matrix due to avoiding 16 complex multiplications per quartet.
-    ///
-    /// - Complexity: O(2^n) - one pass through state, branch per amplitude
+    /// - Complexity: O(2^n) - one pass through state
     @_optimize(speed)
     @_effects(readonly)
     @inlinable
@@ -237,7 +220,7 @@ public enum GateApplication {
     static func applyCNOT(
         control: Int,
         target: Int,
-        state: QuantumState
+        state: QuantumState,
     ) -> QuantumState {
         let stateSize = state.stateSpaceSize
         let controlMask = BitUtilities.bitMask(qubit: control)
@@ -253,17 +236,15 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 
-    /// Apply CZ (Controlled-Z) via conditional phase flip
+    /// Apply CZ (Controlled-Z) via conditional phase flip.
     ///
-    /// Diagonal gate that only modifies phase: negates amplitude when both qubits are |1⟩, leaves others unchanged.
-    /// Implemented as single-pass conditional negation: if both bits set, negate amplitude. No matrix multiplication.
+    /// Negates amplitude when both qubits are |1⟩, leaves others unchanged. Diagonal structure
+    /// eliminates matrix multiplication - just single-pass conditional negation.
     ///
-    /// **Performance**: 2-3x faster than general 4x4 matrix. Diagonal structure eliminates all off-diagonal terms.
-    ///
-    /// - Complexity: O(2^n) - one pass through state, simple branch per amplitude
+    /// - Complexity: O(2^n) - one pass through state
     @_optimize(speed)
     @_effects(readonly)
     @inlinable
@@ -271,7 +252,7 @@ public enum GateApplication {
     static func applyCZ(
         control: Int,
         target: Int,
-        state: QuantumState
+        state: QuantumState,
     ) -> QuantumState {
         let stateSize = state.stateSpaceSize
         let bothMask = BitUtilities.bitMask(qubit: control) | BitUtilities.bitMask(qubit: target)
@@ -287,7 +268,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 
     // MARK: - Toffoli Gate Application
@@ -296,9 +277,8 @@ public enum GateApplication {
     ///
     /// Flips target qubit when both controls are |1⟩. Implemented as: if both control bits set,
     /// swap amplitudes[i] <-> amplitudes[i⊕target] using XOR to compute paired index.
-    /// Single pass with simple conditional logic, no 8x8 matrix multiplication.
-    ///
-    /// **Performance**: Similar speedup to CNOT vs general multi-qubit gates.
+    /// Single pass with simple conditional logic, no 8x8 matrix multiplication. Similar speedup
+    /// to CNOT vs general multi-qubit gates.
     ///
     /// - Complexity: O(2^n) - one pass, branch per amplitude
     @_optimize(speed)
@@ -309,7 +289,7 @@ public enum GateApplication {
         control1: Int,
         control2: Int,
         target: Int,
-        state: QuantumState
+        state: QuantumState,
     ) -> QuantumState {
         let stateSize = state.stateSpaceSize
         let c1Mask = BitUtilities.bitMask(qubit: control1)
@@ -328,7 +308,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 }
 
@@ -340,9 +320,9 @@ public extension QuantumState {
     /// Delegates to ``GateApplication`` with self as state parameter.
     /// Cleaner syntax for chaining transformations.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let state = QuantumState(numQubits: 2)
+    /// let state = QuantumState(qubits: 2)
     ///     .applying(.hadamard, to: 0)
     ///     .applying(.cnot, to: [0, 1])
     /// // Bell state (|00⟩ + |11⟩)/√2
@@ -365,11 +345,11 @@ public extension QuantumState {
     /// Wraps qubit index in array and delegates to ``GateApplication``.
     /// Preferred for single-qubit operations in fluent chains.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let state = QuantumState(numQubits: 2)
+    /// let state = QuantumState(qubits: 2)
     ///     .applying(.hadamard, to: 0)
-    ///     .applying(.rotationZ(theta: .pi / 4), to: 1)
+    ///     .applying(.rotationZ(.pi / 4), to: 1)
     /// ```
     ///
     /// - Parameters:

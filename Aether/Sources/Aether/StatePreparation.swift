@@ -10,7 +10,7 @@ import Foundation
 /// States can be prepared via direct construction (``QuantumState`` extensions, faster)
 /// or circuit-based (``QuantumCircuit`` extensions, hardware-compatible).
 ///
-/// Example:
+/// **Example:**
 /// ```swift
 /// let basis = QuantumState.basis(qubits: 3, state: 5)  // |101⟩
 /// let bell = QuantumCircuit.bellPhiPlus().execute()     // (|00⟩+|11⟩)/√2
@@ -31,7 +31,7 @@ public extension QuantumState {
     ///   - state: Basis state index i ∈ [0, 2^n-1]
     /// - Returns: Quantum state |i⟩
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let zero = QuantumState.basis(qubits: 1, state: 0)   // |0⟩
     /// let one = QuantumState.basis(qubits: 1, state: 1)    // |1⟩
@@ -43,6 +43,7 @@ public extension QuantumState {
     /// - SeeAlso: ``QuantumCircuit/basis(qubits:state:)`` for hardware-compatible circuit version
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     static func basis(qubits: Int, state: Int) -> QuantumState {
         ValidationUtilities.validatePositiveQubits(qubits)
         ValidationUtilities.validateMemoryLimit(qubits)
@@ -51,13 +52,12 @@ public extension QuantumState {
         ValidationUtilities.validateIndexInBounds(state, bound: stateSpaceSize, name: "Basis state index")
 
         let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
-            for i in 0 ..< stateSpaceSize {
-                buffer[i] = i == state ? .one : .zero
-            }
+            buffer.initialize(repeating: .zero)
+            buffer[state] = .one
             count = stateSpaceSize
         }
 
-        return QuantumState(numQubits: qubits, amplitudes: amplitudes)
+        return QuantumState(qubits: qubits, amplitudes: amplitudes)
     }
 
     // MARK: - W State Preparation
@@ -72,7 +72,7 @@ public extension QuantumState {
     /// - Parameter qubits: Number of qubits (n ≥ 2, practical limit n ≤ 20)
     /// - Returns: W state |W_n⟩
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let w3 = QuantumState.w(qubits: 3)
     /// // |W_3⟩ = (|100⟩ + |010⟩ + |001⟩)/√3
@@ -84,6 +84,7 @@ public extension QuantumState {
     /// - SeeAlso: ``dicke(qubits:ones:)`` for generalization to arbitrary Hamming weight
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     static func w(qubits: Int) -> QuantumState {
         ValidationUtilities.validateMinimumQubits(qubits, min: 2, algorithmName: "W state")
         ValidationUtilities.validateAlgorithmQubitLimit(qubits, max: 20, algorithmName: "W state")
@@ -92,13 +93,14 @@ public extension QuantumState {
         let amplitude = Complex<Double>(1.0 / sqrt(Double(qubits)), 0.0)
 
         let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
-            for i in 0 ..< stateSpaceSize {
-                buffer[i] = i.nonzeroBitCount == 1 ? amplitude : .zero
+            buffer.initialize(repeating: .zero)
+            for qubit in 0 ..< qubits {
+                buffer[1 << qubit] = amplitude
             }
             count = stateSpaceSize
         }
 
-        return QuantumState(numQubits: qubits, amplitudes: amplitudes)
+        return QuantumState(qubits: qubits, amplitudes: amplitudes)
     }
 
     // MARK: - Dicke State Preparation
@@ -133,7 +135,7 @@ public extension QuantumState {
     ///   - ones: Number of |1⟩ qubits (k), where 0 ≤ k ≤ n
     /// - Returns: Dicke state |D_k^n⟩
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let d24 = QuantumState.dicke(qubits: 4, ones: 2)
     /// // |D_2^4⟩ = (|0011⟩+|0101⟩+|0110⟩+|1001⟩+|1010⟩+|1100⟩)/√6
@@ -146,39 +148,26 @@ public extension QuantumState {
     /// - SeeAlso: ``w(qubits:)`` for the special case where `ones == 1`
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     static func dicke(qubits: Int, ones: Int) -> QuantumState {
         ValidationUtilities.validatePositiveQubits(qubits)
         ValidationUtilities.validateAlgorithmQubitLimit(qubits, max: 20, algorithmName: "Dicke state")
-        ValidationUtilities.validateDickeParameters(ones, numQubits: qubits)
+        ValidationUtilities.validateDickeParameters(ones, qubits: qubits)
 
         let stateSpaceSize = 1 << qubits
-        let count = binomialCoefficient(qubits, ones)
-        let amplitude = Complex<Double>(1.0 / sqrt(Double(count)), 0.0)
+        let termCount = binomialCoefficient(qubits, ones)
+        let amplitude = Complex<Double>(1.0 / sqrt(Double(termCount)), 0.0)
 
-        let useEnumeration = count < stateSpaceSize / 2
-
-        let amplitudes: [Complex<Double>]
-        if useEnumeration {
-            amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
-                for i in 0 ..< stateSpaceSize {
-                    buffer[i] = .zero
-                }
-                count = stateSpaceSize
-            }
-            var mutableAmplitudes = amplitudes
-            enumerateCombinations(n: qubits, k: ones) { state in
-                mutableAmplitudes[state] = amplitude
-            }
-            return QuantumState(numQubits: qubits, amplitudes: mutableAmplitudes)
-        } else {
-            amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
-                for i in 0 ..< stateSpaceSize {
-                    buffer[i] = i.nonzeroBitCount == ones ? amplitude : .zero
-                }
-                count = stateSpaceSize
-            }
-            return QuantumState(numQubits: qubits, amplitudes: amplitudes)
+        var amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = stateSpaceSize
         }
+
+        enumerateCombinations(n: qubits, k: ones) { state in
+            amplitudes[state] = amplitude
+        }
+
+        return QuantumState(qubits: qubits, amplitudes: amplitudes)
     }
 
     /// Enumerate all n-bit integers with exactly k bits set
@@ -217,17 +206,20 @@ public extension QuantumCircuit {
     ///
     /// - Returns: 2-qubit circuit creating |Φ⁺⟩
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let state = QuantumCircuit.bellPhiPlus().execute()
     /// let p00 = state.probability(of: 0b00)  // 0.5
     /// let p11 = state.probability(of: 0b11)  // 0.5
     /// ```
     ///
-    /// - SeeAlso: ``bellPhiMinus()``, ``bellPsiPlus()``, ``bellPsiMinus()`` for other Bell states
+    /// - SeeAlso: ``bellPhiMinus()``
+    /// - SeeAlso: ``bellPsiPlus()``
+    /// - SeeAlso: ``bellPsiMinus()``
     @_eagerMove
+    @_effects(readonly)
     static func bellPhiPlus() -> QuantumCircuit {
-        var circuit = QuantumCircuit(numQubits: 2)
+        var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
         return circuit
@@ -240,16 +232,19 @@ public extension QuantumCircuit {
     ///
     /// - Returns: 2-qubit circuit creating |Φ⁻⟩
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let state = QuantumCircuit.bellPhiMinus().execute()
     /// let p00 = state.probability(of: 0b00)  // 0.5
     /// ```
     ///
-    /// - SeeAlso: ``bellPhiPlus()``, ``bellPsiPlus()``, ``bellPsiMinus()`` for other Bell states
+    /// - SeeAlso: ``bellPhiPlus()``
+    /// - SeeAlso: ``bellPsiPlus()``
+    /// - SeeAlso: ``bellPsiMinus()``
     @_eagerMove
+    @_effects(readonly)
     static func bellPhiMinus() -> QuantumCircuit {
-        var circuit = QuantumCircuit(numQubits: 2)
+        var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.pauliZ, to: 0)
         circuit.append(.cnot, to: [0, 1])
@@ -264,16 +259,19 @@ public extension QuantumCircuit {
     ///
     /// - Returns: 2-qubit circuit creating |Ψ⁺⟩
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let state = QuantumCircuit.bellPsiPlus().execute()
     /// let p01 = state.probability(of: 0b01)  // 0.5
     /// ```
     ///
-    /// - SeeAlso: ``bellPhiPlus()``, ``bellPhiMinus()``, ``bellPsiMinus()`` for other Bell states
+    /// - SeeAlso: ``bellPhiPlus()``
+    /// - SeeAlso: ``bellPhiMinus()``
+    /// - SeeAlso: ``bellPsiMinus()``
     @_eagerMove
+    @_effects(readonly)
     static func bellPsiPlus() -> QuantumCircuit {
-        var circuit = QuantumCircuit(numQubits: 2)
+        var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.pauliX, to: 1)
         circuit.append(.cnot, to: [0, 1])
@@ -288,16 +286,19 @@ public extension QuantumCircuit {
     ///
     /// - Returns: 2-qubit circuit creating |Ψ⁻⟩
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let state = QuantumCircuit.bellPsiMinus().execute()
     /// let p01 = state.probability(of: 0b01)  // 0.5
     /// ```
     ///
-    /// - SeeAlso: ``bellPhiPlus()``, ``bellPhiMinus()``, ``bellPsiPlus()`` for other Bell states
+    /// - SeeAlso: ``bellPhiPlus()``
+    /// - SeeAlso: ``bellPhiMinus()``
+    /// - SeeAlso: ``bellPsiPlus()``
     @_eagerMove
+    @_effects(readonly)
     static func bellPsiMinus() -> QuantumCircuit {
-        var circuit = QuantumCircuit(numQubits: 2)
+        var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.pauliZ, to: 0)
         circuit.append(.pauliX, to: 1)
@@ -319,7 +320,7 @@ public extension QuantumCircuit {
     ///   - state: Target basis state i ∈ [0, 2^n-1]
     /// - Returns: Circuit preparing |i⟩
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let circuit = QuantumCircuit.basis(qubits: 3, state: 5)  // Applies X(0), X(2)
     /// let state = circuit.execute()  // |101⟩
@@ -331,6 +332,7 @@ public extension QuantumCircuit {
     /// - SeeAlso: ``QuantumState/basis(qubits:state:)`` for direct statevector construction
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     static func basis(qubits: Int, state: Int) -> QuantumCircuit {
         ValidationUtilities.validatePositiveQubits(qubits)
         ValidationUtilities.validateMemoryLimit(qubits)
@@ -338,7 +340,7 @@ public extension QuantumCircuit {
         let stateSpaceSize = 1 << qubits
         ValidationUtilities.validateIndexInBounds(state, bound: stateSpaceSize, name: "Basis state index")
 
-        var circuit = QuantumCircuit(numQubits: qubits)
+        var circuit = QuantumCircuit(qubits: qubits)
 
         for qubit in 0 ..< qubits {
             if (state >> qubit) & 1 == 1 {

@@ -14,7 +14,7 @@
 /// **Performance**: All operations are O(1) bitwise operations compiled to single CPU instructions
 /// (shift, AND, OR, XOR) for zero-cost abstractions.
 ///
-/// **Example**:
+/// **Example:**
 /// ```swift
 /// let state = 5  // |101⟩ in binary
 /// let bit0 = BitUtilities.getBit(state, qubit: 0)  // 1
@@ -29,7 +29,7 @@ public enum BitUtilities {
     /// and isolates it. Used for measurement outcome extraction, marginal probability computation,
     /// and control qubit evaluation in gate application.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let state = 5  // |101⟩ in binary
     /// BitUtilities.getBit(state, qubit: 0)  // 1 (LSB)
@@ -55,7 +55,7 @@ public enum BitUtilities {
     /// Algorithm: `(index & ~(1 << qubit)) | (value << qubit)` clears target bit then sets it to value.
     /// Used for basis state construction, measurement collapse, and controlled gate operations.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let state = 5  // |101⟩
     /// BitUtilities.setBit(state, qubit: 1, value: 1)  // 7 (|111⟩)
@@ -81,7 +81,7 @@ public enum BitUtilities {
     /// X gates and CNOT operations which flip target qubits. Algorithm: `index ^ (1 << qubit)`
     /// creates mask with 1 at target position and XOR flips the bit (0⊕1=1, 1⊕1=0).
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let state = 5  // |101⟩
     /// BitUtilities.flipBit(state, qubit: 1)  // 7 (|111⟩)
@@ -108,7 +108,7 @@ public enum BitUtilities {
     /// intent is specifically to clear a bit. Algorithm: `index & ~(1 << qubit)` creates mask with
     /// 0 at target position and 1s elsewhere, then AND operation clears the bit.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let state = 7  // |111⟩
     /// BitUtilities.clearBit(state, qubit: 1)  // 5 (|101⟩)
@@ -132,7 +132,7 @@ public enum BitUtilities {
     /// shifts 1 left by qubit positions to create mask value 2^qubit. Useful for precomputing masks in
     /// gate application, batch operations, and bit field manipulation.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// BitUtilities.bitMask(qubit: 0)  // 1 (0b001)
     /// BitUtilities.bitMask(qubit: 1)  // 2 (0b010)
@@ -155,7 +155,7 @@ public enum BitUtilities {
     /// qubit positions, extracting each bit, and combining with appropriate weight. Useful for multi-qubit
     /// gate conditions (Toffoli control checks) and multi-qubit measurement outcomes.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let state = 7  // |111⟩
     /// BitUtilities.getBits(state, qubits: [0, 1])  // 3 (both bits are 1)
@@ -185,7 +185,7 @@ public enum BitUtilities {
     /// bit extraction. Algorithm: `((index >> qubit0) & 1) | (((index >> qubit1) & 1) << 1)` extracts
     /// both bits in parallel. Primarily used for Toffoli gate control qubit checks.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let state = 7  // |111⟩
     /// BitUtilities.getTwoBits(state, qubit0: 0, qubit1: 1)  // 3
@@ -203,5 +203,58 @@ public enum BitUtilities {
     @inline(__always)
     static func getTwoBits(_ index: Int, qubit0: Int, qubit1: Int) -> Int {
         ((index >> qubit0) & 1) | (((index >> qubit1) & 1) << 1)
+    }
+
+    /// Insert zero bit at position, shifting higher bits up
+    ///
+    /// Transforms iteration index for efficient masked traversal by inserting a zero at the specified
+    /// bit position. Bits below position remain unchanged, bits at and above shift up by one. Enables
+    /// iterating dimension/2 values instead of dimension values with guard-continue for single-qubit
+    /// gate expansion where target qubit bit must be zero in the base index.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// BitUtilities.insertZeroBit(0b11, at: 1)  // 0b101 (5)
+    /// BitUtilities.insertZeroBit(0b11, at: 0)  // 0b110 (6)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - value: Iteration index to transform
+    ///   - position: Bit position to insert zero
+    /// - Returns: Transformed index with zero at position
+    /// - Complexity: O(1) - constant bitwise operations
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func insertZeroBit(_ value: Int, at position: Int) -> Int {
+        let lowMask = (1 << position) - 1
+        let low = value & lowMask
+        let high = (value & ~lowMask) << 1
+        return high | low
+    }
+
+    /// Insert two zero bits at positions, shifting higher bits up
+    ///
+    /// Transforms iteration index for efficient dual-masked traversal by inserting zeros at two bit
+    /// positions. Enables iterating dimension/4 values instead of dimension values with guard-continue
+    /// for two-qubit gate expansion where both control and target qubit bits must be zero in base index.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// BitUtilities.insertTwoZeroBits(0b1, low: 0, high: 2)  // 0b0100 (4)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - value: Iteration index to transform
+    ///   - low: Lower bit position (must be < high)
+    ///   - high: Higher bit position (must be > low)
+    /// - Returns: Transformed index with zeros at both positions
+    /// - Complexity: O(1) - constant bitwise operations
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func insertTwoZeroBits(_ value: Int, low: Int, high: Int) -> Int {
+        let afterLow = insertZeroBit(value, at: low)
+        return insertZeroBit(afterLow, at: high)
     }
 }

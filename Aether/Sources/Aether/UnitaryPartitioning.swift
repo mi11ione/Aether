@@ -3,48 +3,25 @@
 
 import Accelerate
 
-/// A group of Pauli terms measurable simultaneously via a unitary transformation.
+/// Pauli terms diagonalizable by a common unitary transformation for simultaneous measurement.
 ///
-/// Applies unitary U† before measurement, transforming all terms into diagonal operators
-/// that share a common Z measurement basis. Enables single-shot measurement of multiple
-/// non-commuting terms by diagonalizing them via the unitary transformation.
+/// Created by ``UnitaryPartitioner``. All terms share a Z measurement basis after applying
+/// the diagonalizing unitary U†.
 ///
-/// The unitary U is found such that U†PᵢU are diagonal for all Pauli terms Pᵢ in the partition.
-/// This is achieved through eigendecomposition or variational optimization with hardware-efficient ansatz.
-///
-/// **Example**:
-/// ```swift
-/// let partitioner = UnitaryPartitioner()
-/// let partitions = partitioner.partition(terms: hamiltonian.terms)
-///
-/// for partition in partitions {
-///     let transformedState = applyUnitary(partition.unitaryMatrix, to: state)
-///     let outcomes = measure(transformedState, basis: partition.measurementBasis)
-///     let expectation = computeExpectation(partition.terms, outcomes: outcomes)
-/// }
-/// ```
-///
-/// - Complexity: O(n³) eigendecomposition or O(iterations x depth x 2^(2n)) variational optimization
-/// - SeeAlso: ``UnitaryPartitioner``, ``QWCGroup``, ``Observable``
+/// - SeeAlso: ``UnitaryPartitioner``
+@frozen
 public struct UnitaryPartition: Sendable {
-    /// Pauli terms with coefficients that can be measured simultaneously after applying the unitary transformation.
+    /// Pauli terms in this partition.
     public let terms: PauliTerms
 
-    /// Unitary transformation matrix (2^n x 2^n) that diagonalizes the terms.
-    ///
-    /// After applying U†, all Pauli operators in the partition become (nearly) diagonal,
-    /// sharing a common Z measurement basis.
+    /// Diagonalizing unitary (2^n × 2^n).
     let unitaryMatrix: [[Complex<Double>]]
 
-    /// Measurement basis for all terms in partition (all qubits measured in Z basis).
-    ///
-    /// Computed once at initialization for efficient repeated measurements.
+    /// Measurement basis per qubit (all Z after U†).
     public let measurementBasis: [Int: PauliBasis]
 
-    /// Number of qubits (derived from matrix dimension)
-    private var numQubits: Int { unitaryMatrix.count.trailingZeroBitCount }
+    private var qubits: Int { unitaryMatrix.count.trailingZeroBitCount }
 
-    /// Initialize with precomputed measurement basis
     init(terms: PauliTerms, unitaryMatrix: [[Complex<Double>]]) {
         self.terms = terms
         self.unitaryMatrix = unitaryMatrix
@@ -58,83 +35,45 @@ public struct UnitaryPartition: Sendable {
         measurementBasis = basis
     }
 
-    /// Total weight of partition (sum of absolute coefficients).
-    ///
-    /// Used for partition ordering and shot allocation. Higher weight partitions
-    /// contribute more to total expectation value and should receive more measurements.
-    ///
-    /// - Complexity: O(n) where n is number of terms in partition
+    /// Sum of |coefficients| for shot allocation priority.
     @inlinable
     public var weight: Double {
         terms.reduce(0.0) { $0 + abs($1.coefficient) }
     }
 }
 
-/// Reduces measurement overhead by finding unitary transformations that diagonalize Pauli terms.
+/// Groups Pauli terms into partitions diagonalizable by unitary transformations.
 ///
-/// Use this for large Hamiltonians where measurement dominates VQE runtime. QWC grouping alone
-/// may leave many groups requiring separate circuits. Unitary partitioning further reduces groups
-/// via variational optimization, cutting measurement cost at the expense of optimization overhead.
+/// Starts with QWC groups, then greedily merges using eigendecomposition (fast, exact) or
+/// variational ansatz optimization (L-BFGS-B with hardware-efficient ansatz) when needed.
 ///
-/// Starts with QWC groups, then greedily merges groups by finding unitary U that minimizes
-/// the off-diagonal norm ||off-diagonal(U†PᵢU)||². Uses eigendecomposition when possible (fast, exact)
-/// or variational ansatz optimization when needed (slower, approximate). Accepts partition if
-/// off-diagonal norm falls below threshold (default 0.1).
-///
-/// The optimization uses LAPACK zheev for eigendecomposition (O(n³)) or L-BFGS-B with hardware-efficient
-/// ansatz for variational approach (O(iterations x depth x 2^(2n))). Convergence occurs when gradient
-/// norm drops below tolerance (default 1e-6) or max iterations reached (default 100).
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
-/// let config = UnitaryPartitioner.Config(
-///     maxIterations: 200,
-///     circuitDepth: 5,
-///     diagonalityThreshold: 0.05
-/// )
-/// let partitioner = UnitaryPartitioner(config: config)
-/// let partitions = partitioner.partition(terms: hamiltonian.terms)
-/// print("Reduced \(hamiltonian.terms.count) terms to \(partitions.count) partitions")
+/// let partitioner = UnitaryPartitioner()
+/// let partitions = partitioner.partition(terms: observable.terms)
 /// ```
 ///
-/// - Complexity: O(groups² x iterations x depth x 2^(2n)) worst-case variational optimization
-/// - SeeAlso: ``UnitaryPartition``, ``QWCGrouper``, ``VQE``, ``Observable``
+/// - SeeAlso: ``UnitaryPartition``
+/// - SeeAlso: ``QWCGrouper``
 public struct UnitaryPartitioner {
     // MARK: - Configuration
 
-    /// Configuration for unitary partitioning optimization.
-    ///
-    /// Balances optimization quality against runtime. More iterations and stricter thresholds
-    /// improve diagonalization but increase cost. Default values work well for typical molecular
-    /// Hamiltonians.
-    ///
-    /// **Example**:
-    /// ```swift
-    /// let aggressive = Config(maxIterations: 200, diagonalityThreshold: 0.05)
-    /// let fast = Config(maxIterations: 50, diagonalityThreshold: 0.2)
-    /// ```
+    /// Variational optimization parameters.
+    @frozen
     public struct Config: Sendable {
-        /// Maximum number of L-BFGS-B iterations before giving up.
+        /// L-BFGS-B iteration limit (default 100).
         public let maxIterations: Int
 
-        /// Convergence tolerance for gradient norm in L-BFGS-B optimization.
-        ///
-        /// Optimization stops when ||∇C|| < tolerance. Default 1e-6 is standard for L-BFGS.
+        /// Gradient norm convergence threshold (default 1e-6).
         public let convergenceTolerance: Double
 
-        /// Number of layers in hardware-efficient variational ansatz.
-        ///
-        /// Each layer adds 3n parameters (n = number of qubits). Default 3 layers balances
-        /// expressivity with optimization difficulty.
+        /// Ansatz layers, 3n parameters per layer (default 3).
         public let circuitDepth: Int
 
-        /// Whether to use adaptive layer depth (currently unused, reserved for future optimization).
+        /// Reserved for future use.
         public let useAdaptiveDepth: Bool
 
-        /// Maximum off-diagonal norm to accept partition (lower = stricter).
-        ///
-        /// Partitions with ||off-diagonal(U†HU)|| > threshold are rejected and fall back
-        /// to QWC grouping. Default 0.1 accepts nearly-diagonal results.
+        /// Max off-diagonal norm to accept partition (default 0.1).
         public let diagonalityThreshold: Double
 
         public init(
@@ -142,7 +81,7 @@ public struct UnitaryPartitioner {
             convergenceTolerance: Double = 1e-6,
             circuitDepth: Int = 3,
             useAdaptiveDepth: Bool = true,
-            diagonalityThreshold: Double = 0.1
+            diagonalityThreshold: Double = 0.1,
         ) {
             self.maxIterations = maxIterations
             self.convergenceTolerance = convergenceTolerance
@@ -163,13 +102,18 @@ public struct UnitaryPartitioner {
     @_eagerMove
     private func buildTargetOperator(
         terms: PauliTerms,
-        numQubits: Int
+        qubits: Int,
     ) -> [[Complex<Double>]] {
-        let dimension = 1 << numQubits
-        var targetOperator = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
+        let dimension = 1 << qubits
+        var targetOperator = [[Complex<Double>]](unsafeUninitializedCapacity: dimension) { buffer, count in
+            for i in 0 ..< dimension {
+                buffer.initializeElement(at: i, to: [Complex<Double>](repeating: .zero, count: dimension))
+            }
+            count = dimension
+        }
 
         for (coeff, pauliString) in terms {
-            let pauliMatrix = pauliString.toMatrix(numQubits: numQubits)
+            let pauliMatrix = pauliString.toMatrix(qubits: qubits)
             for i in 0 ..< dimension {
                 for j in 0 ..< dimension {
                     targetOperator[i][j] += Complex(coeff) * pauliMatrix[i][j]
@@ -182,34 +126,19 @@ public struct UnitaryPartitioner {
 
     // MARK: - Main Partitioning Algorithm
 
-    /// Groups Pauli terms into partitions diagonalizable by unitary transformations.
+    /// Partitions terms into diagonalizable groups via greedy merging of QWC groups.
     ///
-    /// Starts with QWC groups, then greedily merges groups where optimization finds a diagonalizing
-    /// unitary. Falls back to identity matrix if optimization fails (returns QWC group as-is).
-    ///
-    /// Computes QWC groups as baseline, then for each seed group attempts to merge remaining groups.
-    /// Optimization tries eigendecomposition first (fast, exact), then variational approach if needed
-    /// (slower, approximate). Accepts merge if off-diagonal norm falls below threshold. Non-mergeable
-    /// groups remain as separate partitions.
-    ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let partitioner = UnitaryPartitioner()
-    /// let partitions = partitioner.partition(terms: hamiltonian.terms)
-    ///
-    /// for (index, partition) in partitions.enumerated() {
-    ///     print("Partition \(index): \(partition.terms.count) terms, weight \(partition.weight)")
-    /// }
+    /// let partitions = UnitaryPartitioner().partition(terms: observable.terms)
     /// ```
     ///
-    /// - Parameter terms: Pauli terms with coefficients from ``Observable``
-    /// - Returns: Unitary partitions (order depends on greedy merging, not sorted by weight)
-    /// - Complexity: O(groups² x iterations x depth x 2^(2n)) worst-case, O(groups x n³) best-case
-    /// - SeeAlso: ``UnitaryPartition``, ``Config``
+    /// - Parameter terms: Pauli terms from ``Observable``
+    /// - Returns: Diagonalizable partitions
     @_optimize(speed)
     @_eagerMove
     public func partition(terms: PauliTerms) -> [UnitaryPartition] {
-        let numQubits = terms.map { $0.pauliString.operators.map(\.qubit).max() ?? 0 }.max().map { $0 + 1 } ?? 0
+        let qubits = terms.map { $0.pauliString.operators.map(\.qubit).max() ?? 0 }.max().map { $0 + 1 } ?? 0
         let qwcGroups: [QWCGroup] = QWCGrouper.group(terms)
         var partitions: [UnitaryPartition] = []
         var remainingGroups: [QWCGroup] = qwcGroups
@@ -226,7 +155,7 @@ public struct UnitaryPartitioner {
 
                 if let unitary = findDiagonalizingUnitary(
                     terms: mergedTerms,
-                    numQubits: numQubits
+                    qubits: qubits,
                 ) {
                     currentTerms = mergedTerms
                     lastUnitary = unitary
@@ -236,16 +165,16 @@ public struct UnitaryPartitioner {
                 }
             }
 
-            if let unitary = lastUnitary ?? findDiagonalizingUnitary(terms: currentTerms, numQubits: numQubits) {
+            if let unitary = lastUnitary ?? findDiagonalizingUnitary(terms: currentTerms, qubits: qubits) {
                 partitions.append(UnitaryPartition(
                     terms: currentTerms,
-                    unitaryMatrix: unitary
+                    unitaryMatrix: unitary,
                 ))
             } else {
-                let identity: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: 1 << numQubits)
+                let identity: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: 1 << qubits)
                 partitions.append(UnitaryPartition(
                     terms: currentTerms,
-                    unitaryMatrix: identity
+                    unitaryMatrix: identity,
                 ))
             }
         }
@@ -255,24 +184,19 @@ public struct UnitaryPartitioner {
 
     // MARK: - Unitary Optimization
 
-    /// Find unitary that diagonalizes given Pauli terms.
-    ///
-    /// - Parameters:
-    ///   - terms: Pauli terms to diagonalize
-    ///   - numQubits: Number of qubits
-    /// - Returns: Unitary matrix if found, nil if optimization fails
+    /// Finds diagonalizing unitary via eigendecomposition, falling back to variational optimization.
     @_optimize(speed)
     @_eagerMove
     private func findDiagonalizingUnitary(
         terms: PauliTerms,
-        numQubits: Int
+        qubits: Int,
     ) -> [[Complex<Double>]]? {
-        let targetOperator = buildTargetOperator(terms: terms, numQubits: numQubits)
+        let targetOperator = buildTargetOperator(terms: terms, qubits: qubits)
 
         if let (_, eigenvectors) = eigendecompose(targetOperator) {
             let offDiagNorm: Double = computeOffDiagonalNorm(
                 operator: targetOperator,
-                unitary: eigenvectors
+                unitary: eigenvectors,
             )
 
             if offDiagNorm < config.diagonalityThreshold {
@@ -280,7 +204,7 @@ public struct UnitaryPartitioner {
             }
         }
 
-        return optimizeVariational(terms: terms, numQubits: numQubits)
+        return optimizeVariational(terms: terms, qubits: qubits)
     }
 
     /// Optimize unitary using variational ansatz.
@@ -288,11 +212,11 @@ public struct UnitaryPartitioner {
     @_eagerMove
     private func optimizeVariational(
         terms: PauliTerms,
-        numQubits: Int
+        qubits: Int,
     ) -> [[Complex<Double>]]? {
-        let pauliMatrices: [[[Complex<Double>]]] = terms.map { $0.pauliString.toMatrix(numQubits: numQubits) }
+        let pauliMatrices: [[[Complex<Double>]]] = terms.map { $0.pauliString.toMatrix(qubits: qubits) }
 
-        let numParams: Int = parameterCount(numQubits: numQubits, depth: config.circuitDepth)
+        let numParams: Int = parameterCount(qubits: qubits, depth: config.circuitDepth)
         let parameters = [Double](unsafeUninitializedCapacity: numParams) { buffer, count in
             for i in 0 ..< numParams {
                 buffer[i] = Double.random(in: -Double.pi ... Double.pi)
@@ -307,7 +231,7 @@ public struct UnitaryPartitioner {
                     parameters: params,
                     terms: terms,
                     pauliMatrices: pauliMatrices,
-                    numQubits: numQubits
+                    qubits: qubits,
                 )
             },
             gradientFunction: { params in
@@ -315,20 +239,20 @@ public struct UnitaryPartitioner {
                     parameters: params,
                     terms: terms,
                     pauliMatrices: pauliMatrices,
-                    numQubits: numQubits
+                    qubits: qubits,
                 )
             },
             maxIterations: config.maxIterations,
-            tolerance: config.convergenceTolerance
+            tolerance: config.convergenceTolerance,
         )
 
         let unitary: [[Complex<Double>]] = buildVariationalUnitary(
             parameters: result.parameters,
-            numQubits: numQubits,
-            depth: config.circuitDepth
+            qubits: qubits,
+            depth: config.circuitDepth,
         )
 
-        let targetOperator = buildTargetOperator(terms: terms, numQubits: numQubits)
+        let targetOperator = buildTargetOperator(terms: terms, qubits: qubits)
 
         let offDiagNorm: Double = computeOffDiagonalNorm(operator: targetOperator, unitary: unitary)
 
@@ -342,15 +266,15 @@ public struct UnitaryPartitioner {
         parameters: [Double],
         terms: PauliTerms,
         pauliMatrices: [[[Complex<Double>]]],
-        numQubits: Int
+        qubits: Int,
     ) -> Double {
         let unitary = buildVariationalUnitary(
             parameters: parameters,
-            numQubits: numQubits,
-            depth: config.circuitDepth
+            qubits: qubits,
+            depth: config.circuitDepth,
         )
 
-        let dimension = 1 << numQubits
+        let dimension = 1 << qubits
         var cost = 0.0
 
         for (index, term) in terms.enumerated() {
@@ -391,7 +315,7 @@ public struct UnitaryPartitioner {
         parameters: [Double],
         terms: PauliTerms,
         pauliMatrices: [[[Complex<Double>]]],
-        numQubits: Int
+        qubits: Int,
     ) -> [Double] {
         let epsilon = 1e-7
         let paramCount = parameters.count
@@ -400,21 +324,22 @@ public struct UnitaryPartitioner {
             parameters: parameters,
             terms: terms,
             pauliMatrices: pauliMatrices,
-            numQubits: numQubits
+            qubits: qubits,
         )
 
+        var paramsPlus = parameters
         let gradient = [Double](unsafeUninitializedCapacity: paramCount) { buffer, count in
             for i in 0 ..< paramCount {
-                var paramsPlus = parameters
                 paramsPlus[i] += epsilon
 
                 let fPlus = costFunctionCached(
                     parameters: paramsPlus,
                     terms: terms,
                     pauliMatrices: pauliMatrices,
-                    numQubits: numQubits
+                    qubits: qubits,
                 )
                 buffer[i] = (fPlus - f0) / epsilon
+                paramsPlus[i] -= epsilon
             }
             count = paramCount
         }
@@ -424,56 +349,31 @@ public struct UnitaryPartitioner {
 
     // MARK: - Variational Ansatz
 
-    /// Counts parameters in variational ansatz (depth x numQubits x 3).
-    ///
-    /// Each layer has 3 parameters per qubit (Rz-Ry-Rz Euler angles for U3 gate).
-    ///
-    /// - Complexity: O(1)
+    /// Parameter count: depth × qubits × 3 (U3 Euler angles per qubit per layer).
     @_effects(readonly)
-    private func parameterCount(numQubits: Int, depth: Int) -> Int {
-        depth * numQubits * 3
+    private func parameterCount(qubits: Int, depth: Int) -> Int {
+        depth * qubits * 3
     }
 
-    /// Constructs unitary matrix from variational ansatz parameters.
-    ///
-    /// Uses hardware-efficient ansatz with depth layers. Each layer applies U3 rotations (Rz-Ry-Rz Euler angles)
-    /// to all qubits, then a linear CNOT chain for entanglement. Total parameters: depth x numQubits x 3.
-    ///
-    /// The ansatz structure repeats depth times: U3(θ, φ, λ) = Rz(λ) Ry(θ) Rz(φ) on each qubit, followed
-    /// by CNOT ladder q₀->q₁, q₁->q₂, ..., qₙ₋₂->qₙ₋₁. CNOT matrices are precomputed once per qubit pair to
-    /// avoid redundant construction.
-    ///
-    /// **Example**:
-    /// ```swift
-    /// let params = [0.5, 1.2, -0.3, 0.8, 0.1, 0.7]
-    /// let unitary = buildVariationalUnitary(parameters: params, numQubits: 2, depth: 1)
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - parameters: Rotation angles (length = depth x numQubits x 3)
-    ///   - numQubits: Number of qubits
-    ///   - depth: Number of ansatz layers
-    /// - Returns: Unitary matrix (2^numQubits x 2^numQubits)
-    /// - Complexity: O(depth x numQubits x 2^(2n)) for matrix composition
-    /// - Precondition: `parameters.count == depth x numQubits x 3`
+    /// Builds unitary from hardware-efficient ansatz: [U3 rotations → CNOT ladder] × depth.
     @_optimize(speed)
     @_eagerMove
     private func buildVariationalUnitary(
         parameters: [Double],
-        numQubits: Int,
-        depth: Int
+        qubits: Int,
+        depth: Int,
     ) -> [[Complex<Double>]] {
-        let dimension = 1 << numQubits
+        let dimension = 1 << qubits
         var unitary: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: dimension)
 
-        let cnotMatrices: [[[Complex<Double>]]] = (0 ..< (numQubits - 1)).map { qubit in
-            cnotMatrix(control: qubit, target: qubit + 1, numQubits: numQubits)
+        let cnotMatrices: [[[Complex<Double>]]] = (0 ..< (qubits - 1)).map { qubit in
+            cnotMatrix(control: qubit, target: qubit + 1, qubits: qubits)
         }
 
         var paramIndex = 0
 
         for _ in 0 ..< depth {
-            for qubit in 0 ..< numQubits {
+            for qubit in 0 ..< qubits {
                 let theta: Double = parameters[paramIndex]
                 let phi: Double = parameters[paramIndex + 1]
                 let lambda: Double = parameters[paramIndex + 2]
@@ -484,13 +384,13 @@ public struct UnitaryPartitioner {
                     theta: theta,
                     phi: phi,
                     lambda: lambda,
-                    numQubits: numQubits
+                    qubits: qubits,
                 )
 
                 unitary = MatrixUtilities.matrixMultiply(rotation, unitary)
             }
 
-            for (index, cnot) in cnotMatrices.enumerated() where index < numQubits - 1 {
+            for (index, cnot) in cnotMatrices.enumerated() where index < qubits - 1 {
                 unitary = MatrixUtilities.matrixMultiply(cnot, unitary)
             }
         }
@@ -504,7 +404,7 @@ public struct UnitaryPartitioner {
     @_eagerMove
     private func conjugateByUnitary(
         _ matrix: [[Complex<Double>]],
-        unitary: [[Complex<Double>]]
+        unitary: [[Complex<Double>]],
     ) -> [[Complex<Double>]] {
         let unitaryDagger: [[Complex<Double>]] = MatrixUtilities.hermitianConjugate(unitary)
         let temp: [[Complex<Double>]] = MatrixUtilities.matrixMultiply(unitaryDagger, matrix)
@@ -515,7 +415,7 @@ public struct UnitaryPartitioner {
     @_effects(readonly)
     private func computeOffDiagonalNorm(
         operator matrix: [[Complex<Double>]],
-        unitary: [[Complex<Double>]]
+        unitary: [[Complex<Double>]],
     ) -> Double {
         let conjugated: [[Complex<Double>]] = conjugateByUnitary(matrix, unitary: unitary)
         let n: Int = conjugated.count
@@ -537,7 +437,7 @@ public struct UnitaryPartitioner {
         theta: Double,
         phi: Double,
         lambda: Double,
-        numQubits: Int
+        qubits: Int,
     ) -> [[Complex<Double>]] {
         let c: Double = cos(theta / 2)
         let s: Double = sin(theta / 2)
@@ -547,13 +447,13 @@ public struct UnitaryPartitioner {
             [Complex(cos(phi) * s, sin(phi) * s), Complex(cos(phi + lambda) * c, sin(phi + lambda) * c)],
         ]
 
-        return embedSingleQubitGate(u3, qubit: qubit, numQubits: numQubits)
+        return embedSingleQubitGate(u3, qubit: qubit, qubits: qubits)
     }
 
     @_optimize(speed)
     @_eagerMove
-    private func cnotMatrix(control: Int, target: Int, numQubits: Int) -> [[Complex<Double>]] {
-        let dimension = 1 << numQubits
+    private func cnotMatrix(control: Int, target: Int, qubits: Int) -> [[Complex<Double>]] {
+        let dimension = 1 << qubits
         var cnot: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: dimension)
 
         for basis in 0 ..< dimension {
@@ -575,9 +475,9 @@ public struct UnitaryPartitioner {
     private func embedSingleQubitGate(
         _ gate: [[Complex<Double>]],
         qubit: Int,
-        numQubits: Int
+        qubits: Int,
     ) -> [[Complex<Double>]] {
-        let dimension = 1 << numQubits
+        let dimension = 1 << qubits
         var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
 
         for row in 0 ..< dimension {
@@ -599,28 +499,7 @@ public struct UnitaryPartitioner {
 
     // MARK: - Eigendecomposition
 
-    /// Diagonalizes Hermitian matrix via eigendecomposition using LAPACK's zheev.
-    ///
-    /// For Hermitian operators, eigenvectors form a unitary basis that diagonalizes the operator.
-    /// Given H, finds U such that U†HU = diag(λ₀, λ₁, ..., λₙ₋₁) where U has eigenvectors as columns.
-    /// This is the exact solution for unitary partitioning when it succeeds.
-    ///
-    /// Returns nil on LAPACK errors (singular matrix, numerical instability, memory allocation failure).
-    /// Algorithm assumes Hermiticity without validation. Caller should fall back to variational optimization
-    /// on failure.
-    ///
-    /// **Example**:
-    /// ```swift
-    /// let hamiltonian = buildTargetOperator(terms: terms, numQubits: 3)
-    /// if let (eigenvalues, eigenvectors) = eigendecompose(hamiltonian) {
-    ///     let diagonal = conjugateByUnitary(hamiltonian, unitary: eigenvectors)
-    /// }
-    /// ```
-    ///
-    /// - Parameter matrix: Hermitian matrix (n x n) in row-major order
-    /// - Returns: (eigenvalues sorted ascending, eigenvectors as columns) or nil if LAPACK fails
-    /// - Complexity: O(n³) time, O(n²) space via LAPACK zheev
-    /// - Precondition: Matrix must be Hermitian (no validation performed)
+    /// Diagonalizes Hermitian matrix via LAPACK zheev. Returns nil on failure.
     @_optimize(speed)
     @_eagerMove
     private func eigendecompose(_ matrix: [[Complex<Double>]]) -> (eigenvalues: [Double], eigenvectors: [[Complex<Double>]])? {
@@ -647,9 +526,9 @@ public struct UnitaryPartitioner {
         var lwork = __LAPACK_int(-1)
         var info = __LAPACK_int(0)
 
-        var rwork = [Double](repeating: 0.0, count: max(1, 3 * n - 2))
+        var rwork = [Double](unsafeUninitializedCapacity: max(1, 3 * n - 2)) { _, count in count = max(1, 3 * n - 2) }
 
-        var workQuery = [Double](repeating: 0.0, count: 2)
+        var workQuery = [Double](unsafeUninitializedCapacity: 2) { _, count in count = 2 }
 
         let queryResult: __LAPACK_int = a.withUnsafeMutableBytes { aPtr in
             workQuery.withUnsafeMutableBytes { workPtr in
@@ -663,7 +542,7 @@ public struct UnitaryPartitioner {
                             OpaquePointer(workPtr.baseAddress)!,
                             &lwork,
                             rworkPtr.baseAddress,
-                            &info
+                            &info,
                         )
                         return info
                     }
@@ -677,7 +556,7 @@ public struct UnitaryPartitioner {
         guard optimalWorkSize > 0 else { return nil }
 
         lwork = __LAPACK_int(optimalWorkSize)
-        var work = [Double](repeating: 0.0, count: 2 * optimalWorkSize)
+        var work = [Double](unsafeUninitializedCapacity: 2 * optimalWorkSize) { _, count in count = 2 * optimalWorkSize }
 
         let computeResult: __LAPACK_int = a.withUnsafeMutableBytes { aPtr in
             work.withUnsafeMutableBytes { workPtr in
@@ -691,7 +570,7 @@ public struct UnitaryPartitioner {
                             OpaquePointer(workPtr.baseAddress)!,
                             &lwork,
                             rworkPtr.baseAddress,
-                            &info
+                            &info,
                         )
                         return info
                     }
@@ -719,6 +598,7 @@ public struct UnitaryPartitioner {
 
     // MARK: - L-BFGS-B Optimizer
 
+    @frozen
     public struct UnitaryOptimizationResult {
         public let parameters: [Double]
         public let finalCost: Double
@@ -726,37 +606,7 @@ public struct UnitaryPartitioner {
         public let converged: Bool
     }
 
-    /// Minimizes cost function using limited-memory quasi-Newton method (L-BFGS-B).
-    ///
-    /// Approximates Hessian via gradient history (last 10 steps), avoiding full storage of quasi-Newton
-    /// methods. Uses two-loop recursion for search direction and backtracking line search with Wolfe
-    /// conditions for step size. Converges when gradient norm drops below tolerance or max iterations
-    /// reached. Line search may fail on non-descent directions.
-    ///
-    /// Faster convergence than gradient descent for smooth landscapes, but requires gradient evaluations
-    /// which are costly for variational unitary optimization. Uses Wolfe constants c1=1e-4 (sufficient
-    /// decrease) and c2=0.9 (curvature condition).
-    ///
-    /// **Example**:
-    /// ```swift
-    /// let result = lbfgsb(
-    ///     initialParameters: randomAngles,
-    ///     costFunction: { params in offDiagonalCost(params, terms: terms) },
-    ///     gradientFunction: { params in finiteDifferenceGradient(params) },
-    ///     maxIterations: 100,
-    ///     tolerance: 1e-6
-    /// )
-    /// print("Converged: \(result.converged), iterations: \(result.iterations)")
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - initialParameters: Starting point (typically random angles in [-π, π])
-    ///   - costFunction: Objective to minimize (off-diagonal norm for unitary partitioning)
-    ///   - gradientFunction: Gradient of objective (finite differences, epsilon=1e-7)
-    ///   - maxIterations: Maximum iterations before giving up
-    ///   - tolerance: Convergence threshold on gradient norm
-    /// - Returns: Optimization result with final parameters, cost, iterations, convergence status
-    /// - Complexity: O(iterations x n x cost_eval) where cost_eval = O(depth x 2^(2n)) for variational unitary
+    /// L-BFGS-B optimizer with Wolfe line search. Converges when ||∇|| < tolerance.
     @_optimize(speed)
     @_eagerMove
     private func lbfgsb(
@@ -764,7 +614,7 @@ public struct UnitaryPartitioner {
         costFunction: ([Double]) -> Double,
         gradientFunction: ([Double]) -> [Double],
         maxIterations: Int,
-        tolerance: Double
+        tolerance: Double,
     ) -> UnitaryOptimizationResult {
         let c1 = 1e-4
         let c2 = 0.9
@@ -794,7 +644,7 @@ public struct UnitaryPartitioner {
                 gradient: gradient,
                 sHistory: sHistory,
                 yHistory: yHistory,
-                rhoHistory: rhoHistory
+                rhoHistory: rhoHistory,
             )
 
             guard let alpha = lineSearch(
@@ -805,7 +655,7 @@ public struct UnitaryPartitioner {
                 costFunction: costFunction,
                 gradientFunction: gradientFunction,
                 c1: c1,
-                c2: c2
+                c2: c2,
             ) else { break }
 
             let n = params.count
@@ -847,7 +697,7 @@ public struct UnitaryPartitioner {
             parameters: params,
             finalCost: cost,
             iterations: iteration,
-            converged: converged
+            converged: converged,
         )
     }
 
@@ -861,7 +711,7 @@ public struct UnitaryPartitioner {
         costFunction: ([Double]) -> Double,
         gradientFunction: ([Double]) -> [Double],
         c1: Double,
-        c2: Double
+        c2: Double,
     ) -> Double? {
         var alpha = 1.0
         let maxBacktrack = 20
@@ -899,33 +749,18 @@ public struct UnitaryPartitioner {
 // MARK: - PauliString Matrix Extension
 
 public extension PauliString {
-    /// Compute column index and phase transformation for Pauli string applied to basis state
+    /// Computes P|row⟩ = phase × |col⟩ for Pauli string P acting on basis state |row⟩.
     ///
-    /// Core algorithm for converting Pauli strings to matrix representations. Given a basis state
-    /// (row index), computes the resulting state (column index) and accumulated phase after
-    /// applying the Pauli string operator. Used by both sparse matrix construction (SparseHamiltonian)
-    /// and dense matrix conversion (UnitaryPartitioning).
+    /// X flips bit, Y flips bit with ±i phase, Z applies ±1 phase. Multi-qubit strings
+    /// combine via tensor product (phases multiply).
     ///
-    /// **Pauli action on computational basis**:
-    /// - **X**: Bit flip -> `col ^= (1 << qubit)`
-    /// - **Y**: Bit flip + phase -> `col ^= (1 << qubit)`, `phase *= (bit==0 ? -i : i)`
-    /// - **Z**: Phase only -> `phase *= (bit==0 ? +1 : -1)`
-    /// - **I** (identity): No-op -> unchanged `col` and `phase`
-    ///
-    /// **Phase conventions**:
-    /// - Y operator: Y|0⟩ = i|1⟩, Y|1⟩ = -i|0⟩
-    /// - Z operator: Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩
-    /// - Combined via multiplication for multi-qubit tensors
-    ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let yPauli = PauliString(operators: [(qubit: 0, basis: .y)])
-    /// let (col, phase) = yPauli.applyToRow(row: 0)
-    /// // Y|0⟩ = i|1⟩ -> col = 1, phase = i
+    /// let (col, phase) = PauliString([.y(0)]).applyToRow(row: 0)  // col=1, phase=i
     /// ```
     ///
-    /// - Parameter row: Input basis state index (0 to 2^numQubits - 1)
-    /// - Returns: (column index, phase factor) representing P|row⟩ = phase * |col⟩
+    /// - Parameter row: Basis state index in [0, 2^n)
+    /// - Returns: Resulting basis state index and accumulated phase
     @_optimize(speed)
     @inlinable
     func applyToRow(row: Int) -> (col: Int, phase: Complex<Double>) {
@@ -953,26 +788,20 @@ public extension PauliString {
         return (col, phase)
     }
 
-    /// Converts Pauli string to dense matrix representation (2^n x 2^n).
+    /// Converts Pauli string to dense 2^n × 2^n matrix via ``applyToRow(row:)``.
     ///
-    /// Applies ``applyToRow(row:)`` to all basis states to construct full matrix. Used by ``UnitaryPartitioner``
-    /// to build target operators H = Σᵢ cᵢ Pᵢ for optimization. Result has exactly 2^numQubits non-zero entries
-    /// (one per row).
-    ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let xGate = PauliString(operators: [(qubit: 0, basis: .x)])
-    /// let matrix = xGate.toMatrix(numQubits: 1)
+    /// let matrix = PauliString([.x(0)]).toMatrix(qubits: 1)
     /// ```
     ///
-    /// - Parameter numQubits: Total number of qubits in system
-    /// - Returns: Dense matrix representation (2^numQubits x 2^numQubits)
-    /// - Complexity: O(2^(2n)) time and space
-    /// - SeeAlso: ``applyToRow(row:)``
+    /// - Parameter qubits: Total qubits in system
+    /// - Returns: Dense matrix with 2^n non-zero entries (one per row)
+    /// - Complexity: O(2^(2n))
     @_optimize(speed)
     @_eagerMove
-    func toMatrix(numQubits: Int) -> [[Complex<Double>]] {
-        let dimension = 1 << numQubits
+    func toMatrix(qubits: Int) -> [[Complex<Double>]] {
+        let dimension = 1 << qubits
         var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
 
         for row in 0 ..< dimension {

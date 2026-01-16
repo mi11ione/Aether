@@ -3,89 +3,39 @@
 
 import Foundation
 
-/// Quantum Approximate Optimization Algorithm: Hybrid quantum-classical combinatorial optimizer
+// MARK: - QAOA
+
+/// Hybrid quantum-classical algorithm for combinatorial optimization.
 ///
-/// Implements QAOA for solving combinatorial optimization problems like MaxCut,
-/// graph coloring, TSP, and satisfiability. **Near-term algorithm** designed for
-/// NISQ devices with applications in operations research, network design, and logistics.
+/// QAOA solves NP-hard optimization problems through variational parameter optimization of a quantum
+/// ansatz composed of alternating problem and mixer Hamiltonian layers. The algorithm prepares an
+/// initial superposition state, applies p alternating layers of exp(-iγₖH_p) and exp(-iβₖH_m), then
+/// measures to extract solution bitstrings. Classical optimization updates the 2p parameters (γ⃗,β⃗)
+/// to minimize the expectation value ⟨ψ(γ⃗,β⃗)|H_p|ψ(γ⃗,β⃗)⟩ until convergence.
 ///
-/// **Algorithm Overview:**
-/// 1. **Initialize**: Prepare equal superposition |+⟩^⊗n
-/// 2. **Alternating layers**: Apply exp(-iγH_p) exp(-iβH_m) for p layers
-/// 3. **Measure**: Sample from computational basis
-/// 4. **Classical optimization**: Update (γ⃗,β⃗) to minimize ⟨H_p⟩
-/// 5. **Repeat until convergence**
+/// The problem Hamiltonian H_p encodes the optimization objective where lower eigenvalues correspond
+/// to better solutions. The mixer Hamiltonian H_m drives exploration of the solution space, typically
+/// implemented as Σᵢ Xᵢ for unconstrained problems. Increasing depth p improves approximation quality
+/// at the cost of circuit complexity and optimization difficulty.
 ///
-/// **Mathematical Foundation:**
-/// - Problem Hamiltonian: H_p encodes optimization cost function
-/// - Mixer Hamiltonian: H_m drives exploration (typically Σᵢ Xᵢ)
-/// - Ansatz state: |ψ(γ⃗,β⃗)⟩ from alternating problem/mixer layers
-/// - Objective: min ⟨ψ(γ⃗,β⃗)|H_p|ψ(γ⃗,β⃗)⟩
-/// - Approximation ratio: ⟨H_p⟩/C_opt where C_opt is optimal cost
+/// Applications span graph partitioning (MaxCut), routing optimization (TSP), constraint satisfaction
+/// (SAT), scheduling (graph coloring), and portfolio optimization in finance. The algorithm targets
+/// near-term quantum hardware with shallow circuits suitable for NISQ devices.
 ///
-/// **Performance:**
-/// - Circuit depth: O(p·|E|) where |E| = Hamiltonian terms
-/// - Parameter count: 2p (γ and β per layer)
-/// - Typical convergence: 50-300 optimizer iterations
-/// - Uses SparseHamiltonian backend (100-1000x speedup)
-///
-/// **Use Cases:**
-/// - **MaxCut**: Graph partitioning, network design
-/// - **TSP**: Routing optimization, logistics
-/// - **Graph coloring**: Scheduling, register allocation
-/// - **SAT**: Boolean satisfiability, verification
-/// - **Portfolio optimization**: Finance, risk management
-///
-/// **Example - MaxCut on square graph:**
+/// **Example:**
 /// ```swift
-/// // Define 4-vertex square: optimal MaxCut = 4
-/// let edges = [(0,1), (1,2), (2,3), (3,0)]
-/// let costHamiltonian = MaxCut.hamiltonian(edges: edges)
-/// let mixerHamiltonian = MixerHamiltonian.xMixer(numQubits: 4)
-///
-/// // Run depth-2 QAOA
-/// let qaoa = await QAOA(
-///     costHamiltonian: costHamiltonian,
-///     mixerHamiltonian: mixerHamiltonian,
-///     numQubits: 4,
-///     depth: 2,
-///     optimizer: COBYLAOptimizer(tolerance: 1e-6)
-/// )
-///
-/// // Optimize starting from random parameters
-/// let result = await qaoa.run(
-///     initialParameters: [0.5, 0.5, 0.5, 0.5]  // (γ₀,β₀,γ₁,β₁)
-/// )
-///
-/// // Extract solution
-/// print("Best cost: \(result.optimalCost)")  // ≈ -2.0
-/// print("MaxCut value: \(Int(-2.0 * result.optimalCost))")  // 4
-///
-/// // Top solutions (bitstrings with highest probability)
-/// for (bitstring, probability) in result.solutionProbabilities.prefix(5) {
-///     let binary = String(bitstring, radix: 2).padded(toLength: 4, withPad: "0", startingAt: 0)
-///     print("Solution \(binary): probability = \(String(format: "%.3f", probability))")
-/// }
-/// // Output: 0101 (29%), 1010 (29%), ... (optimal partitions)
+/// let qaoa = QAOA(cost: MaxCut.hamiltonian(edges: [(0,1), (1,2)]), qubits: 3, depth: 2)
+/// let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
+/// print("Optimal cost: \(result.optimalCost)")
 /// ```
 ///
-/// **Example - Progress tracking:**
-/// ```swift
-/// let qaoa = await QAOA(...)
-///
-/// let result = await qaoa.runWithProgress(
-///     initialParameters: [0.5, 0.5]
-/// ) { iteration, cost in
-///     print("Iteration \(iteration): cost = \(String(format: "%.6f", cost))")
-/// }
-/// ```
-///
-/// **Architecture:**
-/// - Actor-based: Thread-safe, prevents data races
-/// - Async optimization: Non-blocking for UI applications
-/// - SparseHamiltonian: GPU/Accelerate hardware acceleration
-/// - MPS batched evaluation: Grid search for small p
-/// - Progress tracking: Real-time cost updates
+/// - Complexity: O(iterations × (depth × 2^n + hamiltonian_sparsity))
+/// - Note: Actor-based for thread safety and concurrent execution prevention
+/// - SeeAlso: ``Result``
+/// - SeeAlso: ``MaxCut``
+/// - SeeAlso: ``MixerHamiltonian``
+/// - SeeAlso: ``Observable``
+/// - SeeAlso: ``SparseHamiltonian``
 public actor QAOA {
     // MARK: - Configuration
 
@@ -96,7 +46,7 @@ public actor QAOA {
     private let mixerHamiltonian: Observable
 
     /// Number of qubits in system
-    private let numQubits: Int
+    private let qubits: Int
 
     /// QAOA depth: number of alternating layers
     private let depth: Int
@@ -105,7 +55,7 @@ public actor QAOA {
     private let optimizer: Optimizer
 
     /// Convergence criteria for optimization
-    private let convergenceCriteria: ConvergenceCriteria
+    private let convergence: ConvergenceCriteria
 
     /// High-performance sparse Hamiltonian backend (optional)
     private let sparseHamiltonian: SparseHamiltonian?
@@ -129,52 +79,56 @@ public actor QAOA {
 
     // MARK: - Initialization
 
-    /// Create QAOA instance
+    /// Creates QAOA optimizer with specified Hamiltonian and configuration.
     ///
-    /// Configures hybrid quantum-classical optimization for combinatorial problems.
-    /// Automatically constructs QAOA ansatz and SparseHamiltonian backend.
+    /// Constructs parameterized ansatz circuit with alternating problem and mixer layers. Attempts
+    /// sparse Hamiltonian backend construction for hardware-accelerated expectation values when enabled,
+    /// falling back to term-by-term Observable measurement on construction failure. Default X mixer applies
+    /// uniform superposition transitions across computational basis states.
     ///
-    /// **Backend Selection:**
-    /// - SparseHamiltonian (default): GPU/Accelerate hardware acceleration
-    /// - Observable (fallback): Term-by-term measurement
-    ///
-    /// **Performance:**
-    /// - Sparse backend: O(nnz) where nnz = number of non-zeros
-    /// - Observable backend: O(k·2^n) where k = number of Pauli terms
+    /// **Example:**
+    /// ```swift
+    /// let cost = MaxCut.hamiltonian(edges: [(0,1), (1,2)])
+    /// let qaoa = QAOA(cost: cost, qubits: 3, depth: 2)
+    /// ```
     ///
     /// - Parameters:
-    ///   - costHamiltonian: Problem Hamiltonian H_p (e.g., MaxCut)
-    ///   - mixerHamiltonian: Mixer Hamiltonian H_m (default: X mixer)
-    ///   - numQubits: Number of qubits (1-30)
-    ///   - depth: QAOA depth p (1-10 typical)
-    ///   - optimizer: Classical optimization algorithm
-    ///   - convergenceCriteria: Termination conditions (default: ε=1e-6, maxIter=1000)
-    ///   - useSparseBackend: Use SparseHamiltonian acceleration (default: true)
-    ///   - useMetalAcceleration: Use Metal GPU for circuit execution (default: true)
+    ///   - cost: Cost Hamiltonian H_c encoding optimization objective
+    ///   - mixer: Mixer Hamiltonian H_m for solution space exploration (default: X mixer Σᵢ Xᵢ)
+    ///   - qubits: System size (1-30 for statevector simulation)
+    ///   - depth: Number of alternating QAOA layers (typical range 1-10)
+    ///   - optimizer: Classical parameter optimization algorithm
+    ///   - convergence: Termination criteria for optimization loop
+    ///   - sparseBackend: Enable sparse Hamiltonian hardware acceleration
+    ///   - metalAcceleration: Enable Metal GPU for quantum circuit execution
+    /// - Precondition: `qubits` must be positive and ≤30 for memory constraints
+    /// - SeeAlso: ``run(from:progress:)``
+    /// - SeeAlso: ``MaxCut``
+    /// - SeeAlso: ``MixerHamiltonian``
     public init(
-        costHamiltonian: Observable,
-        mixerHamiltonian: Observable? = nil,
-        numQubits: Int,
+        cost: Observable,
+        mixer: Observable? = nil,
+        qubits: Int,
         depth: Int,
         optimizer: Optimizer = COBYLAOptimizer(tolerance: 1e-6),
-        convergenceCriteria: ConvergenceCriteria = ConvergenceCriteria(),
-        useSparseBackend: Bool = true,
-        useMetalAcceleration: Bool = true
+        convergence: ConvergenceCriteria = ConvergenceCriteria(),
+        sparseBackend: Bool = true,
+        metalAcceleration: Bool = true,
     ) {
-        self.costHamiltonian = costHamiltonian
-        self.mixerHamiltonian = mixerHamiltonian ?? MixerHamiltonian.xMixer(numQubits: numQubits)
-        self.numQubits = numQubits
+        costHamiltonian = cost
+        mixerHamiltonian = mixer ?? MixerHamiltonian.x(qubits: qubits)
+        self.qubits = qubits
         self.depth = depth
         self.optimizer = optimizer
-        self.convergenceCriteria = convergenceCriteria
-        sparseHamiltonian = useSparseBackend ? SparseHamiltonian(observable: costHamiltonian) : nil
-        simulator = QuantumSimulator(useMetalAcceleration: useMetalAcceleration)
+        self.convergence = convergence
+        sparseHamiltonian = sparseBackend ? SparseHamiltonian(observable: cost) : nil
+        simulator = QuantumSimulator(useMetalAcceleration: metalAcceleration)
 
-        ansatz = QAOAAnsatz.create(
-            numQubits: numQubits,
+        ansatz = QuantumCircuit.qaoa(
+            cost: costHamiltonian,
+            mixer: mixerHamiltonian,
+            qubits: self.qubits,
             depth: depth,
-            costHamiltonian: costHamiltonian,
-            mixerHamiltonian: self.mixerHamiltonian
         )
 
         parameterBinder = QAOAParameterBinder(ansatz: ansatz)
@@ -182,104 +136,57 @@ public actor QAOA {
 
     // MARK: - Execution
 
-    /// Run QAOA optimization
+    /// Executes QAOA optimization from initial parameters.
     ///
-    /// Executes hybrid quantum-classical loop until convergence or max iterations.
-    /// Each iteration:
-    /// 1. Bind current (γ⃗,β⃗) to ansatz -> concrete circuit
-    /// 2. Execute circuit on simulator (GPU-accelerated if available)
-    /// 3. Compute ⟨ψ|H_p|ψ⟩ using SparseHamiltonian (or Observable fallback)
-    /// 4. Classical optimizer updates parameters
+    /// Runs hybrid loop alternating quantum circuit evaluation and classical parameter updates. Each
+    /// iteration binds current parameters to ansatz, executes circuit on quantum simulator with optional
+    /// GPU acceleration, computes expectation value via sparse or Observable backend, and updates parameters
+    /// through classical optimizer. Continues until energy tolerance, gradient convergence, or maximum
+    /// iterations reached. Optional progress callback receives iteration count and current cost for
+    /// real-time monitoring and UI updates.
     ///
-    /// **Complexity:**
-    /// - Per iteration: O(d·2^n + nnz) where d = circuit depth, nnz = Hamiltonian non-zeros
-    /// - Total: O(iters x (d·2^n + nnz)) where iters = optimizer iterations
-    ///
-    /// **Thread Safety:**
-    /// - Actor isolation ensures thread-safe execution
-    /// - Prevents concurrent QAOA runs
-    ///
-    /// - Parameter initialParameters: Starting point (γ₀,β₀,...,γₚ₋₁,βₚ₋₁)
-    /// - Returns: QAOA result with optimal cost and solution bitstrings
-    ///
-    /// Example:
+    /// **Example:**
     /// ```swift
-    /// let initialGuess = [0.5, 0.5, 0.5, 0.5]  // depth=2
-    /// let result = await qaoa.run(initialParameters: initialGuess)
-    ///
-    /// print("Optimal cost: \(result.optimalCost)")
-    /// print("Parameters: \(result.optimalParameters)")
-    /// print("Top solution: \(result.solutionProbabilities.max(by: { $0.value < $1.value })!)")
+    /// let result = await qaoa.run(from: [0.5, 0.5]) { i, c in print("[\(i)] \(c)") }
+    /// print("Optimal: \(result.optimalCost), solutions: \(result.topSolutions(3))")
     /// ```
-    @_optimize(speed)
-    @_eagerMove
-    public func run(initialParameters: [Double]) async -> QAOAResult {
-        await runWithProgress(initialParameters: initialParameters, progressCallback: nil)
-    }
-
-    /// Run QAOA with progress updates
-    ///
-    /// Same as `run()` but calls progressCallback after each iteration.
-    /// Useful for UI updates, logging, and convergence visualization.
-    ///
-    /// **Progress Callback:**
-    /// - Called after each optimizer iteration
-    /// - Receives: (iteration: Int, currentCost: Double)
-    /// - Async: can perform UI updates on MainActor
     ///
     /// - Parameters:
-    ///   - initialParameters: Starting parameters (length = 2·depth)
-    ///   - progressCallback: Optional progress updates (iteration, cost)
-    /// - Returns: QAOA result
-    ///
-    /// Example:
-    /// ```swift
-    /// let result = await qaoa.runWithProgress(initialParameters: [0.5, 0.5]) { iter, cost in
-    ///     print("[\(iter)] Cost = \(String(format: "%.6f", cost))")
-    ///
-    ///     await MainActor.run {
-    ///         costLabel.text = "\(cost)"
-    ///         progressBar.progress = Double(iter) / 200.0
-    ///     }
-    /// }
-    /// ```
+    ///   - parameters: Initial parameter vector (length 2×depth for γ⃗ and β⃗)
+    ///   - progress: Optional callback receiving iteration count and current cost value
+    /// - Returns: Optimization result with cost, parameters, solution probabilities, and convergence info
+    /// - Complexity: O(iterations × (circuit_depth × 2^n + hamiltonian_operations))
+    /// - Precondition: `parameters.count` must equal 2×depth
+    /// - SeeAlso: ``Result``
+    /// - SeeAlso: ``ConvergenceCriteria``
     @_optimize(speed)
     @_eagerMove
-    public func runWithProgress(
-        initialParameters: [Double],
-        progressCallback: (@Sendable (Int, Double) async -> Void)?
-    ) async -> QAOAResult {
+    public func run(
+        from parameters: [Double],
+        progress: ProgressCallback? = nil,
+    ) async -> Result {
         let expectedParamCount = 2 * depth
         ValidationUtilities.validateParameterVectorLength(
-            initialParameters.count,
+            parameters.count,
             expected: expectedParamCount,
-            name: "QAOA initialParameters (requires 2 x depth)"
+            name: "QAOA parameters (requires 2 x depth)",
         )
 
         currentIteration = 0
         currentCost = 0.0
 
-        // Objective function: evaluate cost for given (γ⃗,β⃗)
-        let costFunction: @Sendable ([Double]) async -> Double = { parameters in
-            // Bind parameters to ansatz circuit
-            // Special binding handles coefficient scaling for QAOA
-            let concreteCircuit: QuantumCircuit = self.parameterBinder.bind(baseParameters: parameters)
-
-            // Execute circuit
+        let costFunction: @Sendable ([Double]) async -> Double = { params in
+            let concreteCircuit: QuantumCircuit = self.parameterBinder.bind(baseParameters: params)
             let state: QuantumState = await self.simulator.execute(concreteCircuit)
-
-            // Compute cost: ⟨ψ|H_p|ψ⟩
             let cost: Double = if let sparseH = self.sparseHamiltonian {
                 await sparseH.expectationValue(of: state)
             } else {
                 self.costHamiltonian.expectationValue(of: state)
             }
-
             return cost
         }
 
-        // Progress callback wrapper
-        let optimizerProgressCallback: (@Sendable (Int, Double) async -> Void)? = if let callback = progressCallback {
+        let optimizerProgress: ProgressCallback? = if let callback = progress {
             { iteration, cost in
                 await self.updateProgress(iteration: iteration, cost: cost)
                 await callback(iteration, cost)
@@ -290,39 +197,39 @@ public actor QAOA {
             }
         }
 
-        // Run classical optimization
         let optimizerResult: OptimizerResult = await optimizer.minimize(
             costFunction,
-            from: initialParameters,
-            using: convergenceCriteria,
-            progress: optimizerProgressCallback
+            from: parameters,
+            using: convergence,
+            progress: optimizerProgress,
         )
 
-        // Compute final solution probabilities
         let finalCircuit: QuantumCircuit = parameterBinder.bind(baseParameters: optimizerResult.parameters)
         let finalState: QuantumState = await simulator.execute(finalCircuit)
         let solutionProbabilities: [Int: Double] = extractSolutionProbabilities(state: finalState)
 
-        return QAOAResult(
+        return Result(
             optimalCost: optimizerResult.value,
             optimalParameters: optimizerResult.parameters,
             solutionProbabilities: solutionProbabilities,
             costHistory: optimizerResult.history,
             iterations: optimizerResult.iterations,
             convergenceReason: optimizerResult.terminationReason,
-            functionEvaluations: optimizerResult.evaluations
+            functionEvaluations: optimizerResult.evaluations,
         )
     }
 
-    // MARK: - Parameter Binding
+    // MARK: - Helpers
 
-    /// Extract solution probabilities from final state
+    /// Extracts significant solution probabilities from quantum state.
     ///
-    /// Returns dictionary mapping bitstring indices to probabilities.
-    /// Filters to significant probabilities (> 1e-6) for practical analysis.
+    /// Computes Born rule probabilities for all computational basis states and filters to values
+    /// exceeding threshold for practical solution analysis. Small probabilities below 1e-6 are
+    /// discarded to reduce dictionary size and focus on likely solutions.
     ///
-    /// - Parameter state: Final quantum state after QAOA circuit
-    /// - Returns: Dictionary [bitstring index -> probability]
+    /// - Parameter state: Quantum state after QAOA circuit execution
+    /// - Returns: Dictionary mapping bitstring index to probability (filtered > 1e-6)
+    /// - Complexity: O(2^n) for probability computation and filtering
     @_optimize(speed)
     @_eagerMove
     @inline(__always)
@@ -342,178 +249,223 @@ public actor QAOA {
 
     // MARK: - State Queries
 
-    /// Get current optimization progress
-    /// - Returns: Tuple of (iteration, current cost)
-    @_effects(readonly)
-    public func getProgress() -> (iteration: Int, cost: Double) {
+    /// Current optimization iteration and cost value.
+    ///
+    /// Returns tuple containing most recent iteration count and cost function value from optimizer.
+    /// Updated after each optimization step for progress monitoring and convergence diagnostics.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let (iteration, cost) = await qaoa.progress
+    /// print("Iteration \(iteration): cost = \(cost)")
+    /// ```
+    ///
+    /// - SeeAlso: ``run(from:progress:)``
+    public var progress: (iteration: Int, cost: Double) {
         (currentIteration, currentCost)
     }
 
-    /// Get backend information (sparse or observable)
-    @_effects(readonly)
-    public func getBackendInfo() async -> String {
-        if let sparseH = sparseHamiltonian {
-            await "SparseHamiltonian: \(sparseH.backendDescription)"
-        } else {
-            "Observable: \(costHamiltonian.terms.count) terms"
+    /// Backend type used for expectation value computation.
+    ///
+    /// Returns sparse backend with description when hardware acceleration is available, or Observable
+    /// backend with term count when using term-by-term measurement. Query asynchronously as sparse
+    /// backend description may require actor isolation.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let backend = await qaoa.backend
+    /// if case .sparse(let desc) = backend { print("Using sparse: \(desc)") }
+    /// ```
+    ///
+    /// - SeeAlso: ``BackendType``
+    /// - SeeAlso: ``SparseHamiltonian``
+    public var backend: BackendType {
+        get async {
+            if let sparseH = sparseHamiltonian {
+                await .sparse(description: sparseH.backendDescription)
+            } else {
+                .observable(termCount: costHamiltonian.terms.count)
+            }
         }
     }
 
-    // MARK: - Private Helpers
-
+    /// Updates current iteration and cost state.
     @inline(__always)
     private func updateProgress(iteration: Int, cost: Double) {
         currentIteration = iteration
         currentCost = cost
     }
-}
 
-// MARK: - QAOA Result
+    // MARK: - Nested Types
 
-/// QAOA optimization result with solution bitstrings and convergence information
-///
-/// Contains optimal cost, parameters, solution probability distribution,
-/// and full convergence history for analysis and visualization.
-///
-/// **Usage:**
-/// ```swift
-/// let result = await qaoa.run(initialParameters: initialGuess)
-///
-/// // Cost information
-/// print("Optimal cost: \(result.optimalCost)")
-/// print("Parameters: \(result.optimalParameters)")
-///
-/// // Solution analysis
-/// let topSolutions = result.solutionProbabilities.sorted(by: { $0.value > $1.value })
-/// for (bitstring, probability) in topSolutions.prefix(5) {
-///     let binary = String(bitstring, radix: 2)
-///     print("Solution \(binary): \(String(format: "%.3f", probability))")
-/// }
-///
-/// // Convergence diagnostics
-/// print("Converged: \(result.convergenceReason)")
-/// print("Iterations: \(result.iterations)")
-///
-/// // Plot cost history
-/// for (i, cost) in result.costHistory.enumerated() {
-///     print("\(i),\(cost)")
-/// }
-/// ```
-@frozen
-public struct QAOAResult: Sendable, CustomStringConvertible {
-    /// Optimal cost found: min ⟨ψ|H_p|ψ⟩
-    public let optimalCost: Double
+    /// Backend type for QAOA expectation value computation.
+    ///
+    /// Distinguishes between sparse Hamiltonian acceleration and term-by-term Observable measurement.
+    /// Sparse backend enables hardware acceleration via Metal GPU or Accelerate framework for molecular
+    /// Hamiltonians with typical 0.01-1% sparsity.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let backend = await qaoa.backend
+    /// if case .sparse(let desc) = backend { print("Sparse: \(desc)") }
+    /// ```
+    ///
+    /// - SeeAlso: ``QAOA/backend``
+    /// - SeeAlso: ``SparseHamiltonian``
+    @frozen
+    public enum BackendType: Sendable {
+        /// Sparse Hamiltonian backend with hardware acceleration
+        case sparse(description: String)
 
-    /// Optimal parameters (γ₀,β₀,...,γₚ₋₁,βₚ₋₁)
-    public let optimalParameters: [Double]
-
-    /// Solution probability distribution [bitstring index -> probability]
-    /// Filtered to probabilities > 1e-6
-    public let solutionProbabilities: [Int: Double]
-
-    /// Complete cost history (one per iteration)
-    public let costHistory: [Double]
-
-    /// Total optimization iterations
-    public let iterations: Int
-
-    /// Why optimization terminated
-    public let convergenceReason: TerminationReason
-
-    /// Total objective function evaluations
-    public let functionEvaluations: Int
-
-    public init(
-        optimalCost: Double,
-        optimalParameters: [Double],
-        solutionProbabilities: [Int: Double],
-        costHistory: [Double],
-        iterations: Int,
-        convergenceReason: TerminationReason,
-        functionEvaluations: Int
-    ) {
-        self.optimalCost = optimalCost
-        self.optimalParameters = optimalParameters
-        self.solutionProbabilities = solutionProbabilities
-        self.costHistory = costHistory
-        self.iterations = iterations
-        self.convergenceReason = convergenceReason
-        self.functionEvaluations = functionEvaluations
+        /// Observable backend with term-by-term measurement
+        case observable(termCount: Int)
     }
 
-    public var description: String {
-        let paramStr = optimalParameters.prefix(4).map { String(format: "%.4f", $0) }.joined(separator: ", ")
-        let paramSuffix = optimalParameters.count > 4 ? ", ..." : ""
+    /// QAOA optimization result with cost, parameters, solutions, and convergence diagnostics.
+    ///
+    /// Encapsulates complete optimization output including optimal cost value representing minimum expectation
+    /// value achieved, optimal parameter vector (γ⃗,β⃗), solution probability distribution mapping bitstring
+    /// indices to measurement probabilities, and convergence metadata.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
+    /// print("Optimal cost: \(result.optimalCost)")
+    /// ```
+    ///
+    /// - SeeAlso: ``QAOA/run(from:progress:)``
+    /// - SeeAlso: ``TerminationReason``
+    @frozen
+    public struct Result: Sendable, CustomStringConvertible {
+        /// Optimal cost found: min ⟨ψ|H_p|ψ⟩
+        public let optimalCost: Double
 
-        let topSolutions = topKSolutions(k: 3)
-        let solutionsStr = topSolutions.map { bitstring, prob in
-            let binary = String(bitstring, radix: 2)
-            return "\(binary) (\(String(format: "%.1f%%", prob * 100)))"
-        }.joined(separator: ", ")
+        /// Optimal parameters (γ₀,β₀,...,γₚ₋₁,βₚ₋₁)
+        public let optimalParameters: [Double]
 
-        return """
-        QAOA Result:
-          Optimal Cost: \(String(format: "%.8f", optimalCost))
-          Parameters: [\(paramStr)\(paramSuffix)]
-          Top Solutions: \(solutionsStr)
-          Iterations: \(iterations)
-          Function Evaluations: \(functionEvaluations)
-          Convergence: \(convergenceReason)
-        """
-    }
+        /// Solution probability distribution [bitstring index -> probability]
+        public let solutionProbabilities: [Int: Double]
 
-    /// Get top-k solutions by probability using partial sort (O(n + k log k) vs O(n log n))
-    @_optimize(speed)
-    public func topKSolutions(k: Int) -> [(bitstring: Int, probability: Double)] {
-        let count = solutionProbabilities.count
-        guard count > 0, k > 0 else { return [] }
+        /// Complete cost history (one per iteration)
+        public let costHistory: [Double]
 
-        if count <= k * 4 {
-            return solutionProbabilities
-                .sorted { $0.value > $1.value }
-                .prefix(k)
-                .map { (bitstring: $0.key, probability: $0.value) }
+        /// Total optimization iterations
+        public let iterations: Int
+
+        /// Why optimization terminated
+        public let convergenceReason: TerminationReason
+
+        /// Total objective function evaluations
+        public let functionEvaluations: Int
+
+        public init(
+            optimalCost: Double,
+            optimalParameters: [Double],
+            solutionProbabilities: [Int: Double],
+            costHistory: [Double],
+            iterations: Int,
+            convergenceReason: TerminationReason,
+            functionEvaluations: Int,
+        ) {
+            self.optimalCost = optimalCost
+            self.optimalParameters = optimalParameters
+            self.solutionProbabilities = solutionProbabilities
+            self.costHistory = costHistory
+            self.iterations = iterations
+            self.convergenceReason = convergenceReason
+            self.functionEvaluations = functionEvaluations
         }
 
-        var heap: [(bitstring: Int, probability: Double)] = []
-        heap.reserveCapacity(k)
+        /// Multi-line formatted summary of optimization results.
+        public var description: String {
+            let paramStr = optimalParameters.prefix(4).map { String(format: "%.4f", $0) }.joined(separator: ", ")
+            let paramSuffix = optimalParameters.count > 4 ? ", ..." : ""
 
-        for (bitstring, prob) in solutionProbabilities {
-            if heap.count < k {
-                heap.append((bitstring: bitstring, probability: prob))
-                if heap.count == k {
-                    for i in stride(from: k / 2 - 1, through: 0, by: -1) {
-                        siftDown(&heap, i, k)
+            let topSols = topSolutions(3)
+            let solutionsStr = topSols.map { bitstring, prob in
+                let binary = String(bitstring, radix: 2)
+                return "\(binary) (\(String(format: "%.1f%%", prob * 100)))"
+            }.joined(separator: ", ")
+
+            return """
+            QAOA Result:
+              Optimal Cost: \(String(format: "%.8f", optimalCost))
+              Parameters: [\(paramStr)\(paramSuffix)]
+              Top Solutions: \(solutionsStr)
+              Iterations: \(iterations)
+              Function Evaluations: \(functionEvaluations)
+              Convergence: \(convergenceReason)
+            """
+        }
+
+        /// Returns top solutions by probability using efficient partial sort.
+        ///
+        /// Extracts most likely solution bitstrings from probability distribution. Uses min-heap-based
+        /// partial sort achieving O(n + k log k) complexity versus O(n log n) for full sort when k << n.
+        ///
+        /// **Example:**
+        /// ```swift
+        /// for (bitstring, probability) in result.topSolutions(5) {
+        ///     print("Solution \(bitstring): \(probability)")
+        /// }
+        /// ```
+        ///
+        /// - Parameter count: Number of top solutions to extract
+        /// - Returns: Array of (bitstring, probability) tuples sorted descending by probability
+        /// - Complexity: O(n + k log k) where n = total solutions, k = requested count
+        @_optimize(speed)
+        @_eagerMove
+        public func topSolutions(_ count: Int) -> [(bitstring: Int, probability: Double)] {
+            let numSolutions = solutionProbabilities.count
+            guard numSolutions > 0, count > 0 else { return [] }
+
+            if numSolutions <= count * 4 {
+                return solutionProbabilities
+                    .sorted { $0.value > $1.value }
+                    .prefix(count)
+                    .map { (bitstring: $0.key, probability: $0.value) }
+            }
+
+            var heap: [(bitstring: Int, probability: Double)] = []
+            heap.reserveCapacity(count)
+
+            for (bitstring, prob) in solutionProbabilities {
+                if heap.count < count {
+                    heap.append((bitstring: bitstring, probability: prob))
+                    if heap.count == count {
+                        for i in stride(from: count / 2 - 1, through: 0, by: -1) {
+                            siftDown(&heap, i, count)
+                        }
                     }
+                } else if prob > heap[0].probability {
+                    heap[0] = (bitstring: bitstring, probability: prob)
+                    siftDown(&heap, 0, count)
                 }
-            } else if prob > heap[0].probability {
-                heap[0] = (bitstring: bitstring, probability: prob)
-                siftDown(&heap, 0, k)
             }
+
+            return heap.sorted { $0.probability > $1.probability }
         }
 
-        return heap.sorted { $0.probability > $1.probability }
-    }
+        /// Min-heap sift down for partial sort.
+        @inline(__always)
+        private func siftDown(_ heap: inout [(bitstring: Int, probability: Double)], _ index: Int, _ size: Int) {
+            var i = index
+            while true {
+                let left = 2 * i + 1
+                let right = 2 * i + 2
+                var smallest = i
 
-    /// Min-heap sift down helper
-    @inline(__always)
-    private func siftDown(_ heap: inout [(bitstring: Int, probability: Double)], _ index: Int, _ size: Int) {
-        var i = index
-        while true {
-            let left = 2 * i + 1
-            let right = 2 * i + 2
-            var smallest = i
+                if left < size, heap[left].probability < heap[smallest].probability {
+                    smallest = left
+                }
+                if right < size, heap[right].probability < heap[smallest].probability {
+                    smallest = right
+                }
 
-            if left < size, heap[left].probability < heap[smallest].probability {
-                smallest = left
+                if smallest == i { break }
+                heap.swapAt(i, smallest)
+                i = smallest
             }
-            if right < size, heap[right].probability < heap[smallest].probability {
-                smallest = right
-            }
-
-            if smallest == i { break }
-            heap.swapAt(i, smallest)
-            i = smallest
         }
     }
 }

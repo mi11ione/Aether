@@ -123,7 +123,7 @@ struct QWCGroupingTests {
         let ps2 = PauliString(.y(1))
         let group = QWCGroup(
             terms: [(coefficient: 2.0, pauliString: ps1), (coefficient: -3.5, pauliString: ps2)],
-            measurementBasis: [0: .x, 1: .y]
+            measurementBasis: [0: .x, 1: .y],
         )
         #expect(abs(group.weight - 5.5) < 1e-10)
     }
@@ -292,7 +292,7 @@ struct ShotAllocationTests {
         let reduction = allocator.varianceReduction(
             for: terms,
             using: allocation,
-            comparedTo: 500
+            comparedTo: 500,
         )
         #expect(reduction >= 1.0)
     }
@@ -437,7 +437,7 @@ struct UnitaryPartitioningTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.1
+            diagonalityThreshold: 0.1,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps = PauliString(.x(0))
@@ -452,7 +452,7 @@ struct UnitaryPartitioningTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.1
+            diagonalityThreshold: 0.1,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
@@ -483,7 +483,7 @@ struct UnitaryPartitioningTests {
             convergenceTolerance: 1e-8,
             circuitDepth: 3,
             useAdaptiveDepth: true,
-            diagonalityThreshold: 0.05
+            diagonalityThreshold: 0.05,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps = PauliString(.x(0))
@@ -497,7 +497,7 @@ struct UnitaryPartitioningTests {
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
-                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]]
+                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]],
         )
         #expect(partition.unitaryMatrix.count == 2)
         #expect(partition.unitaryMatrix[0].count == 2)
@@ -510,12 +510,12 @@ struct UnitaryPartitioningTests {
         let partition1 = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps1)],
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
-                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]]
+                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]],
         )
         let partition2 = UnitaryPartition(
             terms: [(coefficient: 2.0, pauliString: ps2)],
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
-                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]]
+                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]],
         )
         let totalTerms = partition1.terms.count + partition2.terms.count
         #expect(totalTerms == 2)
@@ -526,7 +526,7 @@ struct UnitaryPartitioningTests {
         let ps = PauliString(.x(0))
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
-            unitaryMatrix: [[Complex(1.0, 0.0)]]
+            unitaryMatrix: [[Complex(1.0, 0.0)]],
         )
         #expect(partition.unitaryMatrix.count == 1, "1x1 matrix for 0-qubit system")
     }
@@ -538,7 +538,7 @@ struct UnitaryPartitioningTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.1
+            diagonalityThreshold: 0.1,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
@@ -549,15 +549,15 @@ struct UnitaryPartitioningTests {
         #expect(totalTerms == inputTerms.count)
     }
 
-    @Test("Unitary partition numQubits property")
-    func unitaryPartitionNumQubits() {
+    @Test("Unitary partition qubits property")
+    func unitaryPartitionqubits() {
         let ps = PauliString(.x(0), .y(1))
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0)],
                             [Complex(0.0, 0.0), Complex(1.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0)],
                             [Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(1.0, 0.0), Complex(0.0, 0.0)],
-                            [Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(1.0, 0.0)]]
+                            [Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(1.0, 0.0)]],
         )
         #expect(partition.unitaryMatrix.count == 4, "4x4 matrix for 2-qubit system")
     }
@@ -568,7 +568,7 @@ struct UnitaryPartitioningTests {
         let partition = UnitaryPartition(
             terms: [(coefficient: 1.0, pauliString: ps)],
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
-                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]]
+                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]],
         )
         #expect(partition.terms.count == 1)
         #expect(abs(partition.terms[0].coefficient - 1.0) < 1e-10)
@@ -582,7 +582,7 @@ struct UnitaryPartitioningTests {
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0)],
                             [Complex(0.0, 0.0), Complex(1.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0)],
                             [Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(1.0, 0.0), Complex(0.0, 0.0)],
-                            [Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(1.0, 0.0)]]
+                            [Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(1.0, 0.0)]],
         )
         let basis = partition.measurementBasis
         #expect(basis[0] == .z)
@@ -596,7 +596,7 @@ struct UnitaryPartitioningTests {
         let partition = UnitaryPartition(
             terms: [(coefficient: 2.0, pauliString: ps1), (coefficient: -3.5, pauliString: ps2)],
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
-                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]]
+                            [Complex(0.0, 0.0), Complex(1.0, 0.0)]],
         )
         #expect(abs(partition.weight - 5.5) < 1e-10)
     }
@@ -608,7 +608,7 @@ struct UnitaryPartitioningTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 2,
             useAdaptiveDepth: true,
-            diagonalityThreshold: 0.1
+            diagonalityThreshold: 0.1,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
@@ -624,7 +624,7 @@ struct UnitaryPartitioningTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.2
+            diagonalityThreshold: 0.2,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1))
@@ -640,7 +640,7 @@ struct UnitaryPartitioningTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 3,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.15
+            diagonalityThreshold: 0.15,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps = PauliString(.z(0))
@@ -721,7 +721,7 @@ struct ObservableApproximationTests {
         let ps = PauliString(.x(0))
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 0.9, pauliString: ps)])
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let error = full.error(of: approximate, state: state)
         #expect(error >= 0.0)
     }
@@ -730,7 +730,7 @@ struct ObservableApproximationTests {
     func approximationErrorIdentical() {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let error = observable.error(of: observable, state: state)
         #expect(abs(error) < 1e-10)
     }
@@ -741,7 +741,7 @@ struct ObservableApproximationTests {
         let ps2 = PauliString(.y(0))
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let approximate = Observable(terms: [(coefficient: 1.0, pauliString: ps1)])
-        let stats = full.approximationStatistics(approximate: approximate)
+        let stats = full.approximationStatistics(of: approximate)
         #expect(stats.originalTerms == 2)
         #expect(stats.approximateTerms == 1)
         #expect(stats.reductionFactor == 2.0)
@@ -751,7 +751,7 @@ struct ObservableApproximationTests {
     func approximationStatisticsIdentical() {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let stats = observable.approximationStatistics(approximate: observable)
+        let stats = observable.approximationStatistics(of: observable)
         #expect(stats.originalTerms == stats.approximateTerms)
         #expect(stats.reductionFactor == 1.0)
     }
@@ -760,7 +760,7 @@ struct ObservableApproximationTests {
     func approximationStatisticsDescription() {
         let ps = PauliString(.x(0))
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let stats = full.approximationStatistics(approximate: full)
+        let stats = full.approximationStatistics(of: full)
         let description = stats.description
         #expect(description.contains("Approximation Statistics"))
         #expect(description.contains("Original terms:"))
@@ -772,7 +772,7 @@ struct ObservableApproximationTests {
         let ps = PauliString(.z(0))
         let full = Observable(terms: [(coefficient: 2.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 1.8, pauliString: ps)])
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let relError = full.relativeError(of: approximate, state: state)
         #expect(relError >= 0.0)
         #expect(relError <= 1.0)
@@ -783,7 +783,7 @@ struct ObservableApproximationTests {
         let ps = PauliString(.x(0))
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: -1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let relError = full.relativeError(of: approximate, state: state)
         #expect(abs(relError) < 1e-9)
     }
@@ -793,7 +793,7 @@ struct ObservableApproximationTests {
         let ps = PauliString(.z(0))
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 0.99, pauliString: ps)])
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let valid = full.meetsAccuracy(approximate, state: state, tolerance: 0.1)
         #expect(valid)
     }
@@ -803,7 +803,7 @@ struct ObservableApproximationTests {
         let ps = PauliString(.z(0))
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 0.5, pauliString: ps)])
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let valid = full.meetsAccuracy(approximate, state: state, tolerance: 0.01)
         #expect(!valid)
     }
@@ -814,7 +814,7 @@ struct ObservableApproximationTests {
         let ps2 = PauliString(.y(0))
         let ps3 = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.5, pauliString: ps2), (coefficient: 0.1, pauliString: ps3)])
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let threshold = observable.findOptimalThreshold(state: state, maxError: 0.2, searchSteps: 10)
         #expect(threshold >= 0.0)
         #expect(threshold <= 1.0)
@@ -826,7 +826,7 @@ struct ObservableApproximationTests {
         let ps2 = PauliString(.z(0))
         let ps3 = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.3, pauliString: ps2), (coefficient: 0.1, pauliString: ps3)])
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let threshold = observable.findOptimalThreshold(state: state, maxError: 0.01, searchSteps: 20)
         let approx = observable.filtering(coefficientThreshold: threshold)
         let error = observable.error(of: approx, state: state)
@@ -845,7 +845,7 @@ struct ObservableApproximationTests {
         let ps = PauliString(.x(0))
         let empty = Observable(terms: [])
         let nonEmpty = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let stats = empty.approximationStatistics(approximate: nonEmpty)
+        let stats = empty.approximationStatistics(of: nonEmpty)
 
         #expect(stats.originalTerms == 0)
         #expect(stats.reductionFactor == 1.0)
@@ -855,7 +855,7 @@ struct ObservableApproximationTests {
     @Test("Find optimal threshold on empty observable")
     func findOptimalThresholdEmpty() {
         let observable = Observable(terms: [])
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let threshold = observable.findOptimalThreshold(state: state, maxError: 0.1)
 
         #expect(abs(threshold - 1.0) < 1e-6)
@@ -1001,7 +1001,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.1
+            diagonalityThreshold: 0.1,
         )
         let partitions1 = await observable.unitaryPartitions(config: config)
         let partitions2 = await observable.unitaryPartitions(config: config)
@@ -1017,7 +1017,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.1
+            diagonalityThreshold: 0.1,
         )
         let partitions = await observable.unitaryPartitions(config: config)
         #expect(!partitions.isEmpty)
@@ -1149,7 +1149,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.1
+            diagonalityThreshold: 0.1,
         )
         let count = await observable.measureCircuitCount(for: .unitaryPartitioning(config: config))
         #expect(count >= 1)
@@ -1167,7 +1167,7 @@ struct MeasurementOptimizationIntegrationTests {
     func shotAllocationWithState() {
         let ps = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps)])
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
         let allocation = observable.allocateShots(totalShots: 1000, state: state)
@@ -1179,7 +1179,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
         let allocation = await observable.allocateShotsForGroups(totalShots: 1000, state: state)
@@ -1298,7 +1298,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 2,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.5
+            diagonalityThreshold: 0.5,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
@@ -1315,7 +1315,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-10,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 1e-15
+            diagonalityThreshold: 1e-15,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1))
@@ -1332,7 +1332,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 1e-15
+            diagonalityThreshold: 1e-15,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
@@ -1354,7 +1354,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-5,
             circuitDepth: 2,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.2
+            diagonalityThreshold: 0.2,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1))
@@ -1372,7 +1372,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-4,
             circuitDepth: 4,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.25
+            diagonalityThreshold: 0.25,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .x(1))
@@ -1389,7 +1389,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-5,
             circuitDepth: 3,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.15
+            diagonalityThreshold: 0.15,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1), .z(2))
@@ -1406,7 +1406,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-8,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 1e-16
+            diagonalityThreshold: 1e-16,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1), .z(2))
@@ -1422,7 +1422,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 0.5,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.8
+            diagonalityThreshold: 0.8,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
@@ -1438,7 +1438,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 2,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.2
+            diagonalityThreshold: 0.2,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1))
@@ -1456,7 +1456,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-5,
             circuitDepth: 3,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.18
+            diagonalityThreshold: 0.18,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1), .z(2))
@@ -1465,7 +1465,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps4 = PauliString(.x(0), .x(1), .x(2))
         let ps5 = PauliString(.y(0), .y(1), .y(2))
         let partitions = partitioner.partition(
-            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.95, pauliString: ps2), (coefficient: 0.9, pauliString: ps3), (coefficient: 0.85, pauliString: ps4), (coefficient: 0.8, pauliString: ps5)]
+            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.95, pauliString: ps2), (coefficient: 0.9, pauliString: ps3), (coefficient: 0.85, pauliString: ps4), (coefficient: 0.8, pauliString: ps5)],
         )
         #expect(!partitions.isEmpty)
     }
@@ -1477,7 +1477,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 2,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.22
+            diagonalityThreshold: 0.22,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0), .y(1))
@@ -1486,7 +1486,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps4 = PauliString(.x(0), .z(1))
         let ps5 = PauliString(.y(0), .z(1))
         let partitions = partitioner.partition(
-            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.92, pauliString: ps2), (coefficient: 0.88, pauliString: ps3), (coefficient: 0.84, pauliString: ps4), (coefficient: 0.8, pauliString: ps5)]
+            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.92, pauliString: ps2), (coefficient: 0.88, pauliString: ps3), (coefficient: 0.84, pauliString: ps4), (coefficient: 0.8, pauliString: ps5)],
         )
         #expect(!partitions.isEmpty)
     }
@@ -1515,7 +1515,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps2 = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
@@ -1533,7 +1533,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps2 = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps1), (coefficient: 10.0, pauliString: ps2)]
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
@@ -1542,7 +1542,7 @@ struct MeasurementOptimizationIntegrationTests {
             for: terms,
             using: allocation,
             comparedTo: 500,
-            state: state
+            state: state,
         )
 
         #expect(reduction >= 1.0)
@@ -1558,7 +1558,7 @@ struct MeasurementOptimizationIntegrationTests {
             for: terms,
             using: allocation,
             comparedTo: 500,
-            state: nil
+            state: nil,
         )
 
         #expect(reduction >= 1.0)
@@ -1571,7 +1571,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 2,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.2
+            diagonalityThreshold: 0.2,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.x(0))
@@ -1627,7 +1627,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 2,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.15
+            diagonalityThreshold: 0.15,
         )
         let partitioner = UnitaryPartitioner(config: config)
 
@@ -1636,7 +1636,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps3 = PauliString(.z(0))
 
         let partitions = partitioner.partition(
-            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3)]
+            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3)],
         )
 
         #expect(!partitions.isEmpty)
@@ -1652,7 +1652,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-5,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.2
+            diagonalityThreshold: 0.2,
         )
         let partitioner = UnitaryPartitioner(config: config)
 
@@ -1673,7 +1673,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-5,
             circuitDepth: 2,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.25
+            diagonalityThreshold: 0.25,
         )
         let partitioner = UnitaryPartitioner(config: config)
 
@@ -1682,7 +1682,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps3 = PauliString(.z(0), .z(1))
 
         let partitions = partitioner.partition(
-            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 0.5, pauliString: ps3)]
+            terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 0.5, pauliString: ps3)],
         )
 
         #expect(!partitions.isEmpty)
@@ -1697,7 +1697,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-5,
             circuitDepth: 2,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.3
+            diagonalityThreshold: 0.3,
         )
         let partitioner = UnitaryPartitioner(config: config)
 
@@ -1705,7 +1705,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps2 = PauliString(.y(0))
 
         let partitions = partitioner.partition(
-            terms: [(coefficient: 10.0, pauliString: ps1), (coefficient: 0.1, pauliString: ps2)]
+            terms: [(coefficient: 10.0, pauliString: ps1), (coefficient: 0.1, pauliString: ps2)],
         )
 
         #expect(!partitions.isEmpty)
@@ -1726,7 +1726,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-6,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 0.01
+            diagonalityThreshold: 0.01,
         )
         let partitioner = UnitaryPartitioner(config: config)
         let ps1 = PauliString(.z(0))
@@ -1743,7 +1743,7 @@ struct MeasurementOptimizationIntegrationTests {
             convergenceTolerance: 1e-10,
             circuitDepth: 1,
             useAdaptiveDepth: false,
-            diagonalityThreshold: 1e-18
+            diagonalityThreshold: 1e-18,
         )
         let partitioner = UnitaryPartitioner(config: config)
 

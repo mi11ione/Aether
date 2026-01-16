@@ -13,10 +13,10 @@ struct ObservableHermitianTests {
     func identityObservable() {
         let identity = Observable(
             coefficient: 1.0,
-            pauliString: PauliString()
+            pauliString: PauliString(),
         )
 
-        let state = QuantumState(numQubits: 2)
+        let state = QuantumState(qubits: 2)
         let expectation = identity.expectationValue(of: state)
 
         #expect(abs(expectation - 1.0) < 1e-10)
@@ -26,10 +26,10 @@ struct ObservableHermitianTests {
     func pauliZOnZeroState() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - 1.0) < 1e-10)
@@ -39,10 +39,10 @@ struct ObservableHermitianTests {
     func pauliZOnOneState() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.pauliX, to: 0)
         let state = circuit.execute()
 
@@ -54,10 +54,10 @@ struct ObservableHermitianTests {
     func pauliXOnPlusState() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.x(0))
+            pauliString: PauliString(.x(0)),
         )
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
@@ -69,10 +69,10 @@ struct ObservableHermitianTests {
     func pauliXOnMinusState() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.x(0))
+            pauliString: PauliString(.x(0)),
         )
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.pauliX, to: 0)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
@@ -85,10 +85,10 @@ struct ObservableHermitianTests {
     func pauliYOnPlusIState() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.y(0))
+            pauliString: PauliString(.y(0)),
         )
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         circuit.append(.sGate, to: 0)
         let state = circuit.execute()
@@ -101,7 +101,7 @@ struct ObservableHermitianTests {
     func zzOnBellState() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0), .z(1))
+            pauliString: PauliString(.z(0), .z(1)),
         )
 
         let bell = QuantumCircuit.bellPhiPlus().execute()
@@ -114,7 +114,7 @@ struct ObservableHermitianTests {
     func xxOnBellState() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.x(0), .x(1))
+            pauliString: PauliString(.x(0), .x(1)),
         )
 
         let bell = QuantumCircuit.bellPhiPlus().execute()
@@ -130,7 +130,7 @@ struct ObservableHermitianTests {
             (coefficient: 3.0, pauliString: PauliString(.z(1))),
         ])
 
-        let state = QuantumState(numQubits: 2)
+        let state = QuantumState(qubits: 2)
         let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - 5.0) < 1e-10)
@@ -140,10 +140,10 @@ struct ObservableHermitianTests {
     func negativeCoefficient() {
         let observable = Observable(
             coefficient: -1.0,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - -1.0) < 1e-10)
@@ -153,10 +153,10 @@ struct ObservableHermitianTests {
     func superpositionExpectation() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
@@ -174,7 +174,7 @@ struct ObservableHermitianTests {
             (coefficient: -0.01, pauliString: PauliString(.z(0), .z(1))),
         ])
 
-        let state = QuantumState(numQubits: 2)
+        let state = QuantumState(qubits: 2)
 
         let energy = hamiltonian.expectationValue(of: state)
 
@@ -197,7 +197,7 @@ struct ObservableHermitianTests {
     @Test("Empty observable has zero expectation")
     func emptyObservable() {
         let observable = Observable(terms: [])
-        let state = QuantumState(numQubits: 2)
+        let state = QuantumState(qubits: 2)
         let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation) < 1e-10)
@@ -213,10 +213,10 @@ struct ObservableVarianceTests {
     func varianceOfEigenstate() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let variance = observable.variance(of: state)
 
         #expect(abs(variance) < 1e-10)
@@ -226,10 +226,10 @@ struct ObservableVarianceTests {
     func varianceOfSuperposition() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
@@ -245,7 +245,7 @@ struct ObservableVarianceTests {
             (coefficient: 1.0, pauliString: PauliString(.z(1))),
         ])
 
-        var circuit = QuantumCircuit(numQubits: 2)
+        var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.rotationY(0.5), to: 1)
         let state = circuit.execute()
@@ -259,10 +259,10 @@ struct ObservableVarianceTests {
     func varianceOfIdentity() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString()
+            pauliString: PauliString(),
         )
 
-        var circuit = QuantumCircuit(numQubits: 2)
+        var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.hadamard, to: 1)
         let state = circuit.execute()
@@ -279,7 +279,7 @@ struct ObservableVarianceTests {
             (coefficient: 1.0, pauliString: PauliString(.z(1))),
         ])
 
-        var circuit = QuantumCircuit(numQubits: 2)
+        var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.hadamard, to: 1)
         let state = circuit.execute()
@@ -299,10 +299,10 @@ struct ObservablePauliMultiplicationTests {
     func squaredSinglePauli() {
         let observable = Observable(
             coefficient: 2.0,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let variance = observable.variance(of: state)
 
         #expect(abs(variance) < 1e-10)
@@ -312,10 +312,10 @@ struct ObservablePauliMultiplicationTests {
     func observableSquaredScaling() {
         let observable = Observable(
             coefficient: 3.0,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
@@ -328,10 +328,10 @@ struct ObservablePauliMultiplicationTests {
     func twoQubitVariance() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0), .z(1))
+            pauliString: PauliString(.z(0), .z(1)),
         )
 
-        var circuit = QuantumCircuit(numQubits: 2)
+        var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.hadamard, to: 1)
         let state = circuit.execute()
@@ -348,7 +348,7 @@ struct ObservablePauliMultiplicationTests {
             (coefficient: 1.0, pauliString: PauliString(.y(0))),
         ])
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
@@ -363,7 +363,7 @@ struct ObservablePauliMultiplicationTests {
             (coefficient: 1.0, pauliString: PauliString(.z(0))),
         ])
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let variance = observable.variance(of: state)
         #expect(variance >= 0)
     }
@@ -375,7 +375,7 @@ struct ObservablePauliMultiplicationTests {
             (coefficient: 1.0, pauliString: PauliString(.x(0))),
         ])
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
@@ -393,10 +393,10 @@ struct ObservableEdgeCasesTests {
     func largeCoefficients() {
         let observable = Observable(
             coefficient: 1e10,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - 1e10) < 1e-5)
@@ -406,10 +406,10 @@ struct ObservableEdgeCasesTests {
     func smallCoefficients() {
         let observable = Observable(
             coefficient: 1e-10,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - 1e-10) < 1e-15)
@@ -419,10 +419,10 @@ struct ObservableEdgeCasesTests {
     func manyQubitsObservable() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0), .z(1), .z(2), .z(3), .z(4))
+            pauliString: PauliString(.z(0), .z(1), .z(2), .z(3), .z(4)),
         )
 
-        let state = QuantumState(numQubits: 5)
+        let state = QuantumState(qubits: 5)
         let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - 1.0) < 1e-10)
@@ -435,7 +435,7 @@ struct ObservableEdgeCasesTests {
             terms.append((coefficient: 1.0, pauliString: PauliString(.z(i))))
         }
         let observable = Observable(terms: terms)
-        let state = QuantumState(numQubits: 5)
+        let state = QuantumState(qubits: 5)
         let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation - 5.0) < 1e-10)
@@ -448,7 +448,7 @@ struct ObservableEdgeCasesTests {
             (coefficient: -1.0, pauliString: PauliString(.z(0))),
         ])
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let expectation = observable.expectationValue(of: state)
 
         #expect(abs(expectation) < 1e-10)
@@ -465,7 +465,7 @@ struct ObservableEdgeCasesTests {
     func identityTermDescription() {
         let observable = Observable(
             coefficient: 2.5,
-            pauliString: PauliString()
+            pauliString: PauliString(),
         )
         let description = observable.description
         #expect(description.contains("I"))

@@ -8,39 +8,39 @@
 /// terminates on failure in debug builds and may be optimized away in release builds for zero runtime
 /// cost. Single source of truth for validation rules prevents inconsistent error handling.
 ///
-/// **Example**:
+/// **Example:**
 /// ```swift
-/// ValidationUtilities.validatePositiveQubits(numQubits)
-/// ValidationUtilities.validateQubitIndex(qubit, numQubits: state.numQubits)
+/// ValidationUtilities.validatePositiveQubits(qubits)
+/// ValidationUtilities.validateQubitIndex(qubit, qubits: state.qubits)
 /// ValidationUtilities.validateNormalizedState(state)
 /// ValidationUtilities.validateUnitary(gateMatrix)
 /// ```
 public enum ValidationUtilities {
     /// Validate that number of qubits is positive (at least 1)
     ///
-    /// - Parameter numQubits: Number of qubits to validate
-    /// - Precondition: numQubits must be > 0
+    /// - Parameter qubits: Number of qubits to validate
+    /// - Precondition: qubits must be > 0
     /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validatePositiveQubits(_ numQubits: Int) {
-        precondition(numQubits > 0, "Number of qubits must be positive (got \(numQubits))")
+    static func validatePositiveQubits(_ qubits: Int) {
+        precondition(qubits > 0, "Number of qubits must be positive (got \(qubits))")
     }
 
     /// Validate that number of qubits is within memory limits
     ///
-    /// - Parameter numQubits: Number of qubits to validate
-    /// - Precondition: numQubits must be <= 30
+    /// - Parameter qubits: Number of qubits to validate
+    /// - Precondition: qubits must be <= 30
     /// - Complexity: O(1)
     /// - Note: 30-qubit limit = 2^30 amplitudes = ~8GB for Complex<Double>
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateMemoryLimit(_ numQubits: Int) {
+    static func validateMemoryLimit(_ qubits: Int) {
         precondition(
-            numQubits <= 30,
-            "Number of qubits must not exceed 30 (would require \(1 << numQubits) amplitudes, got \(numQubits) qubits)"
+            qubits <= 30,
+            "Number of qubits must not exceed 30 (would require \(1 << qubits) amplitudes, got \(qubits) qubits)",
         )
     }
 
@@ -48,14 +48,14 @@ public enum ValidationUtilities {
     ///
     /// - Parameter state: Quantum state to validate
     /// - Precondition: state must be normalized (within 1e-10 tolerance)
-    /// - Complexity: O(1) - delegates to state.isNormalized()
+    /// - Complexity: O(2^n) where n = qubits (iterates all amplitudes)
     @_effects(readonly)
     @inlinable
     @inline(__always)
     static func validateNormalizedState(_ state: QuantumState) {
         precondition(
             state.isNormalized(),
-            "State must be normalized (Σ|cᵢ|² = 1) before measurement or expectation value computation"
+            "State must be normalized (Σ|cᵢ|² = 1) before measurement or expectation value computation",
         )
     }
 
@@ -73,7 +73,7 @@ public enum ValidationUtilities {
     static func validateIndexInBounds(_ index: Int, bound: Int, name: String) {
         precondition(
             index >= 0 && index < bound,
-            "\(name) \(index) out of bounds (valid range: 0..<\(bound))"
+            "\(name) \(index) out of bounds (valid range: 0..<\(bound))",
         )
     }
 
@@ -81,16 +81,16 @@ public enum ValidationUtilities {
     ///
     /// - Parameters:
     ///   - qubit: Qubit index to validate
-    ///   - numQubits: Total number of qubits in system
-    /// - Precondition: 0 <= qubit < numQubits
+    ///   - qubits: Total number of qubits in system
+    /// - Precondition: 0 <= qubit < qubits
     /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateQubitIndex(_ qubit: Int, numQubits: Int) {
+    static func validateQubitIndex(_ qubit: Int, qubits: Int) {
         precondition(
-            qubit >= 0 && qubit < numQubits,
-            "Qubit index \(qubit) out of bounds (valid range: 0..<\(numQubits))"
+            qubit >= 0 && qubit < qubits,
+            "Qubit index \(qubit) out of bounds (valid range: 0..<\(qubits))",
         )
     }
 
@@ -107,7 +107,7 @@ public enum ValidationUtilities {
     static func validateOperationQubits(_ qubits: [Int], numQubits: Int) {
         precondition(
             qubits.allSatisfy { $0 >= 0 && $0 < numQubits },
-            "All qubit indices must be in range 0..<\(numQubits) (got \(qubits))"
+            "All qubit indices must be in range 0..<\(numQubits) (got \(qubits))",
         )
     }
 
@@ -318,7 +318,7 @@ public enum ValidationUtilities {
         case 3:
             precondition(
                 qubits[0] != qubits[1] && qubits[0] != qubits[2] && qubits[1] != qubits[2],
-                "Qubit indices must be unique (got \(qubits))"
+                "Qubit indices must be unique (got \(qubits))",
             )
         default:
             let uniqueQubits = Set(qubits)
@@ -341,7 +341,7 @@ public enum ValidationUtilities {
     static func validateEqualCounts(_ array1: [some Any], _ array2: [some Any], name1: String, name2: String) {
         precondition(
             array1.count == array2.count,
-            "\(name1) and \(name2) must have equal counts (got \(array1.count) and \(array2.count))"
+            "\(name1) and \(name2) must have equal counts (got \(array1.count) and \(array2.count))",
         )
     }
 
@@ -359,7 +359,7 @@ public enum ValidationUtilities {
     static func validateArrayCount(_ array: [some Any], expected: Int, name: String) {
         precondition(
             array.count == expected,
-            "\(name) count must be \(expected) but got \(array.count)"
+            "\(name) count must be \(expected) but got \(array.count)",
         )
     }
 
@@ -397,7 +397,7 @@ public enum ValidationUtilities {
         precondition(!matrix1.isEmpty && !matrix2.isEmpty, "Matrices must not be empty")
         precondition(
             matrix1.count == matrix2.count,
-            "\(name1) and \(name2) must have same dimensions (got \(matrix1.count)x\(matrix1[0].count) and \(matrix2.count)x\(matrix2[0].count))"
+            "\(name1) and \(name2) must have same dimensions (got \(matrix1.count)x\(matrix1[0].count) and \(matrix2.count)x\(matrix2[0].count))",
         )
     }
 
@@ -429,7 +429,7 @@ public enum ValidationUtilities {
     static func validateMatrixDimensionEquals(_ matrix: [[some Any]], expected: Int, name: String) {
         precondition(
             matrix.count == expected,
-            "\(name) dimension must be \(expected)x\(expected) (got \(matrix.count)x\(matrix.count))"
+            "\(name) dimension must be \(expected)x\(expected) (got \(matrix.count)x\(matrix.count))",
         )
     }
 
@@ -512,17 +512,17 @@ public enum ValidationUtilities {
     ///
     /// - Parameters:
     ///   - amplitudes: Amplitude array
-    ///   - numQubits: Number of qubits
-    /// - Precondition: amplitudes.count == (1 << numQubits)
+    ///   - qubits: Number of qubits
+    /// - Precondition: amplitudes.count == (1 << qubits)
     /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateAmplitudeCount(_ amplitudes: [Complex<Double>], numQubits: Int) {
-        let expectedCount = 1 << numQubits
+    static func validateAmplitudeCount(_ amplitudes: [Complex<Double>], qubits: Int) {
+        let expectedCount = 1 << qubits
         precondition(
             amplitudes.count == expectedCount,
-            "Amplitude count must be 2^\(numQubits) = \(expectedCount) (got \(amplitudes.count))"
+            "Amplitude count must be 2^\(qubits) = \(expectedCount) (got \(amplitudes.count))",
         )
     }
 
@@ -532,7 +532,7 @@ public enum ValidationUtilities {
     ///   - state: Quantum state to validate
     ///   - required: Required number of qubits
     ///   - exact: If true, require exact match; if false, require minimum (default: false)
-    /// - Precondition: exact ? state.numQubits == required : state.numQubits >= required
+    /// - Precondition: exact ? state.qubits == required : state.qubits >= required
     /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
@@ -540,13 +540,13 @@ public enum ValidationUtilities {
     static func validateStateQubitCount(_ state: QuantumState, required: Int, exact: Bool = false) {
         if exact {
             precondition(
-                state.numQubits == required,
-                "State must have exactly \(required) qubits (got \(state.numQubits))"
+                state.qubits == required,
+                "State must have exactly \(required) qubits (got \(state.qubits))",
             )
         } else {
             precondition(
-                state.numQubits >= required,
-                "State must have at least \(required) qubits (got \(state.numQubits))"
+                state.qubits >= required,
+                "State must have at least \(required) qubits (got \(state.qubits))",
             )
         }
     }
@@ -555,16 +555,16 @@ public enum ValidationUtilities {
     ///
     /// - Parameters:
     ///   - numOnes: Number of qubits in |1⟩ state
-    ///   - numQubits: Total number of qubits
-    /// - Precondition: 0 <= numOnes <= numQubits
+    ///   - qubits: Total number of qubits
+    /// - Precondition: 0 <= numOnes <= qubits
     /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateDickeParameters(_ numOnes: Int, numQubits: Int) {
+    static func validateDickeParameters(_ numOnes: Int, qubits: Int) {
         precondition(
-            numOnes >= 0 && numOnes <= numQubits,
-            "Number of ones must be in range 0...\(numQubits) (got \(numOnes))"
+            numOnes >= 0 && numOnes <= qubits,
+            "Number of ones must be in range 0...\(qubits) (got \(numOnes))",
         )
     }
 
@@ -593,28 +593,28 @@ public enum ValidationUtilities {
     ///
     /// - Parameters:
     ///   - operations: Array of gate operations to validate
-    ///   - numQubits: Number of qubits in the circuit
-    /// - Precondition: All operation qubits must be in range [0, numQubits)
+    ///   - qubits: Number of qubits in the circuit
+    /// - Precondition: All operation qubits must be in range [0, qubits)
     /// - Precondition: All gates must have correct qubit count and unique indices
     /// - Complexity: O(n x m) where n = operations count, m = qubits per operation
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateCircuitOperations(_ operations: [Gate], numQubits: Int) {
+    static func validateCircuitOperations(_ operations: [Gate], qubits: Int) {
         let maxAllowedQubit = 29
 
         for operation in operations {
             precondition(
-                operation.qubits.allSatisfy { $0 >= 0 && $0 < numQubits },
-                "Circuit operation has qubit index out of bounds [0, \(numQubits))"
+                operation.qubits.allSatisfy { $0 >= 0 && $0 < qubits },
+                "Circuit operation has qubit index out of bounds [0, \(qubits))",
             )
             precondition(
                 operation.qubits.count == operation.gate.qubitsRequired,
-                "Gate \(operation.gate) requires \(operation.gate.qubitsRequired) qubits (got \(operation.qubits.count))"
+                "Gate \(operation.gate) requires \(operation.gate.qubitsRequired) qubits (got \(operation.qubits.count))",
             )
             precondition(
                 operation.qubits.allSatisfy { $0 >= 0 && $0 <= maxAllowedQubit },
-                "All qubit indices must be in [0, \(maxAllowedQubit)] (got \(operation.qubits))"
+                "All qubit indices must be in [0, \(maxAllowedQubit)] (got \(operation.qubits))",
             )
             validateUniqueQubits(operation.qubits)
         }
@@ -633,7 +633,7 @@ public enum ValidationUtilities {
     static func validateUpToIndex(_ upToIndex: Int, operationCount: Int) {
         precondition(
             upToIndex >= 0 && upToIndex <= operationCount,
-            "upToIndex must be in range 0...\(operationCount) (got \(upToIndex))"
+            "upToIndex must be in range 0...\(operationCount) (got \(upToIndex))",
         )
     }
 
@@ -656,31 +656,31 @@ public enum ValidationUtilities {
     /// Many educational algorithms have practical qubit limits for simulation.
     ///
     /// - Parameters:
-    ///   - numQubits: Number of qubits
+    ///   - qubits: Number of qubits
     ///   - max: Maximum allowed qubits
     ///   - algorithmName: Algorithm name for error message
-    /// - Precondition: numQubits <= max
+    /// - Precondition: qubits <= max
     /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateAlgorithmQubitLimit(_ numQubits: Int, max: Int, algorithmName: String) {
-        precondition(numQubits <= max, "\(algorithmName) with >\(max) qubits is computationally expensive (got \(numQubits))")
+    static func validateAlgorithmQubitLimit(_ qubits: Int, max: Int, algorithmName: String) {
+        precondition(qubits <= max, "\(algorithmName) with >\(max) qubits is computationally expensive (got \(qubits))")
     }
 
     /// Validate that algorithm has minimum required qubits
     ///
     /// - Parameters:
-    ///   - numQubits: Number of qubits
+    ///   - qubits: Number of qubits
     ///   - min: Minimum required qubits
     ///   - algorithmName: Algorithm name for error message
-    /// - Precondition: numQubits >= min
+    /// - Precondition: qubits >= min
     /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func validateMinimumQubits(_ numQubits: Int, min: Int, algorithmName: String) {
-        precondition(numQubits >= min, "\(algorithmName) requires at least \(min) qubit\(min > 1 ? "s" : "") (got \(numQubits))")
+    static func validateMinimumQubits(_ qubits: Int, min: Int, algorithmName: String) {
+        precondition(qubits >= min, "\(algorithmName) requires at least \(min) qubit\(min > 1 ? "s" : "") (got \(qubits))")
     }
 
     // MARK: - Optimizer Validations
@@ -701,11 +701,11 @@ public enum ValidationUtilities {
     static func validateTrustRadiusRelationships(min minRadius: Double, initial initialRadius: Double, max maxRadius: Double) {
         precondition(
             minRadius < initialRadius,
-            "minTrustRadius must be less than initialTrustRadius (got \(minRadius) >= \(initialRadius))"
+            "minTrustRadius must be less than initialTrustRadius (got \(minRadius) >= \(initialRadius))",
         )
         precondition(
             initialRadius <= maxRadius,
-            "initialTrustRadius must be less than or equal to maxTrustRadius (got \(initialRadius) > \(maxRadius))"
+            "initialTrustRadius must be less than or equal to maxTrustRadius (got \(initialRadius) > \(maxRadius))",
         )
     }
 
@@ -724,7 +724,7 @@ public enum ValidationUtilities {
     static func validateAcceptExpandRatios(accept acceptRatio: Double, expand expandRatio: Double) {
         precondition(
             acceptRatio < expandRatio,
-            "acceptRatio must be less than expandRatio (got \(acceptRatio) >= \(expandRatio))"
+            "acceptRatio must be less than expandRatio (got \(acceptRatio) >= \(expandRatio))",
         )
     }
 
@@ -746,7 +746,7 @@ public enum ValidationUtilities {
     static func validateDistinctVertices(_ vertex1: Int, _ vertex2: Int) {
         precondition(
             vertex1 != vertex2,
-            "Self-loop edge (\(vertex1), \(vertex1)) is invalid. Edges must connect distinct vertices."
+            "Self-loop edge (\(vertex1), \(vertex1)) is invalid. Edges must connect distinct vertices.",
         )
     }
 
@@ -791,7 +791,7 @@ public enum ValidationUtilities {
     static func validateCouplingKeyFormat(_ count: Int, key: String) {
         precondition(
             count == 1 || count == 2,
-            "Invalid coupling key '\(key)': must specify 1-2 qubits (e.g., '0' for local field, '01' or '0-1' for coupling)"
+            "Invalid coupling key '\(key)': must specify 1-2 qubits (e.g., '0' for local field, '01' or '0-1' for coupling)",
         )
     }
 
@@ -814,7 +814,7 @@ public enum ValidationUtilities {
     static func validateParameterVectorLength(_ actual: Int, expected: Int, name: String = "Parameter vector") {
         precondition(
             actual == expected,
-            "\(name) length must be \(expected) (got \(actual))"
+            "\(name) length must be \(expected) (got \(actual))",
         )
     }
 
@@ -894,7 +894,7 @@ public enum ValidationUtilities {
         let size = matrix.count
         precondition(
             size == 2 || size == 4,
-            "Custom gate matrix must be 2x2 (single-qubit) or 4x4 (two-qubit), got \(size)x\(size)"
+            "Custom gate matrix must be 2x2 (single-qubit) or 4x4 (two-qubit), got \(size)x\(size)",
         )
 
         if size == 2 {
@@ -922,7 +922,7 @@ public enum ValidationUtilities {
     static func validateParameterBinding(_ parameterName: String, in bindings: [String: Double]) {
         precondition(
             bindings[parameterName] != nil,
-            "Parameter '\(parameterName)' must have a binding in baseBindings"
+            "Parameter '\(parameterName)' must have a binding in baseBindings",
         )
     }
 
@@ -943,18 +943,18 @@ public enum ValidationUtilities {
     static func validateCompleteParameterBindings(
         _ bindings: [String: Double],
         parameters: [Parameter],
-        parameterSet: Set<String>
+        parameterSet: Set<String>,
     ) {
         for param in parameters {
             precondition(
                 bindings[param.name] != nil,
-                "Missing binding for parameter '\(param.name)'"
+                "Missing binding for parameter '\(param.name)'",
             )
         }
         for key in bindings.keys {
             precondition(
                 parameterSet.contains(key),
-                "Extra parameter '\(key)' not in circuit"
+                "Extra parameter '\(key)' not in circuit",
             )
         }
     }
@@ -985,7 +985,7 @@ public enum ValidationUtilities {
     static func validateConcrete(_ value: ParameterValue, name: String) {
         if case let .parameter(param) = value {
             preconditionFailure(
-                "\(name) must be concrete before matrix generation (symbolic parameter '\(param.name)' requires binding)"
+                "\(name) must be concrete before matrix generation (symbolic parameter '\(param.name)' requires binding)",
             )
         }
     }
@@ -1005,7 +1005,7 @@ public enum ValidationUtilities {
     static func validateConcreteCircuit(_ parameterCount: Int) {
         precondition(
             parameterCount == 0,
-            "Cannot execute circuit with symbolic parameters. Use binding(_:) or bound(with:) first."
+            "Cannot execute circuit with symbolic parameters. Use binding(_:) or bound(with:) first.",
         )
     }
 }

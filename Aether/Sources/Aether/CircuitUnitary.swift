@@ -22,7 +22,7 @@ import Accelerate
 /// or very deep circuits, gate-by-gate execution through ``QuantumSimulator`` is more efficient.
 ///
 /// ```swift
-/// let ansatz = HardwareEfficientAnsatz.create(numQubits: 8, depth: 3)
+/// let ansatz = HardwareEfficientAnsatz.create(qubits: 8, depth: 3)
 /// let circuits = (0..<100).map { i in
 ///     ansatz.bind(parameterVector: generateParameters(seed: i))
 /// }
@@ -30,13 +30,15 @@ import Accelerate
 /// let evaluator = await MPSBatchEvaluator()
 /// let energies = await evaluator.evaluateExpectationValues(
 ///     unitaries: unitaries,
-///     initialState: QuantumState(numQubits: 8),
+///     initialState: QuantumState(qubits: 8),
 ///     hamiltonian: hamiltonian
 /// )
 /// ```
 ///
 /// - Note: Unitary matrices are computed using ``MatrixUtilities`` with Accelerate BLAS for optimal performance.
-/// - SeeAlso: ``MPSBatchEvaluator``, ``MatrixUtilities``, ``QuantumCircuit``
+/// - SeeAlso: ``MPSBatchEvaluator``
+/// - SeeAlso: ``MatrixUtilities``
+/// - SeeAlso: ``QuantumCircuit``
 public enum CircuitUnitary {
     // MARK: - Public API
 
@@ -49,33 +51,34 @@ public enum CircuitUnitary {
     /// tensor product construction for efficiency.
     ///
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 2)
-    /// circuit.append(gate: .hadamard, toQubit: 0)
-    /// circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
+    /// var circuit = QuantumCircuit(qubits: 2)
+    /// circuit.append(.hadamard, to: 0)
+    /// circuit.append(.cnot, to: [0, 1])
     /// let unitary = CircuitUnitary.unitary(for: circuit)
     /// ```
     ///
     /// - Parameter circuit: Quantum circuit to convert.
     /// - Returns: Dense unitary matrix as 2ⁿ x 2ⁿ complex matrix.
     /// - Complexity: O(depth · 2³ⁿ) where depth is number of gates. Per-gate cost includes O(2²ⁿ) expansion and O(2³ⁿ) matrix multiply.
-    /// - Precondition: Circuit must have at least 1 qubit.
+    /// - Precondition: `circuit.qubits > 0` and `circuit.qubits <= 30`.
     /// - Note: Does not validate unitarity of result. Assumes circuit gates are valid unitary operations.
-    /// - SeeAlso: ``MatrixUtilities`` for BLAS-accelerated composition, ``MPSBatchEvaluator`` for batched evaluation.
+    /// - SeeAlso: ``MatrixUtilities``
+    /// - SeeAlso: ``MPSBatchEvaluator``
     @_optimize(speed)
     @_eagerMove
     public static func unitary(for circuit: QuantumCircuit) -> [[Complex<Double>]] {
-        let numQubits: Int = circuit.numQubits
-        ValidationUtilities.validatePositiveQubits(numQubits)
-        ValidationUtilities.validateMemoryLimit(numQubits)
+        let qubits: Int = circuit.qubits
+        ValidationUtilities.validatePositiveQubits(qubits)
+        ValidationUtilities.validateMemoryLimit(qubits)
 
-        let dimension = 1 << numQubits
+        let dimension = 1 << qubits
         var unitary: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: dimension)
 
         for operation in circuit.gates {
             let gateMatrix: [[Complex<Double>]] = expandGateToFullSpace(
                 gate: operation.gate,
                 qubits: operation.qubits,
-                numQubits: numQubits
+                numQubits: qubits,
             )
 
             unitary = MatrixUtilities.matrixMultiply(gateMatrix, unitary)
@@ -86,24 +89,13 @@ public enum CircuitUnitary {
 
     // MARK: - Gate Expansion
 
-    /// Expand gate to full Hilbert space.
-    ///
-    /// Embeds small gate matrix (2x2, 4x4, or 8x8) into full 2ⁿ x 2ⁿ space via tensor product with identity
-    /// on non-target qubits. Uses direct index computation rather than explicit tensor product construction:
-    /// single-qubit gates check target bit match, two-qubit gates check control and target bits.
-    ///
-    /// - Parameters:
-    ///   - gate: Quantum gate to expand.
-    ///   - qubits: Qubit indices for gate application.
-    ///   - numQubits: Total number of qubits in circuit.
-    /// - Returns: Full 2ⁿ x 2ⁿ matrix.
-    /// - Complexity: O(2²ⁿ) to fill full matrix.
+    /// Embed gate matrix into full 2ⁿ x 2ⁿ Hilbert space via tensor product with identity.
     @_optimize(speed)
     @_eagerMove
     private static func expandGateToFullSpace(
         gate: QuantumGate,
         qubits: [Int],
-        numQubits: Int
+        numQubits: Int,
     ) -> [[Complex<Double>]] {
         let dimension = 1 << numQubits
 
@@ -122,36 +114,26 @@ public enum CircuitUnitary {
         }
     }
 
-    /// Expand single-qubit gate to full space.
-    ///
-    /// Directly computes valid indices rather than iterating all dimension² pairs. For single-qubit gates,
-    /// only pairs where non-target bits match have non-zero entries. For each "other bits" pattern
-    /// (dimension/2 patterns), the 2x2 gate contributes 4 entries to the full matrix.
-    ///
-    /// Example: Hadamard on qubit 0 of 2-qubit system produces 4x4 matrix where row 0 (basis state |00⟩)
-    /// maps |0⟩ -> (|0⟩+|1⟩)/√2 giving [1/√2, 1/√2, 0, 0], and similarly for other basis states.
-    ///
-    /// - Complexity: O(2ⁿ⁺²) vs O(2²ⁿ) for naive approach.
+    /// Expand single-qubit gate to full space via zero-bit insertion for O(2ⁿ⁻¹) iteration.
     @_optimize(speed)
     @_eagerMove
     private static func expandSingleQubitGate(
         gate: QuantumGate,
         targetQubit: Int,
-        dimension: Int
+        dimension: Int,
     ) -> [[Complex<Double>]] {
         let smallMatrix: [[Complex<Double>]] = gate.matrix()
         var fullMatrix: [[Complex<Double>]] = Array(
             repeating: Array(repeating: Complex<Double>.zero, count: dimension),
-            count: dimension
+            count: dimension,
         )
 
+        let halfDimension = dimension >> 1
         let targetMask = 1 << targetQubit
 
-        for otherBits in 0 ..< dimension {
-            guard (otherBits & targetMask) == 0 else { continue }
-
-            let base0 = otherBits
-            let base1 = otherBits | targetMask
+        for i in 0 ..< halfDimension {
+            let base0 = BitUtilities.insertZeroBit(i, at: targetQubit)
+            let base1 = base0 | targetMask
 
             fullMatrix[base0][base0] = smallMatrix[0][0]
             fullMatrix[base0][base1] = smallMatrix[0][1]
@@ -162,71 +144,68 @@ public enum CircuitUnitary {
         return fullMatrix
     }
 
-    /// Expand two-qubit gate to full space.
-    ///
-    /// Directly computes valid indices for two-qubit gates. Only pairs where non-control and non-target bits
-    /// match have non-zero entries. For each "other bits" pattern (dimension/4 patterns), the 4x4 gate matrix
-    /// contributes 16 entries. Gate matrix indices 0-3 map to control-target bit pairs (0,0), (0,1), (1,0), (1,1).
-    ///
-    /// - Complexity: O(2ⁿ⁺²) vs O(2²ⁿ) for naive approach.
+    /// Expand two-qubit gate to full space via two-bit insertion for O(2ⁿ⁻²) iteration.
     @_optimize(speed)
     @_eagerMove
     private static func expandTwoQubitGate(
         gate: QuantumGate,
         control: Int,
         target: Int,
-        dimension: Int
+        dimension: Int,
     ) -> [[Complex<Double>]] {
         let smallMatrix: [[Complex<Double>]] = gate.matrix()
         var fullMatrix: [[Complex<Double>]] = Array(
             repeating: Array(repeating: Complex<Double>.zero, count: dimension),
-            count: dimension
+            count: dimension,
         )
 
         let controlMask = 1 << control
         let targetMask = 1 << target
-        let bothMask: Int = controlMask | targetMask
+        let quarterDimension = dimension >> 2
+        let (lowPos, highPos) = control < target ? (control, target) : (target, control)
 
-        for otherBits in 0 ..< dimension {
-            guard (otherBits & bothMask) == 0 else { continue }
+        for i in 0 ..< quarterDimension {
+            let base00 = BitUtilities.insertTwoZeroBits(i, low: lowPos, high: highPos)
+            let base01 = base00 | targetMask
+            let base10 = base00 | controlMask
+            let base11 = base00 | controlMask | targetMask
 
-            let base00 = otherBits
-            let base01 = otherBits | targetMask
-            let base10 = otherBits | controlMask
-            let base11 = otherBits | bothMask
+            fullMatrix[base00][base00] = smallMatrix[0][0]
+            fullMatrix[base00][base01] = smallMatrix[0][1]
+            fullMatrix[base00][base10] = smallMatrix[0][2]
+            fullMatrix[base00][base11] = smallMatrix[0][3]
 
-            let bases = [base00, base01, base10, base11]
+            fullMatrix[base01][base00] = smallMatrix[1][0]
+            fullMatrix[base01][base01] = smallMatrix[1][1]
+            fullMatrix[base01][base10] = smallMatrix[1][2]
+            fullMatrix[base01][base11] = smallMatrix[1][3]
 
-            for rowIdx in 0 ..< 4 {
-                let row = bases[rowIdx]
-                for colIdx in 0 ..< 4 {
-                    let col = bases[colIdx]
-                    fullMatrix[row][col] = smallMatrix[rowIdx][colIdx]
-                }
-            }
+            fullMatrix[base10][base00] = smallMatrix[2][0]
+            fullMatrix[base10][base01] = smallMatrix[2][1]
+            fullMatrix[base10][base10] = smallMatrix[2][2]
+            fullMatrix[base10][base11] = smallMatrix[2][3]
+
+            fullMatrix[base11][base00] = smallMatrix[3][0]
+            fullMatrix[base11][base01] = smallMatrix[3][1]
+            fullMatrix[base11][base10] = smallMatrix[3][2]
+            fullMatrix[base11][base11] = smallMatrix[3][3]
         }
 
         return fullMatrix
     }
 
-    /// Expand Toffoli gate to full space.
-    ///
-    /// Constructs Toffoli matrix directly: if both control qubits are 1, flip target (|c1,c2,t⟩ -> |c1,c2,t⊕1⟩),
-    /// otherwise identity. Most entries are diagonal (1), with off-diagonal entries only in rows where both
-    /// controls equal 1.
-    ///
-    /// - Complexity: O(2ⁿ) to construct matrix.
+    /// Expand Toffoli gate to full space via conditional target flip when both controls are 1.
     @_optimize(speed)
     @_eagerMove
     private static func expandToffoliGate(
         control1: Int,
         control2: Int,
         target: Int,
-        dimension: Int
+        dimension: Int,
     ) -> [[Complex<Double>]] {
         var fullMatrix: [[Complex<Double>]] = Array(
             repeating: Array(repeating: Complex<Double>.zero, count: dimension),
-            count: dimension
+            count: dimension,
         )
 
         let c1Mask = 1 << control1
@@ -257,13 +236,13 @@ public enum CircuitUnitary {
     /// print("\(bytes / 1_048_576) MB")
     /// ```
     ///
-    /// - Parameter numQubits: Number of qubits.
+    /// - Parameter qubits: Number of qubits.
     /// - Returns: Memory in bytes.
     /// - Complexity: O(1).
     @_effects(readonly)
     @inlinable
-    public static func memoryUsage(for numQubits: Int) -> Int {
-        let dimension = 1 << numQubits
+    public static func memoryUsage(for qubits: Int) -> Int {
+        let dimension = 1 << qubits
         let complexSize: Int = MemoryLayout<Complex<Double>>.stride
         return dimension * dimension * complexSize
     }

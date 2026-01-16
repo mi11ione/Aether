@@ -19,10 +19,10 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            useSparseBackend: false
+            useSparseBackend: false,
         )
 
-        let backendInfo = await vqe.getBackendInfo()
+        let backendInfo = await vqe.backendInfo
         #expect(backendInfo.contains("Observable"))
     }
 
@@ -36,10 +36,10 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
         )
 
-        let result = await vqe.run(initialParameters: [0.1])
+        let result = await vqe.run(from: [0.1])
 
         #expect(result.optimalEnergy < 0.0)
         #expect(result.optimalEnergy > -1.1)
@@ -68,12 +68,12 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
         )
 
         let state = CallbackState()
 
-        let result = await vqe.runWithProgress(initialParameters: [0.1]) { _, energy in
+        let result = await vqe.run(from: [0.1]) { _, energy in
             await state.recordCallback(energy: energy)
         }
 
@@ -94,13 +94,13 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
         )
 
-        _ = await vqe.runWithProgress(initialParameters: [0.1]) { iteration, energy in
-            let (currentIter, currentEnergy) = await vqe.getProgress()
-            #expect(currentIter == iteration)
-            #expect(abs(currentEnergy - energy) < 1e-10)
+        _ = await vqe.run(from: [0.1]) { iteration, energy in
+            let currentProgress = await vqe.progress
+            #expect(currentProgress.iteration == iteration)
+            #expect(abs(currentProgress.energy - energy) < 1e-10)
         }
     }
 
@@ -118,10 +118,10 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
         )
 
-        let result = await vqe.run(initialParameters: [0.1, 0.1])
+        let result = await vqe.run(from: [0.1, 0.1])
 
         #expect(result.optimalEnergy < -1.5)
         #expect(result.optimalEnergy > -2.1)
@@ -137,10 +137,10 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
         )
 
-        let result = await vqe.run(initialParameters: [0.1])
+        let result = await vqe.run(from: [0.1])
 
         #expect(result.convergenceReason == .energyConverged)
     }
@@ -155,13 +155,13 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            convergenceCriteria: ConvergenceCriteria(
+            convergence: ConvergenceCriteria(
                 energyTolerance: 1e-2,
-                maxIterations: 50
-            )
+                maxIterations: 50,
+            ),
         )
 
-        let result = await vqe.run(initialParameters: [2.0])
+        let result = await vqe.run(from: [2.0])
 
         #expect(result.optimalEnergy < 0.0)
     }
@@ -176,13 +176,13 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            convergenceCriteria: ConvergenceCriteria(
+            convergence: ConvergenceCriteria(
                 energyTolerance: 1e-3,
-                maxIterations: 50
-            )
+                maxIterations: 50,
+            ),
         )
 
-        let result = await vqe.run(initialParameters: [2.0])
+        let result = await vqe.run(from: [2.0])
 
         #expect(result.optimalEnergy < 0.0)
     }
@@ -197,10 +197,10 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 0.05, maxIterations: 100)
+            convergence: ConvergenceCriteria(energyTolerance: 0.05, maxIterations: 100),
         )
 
-        let result = await vqe.run(initialParameters: [2.0])
+        let result = await vqe.run(from: [2.0])
 
         #expect(result.optimalEnergy < 0.0)
     }
@@ -215,10 +215,10 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            useSparseBackend: true
+            useSparseBackend: true,
         )
 
-        let backendInfo = await vqe.getBackendInfo()
+        let backendInfo = await vqe.backendInfo
         #expect(backendInfo.contains("Sparse") || backendInfo.contains("Observable"))
     }
 
@@ -232,10 +232,10 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            useSparseBackend: false
+            useSparseBackend: false,
         )
 
-        let backendInfo = await vqe.getBackendInfo()
+        let backendInfo = await vqe.backendInfo
         #expect(backendInfo.contains("Observable"))
         #expect(backendInfo.contains("1 term"))
     }
@@ -250,11 +250,11 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
-            useMetalAcceleration: false
+            convergence: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
+            useMetalAcceleration: false,
         )
 
-        let result = await vqe.run(initialParameters: [0.1])
+        let result = await vqe.run(from: [0.1])
 
         #expect(result.optimalEnergy < 0.0)
     }
@@ -269,29 +269,29 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
         )
 
-        let result = await vqe.run(initialParameters: [0.1])
+        let result = await vqe.run(from: [0.1])
 
         #expect(result.functionEvaluations > result.iterations)
     }
 }
 
-/// Test suite for VQEResult.
+/// Test suite for VQE.Result.
 /// Validates VQE result creation,
 /// field access, and description.
-@Suite("VQEResult")
+@Suite("VQE.Result")
 struct VQEResultTests {
     @Test("Create VQE result")
     func createVQEResult() {
-        let result = VQEResult(
+        let result = VQE.Result(
             optimalEnergy: -1.234,
             optimalParameters: [0.5, 1.0, 1.5],
             energyHistory: [-2.0, -1.5, -1.234],
             iterations: 3,
             convergenceReason: .energyConverged,
-            functionEvaluations: 15
+            functionEvaluations: 15,
         )
 
         #expect(result.optimalEnergy == -1.234)
@@ -304,13 +304,13 @@ struct VQEResultTests {
 
     @Test("VQE result description")
     func vqeResultDescription() {
-        let result = VQEResult(
+        let result = VQE.Result(
             optimalEnergy: -1.234,
             optimalParameters: [0.5, 1.0],
             energyHistory: [-1.234],
             iterations: 10,
             convergenceReason: .energyConverged,
-            functionEvaluations: 50
+            functionEvaluations: 50,
         )
 
         let description = result.description
@@ -324,13 +324,13 @@ struct VQEResultTests {
 
     @Test("VQE result description with many parameters")
     func vqeResultDescriptionManyParameters() {
-        let result = VQEResult(
+        let result = VQE.Result(
             optimalEnergy: -1.0,
             optimalParameters: [1.0, 2.0, 3.0, 4.0, 5.0],
             energyHistory: [-1.0],
             iterations: 5,
             convergenceReason: .maxIterationsReached,
-            functionEvaluations: 20
+            functionEvaluations: 20,
         )
 
         let description = result.description
@@ -340,13 +340,13 @@ struct VQEResultTests {
 
     @Test("VQE result with gradient norm convergence")
     func vqeResultGradientNormConvergence() {
-        let result = VQEResult(
+        let result = VQE.Result(
             optimalEnergy: -1.0,
             optimalParameters: [0.5],
             energyHistory: [-1.0],
             iterations: 5,
             convergenceReason: .gradientConverged,
-            functionEvaluations: 25
+            functionEvaluations: 25,
         )
 
         #expect(result.convergenceReason == .gradientConverged)

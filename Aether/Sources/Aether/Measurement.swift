@@ -7,21 +7,18 @@ import GameplayKit
 ///
 /// Encapsulates the result of measuring all qubits in the computational basis (Z-basis).
 /// Contains the classical measurement outcome (basis state index) and the post-measurement
-/// collapsed state. Implements the measurement postulate from quantum mechanics.
+/// collapsed state. Measurement yields outcome i with probability P(i) = |cᵢ|² per the
+/// Born rule, and the post-measurement state collapses to deterministic basis state |i⟩.
 ///
-/// **Born rule**: Measurement yields outcome i with probability P(i) = |cᵢ|²
-///
-/// **State collapse**: Post-measurement state is deterministic basis state |i⟩
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
-/// let bell = QuantumCircuit.bellPhiPlus().execute()
+/// let bell = QuantumCircuit.bell().execute()
 /// let result = Measurement.measure(bell)
-/// // result.outcome: 0 or 3 (50% each)
-/// // result.collapsedState: |00⟩ or |11⟩
+/// // result.outcome: 0 or 3 (50% each), collapsedState: |00⟩ or |11⟩
 /// ```
 ///
 /// - SeeAlso: ``Measurement/measure(_:seed:)``
+@frozen
 public struct MeasurementResult: Equatable, CustomStringConvertible {
     /// Classical outcome: basis state index i ∈ [0, 2^n-1]
     public let outcome: Int
@@ -38,21 +35,19 @@ public struct MeasurementResult: Equatable, CustomStringConvertible {
 ///
 /// Result of measuring a subset of qubits while preserving quantum coherence
 /// in unmeasured qubits. Supports both single-qubit and multi-qubit partial
-/// measurements with a unified API.
+/// measurements with a unified API. Use the `.outcome` property for single-qubit
+/// measurements or `.outcomes` array for multiple qubits.
 ///
-/// **Single-qubit convenience**: Use `.outcome` property for single-qubit measurements
-///
-/// **Multi-qubit access**: Use `.outcomes` array for multiple qubits
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
-/// let bell = QuantumCircuit.bellPhiPlus().execute()
+/// let bell = QuantumCircuit.bell().execute()
 /// let result = Measurement.measure(0, in: bell)
-/// print(result.outcome)  // 0 or 1
-/// print(result.outcomes) // [0] or [1]
+/// print(result.outcome)   // 0 or 1 (single-qubit convenience)
+/// print(result.outcomes)  // [0] or [1] (array form)
 /// ```
 ///
 /// - SeeAlso: ``Measurement``
+@frozen
 public struct PartialMeasurementResult: Equatable, CustomStringConvertible {
     /// Measurement outcomes: length 1 for single qubit, N for multiple qubits
     public let outcomes: [Int]
@@ -62,10 +57,10 @@ public struct PartialMeasurementResult: Equatable, CustomStringConvertible {
 
     /// Convenience accessor for single-qubit measurements
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let result = Measurement.measure(0, in: state)
-    /// print(result.outcome)  // Direct access (equivalent to outcomes[0])
+    /// print(result.outcome)  // Equivalent to outcomes[0]
     /// ```
     ///
     /// - Precondition: `outcomes.count == 1`
@@ -85,22 +80,20 @@ public struct PartialMeasurementResult: Equatable, CustomStringConvertible {
 /// Custom basis measurement outcome
 ///
 /// Result of measuring a qubit in an arbitrary single-qubit basis defined by
-/// a provided basis state |ψ⟩. Returns outcome (0 or 1) corresponding to
-/// projection onto {|ψ⟩, |ψ⊥⟩} basis.
+/// a provided normalized 2D complex vector |ψ⟩ = c₀|0⟩ + c₁|1⟩. Returns outcome
+/// (0 or 1) corresponding to projection onto {|ψ⟩, |ψ⊥⟩} basis where the orthogonal
+/// complement |ψ⊥⟩ is constructed automatically via unitarity.
 ///
-/// **Basis definition**: Provide normalized 2D complex vector |ψ⟩ = c₀|0⟩ + c₁|1⟩
-///
-/// **Orthogonal complement**: |ψ⊥⟩ constructed automatically via unitarity
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
-/// let customBasis = [Complex(1/sqrt(2), 0), Complex(1/sqrt(2), 0)]  // |+⟩
-/// let zero = QuantumState(numQubits: 1)
-/// let result = Measurement.measure(0, basis: customBasis, in: zero)
-/// // result.outcome: 0 or 1 (50% each for |0⟩ measured in |+⟩ basis)
+/// let plusBasis = [Complex(1/sqrt(2), 0), Complex(1/sqrt(2), 0)]
+/// let zero = QuantumState(qubits: 1)
+/// let result = Measurement.measure(0, basis: plusBasis, in: zero)
+/// // result.outcome: 0 or 1 (50% each for |0⟩ in |+⟩ basis)
 /// ```
 ///
 /// - SeeAlso: ``Measurement``
+@frozen
 public struct CustomBasisMeasurementResult: Equatable, CustomStringConvertible {
     /// Measurement outcome: 0 (projected onto |ψ⟩) or 1 (projected onto |ψ⊥⟩)
     public let outcome: Int
@@ -115,26 +108,19 @@ public struct CustomBasisMeasurementResult: Equatable, CustomStringConvertible {
 
 /// Pauli measurement basis selector
 ///
-/// Defines the measurement basis for single-qubit Pauli measurements.
-/// Each basis corresponds to measuring a Pauli observable (X, Y, or Z)
-/// with eigenvalues ±1.
+/// Defines the measurement basis for single-qubit Pauli measurements. Each basis
+/// corresponds to measuring a Pauli observable (X, Y, or Z) with eigenvalues ±1.
+/// X basis has eigenstates |+⟩ = (|0⟩+|1⟩)/√2 (λ=+1) and |-⟩ = (|0⟩-|1⟩)/√2 (λ=-1).
+/// Y basis has eigenstates |+i⟩ = (|0⟩+i|1⟩)/√2 (λ=+1) and |-i⟩ = (|0⟩-i|1⟩)/√2 (λ=-1).
+/// Z basis has eigenstates |0⟩ (λ=+1) and |1⟩ (λ=-1).
 ///
-/// **Basis eigenstates**:
-/// - **X**: |+⟩ = (|0⟩ + |1⟩)/√2 (λ=+1), |-⟩ = (|0⟩ - |1⟩)/√2 (λ=-1)
-/// - **Y**: |+i⟩ = (|0⟩ + i|1⟩)/√2 (λ=+1), |-i⟩ = (|0⟩ - i|1⟩)/√2 (λ=-1)
-/// - **Z**: |0⟩ (λ=+1), |1⟩ (λ=-1)
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
-/// let plus = QuantumState(numQubits: 1, amplitudes: [
-///     Complex(1/sqrt(2), 0),
-///     Complex(1/sqrt(2), 0)
+/// let plus = QuantumState(qubits: 1, amplitudes: [
+///     Complex(1/sqrt(2), 0), Complex(1/sqrt(2), 0)
 /// ])
 /// let xResult = Measurement.measure(0, basis: .x, in: plus)
 /// // xResult.eigenvalue: +1 (deterministic, |+⟩ is X eigenstate)
-///
-/// let zResult = Measurement.measure(0, basis: .z, in: plus)
-/// // zResult.eigenvalue: ±1 (50% each, |+⟩ is superposition in Z basis)
 /// ```
 ///
 /// - SeeAlso: ``Measurement``
@@ -153,26 +139,23 @@ public enum PauliBasis: String, CaseIterable, Sendable {
 ///
 /// Result of measuring a qubit in X, Y, or Z basis. Unlike computational basis
 /// measurements (which return 0/1), Pauli measurements return eigenvalues ±1
-/// corresponding to positive/negative eigenstates.
+/// corresponding to positive/negative eigenstates. Eigenvalue +1 indicates
+/// measurement in positive eigenstate (|+⟩, |+i⟩, or |0⟩), while -1 indicates
+/// negative eigenstate (|-⟩, |-i⟩, or |1⟩). Observable expectation ⟨σ⟩ equals
+/// the average of eigenvalues over many measurements.
 ///
-/// **Eigenvalue interpretation**:
-/// - +1: Qubit measured in positive eigenstate (|+⟩, |+i⟩, or |0⟩)
-/// - -1: Qubit measured in negative eigenstate (|-⟩, |-i⟩, or |1⟩)
-///
-/// **Observable expectation**: ⟨σ⟩ = average of eigenvalues over many measurements
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
-/// let zero = QuantumState(numQubits: 1)
-///
+/// let zero = QuantumState(qubits: 1)
 /// let xResult = Measurement.measure(0, basis: .x, in: zero)
 /// // xResult.eigenvalue: ±1 (50% each, |0⟩ is superposition in X basis)
-///
 /// let zResult = Measurement.measure(0, basis: .z, in: zero)
-/// // zResult.eigenvalue: +1 (deterministic, |0⟩ is Z eigenstate with λ=+1)
+/// // zResult.eigenvalue: +1 (deterministic, |0⟩ is Z eigenstate)
 /// ```
 ///
-/// - SeeAlso: ``Measurement``, ``PauliBasis``
+/// - SeeAlso: ``Measurement``
+/// - SeeAlso: ``PauliBasis``
+@frozen
 public struct PauliMeasurementResult: Equatable, CustomStringConvertible {
     /// Pauli eigenvalue: +1 or -1
     public let eigenvalue: Int
@@ -188,20 +171,18 @@ public struct PauliMeasurementResult: Equatable, CustomStringConvertible {
 /// Single Pauli operator acting on specific qubit
 ///
 /// Represents one Pauli operator (X, Y, or Z) applied to a specific qubit index.
-/// Used as building block for ``PauliString`` tensor product observables.
+/// Used as building block for ``PauliString`` tensor product observables. Static
+/// factory methods `.x(_:)`, `.y(_:)`, `.z(_:)` provide concise construction.
 ///
-/// **Factory methods**: Static methods `.x(_:)`, `.y(_:)`, `.z(_:)` for concise construction
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
 /// let x0 = PauliOperator(qubit: 0, basis: .x)  // X₀
-/// let z2 = PauliOperator(qubit: 2, basis: .z)  // Z₂
-///
-/// let x0Concise = PauliOperator.x(0)  // Equivalent, more readable
-/// let z2Concise = PauliOperator.z(2)
+/// let z2 = PauliOperator.z(2)                  // Z₂ (factory method)
 /// ```
 ///
-/// - SeeAlso: ``PauliString``, ``PauliBasis``
+/// - SeeAlso: ``PauliString``
+/// - SeeAlso: ``PauliBasis``
+@frozen
 public struct PauliOperator: Equatable, Hashable, Sendable {
     /// Target qubit index (0 to n-1)
     public let qubit: Int
@@ -217,7 +198,7 @@ public struct PauliOperator: Equatable, Hashable, Sendable {
 
     /// Create X Pauli operator on specified qubit
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let x0 = PauliOperator.x(0)  // X₀
     /// ```
@@ -231,7 +212,7 @@ public struct PauliOperator: Equatable, Hashable, Sendable {
 
     /// Create Y Pauli operator on specified qubit
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let y1 = PauliOperator.y(1)  // Y₁
     /// ```
@@ -245,7 +226,7 @@ public struct PauliOperator: Equatable, Hashable, Sendable {
 
     /// Create Z Pauli operator on specified qubit
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let z2 = PauliOperator.z(2)  // Z₂
     /// ```
@@ -260,37 +241,31 @@ public struct PauliOperator: Equatable, Hashable, Sendable {
 
 /// Pauli string: tensor product of Pauli operators
 ///
-/// Represents a multi-qubit observable as tensor product of Pauli operators,
-/// e.g., X₀⊗Y₁⊗Z₂. Identity operators are implicit on unspecified qubits.
-/// This is the fundamental observable representation for VQE and quantum chemistry.
+/// Represents a multi-qubit observable as tensor product of Pauli operators O = ⊗ᵢ Pᵢ
+/// where Pᵢ ∈ {I, X, Y, Z}, e.g., X₀⊗Y₁⊗Z₂. Identity operators are implicit on unspecified
+/// qubits. Eigenvalues are products of individual Pauli eigenvalues (±1). This is the
+/// fundamental observable representation for VQE and quantum chemistry. Use variadic
+/// initializer or array for construction.
 ///
-/// **Mathematical form**: O = ⊗ᵢ Pᵢ where Pᵢ ∈ {I, X, Y, Z}
-///
-/// **Eigenvalues**: Product of individual Pauli eigenvalues (±1)
-///
-/// **Construction**: Use variadic initializer or array for programmatic construction
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
-/// let z0 = PauliString(.z(0))                    // Z₀
-/// let xz = PauliString(.x(0), .z(1))             // X₀⊗Z₁
-///
-/// let ops: [PauliOperator] = [.x(0), .y(1), .z(2)]
-/// let xyz = PauliString(ops)                      // X₀⊗Y₁⊗Z₂
-///
-/// let bell = QuantumCircuit.bellPhiPlus().execute()
+/// let z0 = PauliString(.z(0))         // Z₀
+/// let xz = PauliString(.x(0), .z(1))  // X₀⊗Z₁
+/// let bell = QuantumCircuit.bell().execute()
 /// let result = Measurement.measure(xz, in: bell)
-/// // result.eigenvalue: ±1 (product of X₀ and Z₁ eigenvalues)
+/// // result.eigenvalue: ±1
 /// ```
 ///
-/// - SeeAlso: ``PauliOperator``, ``Measurement``
+/// - SeeAlso: ``PauliOperator``
+/// - SeeAlso: ``Measurement``
+@frozen
 public struct PauliString: Equatable, Hashable, CustomStringConvertible, Sendable {
     /// Array of Pauli operators (identity implicit on unspecified qubits)
     public let operators: [PauliOperator]
 
     /// Create Pauli string from operator array
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let ops: [PauliOperator] = [.x(0), .z(1)]
     /// let ps = PauliString(ops)  // X₀⊗Z₁
@@ -303,7 +278,7 @@ public struct PauliString: Equatable, Hashable, CustomStringConvertible, Sendabl
 
     /// Create Pauli string from variadic operator list
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let single = PauliString(.z(0))           // Z₀
     /// let multi = PauliString(.x(0), .z(1))     // X₀⊗Z₁
@@ -331,12 +306,13 @@ public struct PauliString: Equatable, Hashable, CustomStringConvertible, Sendabl
 /// Used in multi-qubit Pauli measurement results to track individual qubit outcomes
 /// before computing the product eigenvalue.
 ///
-/// **Example**:
+/// **Example:**
 /// ```swift
 /// let outcome = MeasurementOutcome(qubit: 0, outcome: 1)  // Qubit 0 measured as |1⟩
 /// ```
 ///
 /// - SeeAlso: ``PauliStringMeasurementResult``
+@frozen
 public struct MeasurementOutcome: Equatable {
     /// Qubit index that was measured
     public let qubit: Int
@@ -348,26 +324,21 @@ public struct MeasurementOutcome: Equatable {
 /// Pauli string measurement outcome with product eigenvalue
 ///
 /// Result of measuring a multi-qubit Pauli string observable (tensor product of Paulis).
-/// Contains the overall product eigenvalue (±1) and individual measurement outcomes
-/// for each qubit in the Pauli string.
+/// Contains the overall product eigenvalue (±1) computed as λ = ∏ᵢ λᵢ where λᵢ = (outcomeᵢ == 0) ? +1 : -1,
+/// and individual measurement outcomes for each qubit. Used for Hamiltonian expectation
+/// values in VQE where ⟨H⟩ = Σᵢ cᵢ⟨Pᵢ⟩.
 ///
-/// **Eigenvalue computation**: λ = ∏ᵢ λᵢ where λᵢ = (outcomeᵢ == 0) ? +1 : -1
-///
-/// **Use case**: Hamiltonian expectation values in VQE (⟨H⟩ = Σᵢ cᵢ⟨Pᵢ⟩)
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
 /// let zz = PauliString(.z(0), .z(1))
-/// let bell = QuantumCircuit.bellPhiPlus().execute()
+/// let bell = QuantumCircuit.bell().execute()  // (|00⟩ + |11⟩)/√2
 /// let result = Measurement.measure(zz, in: bell)
-///
-/// // Bell state: (|00⟩ + |11⟩)/√2
-/// // 50% |00⟩: λ₀=+1, λ₁=+1 -> product=+1
-/// // 50% |11⟩: λ₀=-1, λ₁=-1 -> product=+1
-/// // result.eigenvalue: +1 (deterministic!)
+/// // result.eigenvalue: +1 (deterministic for Bell state)
 /// ```
 ///
-/// - SeeAlso: ``PauliString``, ``Measurement``
+/// - SeeAlso: ``PauliString``
+/// - SeeAlso: ``Measurement``
+@frozen
 public struct PauliStringMeasurementResult: Equatable, CustomStringConvertible {
     /// Overall eigenvalue: product of individual Pauli eigenvalues (±1)
     public let eigenvalue: Int
@@ -387,31 +358,21 @@ public struct PauliStringMeasurementResult: Equatable, CustomStringConvertible {
 /// Non-destructive state snapshot for debugging and analysis
 ///
 /// Captures the full quantum state at a specific point without measurement collapse.
-/// Preserves quantum coherence and superposition. Useful for debugging, algorithm
-/// verification, and state tomography.
+/// Preserves quantum coherence and superposition. Useful for algorithm verification
+/// (comparing intermediate states to theory), debugging (inspecting wavefunction at
+/// circuit points), state tomography, and visualization. Not physically realizable
+/// on quantum hardware (violates no-cloning theorem) - simulation-only analysis tool.
 ///
-/// **Physical realizability**: Not physically realizable on quantum hardware (violates
-/// no-cloning theorem). This is a simulation-only tool for analysis.
-///
-/// **Use cases**:
-/// - Algorithm verification: Compare intermediate states to theory
-/// - Debugging: Inspect wavefunction at specific circuit points
-/// - State tomography: Reconstruct density matrix from multiple snapshots
-/// - Visualization: Display wavefunction evolution over time
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
-/// var circuit = QuantumCircuit(numQubits: 2)
-/// circuit.append(gate: .hadamard, to: 0)
-/// let snapshot1 = Measurement.snapshot(of: circuit.execute(), label: "After H(0)")
-/// // snapshot1.state: |+⟩⊗|0⟩ (no collapse, superposition preserved)
-///
-/// circuit.append(gate: .cnot(control: 0, target: 1), qubits: [])
-/// let snapshot2 = Measurement.snapshot(of: circuit.execute(), label: "After CNOT")
-/// // snapshot2.state: (|00⟩ + |11⟩)/√2 (Bell state)
+/// var circuit = QuantumCircuit(qubits: 2)
+/// circuit.append(.hadamard, to: 0)
+/// let snapshot = Measurement.snapshot(of: circuit.execute(), label: "After H")
+/// // snapshot.state: |+⟩⊗|0⟩ (superposition preserved, no collapse)
 /// ```
 ///
 /// - SeeAlso: ``Measurement/snapshot(of:label:)``
+@frozen
 public struct StateSnapshot: Equatable, CustomStringConvertible, Sendable {
     /// Captured quantum state (full statevector copy)
     public let state: QuantumState
@@ -433,26 +394,20 @@ public struct StateSnapshot: Equatable, CustomStringConvertible, Sendable {
 /// Chi-squared goodness-of-fit test result
 ///
 /// Statistical test result for comparing observed measurement frequencies to
-/// expected theoretical probabilities. Lower chi-squared values indicate better fit.
+/// expected theoretical probabilities. χ² ≈ 0 indicates perfect fit, χ² < degrees
+/// of freedom indicates good fit within statistical fluctuations, and χ² >> degrees
+/// of freedom indicates systematic deviation from theory.
 ///
-/// **Interpretation**:
-/// - χ² ≈ 0: Perfect fit (observed matches expected exactly)
-/// - χ² < degrees of freedom: Good fit (within statistical fluctuations)
-/// - χ² >> degrees of freedom: Poor fit (systematic deviation from theory)
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
-/// let observed = [48, 52]      // Measured |0⟩ 48 times, |1⟩ 52 times
-/// let expected = [0.5, 0.5]    // Theoretical 50/50 split
-/// let result = Measurement.chiSquared(
-///     observed: observed,
-///     expected: expected,
-///     totalShots: 100
-/// )
-/// // result.chiSquared: ~0.16 (good fit, χ² < 1 degree of freedom)
+/// let observed = [48, 52]
+/// let expected = [0.5, 0.5]
+/// let result = Measurement.chiSquared(observed: observed, expected: expected, totalShots: 100)
+/// // result.chiSquared: ~0.16 (good fit)
 /// ```
 ///
 /// - SeeAlso: ``Measurement/chiSquared(observed:expected:totalShots:)``
+@frozen
 public struct ChiSquaredResult {
     /// Chi-squared statistic: Σ((observed - expected)² / expected)
     public let chiSquared: Double
@@ -469,93 +424,54 @@ public struct ChiSquaredResult {
 
 /// Quantum measurement operations: Born rule implementation with state collapse
 ///
-/// Static namespace providing projective measurement operations in computational,
-/// Pauli, and custom bases. Implements the measurement postulate from quantum
-/// mechanics with optional reproducibility via seeding.
+/// Static namespace providing projective measurement operations in computational basis
+/// (Z-basis returning 0/1), Pauli basis (X/Y/Z returning eigenvalues ±1), custom basis
+/// (arbitrary single-qubit unitary), and Pauli strings (multi-qubit tensor products like
+/// X₀⊗Y₁⊗Z₂). Also supports partial measurement (qubit subset preserving coherence in rest)
+/// and non-destructive snapshots. Measurement yields outcome i with probability P(i) = |cᵢ|²
+/// per Born rule, collapsing state to measured outcome. Optional seed enables reproducible
+/// results. All measurements are O(2^n) complexity.
 ///
-/// **Measurement types**:
-/// - **Computational basis**: Standard Z-basis measurement (|0⟩, |1⟩) returning 0/1
-/// - **Pauli basis**: X, Y, or Z measurements returning eigenvalues ±1
-/// - **Custom basis**: Arbitrary single-qubit unitary basis
-/// - **Pauli strings**: Multi-qubit tensor product observables (X₀⊗Y₁⊗Z₂)
-/// - **Partial measurement**: Measure qubit subset, preserve coherence in rest
-/// - **Snapshots**: Non-destructive state capture (no collapse)
-///
-/// **Born rule**: Measurement yields outcome i with probability P(i) = |cᵢ|²
-///
-/// **State collapse**: Post-measurement state projects onto measured outcome
-///
-/// **Reproducibility**: Optional `seed` parameter enables deterministic results
-///
-/// **Performance**: Measurement is O(2^n) for full state, O(2^n) for partial measurement
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
-/// let bell = QuantumCircuit.bellPhiPlus().execute()
-///
-/// // Computational basis measurement
-/// let result = Measurement.measure(bell)
-/// // result.outcome: 0 (|00⟩) or 3 (|11⟩) with 50% probability each
-///
-/// // Pauli X measurement
-/// let xResult = Measurement.measure(0, basis: .x, in: bell)
-/// // xResult.eigenvalue: ±1
-///
-/// // Pauli string measurement
+/// let bell = QuantumCircuit.bell().execute()
+/// let result = Measurement.measure(bell)           // Computational: 0 or 3
+/// let xResult = Measurement.measure(0, basis: .x, in: bell)  // Pauli: ±1
 /// let zz = PauliString(.z(0), .z(1))
-/// let zzResult = Measurement.measure(zz, in: bell)
-/// // zzResult.eigenvalue: +1 (deterministic for Bell state)
-///
-/// // Seeded measurement for reproducibility
-/// let r1 = Measurement.measure(bell, seed: 123)
-/// let r2 = Measurement.measure(bell, seed: 123)
-/// // r1.outcome == r2.outcome (same seed -> same result)
-///
-/// // Non-destructive snapshot
-/// let snapshot = Measurement.snapshot(of: bell, label: "Bell state")
-/// // snapshot.state preserves superposition (no collapse)
+/// let zzResult = Measurement.measure(zz, in: bell) // String: +1 (deterministic)
+/// let r1 = Measurement.measure(bell, seed: 123)    // Reproducible with seed
 /// ```
 ///
-/// - SeeAlso: ``QuantumState``, ``QuantumCircuit``, ``PauliString``
+/// - SeeAlso: ``QuantumState``
+/// - SeeAlso: ``QuantumCircuit``
+/// - SeeAlso: ``PauliString``
 public enum Measurement {
     // MARK: - Computational Basis Measurement
 
     /// Measure all qubits in computational basis (Born rule)
     ///
     /// Performs projective measurement of entire quantum state, sampling outcome
-    /// according to Born rule probabilities P(i) = |cᵢ|². Collapses state to
-    /// deterministic basis state |i⟩. This is the standard measurement operation
-    /// in quantum computing.
+    /// according to Born rule probabilities P(i) = |cᵢ|². Computes full probability
+    /// distribution, samples via roulette wheel selection, and collapses state to
+    /// deterministic basis state |outcome⟩.
     ///
-    /// **Algorithm**:
-    /// 1. Compute probability distribution P(i) = |cᵢ|² for all i ∈ [0, 2^n-1]
-    /// 2. Sample outcome via roulette wheel selection
-    /// 3. Collapse state to |outcome⟩
-    ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let plus = QuantumState(numQubits: 1, amplitudes: [
-    ///     Complex(1/sqrt(2), 0),
-    ///     Complex(1/sqrt(2), 0)
+    /// let plus = QuantumState(qubits: 1, amplitudes: [
+    ///     Complex(1/sqrt(2), 0), Complex(1/sqrt(2), 0)
     /// ])
     /// let result = Measurement.measure(plus)
-    /// // result.outcome: 0 or 1 (50% each)
-    /// // result.collapsedState: |0⟩ or |1⟩
-    ///
-    /// let bell = QuantumCircuit.bellPhiPlus().execute()
-    /// let bellResult = Measurement.measure(bell)
-    /// // bellResult.outcome: 0 (|00⟩) or 3 (|11⟩) with equal probability
-    ///
+    /// // result.outcome: 0 or 1 (50% each), collapsedState: |0⟩ or |1⟩
     /// let r1 = Measurement.measure(plus, seed: 123)
     /// let r2 = Measurement.measure(plus, seed: 123)
-    /// // r1.outcome == r2.outcome (reproducible with same seed)
+    /// // r1.outcome == r2.outcome (reproducible)
     /// ```
     ///
     /// - Parameters:
     ///   - state: Normalized quantum state to measure
     ///   - seed: Optional seed for reproducible results (default: system random)
     /// - Returns: Measurement result with outcome and collapsed state
-    /// - Complexity: O(2^n) time for probability computation, O(2^n) space for state
+    /// - Complexity: O(2^n) time, O(2^n) space
     /// - Precondition: State must be normalized
     @_eagerMove
     public static func measure(_ state: QuantumState, seed: UInt64? = nil) -> MeasurementResult {
@@ -563,7 +479,7 @@ public enum Measurement {
 
         let probabilities = state.probabilities()
         let outcome = sampleOutcome(probabilities: probabilities, seed: seed)
-        let collapsedState = collapseToOutcome(outcome, numQubits: state.numQubits)
+        let collapsedState = collapseToOutcome(outcome, qubits: state.qubits)
 
         return MeasurementResult(outcome: outcome, collapsedState: collapsedState)
     }
@@ -573,21 +489,16 @@ public enum Measurement {
     /// Measure single qubit, leaving others in superposition
     ///
     /// Performs projective measurement of one qubit while preserving quantum coherence
-    /// in unmeasured qubits. Implements partial trace (marginalization). The collapsed
-    /// state maintains entanglement structure for unmeasured qubits.
+    /// in unmeasured qubits via partial trace. Calculates marginal probabilities, samples
+    /// outcome, zeros incompatible amplitudes, and renormalizes compatible ones. The
+    /// collapsed state maintains entanglement structure for unmeasured qubits.
     ///
-    /// **Algorithm**:
-    /// 1. Calculate marginal probabilities P(qubit=0) and P(qubit=1)
-    /// 2. Sample outcome (0 or 1)
-    /// 3. Zero incompatible amplitudes, renormalize compatible ones
-    ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let bell = QuantumCircuit.bellPhiPlus().execute()  // (|00⟩ + |11⟩)/√2
+    /// let bell = QuantumCircuit.bell().execute()  // (|00⟩ + |11⟩)/√2
     /// let result = Measurement.measure(0, in: bell)
     /// // result.outcome: 0 or 1 (50% each)
-    /// // If outcome = 0: collapsedState = |00⟩ (qubit 1 also collapsed to |0⟩)
-    /// // If outcome = 1: collapsedState = |11⟩ (qubit 1 also collapsed to |1⟩)
+    /// // If 0: collapsedState = |00⟩, if 1: collapsedState = |11⟩
     /// ```
     ///
     /// - Parameters:
@@ -606,20 +517,16 @@ public enum Measurement {
     /// Measure multiple qubits, leaving others in superposition
     ///
     /// Performs projective measurement of multiple qubits while preserving quantum
-    /// coherence in unmeasured qubits. Generalizes single-qubit partial measurement
-    /// to arbitrary qubit subsets.
+    /// coherence in unmeasured qubits. Calculates joint probability distribution for
+    /// specified qubits, samples multi-qubit outcome bitstring, zeros incompatible
+    /// amplitudes and renormalizes compatible ones.
     ///
-    /// **Algorithm**:
-    /// 1. Calculate joint probability distribution for specified qubits
-    /// 2. Sample multi-qubit outcome (bitstring)
-    /// 3. Zero incompatible amplitudes, renormalize compatible ones
-    ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let ghz = QuantumCircuit.ghzState(numQubits: 3).execute()  // (|000⟩ + |111⟩)/√2
+    /// let ghz = QuantumCircuit.ghz(qubits: 3).execute()  // (|000⟩ + |111⟩)/√2
     /// let result = Measurement.measure([0, 1], in: ghz)
     /// // result.outcomes: [0, 0] or [1, 1] (50% each)
-    /// // result.collapsedState: |000⟩ or |111⟩ (qubit 2 collapses due to entanglement)
+    /// // result.collapsedState: |000⟩ or |111⟩
     /// ```
     ///
     /// - Parameters:
@@ -637,11 +544,14 @@ public enum Measurement {
         ValidationUtilities.validateUniqueQubits(qubits)
 
         for qubit in qubits {
-            ValidationUtilities.validateIndexInBounds(qubit, bound: state.numQubits, name: "Qubit index")
+            ValidationUtilities.validateIndexInBounds(qubit, bound: state.qubits, name: "Qubit index")
         }
 
         let numOutcomes = 1 << qubits.count
-        var probabilities = [Double](repeating: 0.0, count: numOutcomes)
+        var probabilities = [Double](unsafeUninitializedCapacity: numOutcomes) { buffer, count in
+            buffer.initialize(repeating: 0.0)
+            count = numOutcomes
+        }
 
         for i in 0 ..< state.stateSpaceSize {
             let outcomeIndex = BitUtilities.getBits(i, qubits: qubits)
@@ -661,7 +571,7 @@ public enum Measurement {
             qubits: qubits,
             outcomes: outcomes,
             state: state,
-            probability: probabilities[jointOutcome]
+            probability: probabilities[jointOutcome],
         )
 
         return PartialMeasurementResult(outcomes: outcomes, collapsedState: collapsedState)
@@ -672,28 +582,18 @@ public enum Measurement {
     /// Measure qubit in Pauli basis (X, Y, or Z)
     ///
     /// Performs measurement in specified Pauli eigenbasis, returning eigenvalue ±1
-    /// instead of computational basis outcome 0/1. This is essential for observable
-    /// expectation values and quantum chemistry applications.
+    /// instead of computational basis outcome 0/1. Rotates to computational basis
+    /// (H for X, S†H for Y, identity for Z), measures, maps outcome 0→+1 and 1→-1,
+    /// then rotates back. Essential for observable expectation values and quantum
+    /// chemistry applications.
     ///
-    /// **Implementation**:
-    /// - X basis: Apply H, measure Z, map 0->+1, 1->-1, apply H†
-    /// - Y basis: Apply S†H, measure Z, map 0->+1, 1->-1, apply HS
-    /// - Z basis: Measure Z directly (computational basis)
-    ///
-    /// **Eigenvalue mapping**: outcome 0 -> +1 (positive eigenstate), 1 -> -1 (negative eigenstate)
-    ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let plus = QuantumState(numQubits: 1, amplitudes: [
-    ///     Complex(1/sqrt(2), 0),
-    ///     Complex(1/sqrt(2), 0)
+    /// let plus = QuantumState(qubits: 1, amplitudes: [
+    ///     Complex(1/sqrt(2), 0), Complex(1/sqrt(2), 0)
     /// ])
     /// let xResult = Measurement.measure(0, basis: .x, in: plus)
-    /// // xResult.eigenvalue: +1 (deterministic, |+⟩ is +1 eigenstate of X)
-    ///
-    /// let zero = QuantumState(numQubits: 1)
-    /// let zResult = Measurement.measure(0, basis: .z, in: zero)
-    /// // zResult.eigenvalue: +1 (deterministic, |0⟩ is +1 eigenstate of Z)
+    /// // xResult.eigenvalue: +1 (deterministic, |+⟩ is X eigenstate)
     /// ```
     ///
     /// - Parameters:
@@ -707,7 +607,7 @@ public enum Measurement {
     /// - SeeAlso: ``PauliBasis``
     @_eagerMove
     public static func measure(_ qubit: Int, basis: PauliBasis, in state: QuantumState, seed: UInt64? = nil) -> PauliMeasurementResult {
-        ValidationUtilities.validateIndexInBounds(qubit, bound: state.numQubits, name: "Qubit index")
+        ValidationUtilities.validateIndexInBounds(qubit, bound: state.qubits, name: "Qubit index")
         ValidationUtilities.validateNormalizedState(state)
 
         let rotatedState = rotateToPauliBasis(qubit: qubit, basis: basis, state: state)
@@ -720,26 +620,18 @@ public enum Measurement {
 
     /// Measure multi-qubit Pauli string observable
     ///
-    /// Measures tensor product of Pauli operators (e.g., X₀⊗Y₁⊗Z₂). Returns joint
-    /// eigenvalue (±1) computed as product of individual Pauli eigenvalues. This is
-    /// the fundamental operation for Hamiltonian expectation values in VQE and
-    /// quantum chemistry.
+    /// Measures tensor product of Pauli operators (e.g., X₀⊗Y₁⊗Z₂). Applies basis
+    /// rotations to diagonalize each Pauli operator, measures all qubits in computational
+    /// basis, maps each outcome to eigenvalue (0→+1, 1→-1), computes product eigenvalue
+    /// λ = ∏ᵢ λᵢ, and rotates collapsed state back to original basis. This is the
+    /// fundamental operation for Hamiltonian expectation values in VQE and quantum chemistry.
     ///
-    /// **Algorithm**:
-    /// 1. Apply basis rotations to diagonalize each Pauli operator
-    /// 2. Measure all qubits in computational basis
-    /// 3. Map each outcome to eigenvalue: 0->+1, 1->-1
-    /// 4. Compute product eigenvalue: λ = ∏ᵢ λᵢ
-    /// 5. Rotate collapsed state back to original basis
-    ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let zz = PauliString(.z(0), .z(1))
-    /// let bell = QuantumCircuit.bellPhiPlus().execute()  // (|00⟩ + |11⟩)/√2
+    /// let bell = QuantumCircuit.bell().execute()  // (|00⟩ + |11⟩)/√2
     /// let result = Measurement.measure(zz, in: bell)
-    /// // 50% |00⟩: λ₀=+1, λ₁=+1 -> product=+1
-    /// // 50% |11⟩: λ₀=-1, λ₁=-1 -> product=+1
-    /// // result.eigenvalue: +1 (deterministic!)
+    /// // result.eigenvalue: +1 (deterministic for Bell state)
     /// ```
     ///
     /// - Parameters:
@@ -755,7 +647,7 @@ public enum Measurement {
         ValidationUtilities.validateNormalizedState(state)
 
         for op in pauliString.operators {
-            ValidationUtilities.validateIndexInBounds(op.qubit, bound: state.numQubits, name: "Qubit index")
+            ValidationUtilities.validateIndexInBounds(op.qubit, bound: state.qubits, name: "Qubit index")
         }
 
         let qubits = pauliString.operators.map(\.qubit)
@@ -765,7 +657,7 @@ public enum Measurement {
             return PauliStringMeasurementResult(
                 eigenvalue: 1,
                 collapsedState: state,
-                individualOutcomes: []
+                individualOutcomes: [],
             )
         }
 
@@ -777,13 +669,14 @@ public enum Measurement {
         let partialResult = measure(qubits, in: rotatedState, seed: seed)
 
         var productEigenvalue = 1
-        var individualOutcomes: [MeasurementOutcome] = []
-
-        for (index, op) in pauliString.operators.enumerated() {
-            let outcome = partialResult.outcomes[index]
-            let eigenvalue = (outcome == 0) ? 1 : -1
-            productEigenvalue *= eigenvalue
-            individualOutcomes.append(MeasurementOutcome(qubit: op.qubit, outcome: outcome))
+        let individualOutcomes = [MeasurementOutcome](unsafeUninitializedCapacity: pauliString.operators.count) { buffer, count in
+            for (index, op) in pauliString.operators.enumerated() {
+                let outcome = partialResult.outcomes[index]
+                let eigenvalue = (outcome == 0) ? 1 : -1
+                productEigenvalue *= eigenvalue
+                buffer[index] = MeasurementOutcome(qubit: op.qubit, outcome: outcome)
+            }
+            count = pauliString.operators.count
         }
 
         var finalState = partialResult.collapsedState
@@ -794,7 +687,7 @@ public enum Measurement {
         return PauliStringMeasurementResult(
             eigenvalue: productEigenvalue,
             collapsedState: finalState,
-            individualOutcomes: individualOutcomes
+            individualOutcomes: individualOutcomes,
         )
     }
 
@@ -802,27 +695,17 @@ public enum Measurement {
 
     /// Measure qubit in arbitrary single-qubit basis
     ///
-    /// Performs measurement in custom basis defined by provided basis state |ψ⟩.
-    /// The measurement projects onto {|ψ⟩, |ψ⊥⟩} where |ψ⊥⟩ is the orthogonal complement
-    /// constructed via unitarity.
+    /// Performs measurement in custom basis defined by provided basis state |ψ⟩ = c₀|0⟩ + c₁|1⟩
+    /// (2-element complex array). Projects onto {|ψ⟩, |ψ⊥⟩} where |ψ⊥⟩ is constructed via
+    /// unitarity. Constructs unitary U rotating |ψ⟩→|0⟩, applies U, measures in computational
+    /// basis, and applies U† to collapsed state.
     ///
-    /// **Algorithm**:
-    /// 1. Construct unitary U rotating |ψ⟩ -> |0⟩
-    /// 2. Apply U to state
-    /// 3. Measure in computational basis
-    /// 4. Apply U† to collapsed state
-    ///
-    /// **Basis state format**: 2-element complex array [c₀, c₁] representing |ψ⟩ = c₀|0⟩ + c₁|1⟩
-    ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let customBasis = [
-    ///     Complex(1/sqrt(2), 0),
-    ///     Complex(cos(Double.pi/4)/sqrt(2), sin(Double.pi/4)/sqrt(2))
-    /// ]
-    /// let zero = QuantumState(numQubits: 1)
-    /// let result = Measurement.measure(0, basis: customBasis, in: zero)
-    /// // result.outcome: 0 or 1 (probabilities depend on |⟨ψ|0⟩|²)
+    /// let plusBasis = [Complex(1/sqrt(2), 0), Complex(1/sqrt(2), 0)]
+    /// let zero = QuantumState(qubits: 1)
+    /// let result = Measurement.measure(0, basis: plusBasis, in: zero)
+    /// // result.outcome: 0 or 1 (50% each)
     /// ```
     ///
     /// - Parameters:
@@ -839,9 +722,9 @@ public enum Measurement {
         _ qubit: Int,
         basis basisState: [Complex<Double>],
         in state: QuantumState,
-        seed: UInt64? = nil
+        seed: UInt64? = nil,
     ) -> CustomBasisMeasurementResult {
-        ValidationUtilities.validateIndexInBounds(qubit, bound: state.numQubits, name: "Qubit index")
+        ValidationUtilities.validateIndexInBounds(qubit, bound: state.qubits, name: "Qubit index")
         ValidationUtilities.validateTwoComponentBasis(basisState)
         ValidationUtilities.validateNormalizedState(state)
         ValidationUtilities.validateNormalizedBasis(basisState)
@@ -871,17 +754,15 @@ public enum Measurement {
     ///
     /// Creates a snapshot of the quantum state without measurement collapse.
     /// Preserves full quantum coherence and superposition. Useful for debugging,
-    /// algorithm verification, and state tomography.
+    /// algorithm verification, and state tomography. Not physically realizable on
+    /// quantum hardware (violates no-cloning theorem) - simulation-only analysis tool.
     ///
-    /// **Physical realizability**: Not physically realizable on quantum hardware
-    /// (violates no-cloning theorem). This is a simulation-only analysis tool.
-    ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 2)
-    /// circuit.append(gate: .hadamard, to: 0)
-    /// let snapshot = Measurement.snapshot(of: circuit.execute(), label: "After H(0)")
-    /// // snapshot.state: |+⟩⊗|0⟩ (no collapse, full superposition preserved)
+    /// var circuit = QuantumCircuit(qubits: 2)
+    /// circuit.append(.hadamard, to: 0)
+    /// let snapshot = Measurement.snapshot(of: circuit.execute(), label: "After H")
+    /// // snapshot.state: |+⟩⊗|0⟩ (superposition preserved)
     /// ```
     ///
     /// - Parameters:
@@ -896,7 +777,7 @@ public enum Measurement {
         StateSnapshot(
             state: state,
             label: label,
-            timestamp: Date()
+            timestamp: Date(),
         )
     }
 
@@ -908,12 +789,12 @@ public enum Measurement {
     /// probability distribution. Essential for validating quantum algorithms and
     /// visualizing measurement outcomes.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let bellCircuit = QuantumCircuit.bellPhiPlus()
     /// let outcomes = Measurement.sample(circuit: bellCircuit, shots: 1000)
     ///
-    /// let counts = Measurement.histogram(outcomes: outcomes, numQubits: 2)
+    /// let counts = Measurement.histogram(outcomes: outcomes, qubits: 2)
     /// // counts ≈ [~500, 0, 0, ~500] for Bell state
     /// ```
     ///
@@ -924,21 +805,20 @@ public enum Measurement {
     /// - Returns: Array of measurement outcomes (basis state indices)
     /// - Complexity: O(shots · circuit_depth · 2^n) time, O(shots) space
     /// - Precondition: shots > 0
-    /// - SeeAlso: ``histogram(outcomes:numQubits:)`` for converting to counts
+    /// - SeeAlso: ``histogram(outcomes:qubits:)`` for converting to counts
     @_eagerMove
     public static func sample(circuit: QuantumCircuit, shots: Int, seed: UInt64? = nil) -> [Int] {
         ValidationUtilities.validatePositiveInt(shots, name: "shots")
 
-        var outcomes: [Int] = []
-        outcomes.reserveCapacity(shots)
-
         var rng = createRNG(seed: seed)
 
-        for _ in 0 ..< shots {
-            let finalState = circuit.execute()
-            let probabilities = finalState.probabilities()
-            let outcome = sampleOutcome(probabilities: probabilities, rng: &rng)
-            outcomes.append(outcome)
+        let outcomes = [Int](unsafeUninitializedCapacity: shots) { buffer, count in
+            for i in 0 ..< shots {
+                let finalState = circuit.execute()
+                let probabilities = finalState.probabilities()
+                buffer[i] = sampleOutcome(probabilities: probabilities, rng: &rng)
+            }
+            count = shots
         }
 
         return outcomes
@@ -948,24 +828,24 @@ public enum Measurement {
     ///
     /// Transforms outcome array to count distribution for visualization and analysis.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let outcomes = [0, 0, 3, 0, 3, 3]
-    /// let counts = Measurement.histogram(outcomes: outcomes, numQubits: 2)
+    /// let counts = Measurement.histogram(outcomes: outcomes, qubits: 2)
     /// // counts = [3, 0, 0, 3]
     /// ```
     ///
     /// - Parameters:
     ///   - outcomes: Array of measurement outcomes
-    ///   - numQubits: Number of qubits (determines state space size 2^n)
+    ///   - qubits: Number of qubits (determines state space size 2^n)
     /// - Returns: Array of counts [count(0), count(1), ..., count(2^n-1)]
     /// - Complexity: O(outcomes.count) time, O(2^n) space
     /// - SeeAlso: ``histogram(outcomes:)`` for auto-sizing variant
     @_effects(readonly)
     @inlinable
     @_eagerMove
-    public static func histogram(outcomes: [Int], numQubits: Int) -> [Int] {
-        let stateSpaceSize = 1 << numQubits
+    public static func histogram(outcomes: [Int], qubits: Int) -> [Int] {
+        let stateSpaceSize = 1 << qubits
 
         var counts = [Int](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
             buffer.initialize(repeating: 0)
@@ -986,7 +866,7 @@ public enum Measurement {
     /// Infers histogram size from maximum outcome value. Useful when state space
     /// size is unknown or when most outcomes are clustered in low indices.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let outcomes = [0, 0, 5, 0, 5]
     /// let counts = Measurement.histogram(outcomes: outcomes)
@@ -996,7 +876,7 @@ public enum Measurement {
     /// - Parameter outcomes: Array of measurement outcomes
     /// - Returns: Array of counts with length = max(outcomes) + 1, or empty if no outcomes
     /// - Complexity: O(outcomes.count) time, O(max(outcomes)) space
-    /// - SeeAlso: ``histogram(outcomes:numQubits:)`` for explicit sizing
+    /// - SeeAlso: ``histogram(outcomes:qubits:)`` for explicit sizing
     @_effects(readonly)
     @inlinable
     @_eagerMove
@@ -1024,7 +904,7 @@ public enum Measurement {
     /// Computes maximum relative error across all outcomes for goodness-of-fit testing.
     /// Relative error = |observed - expected| / expected for each outcome.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let observed = [48, 52]
     /// let expected = [0.5, 0.5]
@@ -1047,7 +927,7 @@ public enum Measurement {
     public static func relativeError(
         observed: [Int],
         expected: [Double],
-        totalShots: Int
+        totalShots: Int,
     ) -> Double {
         ValidationUtilities.validateEqualCounts(observed, expected, name1: "observed", name2: "expected")
         ValidationUtilities.validatePositiveInt(totalShots, name: "totalShots")
@@ -1073,13 +953,11 @@ public enum Measurement {
     ///
     /// Tests whether observed distribution matches expected theoretical distribution.
     /// Computes χ² = Σ((observed - expected)² / expected) over bins with expected ≥ 5.
+    /// Values near zero indicate perfect fit, values below degrees of freedom indicate
+    /// good fit within statistical fluctuations, and values much greater than degrees
+    /// of freedom indicate systematic deviation from theory.
     ///
-    /// **Interpretation**:
-    /// - χ² ≈ 0: Perfect fit
-    /// - χ² < degrees of freedom: Good fit (within statistical fluctuations)
-    /// - χ² >> degrees of freedom: Poor fit (systematic deviation)
-    ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let observed = [48, 52]
     /// let expected = [0.5, 0.5]
@@ -1100,11 +978,12 @@ public enum Measurement {
     /// - Complexity: O(n) time where n = observed.count, O(1) space
     /// - Precondition: observed.count == expected.count, totalShots > 0
     /// - Note: Bins with expected count < 5 are skipped (standard chi-squared practice)
-    /// - SeeAlso: ``ChiSquaredResult``, ``relativeError(observed:expected:totalShots:)``
+    /// - SeeAlso: ``ChiSquaredResult``
+    /// - SeeAlso: ``relativeError(observed:expected:totalShots:)``
     public static func chiSquared(
         observed: [Int],
         expected: [Double],
-        totalShots: Int
+        totalShots: Int,
     ) -> ChiSquaredResult {
         ValidationUtilities.validateEqualCounts(observed, expected, name1: "observed", name2: "expected")
         ValidationUtilities.validatePositiveInt(totalShots, name: "totalShots")
@@ -1132,40 +1011,36 @@ public enum Measurement {
             chiSquared: chiSq,
             degreesOfFreedom: degreesOfFreedom,
             testedBins: testedBins,
-            skippedBins: skippedBins
+            skippedBins: skippedBins,
         )
     }
 
     // MARK: - Internal Helpers
 
+    @_optimize(speed)
     @_effects(readonly)
     @inlinable
     @_eagerMove
-    static func collapseToOutcome(_ outcome: Int, numQubits: Int) -> QuantumState {
-        let stateSpaceSize = 1 << numQubits
-        ValidationUtilities.validateIndexInBounds(outcome, bound: stateSpaceSize, name: "Outcome")
-
+    static func collapseToOutcome(_ outcome: Int, qubits: Int) -> QuantumState {
+        let stateSpaceSize = 1 << qubits
         let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
-            for i in 0 ..< stateSpaceSize {
-                buffer[i] = i == outcome ? .one : .zero
-            }
+            buffer.initialize(repeating: .zero)
+            buffer[outcome] = .one
             count = stateSpaceSize
         }
 
-        return QuantumState(numQubits: numQubits, amplitudes: amplitudes)
+        return QuantumState(qubits: qubits, amplitudes: amplitudes)
     }
 
+    @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
     static func multiQubitCollapse(
         qubits: [Int],
         outcomes: [Int],
         state: QuantumState,
-        probability: Double
+        probability: Double,
     ) -> QuantumState {
-        ValidationUtilities.validateEqualCounts(qubits, outcomes, name1: "qubits", name2: "outcomes")
-        ValidationUtilities.validatePositiveDouble(probability, name: "probability")
-
         let normalizationFactor = 1.0 / sqrt(probability)
 
         var mask = 0
@@ -1176,13 +1051,14 @@ public enum Measurement {
         }
 
         let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: state.stateSpaceSize) { buffer, count in
-            for i in 0 ..< state.stateSpaceSize {
-                buffer[i] = (i & mask) == expected ? state.amplitudes[i] * normalizationFactor : .zero
+            buffer.initialize(repeating: .zero)
+            for i in 0 ..< state.stateSpaceSize where (i & mask) == expected {
+                buffer[i] = state.amplitudes[i] * normalizationFactor
             }
             count = state.stateSpaceSize
         }
 
-        return QuantumState(numQubits: state.numQubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 
     @_effects(readonly)

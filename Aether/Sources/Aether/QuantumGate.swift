@@ -6,42 +6,21 @@ import Accelerate
 /// Precomputed 1/√2 for Hadamard and related gates
 private let invSqrt2: Double = 1.0 / 2.0.squareRoot()
 
-/// Quantum gates: unitary transformations for quantum circuits
+/// Quantum gate as unitary transformation U where U†U = I, ensuring probability conservation and reversibility.
 ///
-/// Defines all supported quantum gates with their matrix representations and metadata.
-/// Gates are the fundamental building blocks of quantum computation, implementing
-/// reversible unitary transformations that preserve quantum state normalization.
+/// Single-qubit gates operate as 2×2 complex matrices on C², two-qubit gates as 4×4 on C⁴, and the
+/// three-qubit Toffoli as 8×8 on C⁸. Includes Pauli gates (X, Y, Z), Hadamard for superposition,
+/// phase gates (P, S, T), rotation gates (Rx, Ry, Rz), IBM universal gates (U1, U2, U3), controlled
+/// variants (CNOT, CZ, CY, CH, controlled rotations), and multi-qubit gates (SWAP, √SWAP, Toffoli).
 ///
-/// **Mathematical foundation**:
-/// - Unitarity: U†U = I (probability conservation, reversibility)
-/// - Single-qubit: 2x2 complex matrices operating on C²
-/// - Two-qubit: 4x4 complex matrices operating on C⁴
-/// - Multi-qubit: 2^n x 2^n matrices operating on C^(2^n)
+/// Parameterized gates accept both concrete angles and symbolic ``Parameter`` instances via
+/// ``ParameterValue``, enabling variational circuit construction where the same circuit topology
+/// binds different parameter values per optimization iteration without reconstruction.
 ///
-/// **Gate categories**:
-/// - **Pauli gates**: X (bit flip), Y (bit+phase flip), Z (phase flip)
-/// - **Hadamard**: Creates superposition (basis rotation)
-/// - **Phase gates**: P(θ), S (π/2), T (π/4), U1(λ) - support symbolic parameters
-/// - **Rotation gates**: Rx(θ), Ry(θ), Rz(θ) - parameterized rotations with symbolic/concrete values
-/// - **IBM gates**: U1, U2, U3 (universal single-qubit gates with symbolic parameters)
-/// - **Controlled gates**: CNOT, CZ, CY, CH, controlled rotations (symbolic parameters)
-/// - **Multi-qubit**: SWAP, √SWAP, Toffoli (CCNOT)
-/// - **Custom gates**: User-defined unitaries with validation
-///
-/// **Parameter support**:
-/// Gates with angles support both symbolic parameters and concrete values via ``ParameterValue``.
-/// This enables building variational circuits once, then binding different parameter values
-/// per optimization iteration without circuit reconstruction.
-///
-/// **Usage patterns**:
-/// - **Static circuits**: Use concrete values directly
-/// - **Variational circuits**: Use symbolic ``Parameter`` instances, bind before execution
-/// - **Mixed circuits**: Combine symbolic and concrete gates in same circuit
-///
-/// Example:
+/// **Example:**
 /// ```swift
 /// // Static circuit with concrete values
-/// var circuit = QuantumCircuit(numQubits: 2)
+/// var circuit = QuantumCircuit(qubits: 2)
 /// circuit.append(.hadamard, to: 0)
 /// circuit.append(.rotationY(.pi/4), to: 1)
 /// circuit.append(.cnot, to: [0, 1])
@@ -53,7 +32,10 @@ private let invSqrt2: Double = 1.0 / 2.0.squareRoot()
 /// let state = bound.execute()
 /// ```
 ///
-/// - SeeAlso: ``QuantumCircuit``, ``GateApplication``, ``Parameter``, ``ParameterValue``
+/// - SeeAlso: ``QuantumCircuit`` for circuit construction
+/// - SeeAlso: ``GateApplication`` for CPU execution
+/// - SeeAlso: ``Parameter`` for symbolic parameters
+/// - SeeAlso: ``ParameterValue`` for concrete/symbolic values
 public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable {
     // MARK: - Single-Qubit Gates
 
@@ -111,7 +93,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// - Parameter angle: Phase angle in radians
     /// - Returns: Phase gate with concrete angle
     /// - Complexity: O(1)
-    /// - SeeAlso: ``ParameterValue``, ``Parameter``
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
     @inlinable
     public static func phase(_ angle: Double) -> QuantumGate {
         .phase(.value(angle))
@@ -130,7 +113,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// - Parameter theta: Rotation angle in radians
     /// - Returns: Rotation-X gate with concrete angle
     /// - Complexity: O(1)
-    /// - SeeAlso: ``ParameterValue``, ``Parameter``
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
     @inlinable
     public static func rotationX(_ theta: Double) -> QuantumGate {
         .rotationX(.value(theta))
@@ -149,7 +133,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// - Parameter theta: Rotation angle in radians
     /// - Returns: Rotation-Y gate with concrete angle
     /// - Complexity: O(1)
-    /// - SeeAlso: ``ParameterValue``, ``Parameter``
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
     @inlinable
     public static func rotationY(_ theta: Double) -> QuantumGate {
         .rotationY(.value(theta))
@@ -168,7 +153,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// - Parameter theta: Rotation angle in radians
     /// - Returns: Rotation-Z gate with concrete angle
     /// - Complexity: O(1)
-    /// - SeeAlso: ``ParameterValue``, ``Parameter``
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
     @inlinable
     public static func rotationZ(_ theta: Double) -> QuantumGate {
         .rotationZ(.value(theta))
@@ -187,7 +173,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// - Parameter theta: Phase angle in radians
     /// - Returns: Controlled-phase gate with concrete angle
     /// - Complexity: O(1)
-    /// - SeeAlso: ``ParameterValue``, ``Parameter``
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
     @inlinable
     public static func controlledPhase(_ theta: Double) -> QuantumGate {
         .controlledPhase(.value(theta))
@@ -206,7 +193,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// - Parameter theta: Rotation angle in radians
     /// - Returns: Controlled-Rx gate with concrete angle
     /// - Complexity: O(1)
-    /// - SeeAlso: ``ParameterValue``, ``Parameter``
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
     @inlinable
     public static func controlledRotationX(_ theta: Double) -> QuantumGate {
         .controlledRotationX(.value(theta))
@@ -225,7 +213,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// - Parameter theta: Rotation angle in radians
     /// - Returns: Controlled-Ry gate with concrete angle
     /// - Complexity: O(1)
-    /// - SeeAlso: ``ParameterValue``, ``Parameter``
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
     @inlinable
     public static func controlledRotationY(_ theta: Double) -> QuantumGate {
         .controlledRotationY(.value(theta))
@@ -244,7 +233,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// - Parameter theta: Rotation angle in radians
     /// - Returns: Controlled-Rz gate with concrete angle
     /// - Complexity: O(1)
-    /// - SeeAlso: ``ParameterValue``, ``Parameter``
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
     @inlinable
     public static func controlledRotationZ(_ theta: Double) -> QuantumGate {
         .controlledRotationZ(.value(theta))
@@ -264,7 +254,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// - Parameter lambda: Phase angle in radians
     /// - Returns: U1 gate with concrete lambda
     /// - Complexity: O(1)
-    /// - SeeAlso: ``ParameterValue``, ``Parameter``
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
     @inlinable
     public static func u1(lambda: Double) -> QuantumGate {
         .u1(lambda: .value(lambda))
@@ -286,7 +277,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     ///   - lambda: Second phase angle in radians
     /// - Returns: U2 gate with concrete angles
     /// - Complexity: O(1)
-    /// - SeeAlso: ``ParameterValue``, ``Parameter``
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
     @inlinable
     public static func u2(phi: Double, lambda: Double) -> QuantumGate {
         .u2(phi: .value(phi), lambda: .value(lambda))
@@ -309,7 +301,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     ///   - lambda: Second phase angle in radians
     /// - Returns: U3 gate with concrete angles
     /// - Complexity: O(1)
-    /// - SeeAlso: ``ParameterValue``, ``Parameter``
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
     @inlinable
     public static func u3(theta: Double, phi: Double, lambda: Double) -> QuantumGate {
         .u3(theta: .value(theta), phi: .value(phi), lambda: .value(lambda))
@@ -322,7 +315,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// Single-qubit gates return 1, two-qubit gates return 2, Toffoli returns 3.
     /// Used for circuit validation and gate application.
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// QuantumGate.hadamard.qubitsRequired  // 1
     /// QuantumGate.cnot.qubitsRequired  // 2
@@ -346,7 +339,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// Returns `true` if any ``ParameterValue`` in gate is symbolic (.parameter case).
     /// Used for circuit validation and parameter tracking.
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// QuantumGate.hadamard.isParameterized  // false
     /// QuantumGate.rotationY(.pi/4).isParameterized  // false
@@ -469,7 +462,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// Hermitian gates are their own inverse and represent observables in quantum mechanics.
     /// Pauli gates (X, Y, Z), Hadamard, and SWAP are Hermitian.
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// QuantumGate.pauliX.isHermitian  // true (X† = X)
     /// QuantumGate.hadamard.isHermitian  // true (H† = H)
@@ -498,7 +491,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// - Complexity: O(1) for fixed-size matrices
     /// - Precondition: All parameters must be concrete (.value case)
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let h = QuantumGate.hadamard
     /// let matrix = h.matrix()
@@ -511,7 +504,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// // let fail = symbolic.matrix()  // Precondition failure!
     /// ```
     ///
-    /// - SeeAlso: ``MatrixUtilities``, ``bound(with:)``
+    /// - SeeAlso: ``MatrixUtilities``
+    /// - SeeAlso: ``bound(with:)``
     @_optimize(speed)
     @_eagerMove
     public func matrix() -> [[Complex<Double>]] {
@@ -883,15 +877,14 @@ public extension QuantumGate {
     ///
     /// Checks if matrix preserves quantum state normalization through unitary condition.
     /// All valid quantum gates must be unitary for probability conservation and
-    /// reversibility. Uses numerical tolerance (1e-10) for floating-point comparison.
-    ///
-    /// **Unitarity condition**: U†U = I where U† is conjugate transpose
+    /// reversibility. Verifies U†U = I where U† is conjugate transpose, using numerical
+    /// tolerance (1e-10) for floating-point comparison.
     ///
     /// - Parameter matrix: Square complex matrix to check
     /// - Returns: True if unitary within tolerance (1e-10)
     /// - Complexity: O(n³) where n is matrix dimension
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let hMatrix = QuantumGate.hadamard.matrix()
     /// QuantumGate.isUnitary(hMatrix)  // true
@@ -905,13 +898,17 @@ public extension QuantumGate {
         let n: Int = matrix.count
         guard matrix.allSatisfy({ $0.count == n }) else { return false }
 
-        let product: [[Complex<Double>]] = matrixMultiply(MatrixUtilities.hermitianConjugate(matrix), matrix)
-
+        // Compute U†U = I directly without allocating intermediate matrices
+        // (U†U)[i][j] = Σₖ conj(U[k][i]) × U[k][j]
         for i in 0 ..< n {
             for j in 0 ..< n {
+                var sum: Complex<Double> = .zero
+                for k in 0 ..< n {
+                    sum = sum + matrix[k][i].conjugate * matrix[k][j]
+                }
                 let expected: Complex<Double> = (i == j) ? .one : .zero
-                if abs(product[i][j].real - expected.real) > 1e-10 ||
-                    abs(product[i][j].imaginary - expected.imaginary) > 1e-10
+                if abs(sum.real - expected.real) > 1e-10 ||
+                    abs(sum.imaginary - expected.imaginary) > 1e-10
                 {
                     return false
                 }
@@ -990,9 +987,9 @@ public extension QuantumGate {
     /// - Returns: True if matrices are equal within tolerance
     /// - Complexity: O(n²) where n is matrix dimension
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
-    /// let phase = QuantumGate.phase(angle: .pi).matrix()
+    /// let phase = QuantumGate.phase(.pi).matrix()
     /// let z = QuantumGate.pauliZ.matrix()
     /// QuantumGate.matricesEqual(phase, z)  // true
     /// ```
@@ -1001,7 +998,7 @@ public extension QuantumGate {
     static func matricesEqual(
         _ a: [[Complex<Double>]],
         _ b: [[Complex<Double>]],
-        tolerance: Double = 1e-10
+        tolerance: Double = 1e-10,
     ) -> Bool {
         guard a.count == b.count else { return false }
 
@@ -1030,7 +1027,7 @@ public extension QuantumGate {
     /// - Returns: True if matrix is identity within tolerance
     /// - Complexity: O(n²) where n is matrix dimension
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let h = QuantumGate.hadamard.matrix()
     /// let hh = QuantumGate.matrixMultiply(h, h)
@@ -1040,7 +1037,7 @@ public extension QuantumGate {
     @_effects(readonly)
     static func isIdentityMatrix(
         _ matrix: [[Complex<Double>]],
-        tolerance: Double = 1e-10
+        tolerance: Double = 1e-10,
     ) -> Bool {
         guard !matrix.isEmpty else { return false }
 
@@ -1072,39 +1069,32 @@ public extension QuantumGate {
     /// 4x4 for two-qubit gates. Validates matrix size and unitarity before creating gate.
     ///
     /// Useful for research, custom algorithms, gate decomposition, and implementing
-    /// gates not natively supported by the framework.
+    /// gates not natively supported by the framework. For two-qubit gates, control and
+    /// target qubits are specified when applying the gate to a circuit, not when defining it.
     ///
-    /// **Note**: For two-qubit gates, control and target qubits are specified when
-    /// applying the gate to a circuit, not when defining it. The matrix encodes the
-    /// gate's action on any qubit pair.
-    ///
-    /// - Parameter matrix: 2x2 or 4x4 complex matrix (must be unitary)
-    /// - Returns: Custom single-qubit or two-qubit gate
-    ///
-    /// **Single-qubit example:**
+    /// **Example:**
     /// ```swift
+    /// // Single-qubit custom rotation
     /// let angle = Double.pi / 6
     /// let rotation = [
     ///     [Complex(cos(angle), 0), Complex(-sin(angle), 0)],
     ///     [Complex(sin(angle), 0), Complex(cos(angle), 0)]
     /// ]
-    /// let gate = QuantumGate.custom(matrix: rotation)
-    /// ```
+    /// let singleQubitGate = QuantumGate.custom(matrix: rotation)
     ///
-    /// **Two-qubit example:**
-    /// ```swift
-    /// let theta = Double.pi / 4
-    /// let c = cos(theta / 2)
-    /// let s = sin(theta / 2)
+    /// // Two-qubit controlled rotation
+    /// let c = cos(angle), s = sin(angle)
     /// let controlled = [
-    ///     [Complex(1, 0), Complex(0, 0), Complex(0, 0), Complex(0, 0)],
-    ///     [Complex(0, 0), Complex(1, 0), Complex(0, 0), Complex(0, 0)],
-    ///     [Complex(0, 0), Complex(0, 0), Complex(c, 0), Complex(-s, 0)],
-    ///     [Complex(0, 0), Complex(0, 0), Complex(s, 0), Complex(c, 0)]
+    ///     [Complex(1, 0), .zero, .zero, .zero],
+    ///     [.zero, Complex(1, 0), .zero, .zero],
+    ///     [.zero, .zero, Complex(c, 0), Complex(-s, 0)],
+    ///     [.zero, .zero, Complex(s, 0), Complex(c, 0)]
     /// ]
-    /// let gate = QuantumGate.custom(matrix: controlled)
+    /// let twoQubitGate = QuantumGate.custom(matrix: controlled)
     /// ```
     ///
+    /// - Parameter matrix: 2x2 or 4x4 complex matrix (must be unitary)
+    /// - Returns: Custom single-qubit or two-qubit gate
     /// - Precondition: Matrix must be 2x2 or 4x4 and unitary
     /// - SeeAlso: ``isUnitary(_:)``
     @_eagerMove

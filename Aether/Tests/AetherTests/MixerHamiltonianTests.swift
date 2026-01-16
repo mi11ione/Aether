@@ -11,7 +11,7 @@ import Testing
 struct MixerHamiltonianTests {
     @Test("Single-qubit X mixer has one term")
     func singleQubitXMixer() {
-        let mixer = MixerHamiltonian.xMixer(numQubits: 1)
+        let mixer = MixerHamiltonian.x(qubits: 1)
 
         #expect(mixer.terms.count == 1)
 
@@ -24,7 +24,7 @@ struct MixerHamiltonianTests {
 
     @Test("Multi-qubit X mixer has one X per qubit")
     func multiQubitXMixer() {
-        let mixer = MixerHamiltonian.xMixer(numQubits: 5)
+        let mixer = MixerHamiltonian.x(qubits: 5)
 
         #expect(mixer.terms.count == 5)
 
@@ -44,7 +44,7 @@ struct MixerHamiltonianTests {
 
     @Test("X mixer coefficients are all +1.0")
     func coefficientsAreOne() {
-        let mixer = MixerHamiltonian.xMixer(numQubits: 10)
+        let mixer = MixerHamiltonian.x(qubits: 10)
 
         let coefficients = mixer.terms.map(\.0)
         #expect(coefficients.allSatisfy { abs($0 - 1.0) < 1e-10 })
@@ -52,7 +52,7 @@ struct MixerHamiltonianTests {
 
     @Test("All qubits have X operators")
     func allQubitsHaveX() {
-        let mixer = MixerHamiltonian.xMixer(numQubits: 10)
+        let mixer = MixerHamiltonian.x(qubits: 10)
 
         let qubits = mixer.terms.map { $0.1.operators[0].qubit }.sorted()
         #expect(qubits == Array(0 ..< 10))
@@ -63,7 +63,7 @@ struct MixerHamiltonianTests {
 
     @Test("Maximum practical qubit count")
     func maximumQubits() {
-        let mixer = MixerHamiltonian.xMixer(numQubits: 30)
+        let mixer = MixerHamiltonian.x(qubits: 30)
 
         #expect(mixer.terms.count == 30)
 
@@ -80,7 +80,7 @@ struct MixerHamiltonianTests {
 struct MixerMathematicalPropertiesTests {
     @Test("X mixer is Hermitian")
     func xMixerHermitian() {
-        let mixer = MixerHamiltonian.xMixer(numQubits: 4)
+        let mixer = MixerHamiltonian.x(qubits: 4)
 
         for (coefficient, pauliString) in mixer.terms {
             #expect(coefficient.isFinite)
@@ -94,7 +94,7 @@ struct MixerMathematicalPropertiesTests {
 
     @Test("X mixer uses X basis exclusively")
     func exclusivelyXBasis() {
-        let mixer = MixerHamiltonian.xMixer(numQubits: 5)
+        let mixer = MixerHamiltonian.x(qubits: 5)
         let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2)])
 
         let mixerBases = mixer.terms.flatMap { $0.1.operators.map(\.basis) }
@@ -106,7 +106,7 @@ struct MixerMathematicalPropertiesTests {
 
     @Test("Coefficient sum equals qubit count")
     func coefficientSum() {
-        let mixer = MixerHamiltonian.xMixer(numQubits: 7)
+        let mixer = MixerHamiltonian.x(qubits: 7)
 
         let sum = mixer.terms.reduce(0.0) { $0 + $1.0 }
         #expect(abs(sum - 7.0) < 1e-10)
@@ -114,7 +114,7 @@ struct MixerMathematicalPropertiesTests {
 
     @Test("Each qubit appears exactly once")
     func uniqueQubits() {
-        let mixer = MixerHamiltonian.xMixer(numQubits: 8)
+        let mixer = MixerHamiltonian.x(qubits: 8)
 
         let qubits = mixer.terms.map { $0.1.operators[0].qubit }
         #expect(qubits.count == Set(qubits).count)
@@ -122,7 +122,7 @@ struct MixerMathematicalPropertiesTests {
 
     @Test("No combined terms in Observable")
     func noCombinedTerms() {
-        let mixer = MixerHamiltonian.xMixer(numQubits: 10)
+        let mixer = MixerHamiltonian.x(qubits: 10)
 
         #expect(mixer.terms.count == 10)
 

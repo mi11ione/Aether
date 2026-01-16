@@ -19,35 +19,45 @@ public typealias PauliTerms = [(coefficient: Double, pauliString: PauliString)]
 /// Hamiltonians in quantum chemistry, where electronic structure problems are mapped to
 /// Pauli string sums via fermion-to-qubit transformations.
 ///
-/// - SeeAlso: ``PauliString``, ``VQE``, ``SparseHamiltonian``
+/// - SeeAlso: ``PauliString``
+/// - SeeAlso: ``VQE``
+/// - SeeAlso: ``SparseHamiltonian``
 ///
-/// Example:
+/// **Example:**
 /// ```swift
-/// let hamiltonian = Observable(terms: [
-///     (-1.05, PauliString(operators: [])),
-///     (0.39, PauliString(operators: [(0, .z)])),
-///     (-0.01, PauliString(operators: [(0, .z), (1, .z)]))
-/// ])
-/// let energy = hamiltonian.expectationValue(state: groundState)
+/// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
+/// let state = QuantumState(qubits: 2)
+/// let energy = H.expectationValue(of: state)
 /// ```
+@frozen
 public struct Observable: CustomStringConvertible, Sendable {
     /// Weighted Pauli string terms (cᵢ, Pᵢ) comprising this observable.
     ///
     /// Coefficients must be real to ensure Hermiticity.
     public let terms: PauliTerms
 
-    /// Create observable from weighted Pauli string terms.
+    /// Creates observable from weighted Pauli string terms.
     ///
     /// - Parameter terms: Array of (coefficient, Pauli string) pairs
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
+    /// ```
     public init(terms: PauliTerms) {
         self.terms = terms
     }
 
-    /// Create single-term observable.
+    /// Creates single-term observable.
     ///
     /// - Parameters:
     ///   - coefficient: Real coefficient
     ///   - pauliString: Pauli string operator
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let zObs = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
+    /// ```
     public init(coefficient: Double, pauliString: PauliString) {
         terms = [(coefficient, pauliString)]
     }
@@ -65,10 +75,10 @@ public struct Observable: CustomStringConvertible, Sendable {
     /// - Complexity: O(k·2ⁿ) where k is the number of terms and n is the number of qubits
     /// - Precondition: State must be normalized (Σ|cᵢ|² = 1)
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
-    /// let hamiltonian = Observable(terms: molecularTerms)
-    /// let energy = hamiltonian.expectationValue(state: trialState)
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0)))])
+    /// let energy = H.expectationValue(of: QuantumState(qubits: 1))
     /// ```
     @_optimize(speed)
     public func expectationValue(of state: QuantumState) -> Double {
@@ -79,7 +89,7 @@ public struct Observable: CustomStringConvertible, Sendable {
         for i in 0 ..< terms.count {
             let pauliExpectation = Self.computePauliExpectation(
                 pauliString: terms[i].pauliString,
-                for: state
+                for: state,
             )
             totalExpectation += terms[i].coefficient * pauliExpectation
         }
@@ -99,7 +109,7 @@ public struct Observable: CustomStringConvertible, Sendable {
     @_optimize(speed)
     static func computePauliExpectation(
         pauliString: PauliString,
-        for state: QuantumState
+        for state: QuantumState,
     ) -> Double {
         if pauliString.operators.isEmpty { return 1.0 }
 
@@ -111,7 +121,7 @@ public struct Observable: CustomStringConvertible, Sendable {
             rotatedState = Measurement.rotateToPauliBasis(
                 qubit: op.qubit,
                 basis: op.basis,
-                state: rotatedState
+                state: rotatedState,
             )
             qubitMask |= (1 << op.qubit)
         }
@@ -144,10 +154,10 @@ public struct Observable: CustomStringConvertible, Sendable {
     /// - Precondition: State must be normalized
     /// - SeeAlso: ``ShotAllocator``
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
-    /// let variance = hamiltonian.variance(of: state)
-    /// let shotsNeeded = Int(variance / (targetError * targetError))
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0)))])
+    /// let variance = H.variance(of: QuantumState(qubits: 1))
     /// ```
     @_optimize(speed)
     public func variance(of state: QuantumState) -> Double {
@@ -156,13 +166,7 @@ public struct Observable: CustomStringConvertible, Sendable {
         return meanSquared - mean * mean
     }
 
-    /// Compute O² by expanding (Σᵢ cᵢ Pᵢ)² = Σᵢⱼ cᵢcⱼ PᵢPⱼ.
-    ///
-    /// Multiplies all pairs of Pauli strings using the standard Pauli algebra and combines
-    /// like terms. The result is Hermitian if the input is Hermitian.
-    ///
-    /// - Returns: Observable representing O²
-    /// - Complexity: O(k²) where k is the number of terms
+    /// Computes O² by expanding all Pauli string products and combining like terms.
     @_optimize(speed)
     @_eagerMove
     private func squared() -> Observable {
@@ -193,21 +197,12 @@ public struct Observable: CustomStringConvertible, Sendable {
         return Observable(terms: squaredTerms)
     }
 
-    /// Multiply two Pauli strings with phase tracking.
-    ///
-    /// Applies standard Pauli multiplication rules (X·Y = iZ, Y·Z = iX, Z·X = iY with cyclic
-    /// anticommutation) to each qubit position independently, accumulating the global phase.
-    /// Identity elements (nil Pauli) are handled naturally via guard statements.
-    ///
-    /// - Parameters:
-    ///   - lhs: Left Pauli string
-    ///   - rhs: Right Pauli string
-    /// - Returns: Tuple of (phase, resulting Pauli string)
+    /// Multiplies two Pauli strings using standard Pauli algebra with phase tracking.
     @_optimize(speed)
     @_eagerMove
     private func multiplyPauliStrings(
         _ lhs: PauliString,
-        _ rhs: PauliString
+        _ rhs: PauliString,
     ) -> (phase: Complex<Double>, result: PauliString) {
         var pauliMap: [Int: (left: PauliBasis?, right: PauliBasis?)] = [:]
         pauliMap.reserveCapacity(lhs.operators.count + rhs.operators.count)
@@ -228,11 +223,12 @@ public struct Observable: CustomStringConvertible, Sendable {
         resultOperators.reserveCapacity(pauliMap.count)
 
         for qubit in pauliMap.keys.sorted() {
+            // Safety: qubit comes from pauliMap.keys, guaranteed to exist
             let (left, right) = pauliMap[qubit]!
 
             let (localPhase, resultPauli) = multiplySingleQubitPaulis(
                 left: left,
-                right: right
+                right: right,
             )
 
             phase = phase * localPhase
@@ -249,16 +245,11 @@ public struct Observable: CustomStringConvertible, Sendable {
         return (phase, PauliString(resultOperators))
     }
 
-    /// Multiply single-qubit Pauli operators with phase.
-    ///
-    /// - Parameters:
-    ///   - left: Left Pauli operator (nil represents identity)
-    ///   - right: Right Pauli operator (nil represents identity)
-    /// - Returns: Tuple of (phase, resulting Pauli or nil for identity)
+    /// Multiplies single-qubit Pauli operators returning (phase, result) tuple.
     @_optimize(speed)
     private func multiplySingleQubitPaulis(
         left: PauliBasis?,
-        right: PauliBasis?
+        right: PauliBasis?,
     ) -> (phase: Complex<Double>, result: PauliBasis?) {
         guard let l = left else { return (Complex(1.0, 0.0), right) }
         guard let r = right else { return (Complex(1.0, 0.0), left) }
@@ -281,16 +272,11 @@ public struct Observable: CustomStringConvertible, Sendable {
         }
     }
 
-    /// Combine terms with identical Pauli strings.
-    ///
-    /// Groups terms by Pauli string and sums their coefficients, removing near-zero terms.
-    ///
-    /// - Parameter terms: Unsimplified Pauli terms
-    /// - Returns: Simplified terms with combined coefficients
+    /// Combines terms with identical Pauli strings by summing coefficients.
     @_optimize(speed)
     @_eagerMove
     private func combineLikeTerms(
-        _ inputTerms: PauliTerms
+        _ inputTerms: PauliTerms,
     ) -> PauliTerms {
         var coefficientMap: [PauliString: Double] = [:]
         coefficientMap.reserveCapacity(inputTerms.count)
@@ -313,16 +299,16 @@ public struct Observable: CustomStringConvertible, Sendable {
     ///   - coefficient: Observable coefficient (default: 1.0)
     /// - Returns: Observable representing coefficient · X
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let xObs = Observable.pauliX(qubit: 0)
-    /// let expectation = xObs.expectationValue(state: state)
+    /// let value = xObs.expectationValue(of: QuantumState(qubits: 1))
     /// ```
     @_effects(readonly)
     public static func pauliX(qubit: Int, coefficient: Double = 1.0) -> Observable {
         Observable(
             coefficient: coefficient,
-            pauliString: PauliString(.x(qubit))
+            pauliString: PauliString(.x(qubit)),
         )
     }
 
@@ -333,7 +319,7 @@ public struct Observable: CustomStringConvertible, Sendable {
     ///   - coefficient: Observable coefficient (default: 1.0)
     /// - Returns: Observable representing coefficient · Y
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let yObs = Observable.pauliY(qubit: 1)
     /// ```
@@ -341,7 +327,7 @@ public struct Observable: CustomStringConvertible, Sendable {
     public static func pauliY(qubit: Int, coefficient: Double = 1.0) -> Observable {
         Observable(
             coefficient: coefficient,
-            pauliString: PauliString(.y(qubit))
+            pauliString: PauliString(.y(qubit)),
         )
     }
 
@@ -352,16 +338,16 @@ public struct Observable: CustomStringConvertible, Sendable {
     ///   - coefficient: Observable coefficient (default: 1.0)
     /// - Returns: Observable representing coefficient · Z
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let zObs = Observable.pauliZ(qubit: 0)
-    /// let expectation = zObs.expectationValue(state: state)
+    /// let value = zObs.expectationValue(of: QuantumState(qubits: 1))
     /// ```
     @_effects(readonly)
     public static func pauliZ(qubit: Int, coefficient: Double = 1.0) -> Observable {
         Observable(
             coefficient: coefficient,
-            pauliString: PauliString(.z(qubit))
+            pauliString: PauliString(.z(qubit)),
         )
     }
 

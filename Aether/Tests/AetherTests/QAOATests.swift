@@ -14,14 +14,14 @@ struct QAOAAlgorithmTests {
         let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.triangle())
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 3,
+            cost: cost,
+            qubits: 3,
             depth: 2,
             optimizer: COBYLAOptimizer(tolerance: 1e-4),
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 200)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 200),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
 
         #expect(result.optimalCost < -0.7)
         #expect(result.optimalCost.isFinite)
@@ -37,14 +37,14 @@ struct QAOAAlgorithmTests {
         let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.square())
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 4,
+            cost: cost,
+            qubits: 4,
             depth: 2,
             optimizer: COBYLAOptimizer(tolerance: 1e-4),
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
 
         #expect(result.optimalCost < -1.5)
         #expect(result.optimalCost.isFinite)
@@ -64,14 +64,14 @@ struct QAOAAlgorithmTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 1,
             optimizer: COBYLAOptimizer(tolerance: 1e-4),
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5])
 
         #expect(result.optimalCost < -0.3)
         #expect(result.optimalParameters.count == 2)
@@ -83,13 +83,13 @@ struct QAOAAlgorithmTests {
         let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.pentagon())
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 5,
+            cost: cost,
+            qubits: 5,
             depth: 2,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
 
         #expect(result.optimalCost < -1.5)
         #expect(result.optimalCost.isFinite)
@@ -97,16 +97,16 @@ struct QAOAAlgorithmTests {
 
     @Test("Complete K₄ optimization")
     func completeK4() async {
-        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.completeK4())
+        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.complete4())
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 4,
+            cost: cost,
+            qubits: 4,
             depth: 3,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 400)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 400),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
 
         #expect(result.optimalCost < -1.5)
         #expect(result.optimalCost.isFinite)
@@ -114,16 +114,16 @@ struct QAOAAlgorithmTests {
 
     @Test("Star graph optimization")
     func starGraph() async {
-        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.star(numVertices: 5))
+        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.star(vertices: 5))
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 5,
+            cost: cost,
+            qubits: 5,
             depth: 2,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
 
         #expect(result.optimalCost < -1.5)
         #expect(result.optimalCost.isFinite)
@@ -140,13 +140,13 @@ struct QAOAProgressTrackingTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 1,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 10)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 10),
         )
 
-        let progress = await qaoa.getProgress()
+        let progress = await qaoa.progress
         #expect(progress.iteration >= 0)
         #expect(progress.cost.isFinite || progress.cost == 0)
     }
@@ -172,15 +172,15 @@ struct QAOAProgressTrackingTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 1,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 50)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 50),
         )
 
         let tracker = ProgressTracker()
 
-        let result = await qaoa.runWithProgress(initialParameters: [0.5, 0.5]) { iteration, cost in
+        let result = await qaoa.run(from: [0.5, 0.5]) { iteration, cost in
             await tracker.recordCallback(iteration: iteration, cost: cost)
         }
 
@@ -197,14 +197,14 @@ struct QAOAProgressTrackingTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 1,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 20)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 20),
         )
 
-        _ = await qaoa.runWithProgress(initialParameters: [0.5, 0.5]) { iteration, cost in
-            let progress = await qaoa.getProgress()
+        _ = await qaoa.run(from: [0.5, 0.5]) { iteration, cost in
+            let progress = await qaoa.progress
             #expect(progress.iteration == iteration, "Internal progress iteration should match callback iteration")
             #expect(abs(progress.cost - cost) < 1e-10, "Internal progress cost should match callback cost")
         }
@@ -216,59 +216,29 @@ struct QAOAProgressTrackingTests {
 /// results and correct backend reporting.
 @Suite("QAOA Backend Selection")
 struct QAOABackendSelectionTests {
-    @Test("SparseHamiltonian backend is default")
-    func sparseBackendDefault() async {
-        let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2)])
-
-        let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 3,
-            depth: 1,
-            useSparseBackend: true
-        )
-
-        let backendInfo = await qaoa.getBackendInfo()
-        #expect(backendInfo.contains("SparseHamiltonian"))
-    }
-
-    @Test("Observable backend explicit selection")
-    func observableBackend() async {
-        let cost = MaxCut.hamiltonian(edges: [(0, 1)])
-
-        let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
-            depth: 1,
-            useSparseBackend: false
-        )
-
-        let backendInfo = await qaoa.getBackendInfo()
-        #expect(backendInfo.contains("Observable"))
-    }
-
     @Test("Backends produce consistent results")
     func backendConsistency() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2)])
         let initialParams = [0.5, 0.5]
 
         let qaoaSparse = QAOA(
-            costHamiltonian: cost,
-            numQubits: 3,
+            cost: cost,
+            qubits: 3,
             depth: 1,
             optimizer: COBYLAOptimizer(tolerance: 1e-6),
-            useSparseBackend: true
+            sparseBackend: true,
         )
 
         let qaoaObservable = QAOA(
-            costHamiltonian: cost,
-            numQubits: 3,
+            cost: cost,
+            qubits: 3,
             depth: 1,
             optimizer: COBYLAOptimizer(tolerance: 1e-6),
-            useSparseBackend: false
+            sparseBackend: false,
         )
 
-        let resultSparse = await qaoaSparse.run(initialParameters: initialParams)
-        let resultObservable = await qaoaObservable.run(initialParameters: initialParams)
+        let resultSparse = await qaoaSparse.run(from: initialParams)
+        let resultObservable = await qaoaObservable.run(from: initialParams)
 
         let costDifference = abs(resultSparse.optimalCost - resultObservable.optimalCost)
         #expect(costDifference < 1e-3)
@@ -285,14 +255,14 @@ struct QAOAOptimizerIntegrationTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 1,
             optimizer: COBYLAOptimizer(tolerance: 1e-4),
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5])
         #expect(result.optimalCost.isFinite)
     }
 
@@ -301,14 +271,14 @@ struct QAOAOptimizerIntegrationTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 1,
             optimizer: NelderMeadOptimizer(tolerance: 1e-4),
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5])
         #expect(result.optimalCost.isFinite)
     }
 
@@ -317,14 +287,14 @@ struct QAOAOptimizerIntegrationTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 1,
             optimizer: GradientDescentOptimizer(learningRate: 0.1),
-            convergenceCriteria: ConvergenceCriteria(gradientNormTolerance: 1e-3, maxIterations: 100)
+            convergence: ConvergenceCriteria(gradientNormTolerance: 1e-3, maxIterations: 100),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5])
         #expect(result.optimalCost.isFinite)
     }
 
@@ -333,14 +303,14 @@ struct QAOAOptimizerIntegrationTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 1,
             optimizer: LBFGSBOptimizer(memorySize: 5),
-            convergenceCriteria: ConvergenceCriteria(gradientNormTolerance: 1e-3, maxIterations: 100)
+            convergence: ConvergenceCriteria(gradientNormTolerance: 1e-3, maxIterations: 100),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5])
         #expect(result.optimalCost.isFinite)
     }
 }
@@ -356,14 +326,14 @@ struct QAOAConvergenceTests {
         let maxIter = 10
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 1,
             optimizer: COBYLAOptimizer(tolerance: 1e-10),
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-10, maxIterations: maxIter)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-10, maxIterations: maxIter),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5])
 
         #expect(result.iterations <= maxIter)
 
@@ -383,13 +353,13 @@ struct QAOASolutionProbabilitiesTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 1,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5])
 
         let totalProbability = result.solutionProbabilities.values.reduce(0.0, +)
 
@@ -402,13 +372,13 @@ struct QAOASolutionProbabilitiesTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 1,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5])
 
         for (_, probability) in result.solutionProbabilities {
             #expect(probability > 1e-6)
@@ -421,13 +391,13 @@ struct QAOASolutionProbabilitiesTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 2,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 200)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 200),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
 
         let sortedSolutions = result.solutionProbabilities.sorted { $0.value > $1.value }
 
@@ -455,13 +425,13 @@ struct QAOADepthVariationsTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 3,
+            cost: cost,
+            qubits: 3,
             depth: 1,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5])
 
         #expect(result.optimalParameters.count == 2)
         #expect(result.optimalCost.isFinite)
@@ -472,13 +442,13 @@ struct QAOADepthVariationsTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 3,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 200)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 200),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
 
         #expect(result.optimalParameters.count == 6)
         #expect(result.optimalCost.isFinite)
@@ -489,35 +459,35 @@ struct QAOADepthVariationsTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 5,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300),
         )
 
-        let result = await qaoa.run(initialParameters: Array(repeating: 0.5, count: 10))
+        let result = await qaoa.run(from: Array(repeating: 0.5, count: 10))
 
         #expect(result.optimalParameters.count == 10)
         #expect(result.optimalCost.isFinite)
     }
 }
 
-/// Test suite for QAOAResult representation.
+/// Test suite for QAOA.Result representation.
 /// Validates description formatting and content for QAOA optimization results.
-@Suite("QAOA Result Representation")
+@Suite("QAOA.Result Representation")
 struct QAOAResultRepresentationTests {
     @Test("Result description is readable")
     func resultDescription() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 1,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 50)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 50),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5])
 
         let description = result.description
 
@@ -533,13 +503,13 @@ struct QAOAResultRepresentationTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 3,
+            cost: cost,
+            qubits: 3,
             depth: 3,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
 
         let description = result.description
 
@@ -552,13 +522,13 @@ struct QAOAResultRepresentationTests {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
         let qaoa = QAOA(
-            costHamiltonian: cost,
-            numQubits: 2,
+            cost: cost,
+            qubits: 2,
             depth: 2,
-            convergenceCriteria: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100)
+            convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
         )
 
-        let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
+        let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
 
         let description = result.description
 

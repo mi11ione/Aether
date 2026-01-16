@@ -11,7 +11,7 @@ func demoBellState() {
     print("Qiskit: ~0.05s  |  Aether: watch...\n")
 
     let start = Date()
-    var circuit = QuantumCircuit(numQubits: 2)
+    var circuit = QuantumCircuit(qubits: 2)
     circuit.append(.hadamard, to: 0)
     circuit.append(.cnot, to: [0, 1])
     let state = circuit.execute()
@@ -46,11 +46,11 @@ func demoLargeHamiltonian() async {
     for qubit in 0 ..< 8 {
         terms.append((
             coefficient: Double.random(in: -1.0 ... 1.0),
-            pauliString: PauliString(.z(qubit))
+            pauliString: PauliString(.z(qubit)),
         ))
         terms.append((
             coefficient: Double.random(in: -0.5 ... 0.5),
-            pauliString: PauliString(.x(qubit))
+            pauliString: PauliString(.x(qubit)),
         ))
     }
 
@@ -58,11 +58,11 @@ func demoLargeHamiltonian() async {
         for j in (i + 1) ..< 8 {
             terms.append((
                 coefficient: Double.random(in: -0.5 ... 0.5),
-                pauliString: PauliString(.z(i), .z(j))
+                pauliString: PauliString(.z(i), .z(j)),
             ))
             terms.append((
                 coefficient: Double.random(in: -0.3 ... 0.3),
-                pauliString: PauliString(.x(i), .x(j))
+                pauliString: PauliString(.x(i), .x(j)),
             ))
         }
     }
@@ -75,7 +75,7 @@ func demoLargeHamiltonian() async {
 
         terms.append((
             coefficient: Double.random(in: -0.1 ... 0.1),
-            pauliString: PauliString(.z(q1), .x(q2), .y(q3))
+            pauliString: PauliString(.z(q1), .x(q2), .y(q3)),
         ))
     }
 
@@ -86,7 +86,7 @@ func demoLargeHamiltonian() async {
     print("Sparse matrix: \(sparseH.nnz) non-zeros")
     print("Complexity: \(terms.count) terms x 256 states = \(terms.count * 256) operations\n")
 
-    var circuit = QuantumCircuit(numQubits: 8)
+    var circuit = QuantumCircuit(qubits: 8)
     for qubit in 0 ..< 8 {
         circuit.append(.rotationY(Double.random(in: 0 ... .pi)), to: qubit)
     }
@@ -121,16 +121,16 @@ func demoPerformanceScaling() {
         16: 96.0, // ~96s
     ]
 
-    for numQubits in [4, 6, 8, 10, 12, 14, 16] {
-        var circuit = QuantumCircuit(numQubits: numQubits)
+    for qubits in [4, 6, 8, 10, 12, 14, 16] {
+        var circuit = QuantumCircuit(qubits: qubits)
 
         for _ in 0 ..< 50 {
-            let qubit = Int.random(in: 0 ..< numQubits)
+            let qubit = Int.random(in: 0 ..< qubits)
             circuit.append(.hadamard, to: qubit)
 
-            if numQubits > 1 {
-                let control = Int.random(in: 0 ..< numQubits)
-                let target = Int.random(in: 0 ..< numQubits)
+            if qubits > 1 {
+                let control = Int.random(in: 0 ..< qubits)
+                let target = Int.random(in: 0 ..< qubits)
                 if control != target {
                     circuit.append(.cnot, to: [control, target])
                 }
@@ -141,9 +141,9 @@ func demoPerformanceScaling() {
         _ = circuit.execute()
         let elapsed = Date().timeIntervalSince(start)
 
-        let qiskitTime = qiskitTimes[numQubits]!
+        let qiskitTime = qiskitTimes[qubits]!
         let speedup = qiskitTime / elapsed
-        print("\(numQubits) qubits (50 gates): \(String(format: "%.3f", elapsed))s  (~\(String(format: "%.0f", speedup))x faster)")
+        print("\(qubits) qubits (50 gates): \(String(format: "%.3f", elapsed))s  (~\(String(format: "%.0f", speedup))x faster)")
     }
     print()
 }

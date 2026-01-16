@@ -3,40 +3,33 @@
 
 import Accelerate
 
-/// Quantum state: complex amplitude vector for n-qubit system
+/// Quantum state represented as complex amplitude vector |ψ⟩ = Σᵢ cᵢ|i⟩ in 2^n-dimensional Hilbert space.
 ///
-/// Represents quantum superposition as a statevector in 2^n-dimensional Hilbert space. Each computational
-/// basis state |i⟩ has a complex amplitude cᵢ, with probabilities given by |cᵢ|² (Born rule). Automatically
-/// handles normalization and validation.
+/// Each computational basis state |i⟩ has complex amplitude cᵢ with measurement probability |cᵢ|² (Born rule).
+/// Normalization constraint Σᵢ |cᵢ|² = 1 ensures probabilities sum to unity. Uses little-endian qubit ordering
+/// where qubit 0 corresponds to the least significant bit in the basis state index.
 ///
-/// **Mathematical Foundation**:
-/// - State vector: |ψ⟩ = Σᵢ cᵢ|i⟩ where cᵢ ∈ ℂ, i ∈ [0, 2^n-1]
-/// - Normalization constraint: Σᵢ |cᵢ|² = 1 (total probability = 1)
-/// - Qubit ordering: Little-endian (qubit 0 is LSB in binary index)
-/// - Hilbert space dimension: 2^n for n qubits
+/// Accelerate framework vectorization activates for states with 64+ amplitudes (6+ qubits), providing
+/// hardware-accelerated probability calculations and normalization. Supports 1-30 qubits with 30 qubits
+/// requiring approximately 8GB memory for the 2³⁰ complex amplitudes.
 ///
-/// **Performance**: Accelerate framework vectorization automatically activates for states with 64+ basis states
-/// (6+ qubits), providing significant speedup for probability calculations and normalization checks.
-///
-/// **Quantum Context**: Core representation for quantum algorithms. Ground state |00...0⟩ serves as initial
-/// state for circuits. Bell states demonstrate entanglement. GHZ states test multipartite quantum correlations.
-/// Supports arbitrary superposition states for VQE, QAOA, and quantum machine learning applications.
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
 /// // Ground state |00⟩
-/// let ground = QuantumState(numQubits: 2)
+/// let ground = QuantumState(qubits: 2)
 /// ground.probability(of: 0b00)  // 1.0
 ///
 /// // Bell state (|00⟩ + |11⟩)/√2
-/// let bell = QuantumState(numQubits: 2, amplitudes: [
+/// let bell = QuantumState(qubits: 2, amplitudes: [
 ///     Complex(1/sqrt(2), 0), Complex(0, 0), Complex(0, 0), Complex(1/sqrt(2), 0)
 /// ])
 /// bell.probability(of: 0b00)  // 0.5
 /// bell.probabilities(for: 0)  // (0.5, 0.5)
 /// ```
 ///
-/// - SeeAlso: ``QuantumCircuit`` for state evolution, ``Measurement`` for Born rule sampling
+/// - SeeAlso: ``QuantumCircuit`` for state evolution
+/// - SeeAlso: ``Measurement`` for Born rule sampling
+@frozen
 public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     // MARK: - Properties
 
@@ -45,34 +38,34 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Contains 2^n complex coefficients for n-qubit system in computational basis ordering.
     /// Users can read amplitudes but not modify directly - use ``setAmplitude(_:to:)`` instead.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let state = QuantumState(numQubits: 2)
+    /// let state = QuantumState(qubits: 2)
     /// print(state.amplitudes.count)  // 4
     /// ```
     public private(set) var amplitudes: [Complex<Double>]
 
     /// Number of qubits in this quantum system
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let state = QuantumState(numQubits: 3)
-    /// print(state.numQubits)  // 3
+    /// let state = QuantumState(qubits: 3)
+    /// print(state.qubits)  // 3
     /// ```
-    public let numQubits: Int
+    public let qubits: Int
 
-    /// Size of state space (2^numQubits)
+    /// Size of state space (2^qubits)
     ///
-    /// Convenience property for number of basis states. Equivalent to `1 << numQubits`.
+    /// Convenience property for number of basis states. Equivalent to `1 << qubits`.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let state = QuantumState(numQubits: 3)
+    /// let state = QuantumState(qubits: 3)
     /// print(state.stateSpaceSize)  // 8
     /// ```
     ///
     /// - Complexity: O(1)
-    public var stateSpaceSize: Int { 1 << numQubits }
+    public var stateSpaceSize: Int { 1 << qubits }
 
     // MARK: - Initialization
 
@@ -81,26 +74,24 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Creates computational basis state |00...0⟩ with amplitude 1.0 for state 0 and all other
     /// amplitudes zero. This is the default starting state for quantum circuits and algorithms.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let state = QuantumState(numQubits: 2)  // |00⟩
+    /// let state = QuantumState(qubits: 2)  // |00⟩
     /// ```
     ///
-    /// - Parameter numQubits: Number of qubits (supports 1-30)
+    /// - Parameter qubits: Number of qubits (supports 1-30)
     /// - Complexity: O(2^n)
-    /// - Precondition: 1 ≤ numQubits ≤ 30
-    public init(numQubits: Int) {
-        ValidationUtilities.validatePositiveQubits(numQubits)
-        ValidationUtilities.validateMemoryLimit(numQubits)
+    /// - Precondition: 1 ≤ qubits ≤ 30
+    public init(qubits: Int) {
+        ValidationUtilities.validatePositiveQubits(qubits)
+        ValidationUtilities.validateMemoryLimit(qubits)
 
-        self.numQubits = numQubits
-        let size = 1 << numQubits
+        self.qubits = qubits
+        let size = 1 << qubits
 
         amplitudes = [Complex<Double>](unsafeUninitializedCapacity: size) { buffer, count in
+            buffer.initialize(repeating: .zero)
             buffer[0] = .one
-            for i in 1 ..< size {
-                buffer[i] = .zero
-            }
             count = size
         }
     }
@@ -111,24 +102,24 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// if amplitude vector is not already normalized (within tolerance 1e-10). Useful for preparing
     /// specific quantum states like |+⟩, |−⟩, Bell states, GHZ states, etc.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let plus = QuantumState(numQubits: 1, amplitudes: [
+    /// let plus = QuantumState(qubits: 1, amplitudes: [
     ///     Complex(1/sqrt(2), 0), Complex(1/sqrt(2), 0)  // (|0⟩ + |1⟩)/√2
     /// ])
     /// ```
     ///
     /// - Parameters:
-    ///   - numQubits: Number of qubits
+    ///   - qubits: Number of qubits
     ///   - amplitudes: Array of 2^n complex amplitudes (auto-normalizes if needed)
     /// - Complexity: O(2^n)
-    /// - Precondition: amplitudes.count == 2^numQubits
+    /// - Precondition: amplitudes.count == 2^qubits
     /// - Note: Auto-normalizes if Σ|cᵢ|² ≠ 1
-    public init(numQubits: Int, amplitudes: [Complex<Double>]) {
-        ValidationUtilities.validatePositiveQubits(numQubits)
-        ValidationUtilities.validateAmplitudeCount(amplitudes, numQubits: numQubits)
+    public init(qubits: Int, amplitudes: [Complex<Double>]) {
+        ValidationUtilities.validatePositiveQubits(qubits)
+        ValidationUtilities.validateAmplitudeCount(amplitudes, qubits: qubits)
 
-        self.numQubits = numQubits
+        self.qubits = qubits
         self.amplitudes = amplitudes
 
         let sumSquared = computeNormSquared()
@@ -148,7 +139,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Creates |0⟩ or |1⟩ state for single qubit. Convenience initializer for the most common
     /// quantum states.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let zero = QuantumState(qubit: 0)  // |0⟩
     /// let one = QuantumState(qubit: 1)   // |1⟩
@@ -160,7 +151,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     public init(qubit state: Int) {
         ValidationUtilities.validateBinaryValue(state, name: "Qubit state")
 
-        numQubits = 1
+        qubits = 1
         if state == 0 { amplitudes = [.one, .zero] } else { amplitudes = [.zero, .one] }
     }
 
@@ -186,7 +177,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
             interleavedAmps.withUnsafeBufferPointer { interleavedPtr in
                 var splitComplex = DSPDoubleSplitComplex(
                     realp: UnsafeMutablePointer(mutating: interleavedPtr.baseAddress!),
-                    imagp: UnsafeMutablePointer(mutating: interleavedPtr.baseAddress! + 1)
+                    imagp: UnsafeMutablePointer(mutating: interleavedPtr.baseAddress! + 1),
                 )
                 vDSP_zvmagsD(&splitComplex, 2, magPtr.baseAddress!, 1, vDSP_Length(n))
             }
@@ -200,9 +191,9 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// This implements the Born rule from quantum mechanics: probability equals
     /// magnitude squared of the amplitude.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let bell = QuantumState(numQubits: 2, amplitudes: [
+    /// let bell = QuantumState(qubits: 2, amplitudes: [
     ///     Complex(1/sqrt(2), 0), Complex(0, 0), Complex(0, 0), Complex(1/sqrt(2), 0)
     /// ])
     /// bell.probability(of: 0b00)  // 0.5
@@ -226,9 +217,9 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Returns complete probability vector [P(0), P(1), ..., P(2^n-1)] where P(i) = |cᵢ|².
     /// Automatically uses vectorized Accelerate framework for states with 64+ basis states.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let uniform = QuantumState(numQubits: 2, amplitudes: [
+    /// let uniform = QuantumState(qubits: 2, amplitudes: [
     ///     Complex(0.5, 0), Complex(0.5, 0), Complex(0.5, 0), Complex(0.5, 0)
     /// ])
     /// uniform.probabilities()  // [0.25, 0.25, 0.25, 0.25]
@@ -259,9 +250,9 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Computes maximum probability without allocating full probability array. Returns both the
     /// index and probability of the most likely measurement outcome.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let ghz = QuantumState(numQubits: 3, amplitudes: [
+    /// let ghz = QuantumState(qubits: 3, amplitudes: [
     ///     Complex(1/sqrt(2), 0), Complex(0, 0), Complex(0, 0), Complex(0, 0),
     ///     Complex(0, 0), Complex(0, 0), Complex(0, 0), Complex(1/sqrt(2), 0)
     /// ])
@@ -294,9 +285,9 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Computes P(|0⟩) and P(|1⟩) for a specific qubit by summing over all basis states where
     /// that qubit has the desired value. Implements partial trace / marginalization over other qubits.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let bell = QuantumState(numQubits: 2, amplitudes: [
+    /// let bell = QuantumState(qubits: 2, amplitudes: [
     ///     Complex(1/sqrt(2), 0), Complex(0, 0), Complex(0, 0), Complex(1/sqrt(2), 0)
     /// ])
     /// let (p0, p1) = bell.probabilities(for: 0)  // (0.5, 0.5)
@@ -312,7 +303,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     @_effects(readonly)
     @inlinable
     public func probabilities(for qubit: Int) -> (p0: Double, p1: Double) {
-        ValidationUtilities.validateIndexInBounds(qubit, bound: numQubits, name: "Qubit index")
+        ValidationUtilities.validateIndexInBounds(qubit, bound: qubits, name: "Qubit index")
 
         var p0 = 0.0
         var p1 = 0.0
@@ -364,9 +355,9 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Verifies that Σᵢ |cᵢ|² ≈ 1.0 within numerical tolerance (1e-10). All valid quantum states
     /// must be normalized for probabilities to sum to 1.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let state = QuantumState(numQubits: 2)
+    /// let state = QuantumState(qubits: 2)
     /// state.isNormalized()  // true
     /// ```
     ///
@@ -384,9 +375,9 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Divides all amplitudes by √(Σᵢ |cᵢ|²) to ensure normalization constraint.
     /// Required after operations that may denormalize the state.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// var state = QuantumState(numQubits: 1, amplitudes: [Complex(3, 0), Complex(4, 0)])
+    /// var state = QuantumState(qubits: 1, amplitudes: [Complex(3, 0), Complex(4, 0)])
     /// state.normalize()  // Now [3/5, 4/5] since √(3² + 4²) = 5
     /// ```
     ///
@@ -414,9 +405,9 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Returns the coefficient cᵢ for basis state |i⟩. Use `probability(of:)` for Born rule
     /// probabilities. Direct amplitude access is useful for quantum algorithm analysis and debugging.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let plus = QuantumState(numQubits: 1, amplitudes: [
+    /// let plus = QuantumState(qubits: 1, amplitudes: [
     ///     Complex(1/sqrt(2), 0), Complex(1/sqrt(2), 0)
     /// ])
     /// plus.amplitude(of: 0)  // (1/√2, 0)
@@ -439,9 +430,9 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Directly modifies coefficient cᵢ for basis state |i⟩. May denormalize the state - call
     /// `normalize()` after if needed. Primarily used internally by gate application and for testing.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// var state = QuantumState(numQubits: 1)
+    /// var state = QuantumState(qubits: 1)
     /// state.setAmplitude(0, to: Complex(1/sqrt(2), 0))
     /// state.setAmplitude(1, to: Complex(1/sqrt(2), 0))
     /// ```
@@ -465,9 +456,9 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// Generates human-readable quantum state notation showing only basis states with probability
     /// above threshold (1e-6). Format: "QuantumState(n qubits): amplitude₁|basis₁⟩ + amplitude₂|basis₂⟩ + ..."
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
-    /// let bell = QuantumState(numQubits: 2, amplitudes: [
+    /// let bell = QuantumState(qubits: 2, amplitudes: [
     ///     Complex(1/sqrt(2), 0), Complex(0, 0), Complex(0, 0), Complex(1/sqrt(2), 0)
     /// ])
     /// print(bell)  // "QuantumState(2 qubits): 0.7071|00⟩ + 0.7071|11⟩"
@@ -485,13 +476,13 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
             if magSq > threshold {
                 let ampStr = String(format: "%.4f", sqrt(magSq))
                 let binaryStr = String(i, radix: 2)
-                let paddedBinary = String(repeating: "0", count: max(0, numQubits - binaryStr.count)) + binaryStr
+                let paddedBinary = String(repeating: "0", count: max(0, qubits - binaryStr.count)) + binaryStr
                 terms.append("\(ampStr)|\(paddedBinary)⟩")
             }
         }
 
         return terms.isEmpty
-            ? "QuantumState(\(numQubits) qubits, near-zero)"
-            : "QuantumState(\(numQubits) qubits): " + terms.joined(separator: " + ")
+            ? "QuantumState(\(qubits) qubits, near-zero)"
+            : "QuantumState(\(qubits) qubits): " + terms.joined(separator: " + ")
     }
 }

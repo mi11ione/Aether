@@ -76,7 +76,7 @@ extension Float: ComplexScalar {
 /// **Performance**: All operations are O(1). Optimized with fused multiply-add (FMA) for
 /// ``magnitudeSquared`` and division. Specialized for Double and Float at compile time.
 ///
-/// **Example**:
+/// **Example:**
 /// ```swift
 /// // Cartesian construction
 /// let amplitude = Complex(0.6, 0.8)
@@ -109,7 +109,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     ///   - real: Real component a
     ///   - imaginary: Imaginary component b
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let amplitude = Complex(0.6, 0.8)
     /// let prob = amplitude.magnitudeSquared  // 1.0
@@ -124,7 +124,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     ///
     /// - Parameter real: Real component
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let eigenvalue = Complex(1.0)  // 1 + 0i
     /// ```
@@ -136,7 +136,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
 
     /// Integer literal support enabling `let z: Complex<Double> = 5`
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let identity: Complex<Double> = 1
     /// ```
@@ -148,7 +148,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
 
     /// Float literal support enabling `let z: Complex<Double> = 3.14`
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let pi: Complex<Double> = 3.14159
     /// ```
@@ -162,7 +162,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
 
     /// Additive identity: 0 + 0i
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// var z = Complex<Double>.zero
     /// z += Complex(3, 4)  // Now 3 + 4i
@@ -174,7 +174,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
 
     /// Multiplicative identity: 1 + 0i
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let z = Complex(3.0, 4.0)
     /// let result = z * .one  // 3 + 4i (unchanged)
@@ -186,7 +186,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
 
     /// Imaginary unit where i² = -1
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let i = Complex<Double>.i    // 0 + 1i
     /// let iPower2 = i * i          // -1 + 0i
@@ -204,7 +204,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// Flips the sign of the imaginary component. Essential for quantum inner products
     /// and probability calculations: ⟨ψ|φ⟩ and |ψ|² = ψ*ψ (Born rule).
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let amplitude = Complex(0.6, 0.8)
     /// let conj = amplitude.conjugate      // 0.6 - 0.8i
@@ -225,7 +225,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// for single rounding, maintaining precision. Directly represents Born rule probability
     /// in quantum mechanics: P(outcome) = |amplitude|².
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let amplitude = Complex(0.6, 0.8)
     /// let probability = amplitude.magnitudeSquared  // 1.0
@@ -243,7 +243,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// Uses `hypot` for numerical stability, preventing overflow/underflow in intermediate
     /// calculations when real² + imaginary² exceeds representable range but result doesn't.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let z = Complex(3.0, 4.0)
     /// let r = z.magnitude         // 5.0
@@ -263,7 +263,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// Returns principal argument in radians. Combined with magnitude forms polar representation.
     /// Quantum gate phases are rotations in the complex plane: e^(iθ) = cos(θ) + i·sin(θ).
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let z = Complex(1.0, 1.0)
     /// let angle = z.phase  // π/4 radians (45°)
@@ -281,7 +281,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     ///
     /// Used for validation in quantum state construction and gate operations.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let valid = Complex(3.0, 4.0)
     /// let invalid = Complex(Double.nan, 1.0)
@@ -304,7 +304,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     ///   - magnitude: Magnitude (non-negative radius)
     ///   - phase: Phase angle in radians
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let z = Complex(magnitude: 2.0, phase: .pi/3)
     /// // Creates: 2·e^(iπ/3) = 1 + √3i
@@ -328,7 +328,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     ///
     /// - Parameter phase: Phase angle in radians
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let i = Complex<Double>(phase: .pi/2)           // i
     /// let minusOne = Complex<Double>(phase: .pi)      // -1
@@ -350,7 +350,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// Formats as "a", "bi", "a + bi", or "a - bi" depending on which components
     /// are significant (within epsilon threshold).
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// print(Complex(3, 4))    // "3.0 + 4.0i"
     /// print(Complex(5, 0))    // "5.0"
@@ -380,7 +380,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// than epsilon (1e-10 for Double, 1e-6 for Float). Essential for quantum state comparisons
     /// where exact floating-point equality is unreliable.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let z1 = Complex(1.0, 0.0)
     /// let z2 = Complex(1.0 + 1e-11, 0.0)
@@ -400,7 +400,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// equal values (per ``==(_:_:)`` definition) hash to same bucket. Enables use in Set
     /// and Dictionary collections without hash/equality contract violations.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// var uniqueAmplitudes = Set<Complex<Double>>()
     /// uniqueAmplitudes.insert(Complex(0.707, 0.707))

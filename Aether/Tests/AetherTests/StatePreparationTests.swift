@@ -13,7 +13,7 @@ struct StatePreparationTests {
     func basisStateSingleQubitZero() {
         let state = QuantumState.basis(qubits: 1, state: 0)
 
-        #expect(state.numQubits == 1)
+        #expect(state.qubits == 1)
         #expect(state.amplitudes.count == 2)
         #expect(state.amplitude(of: 0) == .one)
         #expect(state.amplitude(of: 1) == .zero)
@@ -24,7 +24,7 @@ struct StatePreparationTests {
     func basisStateSingleQubitOne() {
         let state = QuantumState.basis(qubits: 1, state: 1)
 
-        #expect(state.numQubits == 1)
+        #expect(state.qubits == 1)
         #expect(state.amplitudes.count == 2)
         #expect(state.amplitude(of: 0) == .zero)
         #expect(state.amplitude(of: 1) == .one)
@@ -35,7 +35,7 @@ struct StatePreparationTests {
     func basisStateThreeQubits() {
         let state = QuantumState.basis(qubits: 3, state: 5)
 
-        #expect(state.numQubits == 3)
+        #expect(state.qubits == 3)
         #expect(state.amplitudes.count == 8)
 
         for i in 0 ..< 8 {
@@ -50,10 +50,10 @@ struct StatePreparationTests {
 
     @Test("Prepare maximum basis state for n qubits")
     func basisStateMaximum() {
-        let numQubits = 4
-        let maxIndex = (1 << numQubits) - 1
+        let qubits = 4
+        let maxIndex = (1 << qubits) - 1
 
-        let state = QuantumState.basis(qubits: numQubits, state: maxIndex)
+        let state = QuantumState.basis(qubits: qubits, state: maxIndex)
 
         #expect(state.amplitude(of: maxIndex) == .one)
         #expect(state.isNormalized())
@@ -97,7 +97,7 @@ struct BellStateVariantsTests {
         let circuit = QuantumCircuit.bellPhiPlus()
         let state = circuit.execute()
 
-        #expect(state.numQubits == 2)
+        #expect(state.qubits == 2)
         #expect(state.isNormalized())
 
         let prob00 = state.probability(of: 0)
@@ -115,7 +115,7 @@ struct BellStateVariantsTests {
         let circuit = QuantumCircuit.bellPhiMinus()
         let state = circuit.execute()
 
-        #expect(state.numQubits == 2)
+        #expect(state.qubits == 2)
         #expect(state.isNormalized())
 
         let prob00 = state.probability(of: 0)
@@ -135,7 +135,7 @@ struct BellStateVariantsTests {
         let circuit = QuantumCircuit.bellPsiPlus()
         let state = circuit.execute()
 
-        #expect(state.numQubits == 2)
+        #expect(state.qubits == 2)
         #expect(state.isNormalized())
 
         let prob01 = state.probability(of: 1)
@@ -153,7 +153,7 @@ struct BellStateVariantsTests {
         let circuit = QuantumCircuit.bellPsiMinus()
         let state = circuit.execute()
 
-        #expect(state.numQubits == 2)
+        #expect(state.qubits == 2)
         #expect(state.isNormalized())
 
         let prob01 = state.probability(of: 1)
@@ -193,7 +193,7 @@ struct WStateTests {
     func wStateTwoQubits() {
         let state = QuantumState.w(qubits: 2)
 
-        #expect(state.numQubits == 2)
+        #expect(state.qubits == 2)
         #expect(state.isNormalized())
 
         let prob01 = state.probability(of: 1)
@@ -210,7 +210,7 @@ struct WStateTests {
     func wStateThreeQubits() {
         let state = QuantumState.w(qubits: 3)
 
-        #expect(state.numQubits == 3)
+        #expect(state.qubits == 3)
         #expect(state.isNormalized())
 
         let expectedProb = 1.0 / 3.0
@@ -232,7 +232,7 @@ struct WStateTests {
     func wStateFourQubits() {
         let state = QuantumState.w(qubits: 4)
 
-        #expect(state.numQubits == 4)
+        #expect(state.qubits == 4)
         #expect(state.isNormalized())
 
         var totalProbSingleExcitation = 0.0
@@ -368,10 +368,10 @@ struct DickeStateTests {
 struct EdgeCasesAndValidationTests {
     @Test("Uniform superposition is correctly implemented")
     func uniformSuperpositionVerification() {
-        let circuit = QuantumCircuit.uniformSuperposition(numQubits: 3)
+        let circuit = QuantumCircuit.uniformSuperposition(qubits: 3)
         let state = circuit.execute()
 
-        #expect(state.numQubits == 3)
+        #expect(state.qubits == 3)
         #expect(state.isNormalized())
 
         let expectedProb = 1.0 / 8.0
@@ -391,7 +391,7 @@ struct EdgeCasesAndValidationTests {
             Complex(1.0, 0.0),
         ]
 
-        let state = QuantumState(numQubits: 2, amplitudes: unnormalized)
+        let state = QuantumState(qubits: 2, amplitudes: unnormalized)
 
         #expect(state.isNormalized(), "State should be auto-normalized")
 
@@ -418,12 +418,12 @@ struct EdgeCasesAndValidationTests {
     @Test("State preparation methods preserve qubit count")
     func qubitCountPreservation() {
         let basisState = QuantumState.basis(qubits: 5, state: 10)
-        #expect(basisState.numQubits == 5)
+        #expect(basisState.qubits == 5)
 
         let dicke = QuantumState.dicke(qubits: 4, ones: 2)
-        #expect(dicke.numQubits == 4)
+        #expect(dicke.qubits == 4)
 
         let wState = QuantumState.w(qubits: 6)
-        #expect(wState.numQubits == 6)
+        #expect(wState.qubits == 6)
     }
 }

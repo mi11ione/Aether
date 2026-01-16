@@ -3,15 +3,10 @@
 
 import Foundation
 
-/// Single gate operation in a quantum circuit
+/// Single gate operation in a quantum circuit combining gate, target qubits, and optional timestamp.
 ///
-/// Encapsulates a quantum gate with its target qubit indices and optional timestamp.
-/// Operations are immutable value types that form the building blocks of quantum circuits.
-///
-/// **Qubit encoding pattern:**
-/// - All gates: qubit indices are specified in the `qubits` array parameter
-/// - Single-qubit gates: `qubits: [target]` (e.g., `qubits: 0` for H gate on qubit 0)
-/// - Multi-qubit gates: `qubits: [control, target]` or `qubits: [c1, c2, target]` for Toffoli
+/// Qubit indices are specified in the `qubits` array: single-qubit gates use `[target]`,
+/// two-qubit gates use `[control, target]`, and Toffoli uses `[c1, c2, target]`.
 ///
 /// **Example:**
 /// ```swift
@@ -20,7 +15,8 @@ import Foundation
 /// let rotation = Gate(.rotationY(.pi / 4), to: 2, timestamp: 1.5)
 /// ```
 ///
-/// - SeeAlso: ``QuantumGate``, ``QuantumCircuit``
+/// - SeeAlso: ``QuantumGate``
+/// - SeeAlso: ``QuantumCircuit``
 public struct Gate: Equatable, Hashable, CustomStringConvertible, Sendable {
     /// Quantum gate to apply
     public let gate: QuantumGate
@@ -89,50 +85,35 @@ public struct Gate: Equatable, Hashable, CustomStringConvertible, Sendable {
     }
 }
 
-/// Ordered sequence of quantum gates implementing quantum algorithms
+/// Ordered sequence of quantum gates transforming |00...0⟩ through unitary operations.
 ///
-/// Represents quantum computation as a series of gate operations transforming an initial state
-/// |00...0⟩ through unitary operations to produce a final superposition state for measurement.
-/// Circuits are mutable structs with value semantics, enabling safe composition and modification.
+/// Supports 1-30 qubits with automatic expansion when gates reference higher indices (ancilla
+/// qubits initialized to |0⟩). Handles both concrete values and symbolic ``Parameter`` instances
+/// for variational algorithms. Small circuits execute directly on CPU; use ``QuantumSimulator``
+/// for GPU acceleration on circuits with 10+ qubits.
 ///
-/// **Unified parameter support:**
-/// Handles both concrete values and symbolic ``Parameter`` instances. Bind parameters before execution for variational algorithms (VQE, QAOA).
-///
-/// **Key features:**
-/// - Supports 1-30 qubits (30-qubit limit = 2³⁰ amplitudes ≈ 8GB memory)
-/// - Auto-expands when gates reference higher indices (ancilla qubits initialized to |0⟩)
-/// - Unified parameter handling: concrete values execute immediately, symbolic bind first
-/// - Optional timestamping for animation and visualization workflows
-///
-/// **Performance:**
-/// - Small circuits (<10 qubits): Execute directly with CPU backend
-/// - Large circuits (≥10 qubits): Use ``QuantumSimulator`` actor for GPU acceleration
-/// - Variational algorithms: Use ``binding(_:)`` with batch evaluation
-///
-/// **Example (concrete parameters):**
+/// **Example:**
 /// ```swift
-/// var circuit = QuantumCircuit(numQubits: 2)
+/// // Concrete parameters
+/// var circuit = QuantumCircuit(qubits: 2)
 /// circuit.append(.hadamard, to: 0)
-/// circuit.append(.rotationY(.pi / 4), to: 1)
 /// circuit.append(.cnot, to: [0, 1])
 /// let state = circuit.execute()
-/// ```
 ///
-/// **Example (symbolic parameters):**
-/// ```swift
-/// var ansatz = QuantumCircuit(numQubits: 2)
+/// // Symbolic parameters for variational circuits
 /// let theta = Parameter(name: "theta")
-/// ansatz.append(.rotationY(theta), to: 0)
-/// ansatz.append(.cnot, to: [0, 1])
-///
-/// let bound = ansatz.binding(["theta": 0.5])
-/// let state = bound.execute()
+/// circuit.append(.rotationY(theta), to: 0)
+/// let bound = circuit.binding(["theta": 0.5])
+/// let boundState = bound.execute()
 /// ```
 ///
-/// - SeeAlso: ``QuantumSimulator``, ``QuantumGate``, ``Parameter``, ``HardwareEfficientAnsatz``
+/// - SeeAlso: ``QuantumSimulator`` for GPU-accelerated execution
+/// - SeeAlso: ``QuantumGate`` for gate definitions
+/// - SeeAlso: ``Parameter`` for symbolic parameters
+/// - SeeAlso: ``HardwareEfficientAnsatz`` for variational circuits
 public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Sendable {
     public private(set) var gates: [Gate]
-    public private(set) var numQubits: Int
+    public private(set) var qubits: Int
     @usableFromInline var cachedMaxQubitUsed: Int
 
     /// Number of gates in the circuit
@@ -152,20 +133,20 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     /// Initializes a circuit with no gate operations. Gates can be added via append or insert methods.
     /// Circuit auto-expands if gates reference qubits beyond initial size (up to 30 qubits maximum).
     ///
-    /// - Parameter numQubits: Number of qubits (1-30)
-    /// - Precondition: numQubits > 0
+    /// - Parameter qubits: Number of qubits (1-30)
+    /// - Precondition: qubits > 0
     /// - Complexity: O(1)
     ///
     /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 3)
+    /// var circuit = QuantumCircuit(qubits: 3)
     /// circuit.append(.hadamard, to: 0)
     /// print(circuit.count)  // 1
     /// ```
-    public init(numQubits: Int) {
-        ValidationUtilities.validatePositiveQubits(numQubits)
-        self.numQubits = numQubits
-        cachedMaxQubitUsed = numQubits - 1
+    public init(qubits: Int) {
+        ValidationUtilities.validatePositiveQubits(qubits)
+        self.qubits = qubits
+        cachedMaxQubitUsed = qubits - 1
         gates = []
     }
 
@@ -175,9 +156,9 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     /// Computes maximum qubit usage during initialization for ancilla detection.
     ///
     /// - Parameters:
-    ///   - numQubits: Number of qubits (1-30)
+    ///   - qubits: Number of qubits (1-30)
     ///   - gates: Initial gate operations to include
-    /// - Precondition: numQubits > 0
+    /// - Precondition: qubits > 0
     /// - Complexity: O(n) where n is number of operations
     ///
     /// **Example:**
@@ -186,13 +167,13 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///     Gate(.hadamard, to: 0),
     ///     Gate(.cnot, to: [0, 1])
     /// ]
-    /// let circuit = QuantumCircuit(numQubits: 2, gates: ops)
+    /// let circuit = QuantumCircuit(qubits: 2, gates: ops)
     /// ```
-    public init(numQubits: Int, gates: [Gate]) {
-        ValidationUtilities.validatePositiveQubits(numQubits)
-        self.numQubits = numQubits
+    public init(qubits: Int, gates: [Gate]) {
+        ValidationUtilities.validatePositiveQubits(qubits)
+        self.qubits = qubits
         self.gates = gates
-        var maxQubit: Int = numQubits - 1
+        var maxQubit: Int = qubits - 1
         for operation in gates {
             let gateMax: Int = operation.qubits.max() ?? -1
             if gateMax > maxQubit { maxQubit = gateMax }
@@ -218,7 +199,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///
     /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 2)
+    /// var circuit = QuantumCircuit(qubits: 2)
     /// circuit.append(.hadamard, to: 0)
     /// circuit.append(.rotationY(.pi / 4), to: 1)
     ///
@@ -229,10 +210,10 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
         ValidationUtilities.validateNonNegativeQubits(qubits)
 
         let maxQubit: Int = qubits.max() ?? -1
-        if maxQubit >= numQubits {
-            let newNumQubits: Int = maxQubit + 1
-            ValidationUtilities.validateMemoryLimit(newNumQubits)
-            numQubits = newNumQubits
+        if maxQubit >= self.qubits {
+            let newqubits: Int = maxQubit + 1
+            ValidationUtilities.validateMemoryLimit(newqubits)
+            self.qubits = newqubits
         }
 
         let operation = Gate(gate, to: qubits, timestamp: timestamp)
@@ -255,7 +236,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///
     /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 3)
+    /// var circuit = QuantumCircuit(qubits: 3)
     /// circuit.append(.hadamard, to: 0)
     /// circuit.append(.rotationZ(.pi / 2), to: 1)
     /// ```
@@ -274,12 +255,12 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///   - index: Position to insert at (0 = beginning, count = end)
     ///   - timestamp: Optional timestamp for animation
     /// - Precondition: 0 ≤ index ≤ count
-    /// - Precondition: All qubits < numQubits
+    /// - Precondition: All qubits < qubits
     /// - Complexity: O(n) where n is number of gates (array shift)
     ///
     /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 2)
+    /// var circuit = QuantumCircuit(qubits: 2)
     /// circuit.append(.hadamard, to: 0)
     /// circuit.append(.hadamard, to: 1)
     /// circuit.insert(.cnot, to: [0, 1], at: 1)
@@ -287,7 +268,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     /// ```
     public mutating func insert(_ gate: QuantumGate, to qubits: [Int], at index: Int, timestamp: Double? = nil) {
         ValidationUtilities.validateIndexInBounds(index, bound: gates.count, name: "Index")
-        ValidationUtilities.validateOperationQubits(qubits, numQubits: numQubits)
+        ValidationUtilities.validateOperationQubits(qubits, numQubits: self.qubits)
 
         let operation = Gate(gate, to: qubits, timestamp: timestamp)
         gates.insert(operation, at: index)
@@ -306,12 +287,12 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///   - index: Position to insert at (0 = beginning, count = end)
     ///   - timestamp: Optional timestamp for animation
     /// - Precondition: 0 ≤ index ≤ count
-    /// - Precondition: qubit < numQubits
+    /// - Precondition: qubit < qubits
     /// - Complexity: O(n) where n is number of gates
     ///
     /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 2)
+    /// var circuit = QuantumCircuit(qubits: 2)
     /// circuit.append(.hadamard, to: 0)
     /// circuit.append(.hadamard, to: 1)
     /// circuit.insert(.pauliX, to: 0, at: 1)
@@ -332,7 +313,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///
     /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 2)
+    /// var circuit = QuantumCircuit(qubits: 2)
     /// circuit.append(.hadamard, to: 0)
     /// circuit.append(.pauliX, to: 1)
     /// circuit.remove(at: 0)  // Removes H gate, keeps X gate
@@ -348,27 +329,27 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     /// Removes all gates from the circuit
     ///
     /// Clears the gate array while preserving the qubit count. Resets cached maximum qubit
-    /// index to numQubits-1.
+    /// index to qubits-1.
     ///
     /// - Complexity: O(1)
     ///
     /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 3)
+    /// var circuit = QuantumCircuit(qubits: 3)
     /// circuit.append(.hadamard, to: 0)
     /// circuit.append(.pauliX, to: 1)
     /// circuit.removeAll()
     /// print(circuit.isEmpty)  // true
-    /// print(circuit.numQubits)  // 3
+    /// print(circuit.qubits)  // 3
     /// ```
     public mutating func removeAll() {
         gates.removeAll()
-        cachedMaxQubitUsed = numQubits - 1
+        cachedMaxQubitUsed = qubits - 1
     }
 
     @inline(__always)
     private mutating func recomputeMaxQubitCache() {
-        var maxQubit: Int = numQubits - 1
+        var maxQubit: Int = qubits - 1
         for operation in gates {
             let gateMax: Int = operation.qubits.max() ?? -1
             if gateMax > maxQubit { maxQubit = gateMax }
@@ -383,7 +364,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     /// Used to detect ancilla qubits that may exceed logical circuit size.
     /// Value is cached and updated during append/insert/remove operations.
     ///
-    /// - Returns: Highest qubit index, or numQubits-1 if no gates
+    /// - Returns: Highest qubit index, or qubits-1 if no gates
     /// - Complexity: O(1) - cached value
     @_optimize(speed)
     @inlinable
@@ -400,7 +381,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///
     /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 2)
+    /// var circuit = QuantumCircuit(qubits: 2)
     /// let theta = Parameter(name: "theta")
     /// let phi = Parameter(name: "phi")
     /// circuit.append(.rotationY(theta), to: 0)
@@ -439,7 +420,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///
     /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 2)
+    /// var circuit = QuantumCircuit(qubits: 2)
     /// circuit.append(.hadamard, to: 0)
     /// print(circuit.parameterCount)  // 0
     ///
@@ -460,7 +441,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///
     /// **Example:**
     /// ```swift
-    /// var ansatz = QuantumCircuit(numQubits: 2)
+    /// var ansatz = QuantumCircuit(qubits: 2)
     /// let theta = Parameter(name: "theta")
     /// ansatz.append(.rotationY(theta), to: 0)
     /// ansatz.append(.cnot, to: [0, 1])
@@ -486,7 +467,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
 
         ValidationUtilities.validateCompleteParameterBindings(values, parameters: params, parameterSet: paramSet)
 
-        var bound = QuantumCircuit(numQubits: numQubits)
+        var bound = QuantumCircuit(qubits: qubits)
 
         for operation in gates {
             let boundGate = operation.gate.bound(with: values)
@@ -504,7 +485,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///
     /// **Example:**
     /// ```swift
-    /// var ansatz = QuantumCircuit(numQubits: 3)
+    /// var ansatz = QuantumCircuit(qubits: 3)
     /// for i in 0..<3 {
     ///     let param = Parameter(name: "theta_\(i)")
     ///     ansatz.append(.rotationY(param), to: i)
@@ -540,7 +521,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///
     /// **Example:**
     /// ```swift
-    /// var ansatz = QuantumCircuit(numQubits: 2)
+    /// var ansatz = QuantumCircuit(qubits: 2)
     /// let theta = Parameter(name: "theta")
     /// ansatz.append(.rotationY(theta), to: 0)
     ///
@@ -565,7 +546,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     public func shiftedCircuits(
         for parameter: String,
         base: [String: Double],
-        shift: Double = .pi / 2
+        shift: Double = .pi / 2,
     ) -> (plus: QuantumCircuit, minus: QuantumCircuit) {
         let params = parameters
         var paramSet = Set<String>()
@@ -576,6 +557,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
         ValidationUtilities.validateParameterExists(parameter, in: paramSet)
         ValidationUtilities.validateParameterBinding(parameter, in: base)
 
+        // Safety: validateParameterBinding above ensures parameter exists in base
         let baseValue = base[parameter]!
 
         var plusBindings = base
@@ -597,7 +579,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///
     /// **Example:**
     /// ```swift
-    /// var ansatz = QuantumCircuit(numQubits: 2)
+    /// var ansatz = QuantumCircuit(qubits: 2)
     /// for i in 0..<2 {
     ///     ansatz.append(.rotationY(Parameter(name: "theta_\(i)")), to: i)
     /// }
@@ -620,7 +602,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     public func shiftedCircuits(
         at index: Int,
         baseVector: [Double],
-        shift: Double = .pi / 2
+        shift: Double = .pi / 2,
     ) -> (plus: QuantumCircuit, minus: QuantumCircuit) {
         let params = parameters
         let paramCount: Int = params.count
@@ -642,16 +624,16 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     /// - Parameters:
     ///   - state: Initial quantum state
     ///   - maxQubit: Maximum qubit index needed by circuit operations
-    /// - Returns: Expanded state if maxQubit ≥ state.numQubits, otherwise original state
+    /// - Returns: Expanded state if maxQubit ≥ state.qubits, otherwise original state
     /// - Complexity: O(2^(n+k)) where n = original qubits, k = ancilla qubits needed
     ///
     /// - SeeAlso: ``execute()``, ``execute(on:)``, ``execute(on:upToIndex:)``
     @_eagerMove
     static func expandStateForAncilla(_ state: QuantumState, maxQubit: Int) -> QuantumState {
-        guard maxQubit >= state.numQubits else { return state }
+        guard maxQubit >= state.qubits else { return state }
 
-        let numAncillaQubits: Int = maxQubit - state.numQubits + 1
-        let expandedSize = 1 << (state.numQubits + numAncillaQubits)
+        let numAncillaQubits: Int = maxQubit - state.qubits + 1
+        let expandedSize = 1 << (state.qubits + numAncillaQubits)
         let originalSize: Int = state.stateSpaceSize
 
         let expandedAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: expandedSize) { buffer, count in
@@ -664,7 +646,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
             count = expandedSize
         }
 
-        return QuantumState(numQubits: maxQubit + 1, amplitudes: expandedAmplitudes)
+        return QuantumState(qubits: maxQubit + 1, amplitudes: expandedAmplitudes)
     }
 
     /// Executes the circuit on a custom initial quantum state
@@ -673,18 +655,18 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     /// Automatically expands the state with ancilla qubits (initialized to |0⟩) if circuit operations
     /// reference qubit indices beyond the initial state size.
     ///
-    /// - Parameter initialState: Starting quantum state (must have numQubits matching circuit)
+    /// - Parameter initialState: Starting quantum state (must have qubits matching circuit)
     /// - Returns: Final quantum state after applying all circuit operations
-    /// - Precondition: initialState.numQubits == numQubits
+    /// - Precondition: initialState.qubits == qubits
     /// - Precondition: Circuit must contain only concrete parameters (no symbolic)
     /// - Complexity: O(n x 2^q) where n = gate count, q = max qubit index (including ancilla)
     ///
     /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 2)
+    /// var circuit = QuantumCircuit(qubits: 2)
     /// circuit.append(.hadamard, to: 0)
     ///
-    /// let initial = QuantumState(numQubits: 2, amplitudes: [
+    /// let initial = QuantumState(qubits: 2, amplitudes: [
     ///     Complex(0.6, 0), Complex(0.8, 0), .zero, .zero
     /// ])
     /// let final = circuit.execute(on: initial)
@@ -695,8 +677,8 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     @_eagerMove
     public func execute(on initialState: QuantumState) -> QuantumState {
         ValidationUtilities.validateConcreteCircuit(parameterCount)
-        ValidationUtilities.validateStateQubitCount(initialState, required: numQubits)
-        ValidationUtilities.validateCircuitOperations(gates, numQubits: numQubits)
+        ValidationUtilities.validateStateQubitCount(initialState, required: qubits)
+        ValidationUtilities.validateCircuitOperations(gates, qubits: qubits)
 
         let maxQubit = highestQubitIndex
         var currentState = Self.expandStateForAncilla(initialState, maxQubit: maxQubit)
@@ -705,7 +687,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
             currentState = GateApplication.apply(
                 operation.gate,
                 to: operation.qubits,
-                state: currentState
+                state: currentState,
             )
         }
 
@@ -724,7 +706,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///
     /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 2)
+    /// var circuit = QuantumCircuit(qubits: 2)
     /// circuit.append(.hadamard, to: 0)
     /// circuit.append(.cnot, to: [0, 1])
     /// let bellState = circuit.execute()  // (|00⟩ + |11⟩)/√2
@@ -734,7 +716,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     @_optimize(speed)
     @_eagerMove
     public func execute() -> QuantumState {
-        let initialState = QuantumState(numQubits: numQubits)
+        let initialState = QuantumState(qubits: qubits)
         return execute(on: initialState)
     }
 
@@ -747,19 +729,19 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     ///   - initialState: Starting quantum state
     ///   - upToIndex: Number of gates to execute (0 = no gates, count = all gates)
     /// - Returns: Quantum state after executing operations [0..<upToIndex]
-    /// - Precondition: initialState.numQubits == numQubits
+    /// - Precondition: initialState.qubits == qubits
     /// - Precondition: 0 ≤ upToIndex ≤ count
     /// - Precondition: Circuit must contain only concrete parameters (no symbolic)
     /// - Complexity: O(k x 2^q) where k = upToIndex, q = max qubit index
     ///
     /// **Example:**
     /// ```swift
-    /// var circuit = QuantumCircuit(numQubits: 2)
+    /// var circuit = QuantumCircuit(qubits: 2)
     /// circuit.append(.hadamard, to: 0)
     /// circuit.append(.pauliX, to: 1)
     /// circuit.append(.cnot, to: [0, 1])
     ///
-    /// let initial = QuantumState(numQubits: 2)
+    /// let initial = QuantumState(qubits: 2)
     /// let afterH = circuit.execute(on: initial, upToIndex: 1)  // Just H gate
     /// let afterHX = circuit.execute(on: initial, upToIndex: 2)  // H + X gates
     /// ```
@@ -767,7 +749,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     @_eagerMove
     public func execute(on initialState: QuantumState, upToIndex: Int) -> QuantumState {
         ValidationUtilities.validateConcreteCircuit(parameterCount)
-        ValidationUtilities.validateStateQubitCount(initialState, required: numQubits)
+        ValidationUtilities.validateStateQubitCount(initialState, required: qubits)
         ValidationUtilities.validateUpToIndex(upToIndex, operationCount: gates.count)
 
         let maxQubit = highestQubitIndex
@@ -777,7 +759,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
             currentState = GateApplication.apply(
                 gates[i].gate,
                 to: gates[i].qubits,
-                state: currentState
+                state: currentState,
             )
         }
 
@@ -788,7 +770,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
 
     /// String representation of the quantum circuit
     public var description: String {
-        if gates.isEmpty { return "QuantumCircuit(\(numQubits) qubits, empty)" }
+        if gates.isEmpty { return "QuantumCircuit(\(qubits) qubits, empty)" }
 
         var gateList = ""
         let limit = min(gates.count, 5)
@@ -800,10 +782,10 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
 
         let paramCount = parameterCount
         if paramCount > 0 {
-            return "QuantumCircuit(\(numQubits) qubits, \(gates.count) gates, \(paramCount) params): \(gateList)\(suffix)"
+            return "QuantumCircuit(\(qubits) qubits, \(gates.count) gates, \(paramCount) params): \(gateList)\(suffix)"
         }
 
-        return "QuantumCircuit(\(numQubits) qubits, \(gates.count) gates): \(gateList)\(suffix)"
+        return "QuantumCircuit(\(qubits) qubits, \(gates.count) gates): \(gateList)\(suffix)"
     }
 }
 
@@ -881,7 +863,7 @@ public extension QuantumCircuit {
     @_eagerMove
     func gradientVectors(
         base: [Double],
-        shift: Double = .pi / 2
+        shift: Double = .pi / 2,
     ) -> (plus: [[Double]], minus: [[Double]]) {
         let numParams: Int = parameterCount
         ValidationUtilities.validateParameterVectorLength(base.count, expected: numParams)
@@ -1012,7 +994,7 @@ public extension QuantumCircuit {
     /// ```
     @_eagerMove
     static func bell() -> QuantumCircuit {
-        var circuit = QuantumCircuit(numQubits: 2)
+        var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
         return circuit
@@ -1022,27 +1004,27 @@ public extension QuantumCircuit {
     ///
     /// Produces n-qubit maximally entangled Greenberger-Horne-Zeilinger state: (|00...0⟩ + |11...1⟩)/√2
     ///
-    /// - Parameter numQubits: Number of qubits (minimum 2, default 3)
+    /// - Parameter qubits: Number of qubits (minimum 2, default 3)
     /// - Returns: n-qubit circuit generating GHZ state
-    /// - Precondition: numQubits ≥ 2
-    /// - Complexity: O(n) where n = numQubits
+    /// - Precondition: qubits ≥ 2
+    /// - Complexity: O(n) where n = qubits
     ///
     /// **Example:**
     /// ```swift
-    /// let circuit = QuantumCircuit.ghz(numQubits: 3)
+    /// let circuit = QuantumCircuit.ghz(qubits: 3)
     /// let state = circuit.execute()
     /// print(state.probability(of: 0b000))  // 0.5
     /// print(state.probability(of: 0b111))  // 0.5
     /// ```
     @_eagerMove
-    static func ghz(numQubits: Int = 3) -> QuantumCircuit {
-        ValidationUtilities.validateMinimumQubits(numQubits, min: 2, algorithmName: "GHZ")
+    static func ghz(qubits: Int = 3) -> QuantumCircuit {
+        ValidationUtilities.validateMinimumQubits(qubits, min: 2, algorithmName: "GHZ")
 
-        var circuit = QuantumCircuit(numQubits: numQubits)
+        var circuit = QuantumCircuit(qubits: qubits)
 
         circuit.append(.hadamard, to: 0)
 
-        for i in 1 ..< numQubits {
+        for i in 1 ..< qubits {
             circuit.append(.cnot, to: [0, i])
         }
 
@@ -1053,60 +1035,55 @@ public extension QuantumCircuit {
     ///
     /// Produces equal superposition over all basis states: (Σᵢ|i⟩)/√(2ⁿ)
     ///
-    /// - Parameter numQubits: Number of qubits
+    /// - Parameter qubits: Number of qubits
     /// - Returns: Circuit that creates uniform superposition
-    /// - Complexity: O(n) where n = numQubits
+    /// - Complexity: O(n) where n = qubits
     @_eagerMove
-    static func uniformSuperposition(numQubits: Int) -> QuantumCircuit {
-        ValidationUtilities.validatePositiveQubits(numQubits)
+    static func uniformSuperposition(qubits: Int) -> QuantumCircuit {
+        ValidationUtilities.validatePositiveQubits(qubits)
 
-        var circuit = QuantumCircuit(numQubits: numQubits)
+        var circuit = QuantumCircuit(qubits: qubits)
 
-        for i in 0 ..< numQubits {
+        for i in 0 ..< qubits {
             circuit.append(.hadamard, to: i)
         }
 
         return circuit
     }
 
-    /// Creates Quantum Fourier Transform circuit for frequency domain transformation
+    /// Creates Quantum Fourier Transform circuit for frequency domain transformation.
     ///
-    /// Implements the quantum analogue of the discrete Fourier transform: |j⟩ -> (1/√N)Σₖ exp(2πijk/N)|k⟩
-    /// where N = 2ⁿ. QFT is a key component in Shor's algorithm and quantum phase estimation.
-    ///
-    /// **Algorithm structure:**
-    /// - For each qubit i (from 0 to n-1):
-    ///   - Apply Hadamard to qubit i
-    ///   - Apply controlled-phase gates from qubits i+1 to n-1
-    ///   - Phase angles: π/2, π/4, π/8, ... (decreasing powers of 2)
-    /// - Reverse qubit order with SWAP gates
+    /// Implements |j⟩ → (1/√N)Σₖ exp(2πijk/N)|k⟩ where N = 2ⁿ, a key component in Shor's algorithm
+    /// and quantum phase estimation. Applies Hadamard to each qubit followed by controlled-phase
+    /// gates with angles π/2, π/4, π/8, ... (decreasing powers of 2), then reverses qubit order
+    /// with SWAP gates.
     ///
     /// **Example:**
     /// ```swift
-    /// let circuit = QuantumCircuit.qft(numQubits: 3)
-    /// let state = QuantumState(numQubits: 3)  // |000⟩
+    /// let circuit = QuantumCircuit.qft(qubits: 3)
+    /// let state = QuantumState(qubits: 3)  // |000⟩
     /// let transformed = circuit.execute(on: state)
     /// // Result: uniform superposition (|000⟩ + |001⟩ + ... + |111⟩)/√8
     /// ```
     ///
-    /// - Parameter numQubits: Number of qubits (typical range: 3-8, maximum: 16)
+    /// - Parameter qubits: Number of qubits (typical range: 3-8, maximum: 16)
     /// - Returns: Circuit implementing QFT
-    /// - Precondition: numQubits ≤ 16
-    /// - Complexity: O(n²) gates where n = numQubits
+    /// - Precondition: qubits ≤ 16
+    /// - Complexity: O(n²) gates where n = qubits
     ///
-    /// - SeeAlso: ``inverseQFT(numQubits:)`` for inverse transformation
+    /// - SeeAlso: ``inverseQFT(qubits:)`` for inverse transformation
     @_optimize(speed)
     @_eagerMove
-    static func qft(numQubits: Int) -> QuantumCircuit {
-        ValidationUtilities.validatePositiveQubits(numQubits)
-        ValidationUtilities.validateAlgorithmQubitLimit(numQubits, max: 16, algorithmName: "QFT")
+    static func qft(qubits: Int) -> QuantumCircuit {
+        ValidationUtilities.validatePositiveQubits(qubits)
+        ValidationUtilities.validateAlgorithmQubitLimit(qubits, max: 16, algorithmName: "QFT")
 
-        var circuit = QuantumCircuit(numQubits: numQubits)
+        var circuit = QuantumCircuit(qubits: qubits)
 
-        for target in 0 ..< numQubits {
+        for target in 0 ..< qubits {
             circuit.append(.hadamard, to: target)
 
-            for control in (target + 1) ..< numQubits {
+            for control in (target + 1) ..< qubits {
                 let k = control - target + 1
                 let theta = Double.pi / Double(1 << k)
 
@@ -1114,9 +1091,9 @@ public extension QuantumCircuit {
             }
         }
 
-        let swapCount = numQubits / 2
+        let swapCount = qubits / 2
         for i in 0 ..< swapCount {
-            let j = numQubits - 1 - i
+            let j = qubits - 1 - i
             circuit.append(.swap, to: [i, j])
         }
 
@@ -1130,8 +1107,8 @@ public extension QuantumCircuit {
     ///
     /// **Example:**
     /// ```swift
-    /// let qftCircuit = QuantumCircuit.qft(numQubits: 3)
-    /// let inverseCircuit = QuantumCircuit.inverseQFT(numQubits: 3)
+    /// let qftCircuit = QuantumCircuit.qft(qubits: 3)
+    /// let inverseCircuit = QuantumCircuit.inverseQFT(qubits: 3)
     ///
     /// var combined = qftCircuit
     /// for gate in inverseCircuit.gates {
@@ -1140,26 +1117,26 @@ public extension QuantumCircuit {
     /// // combined circuit is effectively identity (QFT · QFT† = I)
     /// ```
     ///
-    /// - Parameter numQubits: Number of qubits
+    /// - Parameter qubits: Number of qubits
     /// - Returns: Circuit implementing inverse QFT
-    /// - Complexity: O(n²) gates where n = numQubits
+    /// - Complexity: O(n²) gates where n = qubits
     ///
-    /// - SeeAlso: ``qft(numQubits:)`` for forward transformation
+    /// - SeeAlso: ``qft(qubits:)`` for forward transformation
     @_optimize(speed)
     @_eagerMove
-    static func inverseQFT(numQubits: Int) -> QuantumCircuit {
-        ValidationUtilities.validatePositiveQubits(numQubits)
+    static func inverseQFT(qubits: Int) -> QuantumCircuit {
+        ValidationUtilities.validatePositiveQubits(qubits)
 
-        var circuit = QuantumCircuit(numQubits: numQubits)
+        var circuit = QuantumCircuit(qubits: qubits)
 
-        let swapCount = numQubits / 2
+        let swapCount = qubits / 2
         for i in 0 ..< swapCount {
-            let j = numQubits - 1 - i
+            let j = qubits - 1 - i
             circuit.append(.swap, to: [i, j])
         }
 
-        for target in (0 ..< numQubits).reversed() {
-            for control in (target + 1 ..< numQubits).reversed() {
+        for target in (0 ..< qubits).reversed() {
+            for control in (target + 1 ..< qubits).reversed() {
                 let k = control - target + 1
                 let theta = -Double.pi / Double(1 << k)
 
@@ -1172,45 +1149,40 @@ public extension QuantumCircuit {
         return circuit
     }
 
-    /// Creates Grover search algorithm circuit
+    /// Creates Grover search algorithm circuit for O(√N) unstructured search.
     ///
-    /// Finds a marked item in an unsorted database with O(√N) quantum queries (classical: O(N)).
-    /// Uses quantum amplitude amplification to quadratically speed up unstructured search.
-    ///
-    /// **Algorithm structure:**
-    /// 1. Initialize uniform superposition (H on all qubits)
-    /// 2. Repeat optimal iterations (π/4 x √(2ⁿ)):
-    ///    a. Oracle: mark the target state with phase flip
-    ///    b. Diffusion: amplify marked state amplitude via inversion about average
+    /// Initializes uniform superposition, then repeats oracle (phase flip on target) and diffusion
+    /// (inversion about average) for optimal iterations ⌊π/4 × √(2ⁿ)⌋. Achieves quadratic speedup
+    /// over classical O(N) search.
     ///
     /// - Parameters:
-    ///   - numQubits: Number of qubits (search space size = 2ⁿ, maximum n=10)
+    ///   - qubits: Number of qubits (search space size = 2ⁿ, maximum n=10)
     ///   - target: Target state to search for (basis state index, 0 ≤ target < 2ⁿ)
     ///   - iterations: Number of Grover iterations (defaults to optimal: ⌊π/4 x √(2ⁿ)⌋)
     /// - Returns: Circuit implementing Grover search
-    /// - Precondition: numQubits ≤ 10
+    /// - Precondition: qubits ≤ 10
     /// - Precondition: 0 ≤ target < 2ⁿ
-    /// - Complexity: O(k x n x 2ⁿ) where k = iterations, n = numQubits (execution cost)
+    /// - Complexity: O(k x n x 2ⁿ) where k = iterations, n = qubits (execution cost)
     @_optimize(speed)
     @_eagerMove
-    static func grover(numQubits: Int, target: Int, iterations: Int? = nil) -> QuantumCircuit {
-        ValidationUtilities.validatePositiveQubits(numQubits)
-        ValidationUtilities.validateAlgorithmQubitLimit(numQubits, max: 10, algorithmName: "Grover")
+    static func grover(qubits: Int, target: Int, iterations: Int? = nil) -> QuantumCircuit {
+        ValidationUtilities.validatePositiveQubits(qubits)
+        ValidationUtilities.validateAlgorithmQubitLimit(qubits, max: 10, algorithmName: "Grover")
 
-        let stateSpaceSize = 1 << numQubits
+        let stateSpaceSize = 1 << qubits
         ValidationUtilities.validateIndexInBounds(target, bound: stateSpaceSize, name: "Target basis state")
 
         let optimalIterations: Int = iterations ?? Int((Double.pi / 4.0) * sqrt(Double(stateSpaceSize)))
 
-        var circuit = QuantumCircuit(numQubits: numQubits)
+        var circuit = QuantumCircuit(qubits: qubits)
 
-        for qubit in 0 ..< numQubits {
+        for qubit in 0 ..< qubits {
             circuit.append(.hadamard, to: qubit)
         }
 
         for _ in 0 ..< optimalIterations {
-            appendGroverOracle(to: &circuit, target: target, numQubits: numQubits)
-            appendGroverDiffusion(to: &circuit, numQubits: numQubits)
+            appendGroverOracle(to: &circuit, target: target, qubits: qubits)
+            appendGroverDiffusion(to: &circuit, qubits: qubits)
         }
 
         return circuit
@@ -1221,17 +1193,17 @@ public extension QuantumCircuit {
     /// Marks target basis state with phase flip using X gates to encode complement
     /// bits, multi-controlled Z for phase inversion, then X gates to restore state.
     ///
-    /// - Complexity: O(n) gates where n = numQubits
-    private static func appendGroverOracle(to circuit: inout QuantumCircuit, target: Int, numQubits: Int) {
-        for qubit in 0 ..< numQubits {
+    /// - Complexity: O(n) gates where n = qubits
+    private static func appendGroverOracle(to circuit: inout QuantumCircuit, target: Int, qubits: Int) {
+        for qubit in 0 ..< qubits {
             if (target >> qubit) & 1 == 0 {
                 circuit.append(.pauliX, to: qubit)
             }
         }
 
-        appendMultiControlledZ(to: &circuit, numQubits: numQubits)
+        appendMultiControlledZ(to: &circuit, qubits: qubits)
 
-        for qubit in 0 ..< numQubits {
+        for qubit in 0 ..< qubits {
             if (target >> qubit) & 1 == 0 {
                 circuit.append(.pauliX, to: qubit)
             }
@@ -1246,21 +1218,21 @@ public extension QuantumCircuit {
     /// - 3 qubits: Hadamard sandwich around Toffoli (H·CCNOT·H)
     /// - n≥4 qubits: Hadamard sandwich around multi-controlled X with ancilla
     ///
-    /// - Complexity: O(n) gates where n = numQubits
-    private static func appendMultiControlledZ(to circuit: inout QuantumCircuit, numQubits: Int) {
-        if numQubits == 1 {
+    /// - Complexity: O(n) gates where n = qubits
+    private static func appendMultiControlledZ(to circuit: inout QuantumCircuit, qubits: Int) {
+        if qubits == 1 {
             circuit.append(.pauliZ, to: 0)
-        } else if numQubits == 2 {
+        } else if qubits == 2 {
             circuit.append(.controlledPhase(.pi), to: [0, 1])
-        } else if numQubits == 3 {
+        } else if qubits == 3 {
             circuit.append(.hadamard, to: 2)
             circuit.append(.toffoli, to: [0, 1, 2])
             circuit.append(.hadamard, to: 2)
         } else {
-            let target = numQubits - 1
+            let target = qubits - 1
             circuit.append(.hadamard, to: target)
 
-            appendMultiControlledX(to: &circuit, controls: Array(0 ..< numQubits - 1), target: target)
+            appendMultiControlledX(to: &circuit, controls: Array(0 ..< qubits - 1), target: target)
 
             circuit.append(.hadamard, to: target)
         }
@@ -1292,6 +1264,7 @@ public extension QuantumCircuit {
         } else if n == 2 {
             circuit.append(.toffoli, to: [controls[0], controls[1], target])
         } else {
+            // Safety: controls is non-empty (n >= 3 in this branch)
             let maxUsedQubit: Int = max(controls.max()!, target)
             let firstAncilla: Int = maxUsedQubit + 1
             let numAncilla: Int = n - 2
@@ -1352,15 +1325,11 @@ public extension QuantumCircuit {
         }
     }
 
-    /// Appends multi-controlled arbitrary single-qubit unitary gate
+    /// Appends multi-controlled arbitrary single-qubit unitary gate.
     ///
-    /// Applies any single-qubit gate U with n control qubits: |1⟩⊗ⁿ|ψ⟩ -> |1⟩⊗ⁿU|ψ⟩
-    /// Optimizes decomposition based on gate type (Pauli gates use basis transformations).
-    ///
-    /// **Decomposition strategies:**
-    /// - Pauli X/Y/Z: Optimized basis-specific decompositions
-    /// - Hadamard: Ry sandwich around controlled-Z
-    /// - General unitary: U·Cⁿ(X)·U†·Cⁿ(X)·U (Gray code decomposition)
+    /// Applies gate U with n controls: |1⟩⊗ⁿ|ψ⟩ → |1⟩⊗ⁿU|ψ⟩. Pauli gates use optimized basis-specific
+    /// decompositions, Hadamard uses Ry sandwich around controlled-Z, and general unitaries use
+    /// Gray code decomposition U·Cⁿ(X)·U†·Cⁿ(X)·U.
     ///
     /// - Parameters:
     ///   - circuit: Circuit to append gates to
@@ -1370,12 +1339,12 @@ public extension QuantumCircuit {
     /// - Precondition: gate must be single-qubit
     /// - Complexity: O(n) gates where n = controls.count
     ///
-    /// - SeeAlso: ``grover(numQubits:target:iterations:)``
+    /// - SeeAlso: ``grover(qubits:target:iterations:)``
     static func appendMultiControlledU(
         to circuit: inout QuantumCircuit,
         gate: QuantumGate,
         controls: [Int],
-        target: Int
+        target: Int,
     ) {
         ValidationUtilities.validateControlledGateIsSingleQubit(gate.qubitsRequired)
 
@@ -1412,70 +1381,63 @@ public extension QuantumCircuit {
     /// Appends Grover diffusion operator (inversion about average)
     ///
     /// Implements amplitude amplification via reflection about uniform superposition:
-    /// D = 2|ψ⟩⟨ψ| - I where |ψ⟩ = H⊗ⁿ|0⟩ is uniform superposition.
+    /// D = 2|ψ⟩⟨ψ| - I where |ψ⟩ = H⊗ⁿ|0⟩. Gate sequence: H⊗ⁿ · X⊗ⁿ · Cⁿ(Z) · X⊗ⁿ · H⊗ⁿ.
     ///
-    /// **Gate sequence:** H⊗ⁿ · X⊗ⁿ · Cⁿ(Z) · X⊗ⁿ · H⊗ⁿ
-    ///
-    /// - Complexity: O(n) gates where n = numQubits
-    private static func appendGroverDiffusion(to circuit: inout QuantumCircuit, numQubits: Int) {
-        for qubit in 0 ..< numQubits {
+    /// - Complexity: O(n) gates where n = qubits
+    private static func appendGroverDiffusion(to circuit: inout QuantumCircuit, qubits: Int) {
+        for qubit in 0 ..< qubits {
             circuit.append(.hadamard, to: qubit)
         }
 
-        for qubit in 0 ..< numQubits {
+        for qubit in 0 ..< qubits {
             circuit.append(.pauliX, to: qubit)
         }
 
-        appendMultiControlledZ(to: &circuit, numQubits: numQubits)
+        appendMultiControlledZ(to: &circuit, qubits: qubits)
 
-        for qubit in 0 ..< numQubits {
+        for qubit in 0 ..< qubits {
             circuit.append(.pauliX, to: qubit)
         }
 
-        for qubit in 0 ..< numQubits {
+        for qubit in 0 ..< qubits {
             circuit.append(.hadamard, to: qubit)
         }
     }
 
-    /// Creates quantum annealing circuit for optimization problems
+    /// Creates quantum annealing circuit for combinatorial optimization.
     ///
-    /// Implements adiabatic evolution from simple transverse-field Hamiltonian to problem Hamiltonian.
-    /// Used for combinatorial optimization by encoding problems as Ising models and finding ground states.
-    ///
-    /// **Algorithm structure:**
-    /// 1. Initialize in superposition (transverse field Hamiltonian H₀)
-    /// 2. Gradually interpolate to problem Hamiltonian: H(t) = (1-t)H₀ + tHₚ
-    /// 3. Evolve through discrete time steps with Trotter approximation
-    /// 4. Measure to find configuration corresponding to optimal solution
+    /// Implements adiabatic evolution from transverse-field Hamiltonian H₀ to problem Hamiltonian Hₚ
+    /// via interpolation H(t) = (1-t)H₀ + tHₚ. Initializes in superposition, evolves through discrete
+    /// time steps with Trotter approximation, then measures to find optimal configuration.
     ///
     /// **Example:**
     /// ```swift
     /// // MaxCut on triangle graph
     /// let problem = QuantumCircuit.IsingProblem(fromDictionary: [
     ///     "0-1": -0.5, "1-2": -0.5, "0-2": -0.5
-    /// ], numQubits: 3)
-    /// let circuit = QuantumCircuit.annealing(numQubits: 3, problem: problem, annealingSteps: 20)
+    /// ], qubits: 3)
+    /// let circuit = QuantumCircuit.annealing(qubits: 3, problem: problem, annealingSteps: 20)
     /// let state = circuit.execute()
     /// ```
     ///
     /// - Parameters:
-    ///   - numQubits: Number of qubits (problem variables, maximum: 8)
+    ///   - qubits: Number of qubits (problem variables, maximum: 8)
     ///   - problem: Ising model defining optimization problem (local fields + couplings)
     ///   - annealingSteps: Number of time steps in annealing schedule (default: 20)
     /// - Returns: Circuit demonstrating quantum annealing process
-    /// - Precondition: numQubits ≤ 8
-    /// - Complexity: O(s x n²) gates where s = annealingSteps, n = numQubits
+    /// - Precondition: qubits ≤ 8
+    /// - Complexity: O(s x n²) gates where s = annealingSteps, n = qubits
     ///
-    /// - SeeAlso: ``IsingProblem``, ``annealing(numQubits:couplings:annealingSteps:)``
+    /// - SeeAlso: ``IsingProblem``, ``annealing(qubits:couplings:annealingSteps:)``
     @_eagerMove
-    static func annealing(numQubits: Int, problem: IsingProblem, annealingSteps: Int = 20) -> QuantumCircuit {
-        ValidationUtilities.validatePositiveQubits(numQubits)
+    static func annealing(qubits: Int, problem: IsingProblem, annealingSteps: Int = 20) -> QuantumCircuit {
+        ValidationUtilities.validatePositiveQubits(qubits)
         ValidationUtilities.validatePositiveInt(annealingSteps, name: "annealingSteps")
-        ValidationUtilities.validateAlgorithmQubitLimit(numQubits, max: 8, algorithmName: "Annealing")
+        ValidationUtilities.validateAlgorithmQubitLimit(qubits, max: 8, algorithmName: "Annealing")
 
-        var circuit = QuantumCircuit(numQubits: numQubits)
+        var circuit = QuantumCircuit(qubits: qubits)
 
-        for qubit in 0 ..< numQubits {
+        for qubit in 0 ..< qubits {
             circuit.append(.hadamard, to: qubit)
         }
 
@@ -1483,20 +1445,20 @@ public extension QuantumCircuit {
             let time = Double(step) / Double(annealingSteps - 1)
 
             let transverseStrength = 1.0 - time
-            for qubit in 0 ..< numQubits {
+            for qubit in 0 ..< qubits {
                 let angle = 2.0 * transverseStrength * problem.transverseField[qubit]
                 circuit.append(.rotationX(angle), to: qubit)
             }
 
             let problemStrength = time
 
-            for qubit in 0 ..< numQubits {
+            for qubit in 0 ..< qubits {
                 let angle = 2.0 * problemStrength * problem.localFields[qubit]
                 circuit.append(.rotationZ(angle), to: qubit)
             }
 
-            for i in 0 ..< numQubits {
-                for j in (i + 1) ..< numQubits {
+            for i in 0 ..< qubits {
+                for j in (i + 1) ..< qubits {
                     let coupling = problem.couplings[i][j]
                     if abs(coupling) > 1e-10 {
                         let angle = 2.0 * problemStrength * coupling
@@ -1516,36 +1478,30 @@ public extension QuantumCircuit {
     /// **Example:**
     /// ```swift
     /// let circuit = QuantumCircuit.annealing(
-    ///     numQubits: 3,
+    ///     qubits: 3,
     ///     couplings: ["0-1": -0.5, "1-2": -0.5, "0-2": -0.5],
     ///     annealingSteps: 20
     /// )
     /// ```
     ///
     /// - Parameters:
-    ///   - numQubits: Number of qubits (problem variables)
+    ///   - qubits: Number of qubits (problem variables)
     ///   - couplings: Dictionary mapping qubit indices/pairs to coupling strengths
     ///   - annealingSteps: Number of time steps in annealing schedule
     /// - Returns: Annealing circuit for the specified Ising problem
     ///
-    /// - SeeAlso: ``annealing(numQubits:problem:annealingSteps:)``
+    /// - SeeAlso: ``annealing(qubits:problem:annealingSteps:)``
     @_eagerMove
-    static func annealing(numQubits: Int, couplings: [String: Double], annealingSteps: Int = 20) -> QuantumCircuit {
-        let problem = IsingProblem(fromDictionary: couplings, numQubits: numQubits)
-        return annealing(numQubits: numQubits, problem: problem, annealingSteps: annealingSteps)
+    static func annealing(qubits: Int, couplings: [String: Double], annealingSteps: Int = 20) -> QuantumCircuit {
+        let problem = IsingProblem(fromDictionary: couplings, qubits: qubits)
+        return annealing(qubits: qubits, problem: problem, annealingSteps: annealingSteps)
     }
 
-    /// Ising model problem definition for quantum annealing
+    /// Ising model problem definition for quantum annealing.
     ///
-    /// Encodes combinatorial optimization problems as Ising Hamiltonians: H = Σᵢ hᵢZᵢ + Σ_{i<j} JᵢⱼZᵢZⱼ
-    /// where hᵢ are local fields and Jᵢⱼ are qubit-qubit couplings. Transverse field implements
-    /// quantum tunneling for annealing algorithm.
-    ///
-    /// **Use cases:**
-    /// - MaxCut graph partitioning
-    /// - Constraint satisfaction problems (CSP)
-    /// - Quadratic unconstrained binary optimization (QUBO)
-    /// - Traveling salesman problem (TSP)
+    /// Encodes combinatorial optimization as Ising Hamiltonian H = Σᵢ hᵢZᵢ + Σᵢⱼ JᵢⱼZᵢZⱼ where hᵢ are
+    /// local fields and Jᵢⱼ are qubit-qubit couplings. Applicable to MaxCut, constraint satisfaction,
+    /// QUBO, and traveling salesman problems. Transverse field enables quantum tunneling.
     ///
     /// **Example:**
     /// ```swift
@@ -1553,10 +1509,11 @@ public extension QuantumCircuit {
     ///     "0": -1.0,        // local field on qubit 0
     ///     "0-1": -0.5,      // coupling between qubits 0 and 1
     ///     "1-2": -0.5
-    /// ], numQubits: 3)
+    /// ], qubits: 3)
     /// ```
     ///
-    /// - SeeAlso: ``annealing(numQubits:problem:annealingSteps:)``, ``annealing(numQubits:couplings:annealingSteps:)``
+    /// - SeeAlso: ``annealing(qubits:problem:annealingSteps:)``
+    /// - SeeAlso: ``annealing(qubits:couplings:annealingSteps:)``
     struct IsingProblem {
         public let localFields: [Double]
         public let couplings: [[Double]]
@@ -1573,37 +1530,37 @@ public extension QuantumCircuit {
         }
 
         /// Create Ising model from dictionary specification
-        public init(fromDictionary dictionary: [String: Double], numQubits: Int) {
-            ValidationUtilities.validatePositiveQubits(numQubits)
+        public init(fromDictionary dictionary: [String: Double], qubits: Int) {
+            ValidationUtilities.validatePositiveQubits(qubits)
 
-            var localFieldsBuffer = [Double](unsafeUninitializedCapacity: numQubits) { buffer, count in
+            var localFieldsBuffer = [Double](unsafeUninitializedCapacity: qubits) { buffer, count in
                 buffer.initialize(repeating: 0.0)
-                count = numQubits
+                count = qubits
             }
 
-            var couplingsBuffer = [[Double]](unsafeUninitializedCapacity: numQubits) { buffer, count in
-                for i in 0 ..< numQubits {
-                    buffer[i] = [Double](unsafeUninitializedCapacity: numQubits) { innerBuffer, innerCount in
+            var couplingsBuffer = [[Double]](unsafeUninitializedCapacity: qubits) { buffer, count in
+                for i in 0 ..< qubits {
+                    buffer[i] = [Double](unsafeUninitializedCapacity: qubits) { innerBuffer, innerCount in
                         innerBuffer.initialize(repeating: 0.0)
-                        innerCount = numQubits
+                        innerCount = qubits
                     }
                 }
-                count = numQubits
+                count = qubits
             }
 
             for (key, value) in dictionary {
-                let qubits = Self.parseQubitIndices(from: key)
-                ValidationUtilities.validateCouplingKeyFormat(qubits.count, key: key)
+                let parseQubits = Self.parseQubitIndices(from: key)
+                ValidationUtilities.validateCouplingKeyFormat(parseQubits.count, key: key)
 
-                if qubits.count == 1 {
-                    let qubit = qubits[0]
-                    ValidationUtilities.validateQubitIndex(qubit, numQubits: numQubits)
+                if parseQubits.count == 1 {
+                    let qubit = parseQubits[0]
+                    ValidationUtilities.validateQubitIndex(qubit, qubits: qubits)
                     localFieldsBuffer[qubit] = value
                 } else {
-                    let qubit1 = qubits[0]
-                    let qubit2 = qubits[1]
-                    ValidationUtilities.validateQubitIndex(qubit1, numQubits: numQubits)
-                    ValidationUtilities.validateQubitIndex(qubit2, numQubits: numQubits)
+                    let qubit1 = parseQubits[0]
+                    let qubit2 = parseQubits[1]
+                    ValidationUtilities.validateQubitIndex(qubit1, qubits: qubits)
+                    ValidationUtilities.validateQubitIndex(qubit2, qubits: qubits)
                     ValidationUtilities.validateDistinctVertices(qubit1, qubit2)
                     couplingsBuffer[qubit1][qubit2] = value
                     couplingsBuffer[qubit2][qubit1] = value
@@ -1612,9 +1569,9 @@ public extension QuantumCircuit {
 
             localFields = localFieldsBuffer
             couplings = couplingsBuffer
-            transverseField = [Double](unsafeUninitializedCapacity: numQubits) { buffer, count in
+            transverseField = [Double](unsafeUninitializedCapacity: qubits) { buffer, count in
                 buffer.initialize(repeating: 1.0)
-                count = numQubits
+                count = qubits
             }
         }
 
@@ -1628,32 +1585,33 @@ public extension QuantumCircuit {
             } else if key.count == 2 {
                 return key.compactMap(\.wholeNumberValue)
             } else {
+                // Safety: only reached when key contains only digits (no separator, length != 2)
                 return [Int(key)!]
             }
         }
 
         /// Creates Ising problem for quadratic function minimization
-        public static func quadraticMinimum(numQubits: Int = 4) -> IsingProblem {
-            ValidationUtilities.validateMinimumQubits(numQubits, min: 2, algorithmName: "Quadratic minimum")
+        public static func quadraticMinimum(qubits: Int = 4) -> IsingProblem {
+            ValidationUtilities.validateMinimumQubits(qubits, min: 2, algorithmName: "Quadratic minimum")
 
-            let localFields = [Double](unsafeUninitializedCapacity: numQubits) { buffer, count in
-                for i in 0 ..< numQubits {
+            let localFields = [Double](unsafeUninitializedCapacity: qubits) { buffer, count in
+                for i in 0 ..< qubits {
                     buffer[i] = -1.0 * Double(1 << i)
                 }
-                count = numQubits
+                count = qubits
             }
 
-            let couplings = [[Double]](unsafeUninitializedCapacity: numQubits) { buffer, count in
-                for i in 0 ..< numQubits {
-                    buffer[i] = [Double](unsafeUninitializedCapacity: numQubits) { innerBuffer, innerCount in
+            let couplings = [[Double]](unsafeUninitializedCapacity: qubits) { buffer, count in
+                for i in 0 ..< qubits {
+                    buffer[i] = [Double](unsafeUninitializedCapacity: qubits) { innerBuffer, innerCount in
                         innerBuffer.initialize(repeating: 0.0)
-                        innerCount = numQubits
+                        innerCount = qubits
                     }
-                    if i < numQubits - 1 {
+                    if i < qubits - 1 {
                         buffer[i][i + 1] = 0.5
                     }
                 }
-                count = numQubits
+                count = qubits
             }
 
             return IsingProblem(localFields: localFields, couplings: couplings)

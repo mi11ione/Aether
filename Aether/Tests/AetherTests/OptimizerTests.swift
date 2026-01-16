@@ -23,7 +23,7 @@ struct ConvergenceCriteriaTests {
         let criteria = ConvergenceCriteria(
             energyTolerance: 1e-8,
             gradientNormTolerance: 1e-5,
-            maxIterations: 500
+            maxIterations: 500,
         )
 
         #expect(criteria.energyTolerance == 1e-8)
@@ -52,7 +52,7 @@ struct OptimizerResultTests {
             history: [-2.0, -1.8, -1.5],
             iterations: 3,
             terminationReason: .energyConverged,
-            evaluations: 15
+            evaluations: 15,
         )
 
         #expect(result.parameters == [1.0, 2.0, 3.0])
@@ -121,7 +121,7 @@ struct NelderMeadOptimizerTests {
             objectiveFunction,
             from: [1.0, 1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
-            progress: nil
+            progress: nil,
         )
 
         #expect(abs(result.value) < 0.01)
@@ -163,7 +163,7 @@ struct NelderMeadOptimizerTests {
             objectiveFunction,
             from: [1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
-            progress: progressCallback
+            progress: progressCallback,
         )
 
         let callbackCount = await counter.get()
@@ -182,7 +182,7 @@ struct NelderMeadOptimizerTests {
             objectiveFunction,
             from: [10.0, 10.0],
             using: ConvergenceCriteria(energyTolerance: 1e-12, maxIterations: 5),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.terminationReason == .maxIterationsReached)
@@ -203,7 +203,7 @@ struct NelderMeadOptimizerTests {
             objectiveFunction,
             from: [0.0, 0.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.value < 1.0)
@@ -226,7 +226,7 @@ struct NelderMeadOptimizerTests {
             objectiveFunction,
             from: [-2.0, 2.0],
             using: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 1000),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations > 20, "Rosenbrock function requires many iterations")
@@ -247,7 +247,7 @@ struct NelderMeadOptimizerTests {
             objectiveFunction,
             from: [2.0, -1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 200),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.value < 0.1)
@@ -269,7 +269,7 @@ struct NelderMeadOptimizerTests {
             objectiveFunction,
             from: [4.5, 4.5],
             using: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 500),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations > 10, "Rastrigin requires many iterations")
@@ -296,7 +296,7 @@ struct GradientDescentOptimizerTests {
             learningRate: 0.05,
             momentum: 0.9,
             adaptiveLearningRate: false,
-            parameterShift: 0.01
+            parameterShift: 0.01,
         )
 
         #expect(optimizer.learningRate == 0.05)
@@ -319,9 +319,9 @@ struct GradientDescentOptimizerTests {
             using: ConvergenceCriteria(
                 energyTolerance: 1e-3,
                 gradientNormTolerance: 1e-2,
-                maxIterations: 100
+                maxIterations: 100,
             ),
-            progress: nil
+            progress: nil,
         )
 
         #expect(abs(result.value) < 0.01)
@@ -342,9 +342,9 @@ struct GradientDescentOptimizerTests {
             using: ConvergenceCriteria(
                 energyTolerance: 1e-12,
                 gradientNormTolerance: 1e-1,
-                maxIterations: 50
+                maxIterations: 50,
             ),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.terminationReason == .gradientConverged)
@@ -362,7 +362,7 @@ struct GradientDescentOptimizerTests {
             objectiveFunction,
             from: [1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 20),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations >= 1)
@@ -381,7 +381,7 @@ struct GradientDescentOptimizerTests {
             objectiveFunction,
             from: [10.0, 10.0],
             using: ConvergenceCriteria(energyTolerance: 1e-12, maxIterations: 3),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.terminationReason == .maxIterationsReached)
@@ -400,7 +400,7 @@ struct GradientDescentOptimizerTests {
             objectiveFunction,
             from: [1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-8, maxIterations: 50),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations > 0)
@@ -420,7 +420,7 @@ struct GradientDescentOptimizerTests {
             objectiveFunction,
             from: [0.1],
             using: ConvergenceCriteria(energyTolerance: 1e-12, gradientNormTolerance: 1e-15, maxIterations: 100),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations > 5, "Should take multiple iterations with stagnation")
@@ -440,7 +440,7 @@ struct GradientDescentOptimizerTests {
             objectiveFunction,
             from: [0.0, 0.0],
             using: ConvergenceCriteria(energyTolerance: 1e-4, gradientNormTolerance: 1e-8, maxIterations: 100),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations > 10, "Should take many iterations with stagnation")
@@ -467,7 +467,7 @@ struct LBFGSBOptimizerTests {
             memorySize: 5,
             tolerance: 1e-8,
             maxLineSearchSteps: 10,
-            parameterShift: 0.01
+            parameterShift: 0.01,
         )
 
         #expect(optimizer.memorySize == 5)
@@ -493,9 +493,9 @@ struct LBFGSBOptimizerTests {
             from: [0.0, 0.0],
             using: ConvergenceCriteria(
                 energyTolerance: 1e-3,
-                maxIterations: 200
+                maxIterations: 200,
             ),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations > 0)
@@ -509,7 +509,7 @@ struct LBFGSBOptimizerTests {
             gradient: gradient,
             sHistory: [],
             yHistory: [],
-            rhoHistory: []
+            rhoHistory: [],
         )
 
         #expect(direction == [-1.0, -2.0, -3.0])
@@ -526,7 +526,7 @@ struct LBFGSBOptimizerTests {
             gradient: gradient,
             sHistory: sHistory,
             yHistory: yHistory,
-            rhoHistory: rhoHistory
+            rhoHistory: rhoHistory,
         )
 
         #expect(direction.count == 2)
@@ -548,9 +548,9 @@ struct LBFGSBOptimizerTests {
             using: ConvergenceCriteria(
                 energyTolerance: 1e-12,
                 gradientNormTolerance: 0.1,
-                maxIterations: 50
+                maxIterations: 50,
             ),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.terminationReason == .gradientConverged)
@@ -568,7 +568,7 @@ struct LBFGSBOptimizerTests {
             objectiveFunction,
             from: [0.1],
             using: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 50),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.terminationReason == .energyConverged)
@@ -588,9 +588,9 @@ struct LBFGSBOptimizerTests {
             using: ConvergenceCriteria(
                 energyTolerance: 1e-12,
                 gradientNormTolerance: 1e-12,
-                maxIterations: 2
+                maxIterations: 2,
             ),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.terminationReason == .maxIterationsReached)
@@ -616,9 +616,9 @@ struct LBFGSBOptimizerTests {
             using: ConvergenceCriteria(
                 energyTolerance: 1e-8,
                 gradientNormTolerance: 1e-8,
-                maxIterations: 20
+                maxIterations: 20,
             ),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations >= 1)
@@ -647,7 +647,7 @@ struct SPSAOptimizerTests {
             initialPerturbation: 0.05,
             decayExponent: 0.7,
             perturbationDecayExponent: 0.2,
-            stabilityConstant: 50.0
+            stabilityConstant: 50.0,
         )
 
         #expect(optimizer.initialStepSize == 0.2)
@@ -669,7 +669,7 @@ struct SPSAOptimizerTests {
             objectiveFunction,
             from: [1.0],
             using: ConvergenceCriteria(energyTolerance: 0.01, maxIterations: 200),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.value < 1.0)
@@ -696,7 +696,7 @@ struct SPSAOptimizerTests {
             objectiveFunction,
             from: [1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 10),
-            progress: nil
+            progress: nil,
         )
 
         let evaluationCount = await counter.get()
@@ -715,7 +715,7 @@ struct SPSAOptimizerTests {
             objectiveFunction,
             from: [10.0],
             using: ConvergenceCriteria(energyTolerance: 1e-12, maxIterations: 5),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.terminationReason == .maxIterationsReached)
@@ -734,7 +734,7 @@ struct SPSAOptimizerTests {
             objectiveFunction,
             from: [1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-8, maxIterations: 100),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations > 0)
@@ -771,7 +771,7 @@ struct COBYLAOptimizerTests {
             expandFactor: 2.5,
             acceptRatio: 0.05,
             expandRatio: 0.8,
-            simplexScale: 0.3
+            simplexScale: 0.3,
         )
 
         #expect(optimizer.initialTrustRadius == 1.0)
@@ -806,7 +806,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [1.0, 1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
-            progress: nil
+            progress: nil,
         )
 
         #expect(abs(result.value) < 0.01)
@@ -820,7 +820,7 @@ struct COBYLAOptimizerTests {
         let optimizer = COBYLAOptimizer(
             initialTrustRadius: 0.1,
             maxTrustRadius: 2.0,
-            expandFactor: 2.0
+            expandFactor: 2.0,
         )
 
         let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
@@ -831,7 +831,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [5.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.value < 0.1)
@@ -844,7 +844,7 @@ struct COBYLAOptimizerTests {
             initialTrustRadius: 5.0,
             minTrustRadius: 1e-6,
             maxTrustRadius: 10.0,
-            shrinkFactor: 0.5
+            shrinkFactor: 0.5,
         )
 
         let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
@@ -857,7 +857,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [0.0, 0.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.value < 0.1)
@@ -880,7 +880,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [0.0, 0.0],
             using: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 300),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations > 10)
@@ -910,7 +910,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
-            progress: progressCallback
+            progress: progressCallback,
         )
 
         let callbackCount = await counter.get()
@@ -929,7 +929,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [10.0, 10.0],
             using: ConvergenceCriteria(energyTolerance: 1e-12, maxIterations: 3),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.terminationReason == .maxIterationsReached)
@@ -942,7 +942,7 @@ struct COBYLAOptimizerTests {
             initialTrustRadius: 10.0,
             minTrustRadius: 1e-5,
             maxTrustRadius: 20.0,
-            shrinkFactor: 0.25
+            shrinkFactor: 0.25,
         )
 
         let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
@@ -955,7 +955,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [2.0, 2.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 150),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.value < 0.1)
@@ -966,7 +966,7 @@ struct COBYLAOptimizerTests {
     func convergenceByTrustRegionRadius() async {
         let optimizer = COBYLAOptimizer(
             initialTrustRadius: 0.5,
-            minTrustRadius: 1e-4
+            minTrustRadius: 1e-4,
         )
 
         let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
@@ -977,7 +977,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [0.5],
             using: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.terminationReason == .energyConverged)
@@ -996,7 +996,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [0.1],
             using: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 100),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.value < 0.001)
@@ -1017,7 +1017,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [1.0, 1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations > 0)
@@ -1027,7 +1027,7 @@ struct COBYLAOptimizerTests {
     func stepAcceptanceWithGoodRatio() async {
         let optimizer = COBYLAOptimizer(
             initialTrustRadius: 1.0,
-            acceptRatio: 0.1
+            acceptRatio: 0.1,
         )
 
         let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
@@ -1038,7 +1038,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [1.0, 1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.value < 0.05)
@@ -1051,7 +1051,7 @@ struct COBYLAOptimizerTests {
             initialTrustRadius: 5.0,
             maxTrustRadius: 10.0,
             shrinkFactor: 0.5,
-            acceptRatio: 0.1
+            acceptRatio: 0.1,
         )
 
         let objectiveFunction: @Sendable ([Double]) async -> Double = { params in
@@ -1066,7 +1066,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [0.5],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.value < 1.0)
@@ -1089,7 +1089,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [1.0, 2.0, 3.0, 4.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 200),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.value < 0.1)
@@ -1112,7 +1112,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [0.0, 0.0],
             using: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 200),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations > 5)
@@ -1139,7 +1139,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
-            progress: nil
+            progress: nil,
         )
 
         let actualEvaluations = await counter.get()
@@ -1161,7 +1161,7 @@ struct COBYLAOptimizerTests {
         let model = COBYLAOptimizer.LinearModel(
             baseParameters: [1.0, 2.0],
             baseValue: 3.0,
-            gradient: [0.5, -0.5]
+            gradient: [0.5, -0.5],
         )
 
         #expect(model.baseParameters == [1.0, 2.0])
@@ -1179,7 +1179,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 20),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.iterations > 0)
@@ -1200,7 +1200,7 @@ struct COBYLAOptimizerTests {
             objectiveFunction,
             from: [1.0, 1.0],
             using: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
-            progress: nil
+            progress: nil,
         )
 
         #expect(result.value < 0.1)

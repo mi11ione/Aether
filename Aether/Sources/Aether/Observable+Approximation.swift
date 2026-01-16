@@ -16,9 +16,10 @@ import Foundation
 /// approximation in the initial exploration phase followed by progressive refinement as
 /// optimization converges.
 ///
-/// - SeeAlso: ``Observable``, ``VQE``
+/// - SeeAlso: ``Observable``
+/// - SeeAlso: ``VQE``
 ///
-/// Example:
+/// **Example:**
 /// ```swift
 /// let hamiltonian = Observable(terms: molecularTerms)
 /// for iteration in 0..<100 {
@@ -38,7 +39,7 @@ public extension Observable {
     /// - Returns: Filtered observable with fewer terms
     /// - Complexity: O(k) where k is the number of terms
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let approxH = hamiltonian.filtering(coefficientThreshold: 0.1)
     /// let energy = approxH.expectationValue(state: state)
@@ -80,7 +81,7 @@ public extension Observable {
     /// - Returns: Observable with at most count terms
     /// - Complexity: O(k log k) where k is the number of terms (dominated by sorting)
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let approxH = hamiltonian.keepingLargest(100)
     /// print("Reduced from \(hamiltonian.terms.count) to \(approxH.terms.count)")
@@ -115,9 +116,10 @@ public extension Observable {
     ///   - approximate: Approximated observable
     ///   - state: Quantum state for evaluation
     /// - Returns: Absolute error |⟨H⟩ - ⟨H'⟩|
+    /// - Complexity: O(k·2ⁿ) where k is the number of terms and n is the number of qubits
     /// - Precondition: State must be normalized
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let approx = hamiltonian.filtering(coefficientThreshold: 0.1)
     /// let err = hamiltonian.error(of: approx, state: state)
@@ -137,7 +139,14 @@ public extension Observable {
     ///   - approximate: Approximated observable
     ///   - state: Quantum state for evaluation
     /// - Returns: Relative error |⟨H⟩ - ⟨H'⟩| / |⟨H⟩|
+    /// - Complexity: O(k·2ⁿ) where k is the number of terms and n is the number of qubits
     /// - Precondition: State must be normalized
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let approx = hamiltonian.filtering(coefficientThreshold: 0.1)
+    /// let relErr = hamiltonian.relativeError(of: approx, state: state)
+    /// ```
     @_effects(readonly)
     func relativeError(of approximate: Observable, state: QuantumState) -> Double {
         let exactValue: Double = expectationValue(of: state)
@@ -170,8 +179,8 @@ public extension Observable {
         ///
         /// - Parameter iteration: Current iteration number
         /// - Returns: Threshold value following exponential decay
-        @inlinable
         @_effects(readonly)
+        @inlinable
         public func threshold(at iteration: Int) -> Double {
             let t = Double(iteration)
             return finalThreshold + (initialThreshold - finalThreshold) * exp(-decayRate * t)
@@ -181,21 +190,21 @@ public extension Observable {
         public static let aggressive = AdaptiveSchedule(
             initialThreshold: 0.5,
             finalThreshold: 0.0,
-            decayRate: 0.1
+            decayRate: 0.1,
         )
 
         /// Moderate schedule: balanced decay from 0.1 to 0.0.
         public static let moderate = AdaptiveSchedule(
             initialThreshold: 0.1,
             finalThreshold: 0.0,
-            decayRate: 0.05
+            decayRate: 0.05,
         )
 
         /// Conservative schedule: slow decay from 0.01 to 0.0.
         public static let conservative = AdaptiveSchedule(
             initialThreshold: 0.01,
             finalThreshold: 0.0,
-            decayRate: 0.02
+            decayRate: 0.02,
         )
     }
 
@@ -205,8 +214,9 @@ public extension Observable {
     ///   - schedule: Adaptive threshold schedule
     ///   - iteration: Current optimization iteration
     /// - Returns: Filtered observable for this iteration
+    /// - Complexity: O(k) where k is the number of terms
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let approxH = hamiltonian.applying(schedule: .moderate, iteration: iteration)
     /// ```
@@ -221,7 +231,7 @@ public extension Observable {
 
     /// Statistics describing the quality of a Hamiltonian approximation.
     @frozen
-    struct ApproximationStats: CustomStringConvertible {
+    struct ApproximationStats: Sendable, CustomStringConvertible {
         /// Number of terms in original observable.
         public let originalTerms: Int
 
@@ -255,9 +265,16 @@ public extension Observable {
     ///
     /// - Parameter approximate: Approximated observable
     /// - Returns: Statistics structure with reduction metrics
-    @_eagerMove
+    /// - Complexity: O(k) where k is the total number of terms in both observables
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let approx = hamiltonian.filtering(coefficientThreshold: 0.1)
+    /// let stats = hamiltonian.approximationStatistics(of: approx)
+    /// print(stats.reductionFactor)
+    /// ```
     @_effects(readonly)
-    func approximationStatistics(approximate: Observable) -> ApproximationStats {
+    func approximationStatistics(of approximate: Observable) -> ApproximationStats {
         let originalTerms = terms.count
         let approximateTerms = approximate.terms.count
 
@@ -280,7 +297,7 @@ public extension Observable {
             reductionFactor: reductionFactor,
             coefficientSumOriginal: originalSum,
             coefficientSumApproximate: approximateSum,
-            coefficientRetention: retention
+            coefficientRetention: retention,
         )
     }
 
@@ -293,12 +310,21 @@ public extension Observable {
     ///   - state: Test state for error evaluation
     ///   - tolerance: Maximum acceptable absolute error
     /// - Returns: True if error is within tolerance
+    /// - Complexity: O(k·2ⁿ) where k is the number of terms and n is the number of qubits
     /// - Precondition: State must be normalized
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let approx = hamiltonian.filtering(coefficientThreshold: 0.1)
+    /// if hamiltonian.meetsAccuracy(approx, state: state, tolerance: 0.01) {
+    ///     print("Approximation is accurate enough")
+    /// }
+    /// ```
     @_effects(readonly)
     func meetsAccuracy(
         _ approximate: Observable,
         state: QuantumState,
-        tolerance: Double
+        tolerance: Double,
     ) -> Bool {
         let errorValue: Double = error(of: approximate, state: state)
         return errorValue <= tolerance
@@ -317,11 +343,18 @@ public extension Observable {
     /// - Returns: Minimum threshold meeting error tolerance
     /// - Complexity: O(searchSteps · k · 2ⁿ) where k is the number of terms
     /// - Precondition: State must be normalized
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let threshold = hamiltonian.findOptimalThreshold(state: state, maxError: 0.01)
+    /// let approx = hamiltonian.filtering(coefficientThreshold: threshold)
+    /// ```
     @_optimize(speed)
+    @_effects(readonly)
     func findOptimalThreshold(
         state: QuantumState,
         maxError: Double,
-        searchSteps: Int = 20
+        searchSteps: Int = 20,
     ) -> Double {
         var high = 0.0
         for i in 0 ..< terms.count {

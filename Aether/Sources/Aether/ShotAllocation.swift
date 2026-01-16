@@ -36,7 +36,9 @@ import Accelerate
 /// }
 /// ```
 ///
-/// - SeeAlso: ``Observable``, ``QWCGroup``
+/// - SeeAlso: ``Observable``
+/// - SeeAlso: ``QWCGroup``
+@frozen
 public struct ShotAllocator {
     /// Minimum shots allocated to each term, preventing zero allocation.
     ///
@@ -49,7 +51,9 @@ public struct ShotAllocator {
     ///
     /// - Parameter minShotsPerTerm: Minimum shots per term. Default 10 provides good
     ///   balance between optimization and coverage.
+    /// - Precondition: `minShotsPerTerm` must be positive
     public init(minShotsPerTerm: Int = 10) {
+        ValidationUtilities.validatePositiveInt(minShotsPerTerm, name: "minShotsPerTerm")
         self.minShotsPerTerm = minShotsPerTerm
     }
 
@@ -78,15 +82,16 @@ public struct ShotAllocator {
     ///   - state: Quantum state for variance estimation. If nil, assumes unit variance for all terms.
     /// - Returns: Dictionary mapping term index to allocated shot count
     /// - Complexity: O(n) where n is number of terms
-    /// - Precondition: `terms` must be non-empty, `totalShots` must be positive
-    /// - SeeAlso: ``allocate(forGroups:totalShots:state:)`` for group-level allocation
+    /// - Precondition: `terms` must be non-empty
+    /// - Precondition: `totalShots` must be positive
+    /// - SeeAlso: ``allocate(forGroups:totalShots:state:)``
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
     public func allocate(
         for terms: PauliTerms,
         totalShots: Int,
-        state: QuantumState? = nil
+        state: QuantumState? = nil,
     ) -> [Int: Int] {
         let termCount: Int = terms.count
         ValidationUtilities.validateNonEmpty(terms, name: "terms")
@@ -134,17 +139,21 @@ public struct ShotAllocator {
     ///   - state: Quantum state for variance estimation. If nil, uses coefficient magnitudes only.
     /// - Returns: Dictionary mapping group index to allocated shot count
     /// - Complexity: O(n) where n is total number of terms across all groups
-    /// - SeeAlso: ``allocate(for:totalShots:state:)`` for term-level allocation, ``QWCGroup``
+    /// - Precondition: `groups` must be non-empty
+    /// - Precondition: `totalShots` must be positive
+    /// - SeeAlso: ``allocate(for:totalShots:state:)``
+    /// - SeeAlso: ``QWCGroup``
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
     public func allocate(
         forGroups groups: [QWCGroup],
         totalShots: Int,
-        state: QuantumState? = nil
+        state: QuantumState? = nil,
     ) -> [Int: Int] {
+        ValidationUtilities.validateNonEmpty(groups, name: "groups")
+        ValidationUtilities.validatePositiveInt(totalShots, name: "totalShots")
         let groupCount: Int = groups.count
-        guard groupCount > 0, totalShots > 0 else { return [:] }
 
         let groupWeights: [Double] = if let state {
             computeGroupWeightsBatched(groups: groups, state: state)
@@ -166,9 +175,10 @@ public struct ShotAllocator {
 
     @_optimize(speed)
     @_effects(readonly)
+    @_eagerMove
     private func computeGroupWeightsBatched(
         groups: [QWCGroup],
-        state: QuantumState
+        state: QuantumState,
     ) -> [Double] {
         let groupCount: Int = groups.count
 
@@ -211,14 +221,14 @@ public struct ShotAllocator {
     @_eagerMove
     private func batchEstimateVariances(
         terms: PauliTerms,
-        state: QuantumState
+        state: QuantumState,
     ) -> [Double] {
         let termCount: Int = terms.count
         return [Double](unsafeUninitializedCapacity: termCount) { buffer, count in
             for i in 0 ..< termCount {
                 let expectation = Observable.computePauliExpectation(
                     pauliString: terms[i].pauliString,
-                    for: state
+                    for: state,
                 )
                 buffer[i] = 1.0 - expectation * expectation
             }
@@ -230,9 +240,10 @@ public struct ShotAllocator {
 
     @_optimize(speed)
     @_effects(readonly)
+    @_eagerMove
     private func allocateWithWeights(
         weights: [Double],
-        totalShots: Int
+        totalShots: Int,
     ) -> [Int: Int] {
         let weightCount: Int = weights.count
 
@@ -262,21 +273,23 @@ public struct ShotAllocator {
             allocation = distributeRemainingShots(
                 allocation: allocation,
                 remaining: shotsRemaining,
-                weights: weights
+                weights: weights,
             )
         } else if shotsRemaining < 0 {
             allocation = reduceShots(
                 allocation: allocation,
                 excess: -shotsRemaining,
                 weights: weights,
-                minShots: effectiveMinShots
+                minShots: effectiveMinShots,
             )
         }
 
         return allocation
     }
 
+    @_optimize(speed)
     @_effects(readonly)
+    @_eagerMove
     private func uniformAllocation(numTerms: Int, totalShots: Int) -> [Int: Int] {
         let maxPossibleMin: Int = totalShots / max(numTerms, 1)
         let effectiveMinShots: Int = min(minShotsPerTerm, maxPossibleMin)
@@ -292,10 +305,11 @@ public struct ShotAllocator {
 
     @_optimize(speed)
     @_effects(readonly)
+    @_eagerMove
     private func distributeRemainingShots(
         allocation: [Int: Int],
         remaining: Int,
-        weights: [Double]
+        weights: [Double],
     ) -> [Int: Int] {
         var newAllocation = allocation
         var shotsToDistribute: Int = remaining
@@ -311,6 +325,8 @@ public struct ShotAllocator {
 
         for index in sortedIndices {
             if shotsToDistribute <= 0 { break }
+            // Safety: index comes from sortedIndices which contains only 0..<weightCount,
+            // and newAllocation was populated with all indices in allocateWithWeights
             newAllocation[index]! += 1
             shotsToDistribute -= 1
         }
@@ -320,11 +336,12 @@ public struct ShotAllocator {
 
     @_optimize(speed)
     @_effects(readonly)
+    @_eagerMove
     private func reduceShots(
         allocation: [Int: Int],
         excess: Int,
         weights: [Double],
-        minShots: Int
+        minShots: Int,
     ) -> [Int: Int] {
         var newAllocation = allocation
         var shotsToRemove: Int = excess
@@ -341,6 +358,8 @@ public struct ShotAllocator {
         for index in sortedIndices {
             if shotsToRemove <= 0 { break }
 
+            // Safety: index comes from sortedIndices which contains only 0..<weightCount,
+            // and newAllocation was populated with all indices in allocateWithWeights
             let currentShots = newAllocation[index]!
             let removable: Int = max(0, currentShots - minShots)
             let toRemove: Int = min(removable, shotsToRemove)
@@ -380,6 +399,8 @@ public struct ShotAllocator {
     ///   - state: Quantum state for variance estimation. If nil, assumes unit variance.
     /// - Returns: Variance reduction factor (uniformVariance / optimalVariance). Values > 1 indicate improvement.
     /// - Complexity: O(n) where n is number of terms
+    /// - Precondition: `terms` must be non-empty
+    /// - Precondition: `uniformShots` must be positive
     /// - Precondition: `allocation` must contain entry for each term index
     /// - SeeAlso: ``allocate(for:totalShots:state:)``
     @_optimize(speed)
@@ -388,8 +409,10 @@ public struct ShotAllocator {
         for terms: PauliTerms,
         using allocation: [Int: Int],
         comparedTo uniformShots: Int,
-        state: QuantumState? = nil
+        state: QuantumState? = nil,
     ) -> Double {
+        ValidationUtilities.validateNonEmpty(terms, name: "terms")
+        ValidationUtilities.validatePositiveInt(uniformShots, name: "uniformShots")
         let termCount: Int = terms.count
         let uniformShotsDouble = Double(uniformShots)
 
@@ -404,6 +427,7 @@ public struct ShotAllocator {
 
         for index in 0 ..< termCount {
             ValidationUtilities.validateAllocationContainsIndex(allocation, index: index)
+            // Safety: validateAllocationContainsIndex ensures key exists
             let shots = Double(allocation[index]!)
             let coeffSquared = terms[index].coefficient * terms[index].coefficient
             let varianceContrib = coeffSquared * variances[index]

@@ -9,17 +9,18 @@ import Foundation
 /// satisfy the qubit-wise commutation criterion, enabling simultaneous measurement in a shared basis.
 /// This reduces the number of measurement circuits needed for expectation value computation.
 ///
-/// Example:
+/// **Example:**
 /// ```swift
 /// let hamiltonian = Observable(terms: molecularTerms)
 /// let groups = QWCGrouper.group(hamiltonian.terms)
 /// for group in groups {
 ///     let expectation = measure(state, in: group.measurementBasis)
-///     // All terms in this group measured simultaneously
 /// }
 /// ```
 ///
-/// - SeeAlso: ``QWCGrouper/group(_:)``, ``PauliCommutation/areQWC(_:_:)``
+/// - SeeAlso: ``QWCGrouper/group(_:)``
+/// - SeeAlso: ``PauliCommutation/areQWC(_:_:)``
+@frozen
 public struct QWCGroup: Sendable {
     /// Pauli terms in this group with their coefficients.
     ///
@@ -64,19 +65,17 @@ public struct QWCGroup: Sendable {
 /// Pauli strings and edges connect non-QWC pairs. The algorithm produces near-optimal groupings
 /// with better performance than simple greedy methods.
 ///
-/// Example:
+/// **Example:**
 /// ```swift
 /// let hamiltonian = Observable(terms: molecularTerms)
 /// let groups = QWCGrouper.group(hamiltonian.terms)
 /// let stats = QWCGrouper.statistics(for: groups)
 /// print(stats)
-/// // QWC Grouping Statistics:
-/// // - Terms: 2000
-/// // - Groups: 48
-/// // - Reduction: 41.7x
 /// ```
 ///
-/// - SeeAlso: ``QWCGroup``, ``PauliCommutation``, ``Observable``
+/// - SeeAlso: ``QWCGroup``
+/// - SeeAlso: ``PauliCommutation``
+/// - SeeAlso: ``Observable``
 public enum QWCGrouper {
     // MARK: - Main Grouping Algorithm
 
@@ -86,20 +85,20 @@ public enum QWCGrouper {
     /// a measurement basis, enabling all terms in the group to be measured with a single circuit.
     /// Empty input returns empty array.
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let hamiltonian = Observable(terms: molecularTerms)
     /// let groups = QWCGrouper.group(hamiltonian.terms)
     /// print("Reduced \(hamiltonian.terms.count) terms to \(groups.count) groups")
-    /// // Reduced 2000 terms to 48 groups
     /// ```
     ///
     /// - Parameter terms: Pauli terms to group
     /// - Returns: Array of QWC groups, each with a shared measurement basis
     /// - Complexity: O(n² + n log n) where n is the number of terms
-    /// - SeeAlso: ``statistics(for:)`` to analyze grouping quality
+    /// - SeeAlso: ``statistics(for:)``
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     public static func group(_ terms: PauliTerms) -> [QWCGroup] {
         guard !terms.isEmpty else { return [] }
 
@@ -111,6 +110,7 @@ public enum QWCGrouper {
 
     // MARK: - Graph Construction
 
+    /// Build adjacency list where edges connect non-QWC term pairs.
     @_optimize(speed)
     @_eagerMove
     private static func buildConflictGraph(terms: PauliTerms) -> [[Int]] {
@@ -131,6 +131,7 @@ public enum QWCGrouper {
 
     // MARK: - Graph Coloring (DSATUR Algorithm)
 
+    /// Color graph using DSATUR heuristic for near-optimal chromatic number.
     @_optimize(speed)
     @_eagerMove
     private static func colorGraphDSATUR(graph: [[Int]]) -> (colors: [Int], numColors: Int) {
@@ -279,12 +280,13 @@ public enum QWCGrouper {
 
     // MARK: - Group Building
 
+    /// Convert coloring assignment to QWCGroup array with measurement bases.
     @_optimize(speed)
     @_eagerMove
     private static func buildGroups(
         terms: PauliTerms,
         coloring: [Int],
-        numColors: Int
+        numColors: Int,
     ) -> [QWCGroup] {
         var colorToTerms: [PauliTerms] = Array(repeating: [], count: numColors)
 
@@ -297,6 +299,7 @@ public enum QWCGrouper {
 
         for groupTerms in colorToTerms where !groupTerms.isEmpty {
             let pauliStrings: [PauliString] = groupTerms.map(\.pauliString)
+            // Safety: groupTerms came from same color class, guaranteed QWC by graph coloring
             let basis: [Int: PauliBasis] = PauliCommutation.measurementBasis(of: pauliStrings)!
 
             groups.append(QWCGroup(terms: groupTerms, measurementBasis: basis))
@@ -312,16 +315,16 @@ public enum QWCGrouper {
     /// Provides metrics for analyzing grouping quality, including reduction factor and group size distribution.
     /// Use ``QWCGrouper/statistics(for:)`` to compute these statistics from a grouping.
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let groups = QWCGrouper.group(hamiltonian.terms)
     /// let stats = QWCGrouper.statistics(for: groups)
-    /// print("Reduced \(stats.numTerms) terms to \(stats.numGroups) groups")
     /// print("Reduction factor: \(stats.reductionFactor)x")
     /// ```
     ///
     /// - SeeAlso: ``QWCGrouper/statistics(for:)``
-    public struct GroupingStats {
+    @frozen
+    public struct GroupingStats: Sendable {
         /// Total number of Pauli terms across all groups.
         public let numTerms: Int
 
@@ -362,15 +365,11 @@ public extension QWCGrouper {
     /// Analyzes a grouping to determine the number of terms, groups, reduction factor, and
     /// group size distribution. Returns default values for empty input.
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let groups = QWCGrouper.group(hamiltonian.terms)
     /// let stats = QWCGrouper.statistics(for: groups)
     /// print(stats)
-    /// // QWC Grouping Statistics:
-    /// // - Terms: 2000
-    /// // - Groups: 48
-    /// // - Reduction: 41.7x
     /// ```
     ///
     /// - Parameter groups: QWC groups to analyze
@@ -378,6 +377,7 @@ public extension QWCGrouper {
     /// - Complexity: O(n) where n is the number of groups
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     static func statistics(for groups: [QWCGroup]) -> GroupingStats {
         let numGroups: Int = groups.count
 
@@ -388,7 +388,7 @@ public extension QWCGrouper {
                 reductionFactor: 1.0,
                 largestGroupSize: 0,
                 averageGroupSize: 0.0,
-                groupSizes: []
+                groupSizes: [],
             )
         }
 
@@ -415,7 +415,7 @@ public extension QWCGrouper {
             reductionFactor: reductionFactor,
             largestGroupSize: largestGroupSize,
             averageGroupSize: averageGroupSize,
-            groupSizes: groupSizes
+            groupSizes: groupSizes,
         )
     }
 }

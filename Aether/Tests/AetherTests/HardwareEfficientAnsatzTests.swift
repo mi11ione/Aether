@@ -13,7 +13,7 @@ struct HardwareEfficientAnsatzTests {
     func createBasicAnsatz() {
         let ansatz = HardwareEfficientAnsatz(qubits: 2, depth: 1)
 
-        #expect(ansatz.circuit.numQubits == 2)
+        #expect(ansatz.circuit.qubits == 2)
         #expect(ansatz.parameterCount == 2)
     }
 
@@ -124,7 +124,7 @@ struct HardwareEfficientAnsatzTests {
         let params: [Double] = [0.1, 0.2]
         let boundCircuit = ansatz.circuit.bound(with: params)
 
-        #expect(boundCircuit.numQubits == 2)
+        #expect(boundCircuit.qubits == 2)
         #expect(boundCircuit.count > 0)
     }
 
@@ -132,7 +132,7 @@ struct HardwareEfficientAnsatzTests {
     func singleQubitAnsatz() {
         let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
 
-        #expect(ansatz.circuit.numQubits == 1)
+        #expect(ansatz.circuit.qubits == 1)
         #expect(ansatz.parameterCount == 1)
     }
 
@@ -140,7 +140,7 @@ struct HardwareEfficientAnsatzTests {
     func maximumQubits() {
         let ansatz = HardwareEfficientAnsatz(qubits: 30, depth: 1)
 
-        #expect(ansatz.circuit.numQubits == 30)
+        #expect(ansatz.circuit.qubits == 30)
         #expect(ansatz.parameterCount == 30)
     }
 

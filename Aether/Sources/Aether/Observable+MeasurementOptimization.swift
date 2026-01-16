@@ -12,13 +12,14 @@
 /// simultaneously. Unitary partitioning extends this further by finding optimal unitary
 /// transformations that diagonalize multiple non-commuting terms together.
 ///
-/// Thread-safe caching via Swift actor isolation prevents redundant computation of expensive
-/// grouping algorithms. Automatic strategy selection chooses between term-by-term measurement,
+/// Automatic strategy selection chooses between term-by-term measurement,
 /// QWC grouping, or unitary partitioning based on problem size.
 ///
-/// - SeeAlso: ``QWCGrouper``, ``UnitaryPartitioner``, ``ShotAllocator``
+/// - SeeAlso: ``QWCGrouper``
+/// - SeeAlso: ``UnitaryPartitioner``
+/// - SeeAlso: ``ShotAllocator``
 ///
-/// Example:
+/// **Example:**
 /// ```swift
 /// let hamiltonian = Observable(terms: molecularTerms)
 /// let groups = await hamiltonian.qwcGroups()
@@ -39,49 +40,55 @@ public extension Observable {
         private var qwcGroups: [Int: CacheEntry<[QWCGroup]>] = [:]
         private var unitaryPartitions: [Int: CacheEntry<[UnitaryPartition]>] = [:]
 
+        /// Retrieve cached QWC groups if hash matches and terms are equal.
         func getQWCGroups(
             hash: Int,
-            terms: PauliTerms
+            terms: PauliTerms,
         ) -> [QWCGroup]? {
             guard let entry = qwcGroups[hash] else { return nil }
             guard termsEqual(entry.terms, terms) else { return nil }
             return entry.value
         }
 
+        /// Store QWC groups in cache keyed by hash.
         func setQWCGroups(
             hash: Int,
             terms: PauliTerms,
-            groups: [QWCGroup]
+            groups: [QWCGroup],
         ) {
             qwcGroups[hash] = CacheEntry(terms: terms, value: groups)
         }
 
+        /// Retrieve cached unitary partitions if hash matches and terms are equal.
         func getUnitaryPartitions(
             hash: Int,
-            terms: PauliTerms
+            terms: PauliTerms,
         ) -> [UnitaryPartition]? {
             guard let entry = unitaryPartitions[hash] else { return nil }
             guard termsEqual(entry.terms, terms) else { return nil }
             return entry.value
         }
 
+        /// Store unitary partitions in cache keyed by hash.
         func setUnitaryPartitions(
             hash: Int,
             terms: PauliTerms,
-            partitions: [UnitaryPartition]
+            partitions: [UnitaryPartition],
         ) {
             unitaryPartitions[hash] = CacheEntry(terms: terms, value: partitions)
         }
 
+        /// Remove all cached entries.
         func clear() {
             qwcGroups.removeAll()
             unitaryPartitions.removeAll()
         }
 
+        /// Check if two PauliTerms arrays are element-wise equal.
         @_effects(readonly)
         private func termsEqual(
             _ lhs: PauliTerms,
-            _ rhs: PauliTerms
+            _ rhs: PauliTerms,
         ) -> Bool {
             guard lhs.count == rhs.count else { return false }
             for i in 0 ..< lhs.count {
@@ -96,10 +103,7 @@ public extension Observable {
 
     // MARK: - Cache Key Generation
 
-    /// Compute stable hash for Pauli terms array.
-    ///
-    /// Combines coefficient bit patterns and Pauli operator hashes to produce a consistent
-    /// cache key. Hash collisions are detected by comparing actual terms.
+    /// Compute stable hash combining coefficient bit patterns and Pauli operator hashes.
     @_effects(readonly)
     private func termsHash() -> Int {
         var hasher = 0
@@ -120,8 +124,9 @@ public extension Observable {
     /// thread-safe access without manual lock management.
     ///
     /// - Returns: Array of QWC groups where terms within each group commute qubit-wise
+    /// - Complexity: O(k²) where k is the number of terms (graph coloring), or O(1) if cached
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let groups = await hamiltonian.qwcGroups()
     /// for group in groups {
@@ -149,8 +154,9 @@ public extension Observable {
     ///
     /// - Parameter config: Partitioner configuration controlling depth and convergence
     /// - Returns: Array of unitary partitions where each partition defines a measurement circuit
+    /// - Complexity: O(g² · iter · depth · 2^(2n)) where g is number of groups, or O(1) if cached
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let partitions = await hamiltonian.unitaryPartitions()
     /// print("Reduced to \(partitions.count) measurement circuits")
@@ -172,6 +178,11 @@ public extension Observable {
     /// Clear all cached groupings.
     ///
     /// Useful for testing or memory management when working with many different Hamiltonians.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// await Observable.clearGroupingCaches()
+    /// ```
     static func clearGroupingCaches() async { await cache.clear() }
 
     // MARK: - Measurement Strategies
@@ -196,6 +207,13 @@ public extension Observable {
     ///
     /// - Parameter strategy: Measurement strategy to evaluate
     /// - Returns: Number of quantum circuits required
+    /// - Complexity: O(1) for termByTerm, O(k²) for qwcGrouping, O(g² · iter · depth · 2^(2n)) for unitaryPartitioning
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let circuitCount = await hamiltonian.measureCircuitCount(for: .qwcGrouping)
+    /// print("Need \(circuitCount) circuits")
+    /// ```
     func measureCircuitCount(for strategy: MeasurementStrategy) async -> Int {
         switch strategy {
         case .termByTerm: terms.count
@@ -229,9 +247,10 @@ public extension Observable {
     ///   - minShotsPerTerm: Min shot configuration
     ///   - state: Quantum state for variance estimation (optional)
     /// - Returns: Shot allocation mapping term indices to shot counts
+    /// - Complexity: O(k) where k is the number of terms
     /// - SeeAlso: ``ShotAllocator``
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let allocation = hamiltonian.allocateShots(
     ///     totalShots: 10000,
@@ -242,7 +261,7 @@ public extension Observable {
     func allocateShots(
         totalShots: Int,
         minShotsPerTerm: Int = 10,
-        state: QuantumState? = nil
+        state: QuantumState? = nil,
     ) -> [Int: Int] {
         let allocator = ShotAllocator(minShotsPerTerm: minShotsPerTerm)
         return allocator.allocate(for: terms, totalShots: totalShots, state: state)
@@ -259,8 +278,9 @@ public extension Observable {
     ///   - minShotsPerTerm: Minimum shots per term (avoid zero allocation)
     ///   - state: Quantum state for variance estimation (optional)
     /// - Returns: Shot allocation mapping group indices to shot counts
+    /// - Complexity: O(k² + g) where k is terms and g is groups
     ///
-    /// Example:
+    /// **Example:**
     /// ```swift
     /// let allocation = await hamiltonian.allocateShotsForGroups(
     ///     totalShots: 10000,
@@ -271,7 +291,7 @@ public extension Observable {
     func allocateShotsForGroups(
         totalShots: Int,
         minShotsPerTerm: Int = 10,
-        state: QuantumState? = nil
+        state: QuantumState? = nil,
     ) async -> [Int: Int] {
         let allocator = ShotAllocator(minShotsPerTerm: minShotsPerTerm)
         let groups: [QWCGroup] = await qwcGroups()
@@ -333,6 +353,13 @@ public extension Observable {
     ///
     /// - Parameter includeUnitary: Whether to compute expensive unitary partitioning statistics
     /// - Returns: Statistics structure with reduction factors and speedup estimates
+    /// - Complexity: O(k²) for QWC only, O(k² + g² · iter · depth · 2^(2n)) if includeUnitary
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let stats = await hamiltonian.optimizationStatistics()
+    /// print("QWC reduces circuits by \(stats.qwcReduction)x")
+    /// ```
     @_eagerMove
     func optimizationStatistics(includeUnitary: Bool = false) async -> MeasurementOptimizationStats {
         let numTerms: Int = terms.count
@@ -360,7 +387,7 @@ public extension Observable {
             qwcReduction: qwcReduction,
             unitaryReduction: unitaryReduction,
             estimatedSpeedupQWC: qwcSpeedup,
-            estimatedSpeedupUnitary: unitarySpeedup
+            estimatedSpeedupUnitary: unitarySpeedup,
         )
     }
 }

@@ -14,11 +14,11 @@ struct SparseHamiltonianCorrectnessTests {
     func identityObservable() async {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString()
+            pauliString: PauliString(),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
 
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
@@ -30,11 +30,11 @@ struct SparseHamiltonianCorrectnessTests {
     func singlePauliZ() async {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
 
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
@@ -46,11 +46,11 @@ struct SparseHamiltonianCorrectnessTests {
     func singlePauliX() async {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.x(0))
+            pauliString: PauliString(.x(0)),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
 
@@ -64,11 +64,11 @@ struct SparseHamiltonianCorrectnessTests {
     func singlePauliY() async {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.y(0))
+            pauliString: PauliString(.y(0)),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
-        var circuit = QuantumCircuit(numQubits: 1)
+        var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         circuit.append(.sGate, to: 0)
         let state = circuit.execute()
@@ -83,7 +83,7 @@ struct SparseHamiltonianCorrectnessTests {
     func twoQubitZZ() async {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0), .z(1))
+            pauliString: PauliString(.z(0), .z(1)),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -99,7 +99,7 @@ struct SparseHamiltonianCorrectnessTests {
     func twoQubitXX() async {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.x(0), .x(1))
+            pauliString: PauliString(.x(0), .x(1)),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -120,7 +120,7 @@ struct SparseHamiltonianCorrectnessTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        var circuit = QuantumCircuit(numQubits: 2)
+        var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.rotationY(0.5), to: 1)
         let state = circuit.execute()
@@ -142,7 +142,7 @@ struct SparseHamiltonianCorrectnessTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let state = QuantumState(numQubits: 2)
+        let state = QuantumState(qubits: 2)
 
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
@@ -154,11 +154,11 @@ struct SparseHamiltonianCorrectnessTests {
     func negativeCoefficients() async {
         let observable = Observable(
             coefficient: -2.5,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
 
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
@@ -174,7 +174,7 @@ struct SparseHamiltonianCorrectnessTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        var circuit = QuantumCircuit(numQubits: 2)
+        var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.hadamard, to: 1)
         circuit.append(.cnot, to: [0, 1])
@@ -196,13 +196,13 @@ struct SparseHamiltonianBackendTests {
     func smallSystemBackend() async {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
         let backendDesc = await sparseH.backendDescription
 
-        #expect(!backendDesc.contains("Metal GPU") || sparseH.numQubits >= 8)
+        #expect(!backendDesc.contains("Metal GPU") || sparseH.qubits >= 8)
     }
 
     @Test("Large system (≥ 8 qubits) attempts Metal GPU")
@@ -213,7 +213,7 @@ struct SparseHamiltonianBackendTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        #expect(sparseH.numQubits >= 8)
+        #expect(sparseH.qubits >= 8)
     }
 
     @Test("Empty observable uses fallback backend")
@@ -221,7 +221,7 @@ struct SparseHamiltonianBackendTests {
         let observable = Observable(terms: [])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let value = await sparseH.expectationValue(of: state)
 
         #expect(abs(value) < 1e-10)
@@ -234,7 +234,7 @@ struct SparseHamiltonianBackendTests {
         let backendDesc = await sparseH.backendDescription
         #expect(backendDesc.contains("non-zero"))
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
         let value = await sparseH.expectationValue(of: state)
         #expect(abs(value) < 1e-10)
     }
@@ -249,7 +249,7 @@ struct SparseHamiltonianSparsityTests {
     func identitySparsity() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString()
+            pauliString: PauliString(),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -261,7 +261,7 @@ struct SparseHamiltonianSparsityTests {
     func pauliXSparsity() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.x(0))
+            pauliString: PauliString(.x(0)),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -311,7 +311,7 @@ struct SparseHamiltonianStatisticsTests {
 
         let stats = await sparseH.statistics
 
-        #expect(stats.numQubits == sparseH.numQubits)
+        #expect(stats.qubits == sparseH.qubits)
         #expect(stats.dimension == sparseH.dimension)
         #expect(stats.nonZeros == sparseH.nnz)
         #expect(abs(stats.sparsity - sparseH.sparsity) < 1e-10)
@@ -321,7 +321,7 @@ struct SparseHamiltonianStatisticsTests {
     func backendDescription() async {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -351,7 +351,7 @@ struct SparseHamiltonianStatisticsTests {
     func memoryEstimate() async {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
@@ -392,11 +392,11 @@ struct SparseHamiltonianEdgeCasesTests {
     func largeCoefficients() async {
         let observable = Observable(
             coefficient: 1e10,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
 
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
@@ -408,11 +408,11 @@ struct SparseHamiltonianEdgeCasesTests {
     func smallCoefficients() async {
         let observable = Observable(
             coefficient: 1e-10,
-            pauliString: PauliString(.z(0))
+            pauliString: PauliString(.z(0)),
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
 
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
@@ -429,7 +429,7 @@ struct SparseHamiltonianEdgeCasesTests {
         let observable = Observable(terms: terms)
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let state = QuantumState(numQubits: 5)
+        let state = QuantumState(qubits: 5)
 
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
@@ -445,7 +445,7 @@ struct SparseHamiltonianEdgeCasesTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        let state = QuantumState(numQubits: 1)
+        let state = QuantumState(qubits: 1)
 
         let value = await sparseH.expectationValue(of: state)
         #expect(abs(value) < 1e-6)
@@ -460,7 +460,7 @@ struct SparseHamiltonianEdgeCasesTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        var circuit = QuantumCircuit(numQubits: 3)
+        var circuit = QuantumCircuit(qubits: 3)
         circuit.append(.hadamard, to: 0)
         circuit.append(.rotationY(0.5), to: 1)
         circuit.append(.rotationZ(1.2), to: 2)
@@ -483,7 +483,7 @@ struct SparseHamiltonianEdgeCasesTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        var circuit = QuantumCircuit(numQubits: 8)
+        var circuit = QuantumCircuit(qubits: 8)
         circuit.append(.hadamard, to: 0)
         circuit.append(.hadamard, to: 7)
         let state = circuit.execute()
@@ -504,7 +504,7 @@ struct SparseHamiltonianEdgeCasesTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        var circuit = QuantumCircuit(numQubits: 10)
+        var circuit = QuantumCircuit(qubits: 10)
         circuit.append(.hadamard, to: 0)
         circuit.append(.hadamard, to: 5)
         circuit.append(.hadamard, to: 9)
@@ -534,7 +534,7 @@ struct SparseHamiltonianEdgeCasesTests {
         let observable = Observable(terms: terms)
         let sparseH = SparseHamiltonian(observable: observable)
 
-        var circuit = QuantumCircuit(numQubits: 8)
+        var circuit = QuantumCircuit(qubits: 8)
         circuit.append(.hadamard, to: 0)
         circuit.append(.rotationY(0.5), to: 4)
         let state = circuit.execute()

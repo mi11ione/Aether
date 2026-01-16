@@ -3,24 +3,18 @@
 
 import Foundation
 
-/// Asynchronous quantum circuit executor with automatic GPU acceleration
+/// Asynchronous quantum circuit executor with automatic GPU acceleration.
 ///
-/// Actor-isolated simulator for non-blocking circuit execution with progress tracking.
-/// Automatically uses Metal GPU for circuits with ≥10 qubits when available.
+/// Actor-isolated simulator for non-blocking circuit execution with progress tracking. Uses
+/// ``GateApplication`` (CPU) for circuits under 10 qubits and ``MetalGateApplication`` (GPU)
+/// for larger circuits when Metal is available. Progress callbacks batch every 5 gates.
 ///
-/// Use ``QuantumSimulator`` when you need async execution for UI responsiveness or progress
-/// monitoring. For synchronous execution, call ``QuantumCircuit/execute()`` directly (faster,
-/// simpler API).
-///
-/// **Performance characteristics:**
-/// - CPU execution: Uses ``GateApplication`` for n<10 qubits
-/// - GPU execution: Uses ``MetalGateApplication`` for n≥10 qubits (faster for large states)
-/// - Progress callbacks: Batched every 5 gates to minimize overhead
+/// For synchronous execution without progress tracking, use ``QuantumCircuit/execute()`` directly.
 ///
 /// **Example:**
 /// ```swift
 /// let simulator = QuantumSimulator()
-/// var circuit = QuantumCircuit(numQubits: 10)
+/// var circuit = QuantumCircuit(qubits: 10)
 /// circuit.append(.hadamard, to: 0)
 /// circuit.append(.cnot, to: [0, 1])
 ///
@@ -82,22 +76,16 @@ public actor QuantumSimulator {
 
     // MARK: - Circuit Execution
 
-    /// Executes quantum circuit asynchronously with optional progress tracking
+    /// Executes quantum circuit asynchronously with optional progress tracking.
     ///
-    /// Applies all gate operations sequentially to evolve the quantum state.
-    /// Automatically uses GPU acceleration for circuits with ≥10 qubits when Metal is enabled.
-    /// Progress callbacks are batched every 5 gates to minimize overhead.
-    ///
-    /// **GPU decision**: Checks `numQubits ≥ 10` after ancilla expansion. Once decided,
-    /// uses same backend for entire execution (no switching mid-circuit).
-    ///
-    /// **Progress updates**: Callback invoked every 5 gates or at completion. Values range
-    /// from 0.0 (start) to 1.0 (complete).
+    /// Applies gate operations sequentially, using GPU for circuits with ≥10 qubits (after ancilla
+    /// expansion) when Metal is enabled. Backend selection happens once at start; no mid-circuit
+    /// switching. Progress callback fires every 5 gates or at completion with values in [0.0, 1.0].
     ///
     /// **Example:**
     /// ```swift
     /// let simulator = await QuantumSimulator()
-    /// var circuit = QuantumCircuit(numQubits: 10)
+    /// var circuit = QuantumCircuit(qubits: 10)
     /// circuit.append(.hadamard, to: 0)
     /// circuit.append(.cnot, to: [0, 1])
     ///
@@ -105,7 +93,7 @@ public actor QuantumSimulator {
     /// let state = await simulator.execute(circuit)
     ///
     /// // With custom initial state
-    /// let initial = QuantumState(numQubits: 10)
+    /// let initial = QuantumState(qubits: 10)
     /// let result = await simulator.execute(circuit, from: initial)
     ///
     /// // With progress tracking
@@ -126,20 +114,20 @@ public actor QuantumSimulator {
     public func execute(
         _ circuit: QuantumCircuit,
         from initialState: QuantumState? = nil,
-        progressHandler: (@isolated(any) @Sendable (Double) async -> Void)? = nil
+        progressHandler: (@isolated(any) @Sendable (Double) async -> Void)? = nil,
     ) async -> QuantumState {
         let operationCount: Int = circuit.count
 
         let startState: QuantumState = if let initialState {
             initialState
         } else {
-            QuantumState(numQubits: circuit.numQubits)
+            QuantumState(qubits: circuit.qubits)
         }
 
         let maxQubit: Int = circuit.highestQubitIndex
         var state = QuantumCircuit.expandStateForAncilla(startState, maxQubit: maxQubit)
 
-        let useGPU: Bool = useMetalAcceleration && metalApplication != nil && state.numQubits >= MetalGateApplication.minimumQubitCountForGPU
+        let useGPU: Bool = useMetalAcceleration && metalApplication != nil && state.qubits >= MetalGateApplication.minimumQubitCountForGPU
         let progressMultiplier: Double = operationCount > 0 ? 1.0 / Double(operationCount) : 0.0
         let lastIndex: Int = operationCount - 1
         let operations = circuit.gates
@@ -150,6 +138,7 @@ public actor QuantumSimulator {
         for index in 0 ..< operationCount {
             let operation = operations[index]
             if useGPU {
+                // Safety: useGPU is true only when metalApplication != nil (line 130)
                 state = await metalApplication!.apply(operation.gate, to: operation.qubits, state: state)
             } else {
                 state = GateApplication.apply(operation.gate, to: operation.qubits, state: state)

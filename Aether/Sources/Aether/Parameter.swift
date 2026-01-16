@@ -10,30 +10,21 @@ import Foundation
 /// machine learning) that are optimized by classical optimizers to minimize objective
 /// functions.
 ///
-/// **Defer-and-bind pattern**: Build parameterized circuits once with symbolic parameters,
-/// then bind different numerical values per optimization iteration without reconstructing
-/// the circuit. This pattern separates circuit topology from parameter values, enabling
-/// efficient optimization loops.
+/// The defer-and-bind pattern builds parameterized circuits once with symbolic parameters,
+/// then binds different numerical values per optimization iteration without reconstructing
+/// the circuit. This separates circuit topology from parameter values, enabling efficient
+/// optimization loops. The typical workflow creates symbolic parameters, builds the circuit,
+/// then iteratively binds values via ``QuantumCircuit/binding(_:)`` and executes until
+/// convergence. Parameter names conventionally use Greek letters (theta, phi, gamma, beta),
+/// indexed variants (theta_0, theta_1) for repeated gates, or descriptive names
+/// (rotation_angle, phase_shift) for clarity.
 ///
-/// **Usage workflow**:
-/// 1. Create symbolic parameters with descriptive names
-/// 2. Build parameterized circuit using ``QuantumCircuit``
-/// 3. Classical optimizer proposes parameter values
-/// 4. Bind parameters to concrete values via ``QuantumCircuit/binding(_:)``
-/// 5. Execute concrete circuit and measure expectation value
-/// 6. Repeat steps 3-5 until convergence
-///
-/// **Naming conventions**:
-/// - Greek letters: "theta", "phi", "gamma", "beta" (standard in quantum algorithms)
-/// - Indexed parameters: "theta_0", "theta_1" for repeated gates
-/// - Descriptive names: "rotation_angle", "phase_shift" for clarity
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
 /// let theta = Parameter(name: "theta")
 /// let phi = Parameter(name: "phi")
 ///
-/// var circuit = QuantumCircuit(numQubits: 2)
+/// var circuit = QuantumCircuit(qubits: 2)
 /// circuit.append(.rotationY(theta), to: 0)
 /// circuit.append(.rotationZ(phi), to: 1)
 ///
@@ -42,14 +33,17 @@ import Foundation
 /// let state = bound.execute()
 /// ```
 ///
-/// - SeeAlso: ``ParameterValue``, ``QuantumCircuit``, ``QuantumGate``
+/// - SeeAlso: ``ParameterValue``
+/// - SeeAlso: ``QuantumCircuit``
+/// - SeeAlso: ``QuantumGate``
+@frozen
 public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible {
     /// Parameter name used for identification and binding
     public let name: String
 
     /// Create symbolic parameter with name
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let theta = Parameter(name: "theta")
     /// let gamma_0 = Parameter(name: "gamma_0")
@@ -74,16 +68,14 @@ public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible 
 /// same quantum circuit, useful for hybrid optimization where some parameters
 /// are fixed while others vary.
 ///
-/// **Type-safe evaluation**: Symbolic values require binding dictionary at
-/// evaluation time, while concrete values evaluate to themselves. This distinction
-/// prevents accidentally evaluating unbound parameters.
+/// Symbolic values require a binding dictionary at evaluation time, while concrete values
+/// evaluate to themselves. This type-safe distinction prevents accidentally evaluating
+/// unbound parameters. Common patterns include pure symbolic circuits where all parameters
+/// are bound before execution, mixed circuits combining symbolic parameters with fixed
+/// concrete angles, and partial binding where a subset of parameters remains symbolic
+/// for nested optimization scenarios.
 ///
-/// **Use cases**:
-/// - **Pure symbolic**: All parameters symbolic, bind before execution
-/// - **Mixed circuits**: Some gates with symbolic parameters, others with concrete angles
-/// - **Partial binding**: Bind subset of parameters, leaving others symbolic for nested optimization
-///
-/// **Example**:
+/// **Example:**
 /// ```swift
 /// let theta = Parameter(name: "theta")
 /// let symbolic = ParameterValue.parameter(theta)
@@ -97,7 +89,9 @@ public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible 
 /// let fixed = concrete.evaluate(using: [:])        // π/4
 /// ```
 ///
-/// - SeeAlso: ``Parameter``, ``QuantumGate``
+/// - SeeAlso: ``Parameter``
+/// - SeeAlso: ``QuantumGate``
+@frozen
 public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertible {
     /// Symbolic parameter reference requiring binding at evaluation
     case parameter(Parameter)
@@ -107,7 +101,7 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
 
     /// Whether expression contains symbolic parameter
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let symbolic = ParameterValue.parameter(Parameter(name: "theta"))
     /// let concrete = ParameterValue.value(1.57)
@@ -128,7 +122,7 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     /// Returns the underlying ``Parameter`` if value is symbolic, otherwise `nil`.
     /// Useful for parameter extraction and circuit introspection.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let theta = Parameter(name: "theta")
     /// let symbolic = ParameterValue.parameter(theta)
@@ -149,13 +143,11 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     /// Evaluate parameter value with bindings
     ///
     /// Substitutes symbolic parameters with concrete values from bindings dictionary.
-    /// Concrete values evaluate to their stored number regardless of bindings.
+    /// Concrete values evaluate to their stored number regardless of bindings. For
+    /// symbolic values, looks up the parameter name in bindings and returns the bound
+    /// value; for concrete values, returns the stored number immediately.
     ///
-    /// **Algorithm**:
-    /// - Symbolic: Look up parameter name in bindings, return value
-    /// - Concrete: Return stored value immediately
-    ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let theta = Parameter(name: "theta")
     /// let expr = ParameterValue.parameter(theta)
@@ -178,6 +170,7 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
         case let .value(v): return v
         case let .parameter(p):
             ValidationUtilities.validateParameterBinding(p.name, in: bindings)
+            // Safety: validateParameterBinding guarantees key exists
             return bindings[p.name]!
         }
     }
@@ -199,7 +192,7 @@ extension ParameterValue: ExpressibleByFloatLiteral {
     /// Enables implicit conversion from numeric literals to concrete parameter values.
     /// Allows writing `.rotationX(1.57)` instead of `.rotationX(.value(1.57))`.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let gate: QuantumGate = .rotationY(1.57)  // Implicit .value(1.57)
     /// ```
@@ -217,7 +210,7 @@ public extension ParameterValue {
     /// Enables implicit conversion from ``Parameter`` to symbolic parameter value.
     /// Allows writing `.rotationX(theta)` instead of `.rotationX(.parameter(theta))`.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let theta = Parameter(name: "theta")
     /// let gate: QuantumGate = .rotationY(theta)  // Implicit .parameter(theta)

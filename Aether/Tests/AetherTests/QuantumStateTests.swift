@@ -12,8 +12,8 @@ import Testing
 struct QuantumStateInitializationTests {
     @Test("Initialize 1-qubit state to |0⟩")
     func initializeOneQubit() {
-        let state = QuantumState(numQubits: 1)
-        #expect(state.numQubits == 1)
+        let state = QuantumState(qubits: 1)
+        #expect(state.qubits == 1)
         #expect(state.stateSpaceSize == 2)
         #expect(state.amplitude(of: 0) == Complex.one)
         #expect(state.amplitude(of: 1) == Complex.zero)
@@ -21,8 +21,8 @@ struct QuantumStateInitializationTests {
 
     @Test("Initialize 2-qubit state to |00⟩")
     func initializeTwoQubits() {
-        let state = QuantumState(numQubits: 2)
-        #expect(state.numQubits == 2)
+        let state = QuantumState(qubits: 2)
+        #expect(state.qubits == 2)
         #expect(state.stateSpaceSize == 4)
         #expect(state.amplitude(of: 0) == Complex.one)
         #expect(state.amplitude(of: 1) == Complex.zero)
@@ -32,29 +32,29 @@ struct QuantumStateInitializationTests {
 
     @Test("Initialize 8-qubit state (demo default)")
     func initializeEightQubits() {
-        let state = QuantumState(numQubits: 8)
-        #expect(state.numQubits == 8)
+        let state = QuantumState(qubits: 8)
+        #expect(state.qubits == 8)
         #expect(state.stateSpaceSize == 256)
     }
 
     @Test("Initialize 16-qubit state (interactive mode)")
     func initializeSixteenQubits() {
-        let state = QuantumState(numQubits: 16)
-        #expect(state.numQubits == 16)
+        let state = QuantumState(qubits: 16)
+        #expect(state.qubits == 16)
         #expect(state.stateSpaceSize == 65536)
     }
 
     @Test("Initialize 24-qubit state (execution mode ceiling)")
     func initializeTwentyFourQubits() {
-        let state = QuantumState(numQubits: 24)
-        #expect(state.numQubits == 24)
+        let state = QuantumState(qubits: 24)
+        #expect(state.qubits == 24)
         #expect(state.stateSpaceSize == 16_777_216)
     }
 
     @Test("Single-qubit convenience initializer for |0⟩")
     func singleQubitZero() {
         let state = QuantumState(qubit: 0)
-        #expect(state.numQubits == 1)
+        #expect(state.qubits == 1)
         #expect(state.amplitude(of: 0) == Complex.one)
         #expect(state.amplitude(of: 1) == Complex.zero)
     }
@@ -62,7 +62,7 @@ struct QuantumStateInitializationTests {
     @Test("Single-qubit convenience initializer for |1⟩")
     func singleQubitOne() {
         let state = QuantumState(qubit: 1)
-        #expect(state.numQubits == 1)
+        #expect(state.qubits == 1)
         #expect(state.amplitude(of: 0) == Complex.zero)
         #expect(state.amplitude(of: 1) == Complex.one)
     }
@@ -71,7 +71,7 @@ struct QuantumStateInitializationTests {
     func customAmplitudes() {
         let invSqrt2 = 1.0 / sqrt(2.0)
         let amplitudes = [Complex(invSqrt2, 0.0), Complex(invSqrt2, 0.0)]
-        let state = QuantumState(numQubits: 1, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 1, amplitudes: amplitudes)
 
         #expect(abs(state.amplitude(of: 0).real - invSqrt2) < 1e-10)
         #expect(abs(state.amplitude(of: 1).real - invSqrt2) < 1e-10)
@@ -85,13 +85,13 @@ struct QuantumStateInitializationTests {
 struct QuantumStateNormalizationTests {
     @Test("New state is normalized")
     func newStateNormalized() {
-        let state = QuantumState(numQubits: 3)
+        let state = QuantumState(qubits: 3)
         #expect(state.isNormalized())
     }
 
     @Test("Probability sum equals 1.0")
     func probabilitySumOne() {
-        let state = QuantumState(numQubits: 2)
+        let state = QuantumState(qubits: 2)
         let probs = state.probabilities()
         let sum = probs.reduce(0.0, +)
         #expect(abs(sum - 1.0) < 1e-10)
@@ -99,7 +99,7 @@ struct QuantumStateNormalizationTests {
 
     @Test("Normalization after modification")
     func normalizeAfterModification() {
-        var state = QuantumState(numQubits: 1)
+        var state = QuantumState(qubits: 1)
         state.setAmplitude(0, to: Complex(2.0, 0.0))
         state.setAmplitude(1, to: Complex(2.0, 0.0))
 
@@ -132,7 +132,7 @@ struct QuantumStateProbabilityTests {
     func equalSuperposition() {
         let invSqrt2 = 1.0 / sqrt(2.0)
         let amplitudes = [Complex(invSqrt2, 0.0), Complex(invSqrt2, 0.0)]
-        let state = QuantumState(numQubits: 1, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 1, amplitudes: amplitudes)
 
         #expect(abs(state.probability(of: 0) - 0.5) < 1e-10)
         #expect(abs(state.probability(of: 1) - 0.5) < 1e-10)
@@ -162,7 +162,7 @@ struct QuantumStateBellStateTests {
             Complex(0.0, 0.0),
             Complex(invSqrt2, 0.0),
         ]
-        let state = QuantumState(numQubits: 2, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
         #expect(state.isNormalized())
     }
 
@@ -175,7 +175,7 @@ struct QuantumStateBellStateTests {
             Complex(0.0, 0.0),
             Complex(invSqrt2, 0.0),
         ]
-        let state = QuantumState(numQubits: 2, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
 
         #expect(abs(state.probability(of: 0) - 0.5) < 1e-10)
         #expect(abs(state.probability(of: 1)) < 1e-10)
@@ -191,9 +191,9 @@ struct QuantumStateBellStateTests {
 struct QuantumStateScalabilityTests {
     @Test("State space size scales exponentially")
     func stateSpaceSizeScaling() {
-        let state1 = QuantumState(numQubits: 1)
-        let state2 = QuantumState(numQubits: 2)
-        let state3 = QuantumState(numQubits: 3)
+        let state1 = QuantumState(qubits: 1)
+        let state2 = QuantumState(qubits: 2)
+        let state3 = QuantumState(qubits: 3)
 
         #expect(state1.stateSpaceSize == 2)
         #expect(state2.stateSpaceSize == 4)
@@ -203,8 +203,8 @@ struct QuantumStateScalabilityTests {
     @Test("Architecture handles varying qubit counts identically")
     func varyingQubitCounts() {
         for n in [1, 4, 8, 12, 16, 20, 24] {
-            let state = QuantumState(numQubits: n)
-            #expect(state.numQubits == n)
+            let state = QuantumState(qubits: n)
+            #expect(state.qubits == n)
             #expect(state.stateSpaceSize == (1 << n))
             #expect(state.isNormalized())
         }
@@ -218,15 +218,15 @@ struct QuantumStateScalabilityTests {
 struct QuantumStateEqualityTests {
     @Test("Identical states are equal")
     func identicalStatesEqual() {
-        let state1 = QuantumState(numQubits: 2)
-        let state2 = QuantumState(numQubits: 2)
+        let state1 = QuantumState(qubits: 2)
+        let state2 = QuantumState(qubits: 2)
         #expect(state1 == state2)
     }
 
     @Test("Different qubit counts are not equal")
     func differentQubitCountsNotEqual() {
-        let state1 = QuantumState(numQubits: 1)
-        let state2 = QuantumState(numQubits: 2)
+        let state1 = QuantumState(qubits: 1)
+        let state2 = QuantumState(qubits: 2)
         #expect(state1 != state2)
     }
 
@@ -255,7 +255,7 @@ struct QuantumStateDescriptionTests {
     func superpositionDescription() {
         let invSqrt2 = 1.0 / sqrt(2.0)
         let amplitudes = [Complex(invSqrt2, 0.0), Complex(invSqrt2, 0.0)]
-        let state = QuantumState(numQubits: 1, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 1, amplitudes: amplitudes)
         let desc = state.description
         #expect(desc.contains("1 qubit"))
     }
@@ -268,7 +268,7 @@ struct QuantumStateDescriptionTests {
             Complex(1e-10, 0.0),
             Complex(1e-10, 0.0),
         ]
-        let state = QuantumState(numQubits: 2, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
         let desc = state.description
         #expect(desc.contains("near-zero"))
     }
@@ -281,9 +281,9 @@ struct QuantumStateDescriptionTests {
 struct LargeStateVectorizedTests {
     @Test("Normalize large state uses vectorized path")
     func normalizeLargeState() {
-        let numQubits = 7
+        let qubits = 7
         let amplitudes = [Complex<Double>](repeating: Complex(1.0, 0.0), count: 128)
-        var state = QuantumState(numQubits: numQubits, amplitudes: amplitudes)
+        var state = QuantumState(qubits: qubits, amplitudes: amplitudes)
         #expect(state.isNormalized())
 
         for i in 0 ..< 128 {
@@ -297,10 +297,10 @@ struct LargeStateVectorizedTests {
 
     @Test("Probabilities for large state uses vectorized path")
     func probabilitiesLargeState() {
-        let numQubits = 7
+        let qubits = 7
         let invSqrtN = 1.0 / sqrt(128.0)
         let amplitudes = [Complex<Double>](repeating: Complex(invSqrtN, 0.0), count: 128)
-        let state = QuantumState(numQubits: numQubits, amplitudes: amplitudes)
+        let state = QuantumState(qubits: qubits, amplitudes: amplitudes)
 
         let probs = state.probabilities()
         #expect(probs.count == 128)
@@ -311,16 +311,16 @@ struct LargeStateVectorizedTests {
 
     @Test("isNormalized for large state uses vectorized path")
     func isNormalizedLargeState() {
-        let numQubits = 8
-        let state = QuantumState(numQubits: numQubits)
+        let qubits = 8
+        let state = QuantumState(qubits: qubits)
         #expect(state.isNormalized())
     }
 
     @Test("Large state auto-normalizes on init")
     func largeStateAutoNormalizes() {
-        let numQubits = 7
+        let qubits = 7
         let amplitudes = [Complex<Double>](repeating: Complex(1.0, 0.0), count: 128)
-        let state = QuantumState(numQubits: numQubits, amplitudes: amplitudes)
+        let state = QuantumState(qubits: qubits, amplitudes: amplitudes)
 
         #expect(state.isNormalized())
     }
@@ -332,7 +332,7 @@ struct LargeStateVectorizedTests {
 struct AmplitudeMutationTests {
     @Test("setAmplitude modifies correct amplitude")
     func setAmplitudeCorrect() {
-        var state = QuantumState(numQubits: 2)
+        var state = QuantumState(qubits: 2)
         let newAmp = Complex(0.5, 0.3)
 
         state.setAmplitude(2, to: newAmp)
@@ -345,7 +345,7 @@ struct AmplitudeMutationTests {
 
     @Test("setAmplitude can create superposition")
     func setAmplitudeCreatesSuperposition() {
-        var state = QuantumState(numQubits: 1)
+        var state = QuantumState(qubits: 1)
         let invSqrt2 = 1.0 / sqrt(2.0)
 
         state.setAmplitude(0, to: Complex(invSqrt2, 0.0))
@@ -365,7 +365,7 @@ struct AutoNormalizationTests {
     @Test("Unnormalized amplitudes get auto-normalized")
     func autoNormalizeUnnormalized() {
         let amplitudes = [Complex(2.0, 0.0), Complex(2.0, 0.0)]
-        let state = QuantumState(numQubits: 1, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 1, amplitudes: amplitudes)
 
         #expect(state.isNormalized())
     }
@@ -374,7 +374,7 @@ struct AutoNormalizationTests {
     func alreadyNormalizedStaysUnchanged() {
         let invSqrt2 = 1.0 / sqrt(2.0)
         let amplitudes = [Complex(invSqrt2, 0.0), Complex(invSqrt2, 0.0)]
-        let state = QuantumState(numQubits: 1, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 1, amplitudes: amplitudes)
 
         #expect(abs(state.amplitude(of: 0).real - invSqrt2) < 1e-10)
         #expect(abs(state.amplitude(of: 1).real - invSqrt2) < 1e-10)
@@ -386,7 +386,7 @@ struct AutoNormalizationTests {
             Complex(1.0, 1.0),
             Complex(1.0, -1.0),
         ]
-        let state = QuantumState(numQubits: 1, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 1, amplitudes: amplitudes)
 
         #expect(state.isNormalized())
     }

@@ -41,7 +41,7 @@ struct qubitGateApplicationTests {
     @Test("Z gate adds phase to |1⟩ component")
     func zGateAddsPhase() {
         let invSqrt2 = 1.0 / sqrt(2.0)
-        let state = QuantumState(numQubits: 1, amplitudes: [
+        let state = QuantumState(qubits: 1, amplitudes: [
             Complex(invSqrt2, 0.0),
             Complex(invSqrt2, 0.0),
         ])
@@ -101,11 +101,11 @@ struct GateReversibilityTests {
 struct CNOTGateTests {
     @Test("CNOT on |00⟩ gives |00⟩")
     func cnotOnZeroZero() {
-        let state = QuantumState(numQubits: 2)
+        let state = QuantumState(qubits: 2)
         let newState = GateApplication.apply(
             .cnot,
             to: [0, 1],
-            state: state
+            state: state,
         )
 
         #expect(abs(newState.amplitude(of: 0).real - 1.0) < 1e-10)
@@ -122,12 +122,12 @@ struct CNOTGateTests {
             Complex<Double>.zero,
             Complex<Double>.zero,
         ]
-        let state = QuantumState(numQubits: 2, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
 
         let newState = GateApplication.apply(
             .cnot,
             to: [0, 1],
-            state: state
+            state: state,
         )
 
         #expect(abs(newState.amplitude(of: 3).real - 1.0) < 1e-10)
@@ -138,16 +138,16 @@ struct CNOTGateTests {
 
     @Test("CNOT twice returns original state")
     func cnotTwiceIsIdentity() {
-        let state = QuantumState(numQubits: 2)
+        let state = QuantumState(qubits: 2)
         let state1 = GateApplication.apply(
             .cnot,
             to: [0, 1],
-            state: state
+            state: state,
         )
         let state2 = GateApplication.apply(
             .cnot,
             to: [0, 1],
-            state: state1
+            state: state1,
         )
 
         #expect(state == state2)
@@ -161,13 +161,13 @@ struct CNOTGateTests {
 struct BellStateTests {
     @Test("H·CNOT creates Bell state (|00⟩ + |11⟩)/√2")
     func createBellState() {
-        var state = QuantumState(numQubits: 2)
+        var state = QuantumState(qubits: 2)
 
         state = state.applying(.hadamard, to: 0)
         state = GateApplication.apply(
             .cnot,
             to: [0, 1],
-            state: state
+            state: state,
         )
 
         let invSqrt2 = 1.0 / sqrt(2.0)
@@ -179,12 +179,12 @@ struct BellStateTests {
 
     @Test("Bell state is normalized")
     func bellStateNormalized() {
-        var state = QuantumState(numQubits: 2)
+        var state = QuantumState(qubits: 2)
         state = state.applying(.hadamard, to: 0)
         state = GateApplication.apply(
             .cnot,
             to: [0, 1],
-            state: state
+            state: state,
         )
 
         #expect(state.isNormalized())
@@ -192,12 +192,12 @@ struct BellStateTests {
 
     @Test("Bell state has correct probabilities")
     func bellStateProbabilities() {
-        var state = QuantumState(numQubits: 2)
+        var state = QuantumState(qubits: 2)
         state = state.applying(.hadamard, to: 0)
         state = GateApplication.apply(
             .cnot,
             to: [0, 1],
-            state: state
+            state: state,
         )
 
         #expect(abs(state.probability(of: 0) - 0.5) < 1e-10)
@@ -214,7 +214,7 @@ struct BellStateTests {
 struct NormalizationPreservationTests {
     @Test("Single-qubit gate preserves normalization")
     func singleQubitPreservesNorm() {
-        let state = QuantumState(numQubits: 3)
+        let state = QuantumState(qubits: 3)
         let newState = state.applying(.hadamard, to: 1)
 
         #expect(state.isNormalized())
@@ -223,7 +223,7 @@ struct NormalizationPreservationTests {
 
     @Test("CNOT preserves normalization")
     func cnotPreservesNorm() {
-        var state = QuantumState(numQubits: 2)
+        var state = QuantumState(qubits: 2)
         state = state.applying(.hadamard, to: 0)
 
         #expect(state.isNormalized())
@@ -231,7 +231,7 @@ struct NormalizationPreservationTests {
         state = GateApplication.apply(
             .cnot,
             to: [0, 1],
-            state: state
+            state: state,
         )
 
         #expect(state.isNormalized())
@@ -239,7 +239,7 @@ struct NormalizationPreservationTests {
 
     @Test("Deep circuit preserves normalization")
     func deepCircuitPreservesNorm() {
-        var state = QuantumState(numQubits: 2)
+        var state = QuantumState(qubits: 2)
 
         for _ in 0 ..< 5 {
             state = state.applying(.hadamard, to: 0)
@@ -257,7 +257,7 @@ struct NormalizationPreservationTests {
 struct MultiQubitSystemTests {
     @Test("Gate on qubit 0 doesn't affect qubit 1")
     func gateOnQubit0Independent() {
-        let state = QuantumState(numQubits: 2)
+        let state = QuantumState(qubits: 2)
         let newState = state.applying(.pauliX, to: 0)
 
         #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-10)
@@ -265,7 +265,7 @@ struct MultiQubitSystemTests {
 
     @Test("Gate on qubit 1 doesn't affect qubit 0")
     func gateOnQubit1Independent() {
-        let state = QuantumState(numQubits: 2)
+        let state = QuantumState(qubits: 2)
         let newState = state.applying(.pauliX, to: 1)
 
         #expect(abs(newState.amplitude(of: 2).real - 1.0) < 1e-10)
@@ -279,33 +279,33 @@ struct MultiQubitSystemTests {
 struct GateApplicationScalabilityTests {
     @Test("Single-qubit gate works on 8-qubit system")
     func eightQubitSystem() {
-        let state = QuantumState(numQubits: 8)
+        let state = QuantumState(qubits: 8)
         let newState = state.applying(.hadamard, to: 3)
 
         #expect(newState.isNormalized())
-        #expect(newState.numQubits == 8)
+        #expect(newState.qubits == 8)
     }
 
     @Test("CNOT works on 12-qubit system")
     func twelveQubitSystem() {
-        let state = QuantumState(numQubits: 12)
+        let state = QuantumState(qubits: 12)
         let newState = GateApplication.apply(
             .cnot,
             to: [5, 7],
-            state: state
+            state: state,
         )
 
         #expect(newState.isNormalized())
-        #expect(newState.numQubits == 12)
+        #expect(newState.qubits == 12)
     }
 
     @Test("Gate application scales to 16 qubits")
     func sixteenQubitSystem() {
-        let state = QuantumState(numQubits: 16)
+        let state = QuantumState(qubits: 16)
         let newState = state.applying(.pauliX, to: 10)
 
         #expect(newState.isNormalized())
-        #expect(newState.numQubits == 16)
+        #expect(newState.qubits == 16)
     }
 }
 
@@ -325,7 +325,7 @@ struct PhaseGateTests {
     @Test("S gate applies π/2 phase")
     func sGatePhase() {
         let invSqrt2 = 1.0 / sqrt(2.0)
-        let state = QuantumState(numQubits: 1, amplitudes: [
+        let state = QuantumState(qubits: 1, amplitudes: [
             Complex(invSqrt2, 0.0),
             Complex(invSqrt2, 0.0),
         ])
@@ -344,19 +344,19 @@ struct PhaseGateTests {
 struct GHZStateTests {
     @Test("Create 3-qubit GHZ state")
     func createGHZState() {
-        var state = QuantumState(numQubits: 3)
+        var state = QuantumState(qubits: 3)
 
         state = state.applying(.hadamard, to: 0)
         state = GateApplication.apply(
             .cnot,
             to: [0, 1],
-            state: state
+            state: state,
         )
 
         state = GateApplication.apply(
             .cnot,
             to: [0, 2],
-            state: state
+            state: state,
         )
 
         let invSqrt2 = 1.0 / sqrt(2.0)
@@ -376,11 +376,11 @@ struct GHZStateTests {
 struct ToffoliGateApplicationTests {
     @Test("Toffoli on |000⟩ gives |000⟩")
     func toffoliOnAllZeros() {
-        let state = QuantumState(numQubits: 3)
+        let state = QuantumState(qubits: 3)
         let newState = GateApplication.apply(
             .toffoli,
             to: [0, 1, 2],
-            state: state
+            state: state,
         )
 
         #expect(abs(newState.amplitude(of: 0).real - 1.0) < 1e-10)
@@ -394,16 +394,16 @@ struct ToffoliGateApplicationTests {
         var amplitudes = Array(repeating: Complex<Double>.zero, count: 8)
         amplitudes[6] = .one
 
-        let state = QuantumState(numQubits: 3, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 3, amplitudes: amplitudes)
         let state1 = GateApplication.apply(
             .toffoli,
             to: [0, 1, 2],
-            state: state
+            state: state,
         )
         let state2 = GateApplication.apply(
             .toffoli,
             to: [0, 1, 2],
-            state: state1
+            state: state1,
         )
 
         #expect(state == state2)
@@ -411,7 +411,7 @@ struct ToffoliGateApplicationTests {
 
     @Test("Toffoli preserves normalization")
     func toffoliPreservesNormalization() {
-        var state = QuantumState(numQubits: 3)
+        var state = QuantumState(qubits: 3)
         state = state.applying(.hadamard, to: 0)
         state = state.applying(.hadamard, to: 1)
 
@@ -420,7 +420,7 @@ struct ToffoliGateApplicationTests {
         let newState = GateApplication.apply(
             .toffoli,
             to: [0, 1, 2],
-            state: state
+            state: state,
         )
 
         #expect(newState.isNormalized())
@@ -437,11 +437,11 @@ struct SwapAndControlledPhaseTests {
         var amplitudes = Array(repeating: Complex<Double>.zero, count: 4)
         amplitudes[2] = .one
 
-        let state = QuantumState(numQubits: 2, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
         let newState = GateApplication.apply(
             .swap,
             to: [0, 1],
-            state: state
+            state: state,
         )
 
         #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-10)
@@ -452,13 +452,13 @@ struct SwapAndControlledPhaseTests {
 
     @Test("SWAP preserves normalization")
     func swapPreservesNormalization() {
-        var state = QuantumState(numQubits: 2)
+        var state = QuantumState(qubits: 2)
         state = state.applying(.hadamard, to: 0)
 
         let newState = GateApplication.apply(
             .swap,
             to: [0, 1],
-            state: state
+            state: state,
         )
 
         #expect(newState.isNormalized())
@@ -470,12 +470,12 @@ struct SwapAndControlledPhaseTests {
         let amplitude = Complex(invSqrt2 * invSqrt2, 0.0)
         let amplitudes = Array(repeating: amplitude, count: 4)
 
-        let state = QuantumState(numQubits: 2, amplitudes: amplitudes)
+        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
         let theta = Double.pi / 2.0
         let newState = GateApplication.apply(
             .controlledPhase(theta),
             to: [0, 1],
-            state: state
+            state: state,
         )
 
         #expect(abs(newState.amplitude(of: 0).real - amplitude.real) < 1e-10)
@@ -496,7 +496,7 @@ struct SwapAndControlledPhaseTests {
 struct ConvenienceExtensionTests {
     @Test("applying(gate:to:) convenience method works")
     func applyingWithArrayWorks() {
-        let state = QuantumState(numQubits: 2)
+        let state = QuantumState(qubits: 2)
         let newState = state.applying(.hadamard, to: 0)
 
         #expect(newState.isNormalized())

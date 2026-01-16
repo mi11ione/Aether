@@ -11,43 +11,37 @@
 /// gates. Depth controls expressivity: more layers represent more quantum states but increase
 /// optimization difficulty and susceptibility to barren plateaus.
 ///
-/// **Performance:**
-/// - Construction: O(depth x numQubits) gates
-/// - Parameter count: depth x numQubits x rotations.parametersPerQubit
-/// - Circuit depth: O(depth x numQubits) for linear/circular, O(depth x numQubits²) for all-to-all
+/// Construction requires O(depth × qubits) gates with parameter count equal to
+/// depth × qubits × rotations.parametersPerQubit. Circuit depth scales as O(depth × qubits)
+/// for linear/circular entanglement, or O(depth × qubits²) for all-to-all connectivity.
 ///
 /// **Example:**
 /// ```swift
 /// let ansatz = HardwareEfficientAnsatz(qubits: 4, depth: 2)
-/// print(ansatz.parameterCount)  // 8 (4 qubits x 2 layers x 1 Ry per qubit)
-///
-/// let vqe = await VQE(
-///     hamiltonian: hamiltonian,
-///     ansatz: ansatz,
-///     optimizer: COBYLAOptimizer()
-/// )
-/// let result = await vqe.run(initialParameters: Array(repeating: 0.01, count: ansatz.parameterCount))
+/// let params = Array(repeating: 0.01, count: ansatz.parameterCount)
+/// let state = ansatz.circuit.bound(with: params).execute()
 /// ```
 ///
-/// - SeeAlso: ``VQE``, ``QuantumCircuit``, ``Parameter``
+/// - SeeAlso: ``VQE``
+/// - SeeAlso: ``QuantumCircuit``
+/// - SeeAlso: ``Parameter``
+@frozen
 public struct HardwareEfficientAnsatz: Sendable {
     /// Single-qubit rotation gate choices affecting circuit expressivity and parameter count
     ///
     /// Rotation gates control how many parameters are needed per qubit per layer. Single-axis
     /// rotations (Rx, Ry, Rz) use one parameter each. Full rotations (Rz-Ry-Rz sequence) provide
-    /// maximum single-qubit expressivity at the cost of 3x parameters.
-    ///
-    /// **Typical usage:** Ry rotations (default) balance expressivity and parameter efficiency.
-    /// Use full rotations when additional expressivity is needed and parameter count is acceptable.
+    /// maximum single-qubit expressivity at the cost of 3x parameters. Ry rotations (default)
+    /// balance expressivity and parameter efficiency; use full rotations when additional
+    /// expressivity is needed and parameter count is acceptable.
     ///
     /// **Example:**
     /// ```swift
-    /// let standard = HardwareEfficientAnsatz(qubits: 4, depth: 2, rotations: .ry)
-    /// print(standard.parameterCount)  // 8
-    ///
-    /// let expressive = HardwareEfficientAnsatz(qubits: 4, depth: 2, rotations: .full)
-    /// print(expressive.parameterCount)  // 24 (3x parameters)
+    /// let ry = HardwareEfficientAnsatz(qubits: 4, depth: 2, rotations: .ry)
+    /// let full = HardwareEfficientAnsatz(qubits: 4, depth: 2, rotations: .full)
+    /// print(ry.parameterCount, full.parameterCount)  // 8, 24
     /// ```
+    @frozen
     public enum Rotations: Sendable {
         /// Ry rotations (1 parameter per qubit per layer)
         case ry
@@ -75,19 +69,17 @@ public struct HardwareEfficientAnsatz: Sendable {
     ///
     /// Entangling patterns determine which qubits interact via CNOT gates. Linear and circular
     /// patterns create nearest-neighbor connectivity suitable for most quantum hardware. All-to-all
-    /// creates full connectivity but produces deep circuits unsuitable for NISQ devices.
-    ///
-    /// **Typical usage:** Linear (default) for hardware compatibility. Circular adds one CNOT
-    /// connecting first and last qubits. Avoid all-to-all except for small qubit counts.
+    /// creates full connectivity but produces deep circuits unsuitable for NISQ devices. Linear
+    /// (default) provides hardware compatibility, circular adds one CNOT connecting first and
+    /// last qubits, and all-to-all should be avoided except for small qubit counts.
     ///
     /// **Example:**
     /// ```swift
     /// let linear = HardwareEfficientAnsatz(qubits: 4, depth: 1, entanglement: .linear)
-    /// print(linear.circuit.count)  // 7 gates (4 Ry + 3 CNOT)
-    ///
     /// let circular = HardwareEfficientAnsatz(qubits: 4, depth: 1, entanglement: .circular)
-    /// print(circular.circuit.count)  // 8 gates (4 Ry + 4 CNOT)
+    /// print(linear.circuit.count, circular.circuit.count)  // 7, 8
     /// ```
+    @frozen
     public enum Entanglement: Sendable {
         /// CNOT chain: i->(i+1) for i=0..n-2
         case linear
@@ -115,13 +107,13 @@ public struct HardwareEfficientAnsatz: Sendable {
 
     /// Total parameters in circuit
     ///
-    /// Computed as depth x numQubits x parametersPerQubit. Use this count when
+    /// Computed as depth x qubits x parametersPerQubit. Use this count when
     /// initializing parameter vectors for optimization.
     ///
     /// - Complexity: O(1)
     /// - SeeAlso: ``Rotations/parametersPerQubit``
     public var parameterCount: Int {
-        depth * circuit.numQubits * rotations.parametersPerQubit
+        depth * circuit.qubits * rotations.parametersPerQubit
     }
 
     // MARK: - Initialization
@@ -140,39 +132,39 @@ public struct HardwareEfficientAnsatz: Sendable {
     /// ```
     ///
     /// - Parameters:
-    ///   - numQubits: System size
+    ///   - qubits: System size
     ///   - depth: Number of rotation-entanglement layer pairs
     ///   - rotations: Single-qubit gate choice (default: Ry)
     ///   - entanglement: Two-qubit connectivity (default: linear)
     ///
-    /// - Complexity: O(depth x numQubits) gates constructed
-    /// - Precondition: `numQubits` must be positive and ≤30, `depth` must be positive and ≤100
+    /// - Complexity: O(depth x qubits) gates constructed
+    /// - Precondition: `qubits` must be positive and ≤30, `depth` must be positive and ≤100
     @_optimize(speed)
     public init(
-        qubits numQubits: Int,
+        qubits: Int,
         depth: Int,
         rotations: Rotations = .ry,
-        entanglement: Entanglement = .linear
+        entanglement: Entanglement = .linear,
     ) {
-        ValidationUtilities.validatePositiveQubits(numQubits)
-        ValidationUtilities.validateMemoryLimit(numQubits)
+        ValidationUtilities.validatePositiveQubits(qubits)
+        ValidationUtilities.validateMemoryLimit(qubits)
         ValidationUtilities.validatePositiveInt(depth, name: "depth")
         ValidationUtilities.validateUpperBound(depth, max: 100, name: "depth")
 
-        var circuit = QuantumCircuit(numQubits: numQubits)
+        var circuit = QuantumCircuit(qubits: qubits)
 
         for layerIndex in 0 ..< depth {
             Self.addRotations(
                 to: &circuit,
-                qubits: numQubits,
+                qubits: qubits,
                 layer: layerIndex,
-                type: rotations
+                type: rotations,
             )
 
             Self.addEntanglement(
                 to: &circuit,
-                qubits: numQubits,
-                pattern: entanglement
+                qubits: qubits,
+                pattern: entanglement,
             )
         }
 
@@ -189,7 +181,7 @@ public struct HardwareEfficientAnsatz: Sendable {
         to circuit: inout QuantumCircuit,
         qubits: Int,
         layer: Int,
-        type: Rotations
+        type: Rotations,
     ) {
         let layerPrefix = "theta_\(layer)_"
 
@@ -230,7 +222,7 @@ public struct HardwareEfficientAnsatz: Sendable {
     private static func addEntanglement(
         to circuit: inout QuantumCircuit,
         qubits: Int,
-        pattern: Entanglement
+        pattern: Entanglement,
     ) {
         switch pattern {
         case .linear, .circular:

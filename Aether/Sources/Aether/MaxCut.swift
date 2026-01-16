@@ -1,124 +1,49 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-/// MaxCut problem Hamiltonian constructors for QAOA
+/// MaxCut cost Hamiltonian construction for QAOA.
 ///
-/// Provides cost Hamiltonian construction for the Maximum Cut (MaxCut) problem.
-/// MaxCut is a classic NP-hard graph partitioning problem and the **canonical
-/// benchmark** for QAOA algorithms.
+/// Given an undirected graph G = (V, E), the MaxCut problem seeks a partition
+/// of vertices into two sets that maximizes edges crossing the partition. This
+/// classic NP-hard problem serves as the canonical benchmark for QAOA algorithms.
 ///
-/// **Problem Definition:**
-/// Given an undirected graph G = (V, E), partition vertices into two sets S and T
-/// such that the number of edges crossing the partition is maximized.
+/// The cost Hamiltonian H = -½ Σ_{(i,j)∈E} ZᵢZⱼ encodes the objective such that
+/// minimizing H is equivalent to maximizing the cut size. The ground state energy
+/// E₀ relates to the optimal cut by: maxcut = -2·E₀.
 ///
-/// **Mathematical Formulation:**
-/// - Cost function: C(z) = Σ_{(i,j)∈E} ½(1 - zᵢzⱼ) where z ∈ {±1}^n
-/// - Quantum encoding: zᵢ = 2·qᵢ - 1 where qᵢ ∈ {0,1}
-/// - Hamiltonian: H_p = Σ_{(i,j)∈E} ½(1 - ZᵢZⱼ) = Σ_{(i,j)∈E} ½(I - ZᵢZⱼ)
-///
-/// **Simplified form (drop constant):**
-/// H_p = -½ Σ_{(i,j)∈E} ZᵢZⱼ  (minimization equivalent to MaxCut)
-///
-/// **Properties:**
-/// - Minimizing H_p <-> Maximizing cut size
-/// - Ground state energy: E₀ = -maxcut/2
-/// - MaxCut value: maxcut = -2·E₀
-///
-/// **Example - 4-vertex square graph:**
+/// **Example:**
 /// ```swift
-/// // Square graph: 0---1
-/// //               |   |
-/// //               3---2
-/// let edges = [(0,1), (1,2), (2,3), (3,0)]
-/// let hamiltonian = MaxCut.hamiltonian(edges: edges)
-///
-/// // Hamiltonian: H = -½(Z₀Z₁ + Z₁Z₂ + Z₂Z₃ + Z₃Z₀)
-/// // Optimal cut: {0,2} vs {1,3} -> 4 edges cut
-/// // Ground state energy: E₀ = -2.0
-/// // Verification: maxcut = -2·E₀ = 4 ✓
-///
-/// // Run QAOA
-/// let qaoa = await QAOA(
-///     costHamiltonian: hamiltonian,
-///     numQubits: 4,
-///     depth: 2,
-///     optimizer: COBYLAOptimizer(tolerance: 1e-6)
-/// )
-///
-/// let result = await qaoa.run(initialParameters: [0.5, 0.5, 0.5, 0.5])
-/// let maxcutValue = Int(-2.0 * result.optimalEnergy)
-/// print("MaxCut value: \(maxcutValue)")  // 4
+/// let hamiltonian = MaxCut.hamiltonian(edges: [(0, 1), (1, 2), (2, 0)])
+/// let qaoa = await QAOA(cost: hamiltonian, mixer: MixerHamiltonian.x(qubits: 3), qubits: 3, depth: 2)
+/// let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
 /// ```
 ///
-/// **Example - Triangle graph (K₃):**
-/// ```swift
-/// // Complete graph on 3 vertices
-/// let edges = [(0,1), (1,2), (0,2)]
-/// let hamiltonian = MaxCut.hamiltonian(edges: edges)
-///
-/// // Optimal cut: any single vertex vs others -> 2 edges
-/// // Ground state energy: E₀ = -1.0
-/// // MaxCut value: 2
-/// ```
-///
-/// **Applications:**
-/// - Network design: Minimize communication cost between modules
-/// - VLSI design: Circuit partitioning for placement
-/// - Image segmentation: Partition pixels into regions
-/// - Community detection: Graph clustering
-/// - Benchmark for quantum optimization algorithms
-@frozen
-public struct MaxCut {
-    /// Create MaxCut cost Hamiltonian from graph edges
+/// - SeeAlso: ``QAOA``
+/// - SeeAlso: ``Observable``
+/// - SeeAlso: ``MixerHamiltonian``
+public enum MaxCut {
+    private static let zzCoefficient = -0.5
+
+    /// Creates a MaxCut cost Hamiltonian from graph edges.
     ///
-    /// Constructs H_p = -½ Σ_{(i,j)∈E} ZᵢZⱼ for MaxCut optimization.
-    /// Minimizing this Hamiltonian is equivalent to maximizing the cut size.
+    /// Each edge (i, j) contributes a term -0.5·ZᵢZⱼ to the Hamiltonian. The ZZ
+    /// operator yields +1 when qubits share the same state (edge not cut) and -1
+    /// when they differ (edge cut), making minimization equivalent to maximizing
+    /// the cut. Edge order is normalized internally so (i, j) and (j, i) produce
+    /// identical terms.
     ///
-    /// **Edge encoding:**
-    /// - Each edge (i,j) contributes term: -0.5·Z_i⊗Z_j
-    /// - Coefficient -0.5 ensures: min H_p <-> max cut
-    /// - ZᵢZⱼ = +1 if qubits in same state (not cut)
-    /// - ZᵢZⱼ = -1 if qubits in different states (cut)
-    ///
-    /// **Hamiltonian structure:**
-    /// - Number of terms: |E| (one per edge)
-    /// - Sparsity: Depends on graph connectivity
-    /// - Dense graphs (many edges) -> more terms -> slower QAOA
-    ///
-    /// **Complexity:**
-    /// - Construction: O(|E|) time and space
-    /// - QAOA circuit: O(|E|) gates per layer (one ZZ rotation per edge)
-    ///
-    /// - Parameter edges: Array of undirected edges as (vertex_i, vertex_j) pairs
-    /// - Returns: Observable representing MaxCut cost Hamiltonian
-    ///
-    /// **Validation:**
-    /// - Edges must reference valid qubit indices (≥ 0, < 30 memory limit)
-    /// - Duplicate edges allowed (combined into single term automatically)
-    /// - Edge order doesn't matter: (i,j) ≡ (j,i)
-    ///
-    /// Example:
+    /// **Example:**
     /// ```swift
-    /// // Path graph: 0---1---2---3
-    /// let edges = [(0,1), (1,2), (2,3)]
-    /// let hamiltonian = MaxCut.hamiltonian(edges: edges)
-    ///
-    /// // Result: H = -0.5·Z₀Z₁ - 0.5·Z₁Z₂ - 0.5·Z₂Z₃
-    /// print(hamiltonian.terms.count)  // 3 terms
-    ///
-    /// // Optimal cuts: {0,2} vs {1,3} -> 3 edges cut
-    /// // Ground state energy: E₀ = -1.5
-    /// // MaxCut value: 3
-    ///
-    /// // Use with QAOA
-    /// let qaoa = await QAOA(
-    ///     costHamiltonian: hamiltonian,
-    ///     numQubits: 4,
-    ///     depth: 3
-    /// )
+    /// let hamiltonian = MaxCut.hamiltonian(edges: [(0, 1), (1, 2), (2, 3)])
     /// ```
+    ///
+    /// - Parameter edges: Undirected edges as vertex pairs with non-negative indices
+    /// - Returns: Observable with one ZZ term per edge, coefficient -0.5
+    /// - Complexity: O(|E|) time and space
+    /// - Precondition: Vertices must be non-negative and below the 30-qubit memory limit
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     public static func hamiltonian(edges: [(Int, Int)]) -> Observable {
         ValidationUtilities.validateNonEmpty(edges, name: "edges")
 
@@ -131,122 +56,56 @@ public struct MaxCut {
             ValidationUtilities.validateMemoryLimit(max(i, j) + 1)
             ValidationUtilities.validateDistinctVertices(i, j)
 
-            // H_p term: -0.5 * Z_i⊗Z_j
-            // Sorted order ensures (i,j) and (j,i) produce identical PauliStrings
             let vertex1 = min(i, j)
             let vertex2 = max(i, j)
             let pauliString = PauliString(.z(vertex1), .z(vertex2))
 
-            terms.append((coefficient: -0.5, pauliString: pauliString))
+            terms.append((coefficient: zzCoefficient, pauliString: pauliString))
         }
 
         return Observable(terms: terms)
     }
 
-    /// Create example graphs for testing and demonstration
-    ///
-    /// Provides common graph topologies with known MaxCut solutions for
-    /// algorithm validation and benchmarking.
-    @frozen
-    public struct Examples {
-        /// Triangle graph (K₃): 3 vertices, 3 edges
-        ///
-        /// Complete graph on 3 vertices. Any partition has maxcut = 2.
-        ///
-        /// - Returns: Edges for triangle graph
-        ///
-        /// Example:
-        /// ```swift
-        /// let edges = MaxCut.Examples.triangle()
-        /// let hamiltonian = MaxCut.hamiltonian(edges: edges)
-        /// // Expected maxcut: 2
-        /// // Expected E₀: -1.0
-        /// ```
+    /// Standard graph topologies with known MaxCut solutions for testing and benchmarking.
+    public enum Examples {
+        /// Triangle graph K₃ with 3 vertices and 3 edges. Optimal maxcut = 2, E₀ = -1.0.
         @inlinable
+        @_effects(readonly)
         public static func triangle() -> [(Int, Int)] {
             [(0, 1), (1, 2), (0, 2)]
         }
 
-        /// Square graph: 4 vertices in cycle
-        ///
-        /// Cycle graph C₄. Optimal cut partitions opposite vertices: maxcut = 4.
-        ///
-        /// - Returns: Edges for square graph
-        ///
-        /// Example:
-        /// ```swift
-        /// let edges = MaxCut.Examples.square()
-        /// let hamiltonian = MaxCut.hamiltonian(edges: edges)
-        /// // Expected maxcut: 4
-        /// // Expected E₀: -2.0
-        /// // Optimal partitions: {0,2} vs {1,3}
-        /// ```
+        /// Square cycle graph C₄ with 4 vertices and 4 edges. Optimal maxcut = 4, E₀ = -2.0.
         @inlinable
+        @_effects(readonly)
         public static func square() -> [(Int, Int)] {
             [(0, 1), (1, 2), (2, 3), (3, 0)]
         }
 
-        /// Pentagon graph: 5 vertices in cycle
-        ///
-        /// Cycle graph C₅. Optimal cut has maxcut = 4 (any partition with 2 vs 3 vertices).
-        ///
-        /// - Returns: Edges for pentagon graph
-        ///
-        /// Example:
-        /// ```swift
-        /// let edges = MaxCut.Examples.pentagon()
-        /// let hamiltonian = MaxCut.hamiltonian(edges: edges)
-        /// // Expected maxcut: 4
-        /// // Expected E₀: -2.0
-        /// ```
+        /// Pentagon cycle graph C₅ with 5 vertices and 5 edges. Optimal maxcut = 4, E₀ = -2.0.
         @inlinable
+        @_effects(readonly)
         public static func pentagon() -> [(Int, Int)] {
             [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)]
         }
 
-        /// Complete graph K₄: 4 vertices, all pairs connected
-        ///
-        /// Every pair of vertices has an edge (6 edges total).
-        /// Optimal cut partitions into equal sets: maxcut = 4.
-        ///
-        /// - Returns: Edges for K₄ complete graph
-        ///
-        /// Example:
-        /// ```swift
-        /// let edges = MaxCut.Examples.completeK4()
-        /// let hamiltonian = MaxCut.hamiltonian(edges: edges)
-        /// // Expected maxcut: 4
-        /// // Expected E₀: -2.0
-        /// // Optimal partitions: {0,1} vs {2,3} or similar 2-2 split
-        /// ```
+        /// Complete graph K₄ with 4 vertices and 6 edges. Optimal maxcut = 4, E₀ = -2.0.
         @inlinable
-        public static func completeK4() -> [(Int, Int)] {
+        @_effects(readonly)
+        public static func complete4() -> [(Int, Int)] {
             [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
         }
 
-        /// Linear chain: n vertices in path
+        /// Path graph with n vertices and n-1 edges. Optimal maxcut = n-1, E₀ = -(n-1)/2.
         ///
-        /// Path graph: 0---1---2---...---(n-1)
-        /// Optimal cut alternates vertices: maxcut = n-1 (entire path cut).
-        ///
-        /// - Parameter numVertices: Number of vertices in path (≥ 2)
-        /// - Returns: Edges for linear chain
-        ///
-        /// Example:
-        /// ```swift
-        /// let edges = MaxCut.Examples.linearChain(numVertices: 6)
-        /// let hamiltonian = MaxCut.hamiltonian(edges: edges)
-        /// // 6 vertices: 0---1---2---3---4---5
-        /// // Expected maxcut: 5 (all edges cut)
-        /// // Expected E₀: -2.5
-        /// // Optimal partition: {0,2,4} vs {1,3,5}
-        /// ```
+        /// - Parameter vertices: Number of vertices in path (≥ 2)
         @_optimize(speed)
         @_eagerMove
-        public static func linearChain(numVertices: Int) -> [(Int, Int)] {
-            ValidationUtilities.validateLowerBound(numVertices, min: 2, name: "numVertices")
+        @_effects(readonly)
+        public static func linearChain(vertices: Int) -> [(Int, Int)] {
+            ValidationUtilities.validateLowerBound(vertices, min: 2, name: "vertices")
 
-            let edgeCount = numVertices - 1
+            let edgeCount = vertices - 1
             return [(Int, Int)](unsafeUninitializedCapacity: edgeCount) { buffer, count in
                 for i in 0 ..< edgeCount {
                     buffer[i] = (i, i + 1)
@@ -255,32 +114,64 @@ public struct MaxCut {
             }
         }
 
-        /// Star graph: central vertex connected to all others
+        /// Star graph with central vertex 0 connected to n-1 peripheral vertices.
+        /// Optimal maxcut = n-1, E₀ = -(n-1)/2.
         ///
-        /// One central vertex (0) connected to n-1 peripheral vertices.
-        /// Optimal cut isolates center: maxcut = n-1.
-        ///
-        /// - Parameter numVertices: Total vertices including center (≥ 2)
-        /// - Returns: Edges for star graph
-        ///
-        /// Example:
-        /// ```swift
-        /// let edges = MaxCut.Examples.star(numVertices: 5)
-        /// let hamiltonian = MaxCut.hamiltonian(edges: edges)
-        /// // Center (0) connected to {1,2,3,4}
-        /// // Expected maxcut: 4
-        /// // Expected E₀: -2.0
-        /// // Optimal partition: {0} vs {1,2,3,4}
-        /// ```
+        /// - Parameter vertices: Total vertices including center (≥ 2)
         @_optimize(speed)
         @_eagerMove
-        public static func star(numVertices: Int) -> [(Int, Int)] {
-            ValidationUtilities.validateLowerBound(numVertices, min: 2, name: "numVertices")
+        @_effects(readonly)
+        public static func star(vertices: Int) -> [(Int, Int)] {
+            ValidationUtilities.validateLowerBound(vertices, min: 2, name: "vertices")
 
-            let edgeCount = numVertices - 1
+            let edgeCount = vertices - 1
             return [(Int, Int)](unsafeUninitializedCapacity: edgeCount) { buffer, count in
                 for i in 0 ..< edgeCount {
                     buffer[i] = (0, i + 1)
+                }
+                count = edgeCount
+            }
+        }
+
+        /// Cycle graph Cₙ with n vertices and n edges forming a ring.
+        /// Generalizes `square()` (C₄) and `pentagon()` (C₅).
+        /// For even n: maxcut = n, E₀ = -n/2. For odd n: maxcut = n-1, E₀ = -(n-1)/2.
+        ///
+        /// - Parameter vertices: Number of vertices in cycle (≥ 3)
+        @_optimize(speed)
+        @_eagerMove
+        @_effects(readonly)
+        public static func cycle(vertices: Int) -> [(Int, Int)] {
+            ValidationUtilities.validateLowerBound(vertices, min: 3, name: "vertices")
+
+            return [(Int, Int)](unsafeUninitializedCapacity: vertices) { buffer, count in
+                for i in 0 ..< vertices - 1 {
+                    buffer[i] = (i, i + 1)
+                }
+                buffer[vertices - 1] = (vertices - 1, 0)
+                count = vertices
+            }
+        }
+
+        /// Complete graph Kₙ with n vertices and n(n-1)/2 edges.
+        /// Generalizes `triangle()` (K₃) and `complete4()` (K₄).
+        /// Optimal maxcut = ⌊n²/4⌋, E₀ = -⌊n²/4⌋/2.
+        ///
+        /// - Parameter vertices: Number of vertices (≥ 2)
+        @_optimize(speed)
+        @_eagerMove
+        @_effects(readonly)
+        public static func complete(vertices: Int) -> [(Int, Int)] {
+            ValidationUtilities.validateLowerBound(vertices, min: 2, name: "vertices")
+
+            let edgeCount = vertices * (vertices - 1) / 2
+            return [(Int, Int)](unsafeUninitializedCapacity: edgeCount) { buffer, count in
+                var index = 0
+                for i in 0 ..< vertices {
+                    for j in (i + 1) ..< vertices {
+                        buffer[index] = (i, j)
+                        index += 1
+                    }
                 }
                 count = edgeCount
             }

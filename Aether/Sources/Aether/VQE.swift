@@ -3,92 +3,32 @@
 
 import Foundation
 
-/// Variational Quantum Eigensolver: Quantum ground state solver
+/// Hybrid quantum-classical algorithm for finding ground state energies.
 ///
-/// Hybrid quantum-classical algorithm for finding ground state energy of
-/// arbitrary Hamiltonians. **The killer application** for near-term quantum
-/// computing with applications in quantum chemistry, materials science,
-/// optimization, and condensed matter physics.
+/// VQE minimizes ⟨ψ(θ⃗)|H|ψ(θ⃗)⟩ through iterative quantum state preparation and classical parameter optimization.
+/// The variational principle guarantees computed energies are upper bounds on the true ground state. Primary
+/// application for near-term quantum hardware in molecular chemistry, materials science, optimization, and
+/// condensed matter physics.
 ///
-/// **Algorithm Overview:**
-/// 1. **Prepare parameterized state**: |ψ(θ⃗)⟩ via hardware-efficient ansatz
-/// 2. **Measure energy**: ⟨ψ(θ⃗)|H|ψ(θ⃗)⟩ using SparseHamiltonian backend
-/// 3. **Classical optimization**: Update θ⃗ to minimize energy
-/// 4. **Repeat until convergence**: |E_new - E_old| < ε
+/// The algorithm alternates between quantum circuit execution (state preparation via parameterized ansatz) and
+/// classical optimization (parameter updates) until energy convergence. Sparse Hamiltonian backend provides
+/// GPU/Accelerate acceleration for molecular systems with typical 0.01-1% sparsity. Circuit depth remains
+/// shallow for NISQ compatibility.
 ///
-/// **Mathematical Foundation:**
-/// - Variational principle: ⟨ψ|H|ψ⟩ ≥ E₀ for any |ψ⟩
-/// - VQE finds upper bound on ground state energy E₀
-/// - Better ansatz (more parameters) -> tighter bound -> closer to E₀
-/// - Guaranteed convergence to local minimum
-///
-/// **Performance:**
-/// - SparseHamiltonian backend: GPU/Accelerate hardware acceleration
-/// - Typical convergence: 50-300 optimizer iterations
-/// - Circuit depth: shallow (NISQ-compatible)
-/// - Hardware requirements: coherence time > circuit execution time
-///
-/// **Use Cases:**
-/// - **Quantum chemistry**: Molecular ground state energies, reaction pathways
-/// - **Materials science**: Electronic structure, phase transitions
-/// - **Optimization**: QUBO problems, portfolio optimization
-/// - **Condensed matter**: Many-body systems, strongly correlated electrons
-///
-/// **Example - H₂ molecule ground state:**
+/// **Example:**
 /// ```swift
-/// // 1. Define molecular Hamiltonian
-/// let hamiltonian = Observable(terms: [
-///     (-1.05, PauliString(operators: [])),                    // Identity
-///     (0.39,  PauliString(operators: [(0, .z)])),             // Z₀
-///     (-0.39, PauliString(operators: [(1, .z)])),             // Z₁
-///     (-0.01, PauliString(operators: [(0, .z), (1, .z)])),    // Z₀Z₁
-///     (0.18,  PauliString(operators: [(0, .x), (1, .x)]))     // X₀X₁
-/// ])
-///
-/// // 2. Build hardware-efficient ansatz
-/// let ansatz = HardwareEfficientAnsatz(qubits: 2, depth: 2)
-///
-/// // 3. Configure VQE
-/// let vqe = await VQE(
-///     hamiltonian: hamiltonian,
-///     ansatz: ansatz,
-///     optimizer: NelderMeadOptimizer(tolerance: 1e-6),
-///     convergenceCriteria: ConvergenceCriteria(
-///         energyTolerance: 1e-6,
-///         maxIterations: 200
-///     )
-/// )
-///
-/// // 4. Run optimization with progress tracking
-/// let result = await vqe.runWithProgress(
-///     initialParameters: Array(repeating: 0.01, count: ansatz.parameterCount)
-/// ) { iteration, energy in
-///     print("Iteration \(iteration): E = \(energy) Hartree")
-/// }
-///
-/// print("Ground state energy: \(result.optimalEnergy) Hartree")
-/// print("Converged in \(result.iterations) iterations")
-/// print("Convergence: \(result.convergenceReason)")
+/// let vqe = VQE(hamiltonian: h2Hamiltonian, ansatz: ansatz, optimizer: COBYLAOptimizer())
+/// let result = await vqe.run(from: Array(repeating: 0.1, count: ansatz.parameterCount))
+/// print("Ground state energy: \(result.optimalEnergy)")
 /// ```
 ///
-/// **Example - Progress tracking for UI:**
-/// ```swift
-/// let vqe = await VQE(...)
-///
-/// let result = await vqe.runWithProgress(initialParameters: initialGuess) { iteration, energy in
-///     await MainActor.run {
-///         progressLabel.text = "Iteration \(iteration): E = \(String(format: "%.6f", energy))"
-///         energyChart.addDataPoint(x: iteration, y: energy)
-///     }
-/// }
-/// ```
-///
-/// **Architecture:**
-/// - Actor-based: Thread-safe, prevents data races
-/// - Async optimization: Non-blocking for UI applications
-/// - SparseHamiltonian: GPU/Accelerate hardware acceleration
-/// - Observable fallback: Guaranteed correctness if sparse construction fails
-/// - Progress tracking: Real-time energy updates
+/// - Complexity: O(iterations × (circuit_depth × 2^n + hamiltonian_sparsity))
+/// - Note: Actor-based for thread safety
+/// - SeeAlso: ``HardwareEfficientAnsatz``
+/// - SeeAlso: ``Observable``
+/// - SeeAlso: ``SparseHamiltonian``
+/// - SeeAlso: ``Optimizer``
+/// - SeeAlso: ``ConvergenceCriteria``
 public actor VQE {
     // MARK: - Configuration
 
@@ -102,7 +42,7 @@ public actor VQE {
     private let optimizer: Optimizer
 
     /// Convergence criteria for optimization
-    private let convergenceCriteria: ConvergenceCriteria
+    private let convergence: ConvergenceCriteria
 
     /// High-performance sparse Hamiltonian backend (optional)
     private let sparseHamiltonian: SparseHamiltonian?
@@ -120,111 +60,71 @@ public actor VQE {
 
     // MARK: - Initialization
 
-    /// Create VQE instance
+    /// Creates VQE optimizer with specified Hamiltonian and ansatz.
     ///
-    /// Configures hybrid quantum-classical optimization for ground state search.
-    /// Automatically constructs SparseHamiltonian backend if useSparseBackend=true.
+    /// Constructs sparse Hamiltonian backend when enabled for hardware-accelerated expectation values on
+    /// GPU/Accelerate. Falls back to Observable for term-by-term measurement if sparse construction fails.
+    /// Typical molecular Hamiltonians achieve 0.01-1% sparsity enabling substantial acceleration.
     ///
-    /// **Backend Selection:**
-    /// - SparseHamiltonian (default): GPU/Accelerate hardware acceleration
-    /// - Observable (fallback): Term-by-term measurement
-    ///
-    /// **Performance:**
-    /// - Sparse backend: O(nnz) where nnz = number of non-zeros (~0.01-1% of 4^n)
-    /// - Observable backend: O(k·2^n) where k = number of Pauli terms
-    /// - For 10-qubit H₂O: 8K non-zeros vs 2000 terms x 1024 amplitudes
+    /// **Example:**
+    /// ```swift
+    /// let ansatz = HardwareEfficientAnsatz(qubits: 4, depth: 3)
+    /// let vqe = VQE(hamiltonian: hamiltonian, ansatz: ansatz, optimizer: COBYLAOptimizer())
+    /// ```
     ///
     /// - Parameters:
-    ///   - hamiltonian: Molecular or optimization Hamiltonian
-    ///   - ansatz: Hardware-efficient Ansatz
+    ///   - hamiltonian: Target Hamiltonian for minimization
+    ///   - ansatz: Parameterized quantum circuit
     ///   - optimizer: Classical optimization algorithm
-    ///   - convergenceCriteria: Termination conditions (default: ε=1e-6, maxIter=1000)
-    ///   - useSparseBackend: Use SparseHamiltonian acceleration (default: true)
-    ///   - useMetalAcceleration: Use Metal GPU for circuit execution (default: true)
+    ///   - convergence: Termination criteria
+    ///   - useSparseBackend: Enable sparse matrix acceleration
+    ///   - useMetalAcceleration: Enable Metal GPU execution
+    /// - Complexity: O(hamiltonian_construction)
     public init(
         hamiltonian: Observable,
         ansatz: HardwareEfficientAnsatz,
         optimizer: Optimizer,
-        convergenceCriteria: ConvergenceCriteria = .init(),
+        convergence: ConvergenceCriteria = .init(),
         useSparseBackend: Bool = true,
-        useMetalAcceleration: Bool = true
+        useMetalAcceleration: Bool = true,
     ) {
         self.hamiltonian = hamiltonian
         self.ansatz = ansatz
         self.optimizer = optimizer
-        self.convergenceCriteria = convergenceCriteria
+        self.convergence = convergence
         sparseHamiltonian = useSparseBackend ? SparseHamiltonian(observable: hamiltonian) : nil
         simulator = QuantumSimulator(useMetalAcceleration: useMetalAcceleration)
     }
 
     // MARK: - Execution
 
-    /// Run VQE optimization
+    /// Executes VQE optimization from initial parameters.
     ///
-    /// Executes hybrid quantum-classical loop until convergence or max iterations.
-    /// Each iteration:
-    /// 1. Bind current parameters to ansatz
-    /// 2. Execute circuit on simulator (GPU-accelerated if available)
-    /// 3. Compute ⟨ψ|H|ψ⟩ using SparseHamiltonian (or Observable fallback)
-    /// 4. Classical optimizer updates parameters
+    /// Runs hybrid loop: binds parameters to ansatz, executes circuit, computes expectation value, updates
+    /// parameters until convergence. Optional progress callback receives iteration count and current energy
+    /// after each optimizer step for UI updates or logging.
     ///
-    /// **Complexity:**
-    /// - Per iteration: O(d·2^n + nnz) where d = circuit depth, nnz = Hamiltonian non-zeros
-    /// - Total: O(iters x (d·2^n + nnz)) where iters = optimizer iterations
-    ///
-    /// - Parameter initialParameters: Starting point in parameter space
-    /// - Returns: VQE result with optimal energy and parameters
-    ///
-    /// Example:
+    /// **Example:**
     /// ```swift
-    /// let initialGuess = Array(repeating: 0.01, count: ansatz.parameterCount)
-    /// let result = await vqe.run(initialParameters: initialGuess)
-    ///
-    /// print("Ground state: \(result.optimalEnergy) Hartree")
-    /// print("Parameters: \(result.optimalParameters)")
-    /// print("Iterations: \(result.iterations)")
+    /// let result = await vqe.run(from: initialParams) { iter, energy in print("[\(iter)] \(energy)") }
+    /// print("Ground state: \(result.optimalEnergy)")
     /// ```
-    @_optimize(speed)
-    @_eagerMove
-    public func run(initialParameters: [Double]) async -> VQEResult {
-        await runWithProgress(initialParameters: initialParameters, progressCallback: nil)
-    }
-
-    /// Run VQE with progress updates
-    ///
-    /// Same as `run()` but calls progressCallback after each iteration.
-    /// Useful for UI updates, logging, and convergence visualization.
-    ///
-    /// **Progress Callback:**
-    /// - Called after each optimizer iteration
-    /// - Receives: (iteration: Int, currentEnergy: Double)
-    /// - Async: can perform UI updates on MainActor
-    /// - Not called on initial evaluation
     ///
     /// - Parameters:
-    ///   - initialParameters: Starting parameters
-    ///   - progressCallback: Called with (iteration, energy) after each iteration
-    /// - Returns: VQE result
-    ///
-    /// Example:
-    /// ```swift
-    /// let result = await vqe.runWithProgress(initialParameters: initialGuess) { iter, E in
-    ///     print("[\(iter)] E = \(String(format: "%.8f", E)) Hartree")
-    ///
-    ///     // Update UI on main thread
-    ///     await MainActor.run {
-    ///         energyLabel.text = "\(E)"
-    ///         progressBar.progress = Double(iter) / 200.0
-    ///     }
-    /// }
-    /// ```
+    ///   - parameters: Initial ansatz parameters
+    ///   - progress: Optional callback receiving iteration and energy
+    /// - Returns: Optimization result with ground state energy and parameters
+    /// - Complexity: O(iterations × (circuit_depth × 2^n + hamiltonian_sparsity))
+    /// - Precondition: `parameters.count == ansatz.parameterCount`
+    /// - SeeAlso: ``Result``
+    /// - SeeAlso: ``Progress``
     @_optimize(speed)
     @_eagerMove
-    public func runWithProgress(
-        initialParameters: [Double],
-        progressCallback: (@Sendable (Int, Double) async -> Void)?
-    ) async -> VQEResult {
-        ValidationUtilities.validateArrayCount(initialParameters, expected: ansatz.parameterCount, name: "initialParameters")
+    public func run(
+        from parameters: [Double],
+        progress: (@Sendable (Int, Double) async -> Void)? = nil,
+    ) async -> Result {
+        ValidationUtilities.validateArrayCount(parameters, expected: ansatz.parameterCount, name: "parameters")
 
         currentIteration = 0
         currentEnergy = 0.0
@@ -245,135 +145,151 @@ public actor VQE {
 
         let optimizerProgressCallback: @Sendable (Int, Double) async -> Void = { iteration, energy in
             await self.updateProgress(iteration: iteration, energy: energy)
-            await progressCallback?(iteration, energy)
+            await progress?(iteration, energy)
         }
 
         let optimizerResult: OptimizerResult = await optimizer.minimize(
             energyFunction,
-            from: initialParameters,
-            using: convergenceCriteria,
-            progress: optimizerProgressCallback
+            from: parameters,
+            using: convergence,
+            progress: optimizerProgressCallback,
         )
 
-        return VQEResult(
+        return Result(
             optimalEnergy: optimizerResult.value,
             optimalParameters: optimizerResult.parameters,
             energyHistory: optimizerResult.history,
             iterations: optimizerResult.iterations,
             convergenceReason: optimizerResult.terminationReason,
-            functionEvaluations: optimizerResult.evaluations
+            functionEvaluations: optimizerResult.evaluations,
         )
     }
 
     // MARK: - State Queries
 
-    /// Get current optimization progress
-    /// - Returns: Tuple of (iteration, current energy)
-    @_effects(readonly)
-    public func getProgress() -> (iteration: Int, energy: Double) {
-        (currentIteration, currentEnergy)
+    /// Current optimization progress.
+    ///
+    /// Updated after each optimizer iteration during ``run(from:progress:)`` execution.
+    ///
+    /// - Complexity: O(1)
+    public var progress: Progress {
+        Progress(iteration: currentIteration, energy: currentEnergy)
     }
 
-    /// Get backend information (sparse or observable)
-    @_effects(readonly)
-    public func getBackendInfo() async -> String {
-        if let sparseH = sparseHamiltonian {
-            await "SparseHamiltonian: \(sparseH.backendDescription)"
-        } else {
-            "Observable: \(hamiltonian.terms.count) terms"
+    /// Hamiltonian backend description.
+    ///
+    /// Indicates whether sparse matrix or observable backend is being used for expectation value computation.
+    ///
+    /// - Complexity: O(1)
+    public var backendInfo: String {
+        get async {
+            if let sparseH = sparseHamiltonian {
+                await "SparseHamiltonian: \(sparseH.backendDescription)"
+            } else {
+                "Observable: \(hamiltonian.terms.count) terms"
+            }
         }
     }
 
     // MARK: - Private Helpers
 
+    /// Updates current iteration and energy state.
     @inline(__always)
     private func updateProgress(iteration: Int, energy: Double) {
         currentIteration = iteration
         currentEnergy = energy
     }
-}
 
-// MARK: - VQE Result
+    // MARK: - Nested Types
 
-/// VQE optimization result with convergence information
-///
-/// Contains optimal ground state energy, parameters, full convergence history,
-/// and diagnostics for analysis and visualization.
-///
-/// **Usage:**
-/// ```swift
-/// let result = await vqe.run(initialParameters: initialGuess)
-///
-/// // Ground state information
-/// print("E₀ = \(result.optimalEnergy) Hartree")
-/// print("Optimal parameters: \(result.optimalParameters)")
-///
-/// // Convergence diagnostics
-/// print("Converged: \(result.convergenceReason)")
-/// print("Iterations: \(result.iterations)")
-/// print("Function evaluations: \(result.functionEvaluations)")
-///
-/// // Plot convergence curve
-/// for (i, energy) in result.energyHistory.enumerated() {
-///     print("\(i),\(energy)")
-/// }
-///
-/// // Check convergence quality
-/// let energyRange = result.energyHistory.max()! - result.energyHistory.min()!
-/// print("Energy range: \(energyRange) Hartree")
-/// ```
-@frozen
-public struct VQEResult: Sendable, CustomStringConvertible {
-    /// Ground state energy found (upper bound on true E₀)
-    public let optimalEnergy: Double
+    /// Optimization state snapshot.
+    ///
+    /// Captures current iteration and energy during VQE execution. Updated after each optimizer step.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let state = await vqe.progress
+    /// print("Iteration \(state.iteration): E = \(state.energy)")
+    /// ```
+    @frozen
+    public struct Progress: Sendable, Equatable {
+        /// Current iteration number
+        public let iteration: Int
 
-    /// Optimal parameters for ansatz
-    public let optimalParameters: [Double]
+        /// Current energy value
+        public let energy: Double
 
-    /// Complete energy history (one per iteration)
-    public let energyHistory: [Double]
-
-    /// Total optimization iterations
-    public let iterations: Int
-
-    /// Why optimization terminated
-    public let convergenceReason: TerminationReason
-
-    /// Total objective function evaluations (includes gradient computations)
-    public let functionEvaluations: Int
-
-    public init(
-        optimalEnergy: Double,
-        optimalParameters: [Double],
-        energyHistory: [Double],
-        iterations: Int,
-        convergenceReason: TerminationReason,
-        functionEvaluations: Int
-    ) {
-        self.optimalEnergy = optimalEnergy
-        self.optimalParameters = optimalParameters
-        self.energyHistory = energyHistory
-        self.iterations = iterations
-        self.convergenceReason = convergenceReason
-        self.functionEvaluations = functionEvaluations
+        @inlinable
+        public init(iteration: Int, energy: Double) {
+            self.iteration = iteration
+            self.energy = energy
+        }
     }
 
-    public var description: String {
-        var paramStr = ""
-        let displayCount = min(optimalParameters.count, 3)
-        for i in 0 ..< displayCount {
-            if i > 0 { paramStr += ", " }
-            paramStr += String(format: "%.4f", optimalParameters[i])
-        }
-        let paramSuffix = optimalParameters.count > 3 ? ", ..." : ""
+    /// VQE optimization result.
+    ///
+    /// Contains ground state energy (upper bound on true E₀), optimal parameters, and convergence diagnostics.
+    /// Energy history enables convergence analysis and visualization.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let result = await vqe.run(from: initialGuess)
+    /// print("E₀ = \(result.optimalEnergy), converged: \(result.convergenceReason)")
+    /// ```
+    ///
+    /// - SeeAlso: ``VQE``
+    /// - SeeAlso: ``TerminationReason``
+    @frozen
+    public struct Result: Sendable, CustomStringConvertible {
+        /// Ground state energy (upper bound on true E₀)
+        public let optimalEnergy: Double
 
-        return """
-        VQE Result:
-          Ground State Energy: \(String(format: "%.8f", optimalEnergy)) Hartree
-          Parameters: [\(paramStr)\(paramSuffix)]
-          Iterations: \(iterations)
-          Function Evaluations: \(functionEvaluations)
-          Convergence: \(convergenceReason)
-        """
+        /// Optimal ansatz parameters
+        public let optimalParameters: [Double]
+
+        /// Energy at each iteration
+        public let energyHistory: [Double]
+
+        /// Total iterations performed
+        public let iterations: Int
+
+        /// Termination condition reached
+        public let convergenceReason: TerminationReason
+
+        /// Total function evaluations (includes gradient computations)
+        public let functionEvaluations: Int
+
+        public init(
+            optimalEnergy: Double,
+            optimalParameters: [Double],
+            energyHistory: [Double],
+            iterations: Int,
+            convergenceReason: TerminationReason,
+            functionEvaluations: Int,
+        ) {
+            self.optimalEnergy = optimalEnergy
+            self.optimalParameters = optimalParameters
+            self.energyHistory = energyHistory
+            self.iterations = iterations
+            self.convergenceReason = convergenceReason
+            self.functionEvaluations = functionEvaluations
+        }
+
+        /// Multi-line formatted summary of optimization results.
+        public var description: String {
+            let paramStr = optimalParameters.prefix(3)
+                .map { String(format: "%.4f", $0) }
+                .joined(separator: ", ")
+            let paramSuffix = optimalParameters.count > 3 ? ", ..." : ""
+
+            return """
+            VQE Result:
+              Ground State Energy: \(String(format: "%.8f", optimalEnergy))
+              Parameters: [\(paramStr)\(paramSuffix)]
+              Iterations: \(iterations)
+              Function Evaluations: \(functionEvaluations)
+              Convergence: \(convergenceReason)
+            """
+        }
     }
 }

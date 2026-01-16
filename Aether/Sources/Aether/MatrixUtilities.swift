@@ -16,7 +16,7 @@ import Accelerate
 /// SIMD vectorization and cache optimization. Critical for unitary partitioning, circuit optimization,
 /// and multi-gate composition in variational algorithms.
 ///
-/// **Example**:
+/// **Example:**
 /// ```swift
 /// let h = QuantumGate.hadamard.matrix()
 /// let x = QuantumGate.pauliX.matrix()
@@ -31,7 +31,7 @@ public enum MatrixUtilities {
     /// Primary use cases: gate composition (fusing sequential gates), unitarity validation (U†U),
     /// and basis transformations (U†OU for operator conjugation).
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let h = QuantumGate.hadamard.matrix()
     /// let x = QuantumGate.pauliX.matrix()
@@ -99,7 +99,7 @@ public enum MatrixUtilities {
                                 OpaquePointer(aPtr.baseAddress), Int32(n),
                                 OpaquePointer(bPtr.baseAddress), Int32(n),
                                 OpaquePointer(betaPtr),
-                                OpaquePointer(cPtr.baseAddress), Int32(n)
+                                OpaquePointer(cPtr.baseAddress), Int32(n),
                             )
                         }
                     }
@@ -126,7 +126,7 @@ public enum MatrixUtilities {
     /// Essential for unitarity validation (U†U = I), operator basis transformations (U†OU), and
     /// computing adjoint evolution. For unitary gates: U† = U⁻¹ (inverse equals conjugate transpose).
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let u = QuantumGate.hadamard.matrix()
     /// let uDagger = MatrixUtilities.hermitianConjugate(u)
@@ -161,7 +161,7 @@ public enum MatrixUtilities {
     /// initialization of unitary transformations, and matrix algebra operations. Identity satisfies
     /// I x M = M x I = M for any matrix M, and is itself unitary: I† = I.
     ///
-    /// **Example**:
+    /// **Example:**
     /// ```swift
     /// let i4 = MatrixUtilities.identityMatrix(dimension: 4)  // 4x4 identity for 2-qubit gates
     /// ```
@@ -179,8 +179,9 @@ public enum MatrixUtilities {
         return (0 ..< dimension).map { i in
             [Complex<Double>](unsafeUninitializedCapacity: dimension) { buffer, count in
                 for j in 0 ..< dimension {
-                    buffer[j] = (i == j) ? .one : .zero
+                    buffer[j] = .zero
                 }
+                buffer[i] = .one
                 count = dimension
             }
         }

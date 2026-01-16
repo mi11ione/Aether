@@ -5,55 +5,40 @@
 ///
 /// Implements massively parallel quantum gate operations on Apple GPUs using Metal.
 /// Each kernel processes quantum state amplitudes in parallel across thousands of GPU threads,
-/// achieving 2-10x speedup over CPU for states with ≥10 qubits (2^10 = 1024 amplitudes).
+/// providing significant speedup over CPU for states with 10 or more qubits.
 ///
-/// **GPU parallelization strategy**:
-/// - Single-qubit gates: Each thread processes one amplitude pair (i, j) where i and j differ only in target qubit
-/// - Two-qubit gates: Each thread processes one amplitude quartet (4 states differing in control/target qubits)
-/// - CNOT/Toffoli: Each thread processes one amplitude, reads from input buffer, writes to output buffer
+/// Single-qubit gates have each thread process one amplitude pair (i, j) where indices differ
+/// only in target qubit. Two-qubit gates process amplitude quartets for states differing in
+/// control/target qubits. CNOT and Toffoli gates process one amplitude per thread using
+/// separate input/output buffers.
 ///
-/// **Thread mapping**:
-/// - Thread grid size: 2^n threads for n-qubit state (one per amplitude or per pair/quartet)
-/// - Threadgroups: Auto-sized to GPU hardware limits (typically 256-1024 threads per group)
-/// - Memory access: Coalesced reads/writes for optimal bandwidth utilization
+/// Thread grid size is 2^n for n-qubit states with threadgroups auto-sized to hardware limits.
+/// Memory access patterns use coalesced reads/writes for optimal bandwidth. Complex amplitudes
+/// use Float32 precision matching Swift Complex<Float> layout for zero-copy transfer.
 ///
-/// **Complex number representation**:
-/// - Float32 precision (complex amplitudes stored as (real, imaginary) pairs)
-/// - Matches Swift Complex<Float> layout for zero-copy CPU-GPU transfer
-/// - Operations: Complex addition, multiplication, scalar scaling
+/// Race conditions are avoided through unique index ownership for single/two-qubit gates
+/// (in-place update safe) and separate input/output buffers for CNOT/Toffoli gates.
 ///
-/// **Race condition avoidance**:
-/// - Single-qubit/two-qubit: Each thread writes to unique indices (in-place update safe)
-/// - CNOT/Toffoli: Separate input/output buffers prevent read-after-write hazards
+/// Kernels: applySingleQubitGate (2x2 matrix-vector), applyCNOT (conditional swap),
+/// applyTwoQubitGate (4x4 matrix-vector), applyToffoli (double-controlled NOT),
+/// csrSparseMatVec (sparse Hamiltonian multiply).
 ///
-/// **Kernel functions**:
-/// 1. `applySingleQubitGate`: Parallel 2x2 matrix-vector multiplication for qubit pairs
-/// 2. `applyCNOT`: Optimized controlled-NOT with conditional amplitude swap
-/// 3. `applyTwoQubitGate`: General 4x4 matrix-vector for arbitrary two-qubit gates
-/// 4. `applyToffoli`: Double-controlled NOT (three-qubit gate)
-/// 5. `csrSparseMatVec`: CSR sparse matrix-vector multiply for Hamiltonian expectation values
-///
-/// Example usage (from Swift):
+/// **Example:**
 /// ```swift
-/// // Metal shader automatically invoked by MetalGateApplication
 /// let metalApp = MetalGateApplication()
-/// let state = QuantumState(numQubits: 12)  // 4096 amplitudes
-/// let newState = metalApp.apply(gate: .hadamard, to: 0, state: state)
-/// // GPU processes 2048 amplitude pairs in parallel
+/// let state = QuantumState(qubits: 12)
+/// let newState = await metalApp.apply(gate: .hadamard, to: 0, state: state)
 /// ```
 ///
-/// **Mathematical correctness**:
-/// All kernels implement the same quantum mechanics as CPU GateApplication:
-/// - Unitarity: U†U = I preserved through exact matrix operations
-/// - Normalization: Σ|cᵢ|² = 1 maintained by unitary transformations
-/// - Bit ordering: Little-endian qubit indexing (qubit 0 is LSB)
+/// All kernels preserve unitarity (U†U = I) and normalization (Σ|cᵢ|² = 1) through exact
+/// matrix operations. Bit ordering uses little-endian qubit indexing (qubit 0 is LSB).
 
 #include <metal_stdlib>
 using namespace metal;
 
-// Complex number structure matching Swift Complex<Float>
-// Memory layout: 8 bytes (4 bytes real + 4 bytes imaginary)
-// Alignment: Matches Swift's @frozen Complex<Float> for zero-copy transfer
+/// Complex number structure matching Swift Complex<Float>
+/// Memory layout: 8 bytes (4 bytes real + 4 bytes imaginary)
+/// Alignment: Matches Swift's @frozen Complex<Float> for zero-copy transfer
 struct ComplexFloat {
     float real;
     float imaginary;
@@ -88,44 +73,33 @@ inline ComplexFloat complexScale(ComplexFloat a, float scalar) {
 ///
 /// Transforms quantum state by applying 2x2 unitary matrix U to target qubit.
 /// Each thread processes one amplitude pair (cᵢ, cⱼ) where i and j differ only
-/// in the target qubit bit.
+/// in the target qubit bit. Launches 2^(n-1) threads, each computing index pair
+/// by inserting a 0 bit at targetQubit position, applying [cᵢ', cⱼ'] = U·[cᵢ, cⱼ],
+/// and writing results in-place with no race conditions due to unique index ownership.
 ///
-/// **Algorithm**:
-/// - Launch 2^(n-1) threads (half of state size)
-/// - Thread gid computes index pair by "inserting" a 0 bit at targetQubit position
-/// - Applies matrix: [cᵢ', cⱼ'] = U · [cᵢ, cⱼ] where U = [[g00, g01], [g10, g11]]
-/// - Writes results back in-place (no race conditions - unique indices per thread)
+/// Index computation uses lowMask = (1 << targetQubit) - 1 to extract bits below
+/// targetQubit, then i = (gid & lowMask) | ((gid & ~lowMask) << 1) shifts upper
+/// bits left while keeping lower bits, and j = i | (1 << targetQubit) sets the
+/// target bit to 1.
 ///
-/// **Index computation** (insert 0 bit at position targetQubit):
-/// - lowMask = (1 << targetQubit) - 1 extracts bits below targetQubit
-/// - i = (gid & lowMask) | ((gid & ~lowMask) << 1) shifts upper bits left, keeps lower bits
-/// - j = i | (1 << targetQubit) sets the targetQubit bit to 1
+/// Each thread reads 2 amplitudes and writes 2 amplitudes. Adjacent threads access
+/// nearby memory for coalesced bandwidth.
 ///
-/// **Parallelization**:
-/// - Threads: 2^(n-1)
-/// - Memory access: Each thread reads 2 amplitudes, writes 2 amplitudes
-/// - Coalescing: Adjacent threads access nearby memory for optimal bandwidth
-///
-/// **Parameters**:
+/// **Parameters:**:
 /// - amplitudes: Input/output state vector (2^n complex amplitudes)
 /// - targetQubit: Qubit index to apply gate to (0 to n-1)
-/// - gateMatrix: 2x2 unitary matrix [g00, g01, g10, g11] in row-major order
-/// - numQubits: Total number of qubits (n)
+/// - gateMatrix: 2x2 unitary matrix [g00, g01, g10, g11] row-major
+/// - qubits: Total number of qubits (n)
 /// - gid: Thread ID in grid (0 to 2^(n-1) - 1)
-///
-/// Example: Hadamard on qubit 1 of 3-qubit state (stateSize=8, launch 4 threads)
-/// - Thread 0: lowMask=1, i=(0&1)|((0&~1)<<1)=0, j=0|2=2 -> processes (c000, c010)
-/// - Thread 1: i=(1&1)|((1&~1)<<1)=1, j=1|2=3 -> processes (c001, c011)
-/// - Thread 2: i=(2&1)|((2&~1)<<1)=4, j=4|2=6 -> processes (c100, c110)
-/// - Thread 3: i=(3&1)|((3&~1)<<1)=5, j=5|2=7 -> processes (c101, c111)
+/// - Complexity: O(1) per thread, O(2^(n-1)) total threads
 kernel void applySingleQubitGate(
     device ComplexFloat *amplitudes [[buffer(0)]],
     constant uint &targetQubit [[buffer(1)]],
     constant ComplexFloat *gateMatrix [[buffer(2)]],
-    constant uint &numQubits [[buffer(3)]],
+    constant uint &qubits [[buffer(3)]],
     uint gid [[thread_position_in_grid]]
 ) {
-    const uint numPairs = 1 << (numQubits - 1);
+    const uint numPairs = 1 << (qubits - 1);
     
     if (gid < numPairs) {
         const uint lowMask = (1 << targetQubit) - 1;
@@ -152,45 +126,32 @@ kernel void applySingleQubitGate(
 
 /// Apply CNOT gate: optimized controlled-NOT implementation
 ///
-/// Implements CNOT(control->target) gate with conditional amplitude swap.
-/// Much faster than general two-qubit gate matrix multiplication since
-/// CNOT only swaps amplitudes when control=1, no complex arithmetic needed.
+/// Implements CNOT(control→target) with conditional amplitude swap, avoiding
+/// complex arithmetic since CNOT only swaps amplitudes when control=1. Each
+/// thread processes one amplitude: if control bit is 1, writes to flipped
+/// target index; if 0, writes unchanged. Uses separate input/output buffers
+/// to avoid read-after-write hazards.
 ///
-/// **Algorithm**:
-/// - Each thread processes one amplitude at index gid
-/// - If control bit is 1: write amplitude to flipped target index
-/// - If control bit is 0: write amplitude unchanged
-/// - Uses separate input/output buffers to avoid read-after-write hazards
+/// Launches 2^n threads (one per amplitude). Each thread reads 1 amplitude
+/// and writes 1 amplitude. Write pattern depends on qubit indices.
 ///
-/// **Parallelization**:
-/// - Threads: 2^n (all active, one per amplitude)
-/// - Memory access: Each thread reads 1 amplitude, writes 1 amplitude
-/// - Write pattern: Non-coalesced (depends on qubit indices), but still fast
-///
-/// **Parameters**:
+/// **Parameters:**
 /// - amplitudes: Input state vector (read-only)
 /// - controlQubit: Control qubit index (0 to n-1)
 /// - targetQubit: Target qubit index (0 to n-1, ≠ control)
-/// - numQubits: Total number of qubits (n)
+/// - qubits: Total number of qubits (n)
 /// - outputAmplitudes: Output state vector (write-only)
 /// - gid: Thread ID in grid (0 to 2^n - 1)
-///
-/// Example: CNOT(0->1) on 2-qubit state
-/// - Input: [c00, c01, c10, c11]
-/// - Thread 0: control=0 -> output[0] = input[0] (c00 unchanged)
-/// - Thread 1: control=1 -> output[3] = input[1] (c01 -> c11)
-/// - Thread 2: control=0 -> output[2] = input[2] (c10 unchanged)
-/// - Thread 3: control=1 -> output[1] = input[3] (c11 -> c01)
-/// - Output: [c00, c11, c10, c01]
+/// - Complexity: O(1) per thread, O(2^n) total threads
 kernel void applyCNOT(
     device ComplexFloat *amplitudes [[buffer(0)]],
     constant uint &controlQubit [[buffer(1)]],
     constant uint &targetQubit [[buffer(2)]],
-    constant uint &numQubits [[buffer(3)]],
+    constant uint &qubits [[buffer(3)]],
     device ComplexFloat *outputAmplitudes [[buffer(4)]],
     uint gid [[thread_position_in_grid]]
 ) {
-    const uint stateSize = 1 << numQubits;
+    const uint stateSize = 1 << qubits;
     
     if (gid < stateSize) {
         const uint controlMask = 1 << controlQubit;
@@ -211,46 +172,34 @@ kernel void applyCNOT(
 ///
 /// Transforms quantum state by applying 4x4 unitary matrix to control/target qubits.
 /// Each thread processes one amplitude quartet (c00, c01, c10, c11) where indices
-/// differ only in the control and target qubit bits.
+/// differ only in control and target bits. Launches 2^(n-2) threads, each computing
+/// index quartet by inserting two 0 bits, applying [c'00, c'01, c'10, c'11]ᵀ = U·[c00, c01, c10, c11]ᵀ,
+/// and writing in-place with unique index ownership.
 ///
-/// **Algorithm**:
-/// - Launch 2^(n-2) threads (quarter of state size)
-/// - Thread gid computes index quartet by "inserting" two 0 bits at qubit positions
-/// - Applies 4x4 matrix: [c'00, c'01, c'10, c'11]ᵀ = U · [c00, c01, c10, c11]ᵀ
-/// - Writes results back in-place (each thread owns 4 unique indices)
+/// Index computation sorts qubit positions (lo = min, hi = max), uses loMask to
+/// extract bits below lo, inserts 0 at lo then hi to get base i00, then sets
+/// control/target bits for i01, i10, i11.
 ///
-/// **Index computation** (insert two 0 bits at control and target positions):
-/// - Sort qubit positions: lo = min(control, target), hi = max(control, target)
-/// - loMask = (1 << lo) - 1 extracts bits below lo
-/// - midMask = ((1 << (hi - lo - 1)) - 1) << lo extracts bits between lo and hi
-/// - Insert 0 at lo, then 0 at hi to get base index i00
-/// - Set control/target bits to get i01, i10, i11
+/// Each thread reads 4 amplitudes and writes 4 amplitudes, performing 16 complex
+/// multiplications and 12 complex additions.
 ///
-/// **Parallelization**:
-/// - Threads: 2^(n-2)
-/// - Memory access: Each thread reads 4 amplitudes, writes 4 amplitudes
-/// - Computation: 16 complex multiplications + 12 complex additions per thread
-///
-/// **Parameters**:
+/// **Parameters:**
 /// - amplitudes: Input/output state vector (2^n complex amplitudes)
 /// - controlQubit: Control qubit index (0 to n-1)
 /// - targetQubit: Target qubit index (0 to n-1, ≠ control)
-/// - gateMatrix: 4x4 unitary matrix (16 elements, row-major order)
-/// - numQubits: Total number of qubits (n)
+/// - gateMatrix: 4x4 unitary matrix (16 elements, row-major)
+/// - qubits: Total number of qubits (n)
 /// - gid: Thread ID in grid (0 to 2^(n-2) - 1)
-///
-/// Example: CZ gate on qubits (0,1) of 3-qubit state (stateSize=8, launch 2 threads)
-/// - Thread 0: i00=0, i01=1, i10=2, i11=3 -> processes quartet [c000,c001,c010,c011]
-/// - Thread 1: i00=4, i01=5, i10=6, i11=7 -> processes quartet [c100,c101,c110,c111]
+/// - Complexity: O(1) per thread, O(2^(n-2)) total threads
 kernel void applyTwoQubitGate(
     device ComplexFloat *amplitudes [[buffer(0)]],
     constant uint &controlQubit [[buffer(1)]],
     constant uint &targetQubit [[buffer(2)]],
     constant ComplexFloat *gateMatrix [[buffer(3)]],
-    constant uint &numQubits [[buffer(4)]],
+    constant uint &qubits [[buffer(4)]],
     uint gid [[thread_position_in_grid]]
 ) {
-    const uint numQuartets = 1 << (numQubits - 2);
+    const uint numQuartets = 1 << (qubits - 2);
     
     if (gid < numQuartets) {
         const uint lo = min(controlQubit, targetQubit);
@@ -273,9 +222,7 @@ kernel void applyTwoQubitGate(
         ComplexFloat c01 = amplitudes[i01];
         ComplexFloat c10 = amplitudes[i10];
         ComplexFloat c11 = amplitudes[i11];
-        
-        // Apply 4x4 matrix
-        // Matrix stored row-major: [row][col]
+
         ComplexFloat new00 = complexAdd(
             complexAdd(complexMultiply(gateMatrix[0], c00), complexMultiply(gateMatrix[1], c01)),
             complexAdd(complexMultiply(gateMatrix[2], c10), complexMultiply(gateMatrix[3], c11))
@@ -304,46 +251,34 @@ kernel void applyTwoQubitGate(
 
 /// Apply Toffoli gate: double-controlled NOT (CCNOT)
 ///
-/// Implements three-qubit Toffoli gate that flips target qubit if both control
+/// Implements three-qubit Toffoli gate that flips target qubit when both control
 /// qubits are |1⟩. Essential for reversible classical logic and quantum error
-/// correction. Optimized special case avoiding 8x8 matrix multiplication.
+/// correction, optimized to avoid 8x8 matrix multiplication. Each thread processes
+/// one amplitude: if both control bits are 1, writes to flipped target index;
+/// otherwise writes unchanged. Uses separate input/output buffers for race safety.
 ///
-/// **Algorithm**:
-/// - Each thread processes one amplitude at index gid
-/// - If both control bits are 1: write amplitude to flipped target index
-/// - Otherwise: write amplitude unchanged (identity operation)
-/// - Uses separate input/output buffers to prevent race conditions
+/// Launches 2^n threads (one per amplitude). Each thread reads 1 amplitude and
+/// writes 1 amplitude. Approximately 25% of threads perform the swap operation.
 ///
-/// **Parallelization**:
-/// - Threads: 2^n (all active, one per amplitude)
-/// - Memory access: Each thread reads 1 amplitude, writes 1 amplitude
-/// - Conditional logic: Only ~25% of threads perform swap (when both controls = 1)
-///
-/// **Parameters**:
+/// **Parameters:**
 /// - amplitudes: Input state vector (read-only)
 /// - control1Qubit: First control qubit index (0 to n-1)
 /// - control2Qubit: Second control qubit index (0 to n-1, ≠ control1)
-/// - targetQubit: Target qubit index (0 to n-1, ≠ control1, ≠ control2)
-/// - numQubits: Total number of qubits (n)
+/// - targetQubit: Target qubit index (0 to n-1, ≠ controls)
+/// - qubits: Total number of qubits (n)
 /// - outputAmplitudes: Output state vector (write-only)
 /// - gid: Thread ID in grid (0 to 2^n - 1)
-///
-/// Example: Toffoli(0,1->2) on 3-qubit state
-/// - Input: [c000, c001, c010, c011, c100, c101, c110, c111]
-/// - Thread 6 (0b110): Both controls=1, target=0 -> output[7] = input[6]
-/// - Thread 7 (0b111): Both controls=1, target=1 -> output[6] = input[7]
-/// - Other threads: Write unchanged (controls not both 1)
-/// - Output: [c000, c001, c010, c011, c100, c101, c111, c110] (swap c110<->c111)
+/// - Complexity: O(1) per thread, O(2^n) total threads
 kernel void applyToffoli(
     device ComplexFloat *amplitudes [[buffer(0)]],
     constant uint &control1Qubit [[buffer(1)]],
     constant uint &control2Qubit [[buffer(2)]],
     constant uint &targetQubit [[buffer(3)]],
-    constant uint &numQubits [[buffer(4)]],
+    constant uint &qubits [[buffer(4)]],
     device ComplexFloat *outputAmplitudes [[buffer(5)]],
     uint gid [[thread_position_in_grid]]
 ) {
-    const uint stateSize = 1 << numQubits;
+    const uint stateSize = 1 << qubits;
     
     if (gid < stateSize) {
         const uint c1Mask = 1 << control1Qubit;
@@ -351,11 +286,9 @@ kernel void applyToffoli(
         const uint targetMask = 1 << targetQubit;
         
         if (((gid & c1Mask) != 0) && ((gid & c2Mask) != 0)) {
-            // Both controls are 1: flip target
             const uint flipped = gid ^ targetMask;
             outputAmplitudes[flipped] = amplitudes[gid];
         } else {
-            // Otherwise: identity
             outputAmplitudes[gid] = amplitudes[gid];
         }
     }
@@ -363,62 +296,35 @@ kernel void applyToffoli(
 
 // MARK: - CSR Sparse Matrix-Vector Multiply Kernel
 
-/// CSR Sparse Matrix-Vector Multiply: output = H * input (for Hamiltonian expectation values)
+/// CSR Sparse Matrix-Vector Multiply: output = H × input for Hamiltonian expectation values
 ///
-/// Implements sparse matrix-vector multiplication using CSR (Compressed Sparse Row) format
-/// for quantum Hamiltonian expectation values. Each thread computes one output element
-/// by accumulating the dot product of one sparse row with the input vector.
+/// Implements sparse matrix-vector multiplication using CSR (Compressed Sparse Row) format.
+/// Each thread computes one output element by accumulating the dot product of one sparse
+/// row with the input vector: output[row] = Σⱼ H[row,j] × input[j], iterating from
+/// rowPointers[row] to rowPointers[row+1]-1 and accumulating values[k] × input[columnIndices[k]].
 ///
-/// **Algorithm:**
-/// - Each thread row: Computes output[row] = Σⱼ H[row,j] * input[j]
-/// - CSR iteration: Loop from rowPointers[row] to rowPointers[row+1]-1
-/// - For each k: Accumulate values[k] * input[columnIndices[k]]
+/// Launches dimension threads (one per matrix row). Each thread reads O(nnz/dimension)
+/// sparse elements on average, performing complex multiplication and addition per non-zero.
 ///
-/// **Parallelization:**
-/// - Threads: dimension (one per matrix row)
-/// - Memory access: Each thread reads O(nnz/dimension) sparse elements (average non-zeros per row)
-/// - Computation: Complex multiplication + addition per non-zero element
-///
-/// **CSR Format:**
-/// - rowPointers[i] = index in columnIndices/values where row i starts
-/// - rowPointers[i+1] - rowPointers[i] = number of non-zeros in row i
-/// - columnIndices[k] = column index of k-th non-zero element
-/// - values[k] = complex value of k-th non-zero element
+/// CSR format uses rowPointers[i] as the index where row i starts in columnIndices/values,
+/// with rowPointers[i+1] - rowPointers[i] giving non-zeros in row i. columnIndices[k] holds
+/// the column index and values[k] the complex value of the k-th non-zero element.
 ///
 /// **Example:**
-/// ```
-/// Matrix: [[1+i, 0, 2], [0, 3, 0], [4-i, 0, 5]]
-/// CSR:
-///   rowPointers = [0, 2, 3, 5]
-///   columnIndices = [0, 2, 1, 0, 2]
-///   values = [1+i, 2+0i, 3+0i, 4-i, 5+0i]
-///
-/// Row 0: start=0, end=2 -> H[0,0]*input[0] + H[0,2]*input[2]
-/// Row 1: start=2, end=3 -> H[1,1]*input[1]
-/// Row 2: start=3, end=5 -> H[2,0]*input[0] + H[2,2]*input[2]
+/// ```swift
+/// let sparseH = SparseHamiltonian(observable: hamiltonian)
+/// let energy = sparseH.expectationValue(state: state)
 /// ```
 ///
 /// **Parameters:**
-/// - rowPointers: CSR row pointers [dimension+1] - indices into columnIndices
-/// - columnIndices: CSR column indices [nnz] - column index of each non-zero
-/// - values: Complex values [nnz] - non-zero matrix elements
-/// - input: Input vector [dimension] - quantum state |ψ⟩
-/// - output: Output vector [dimension] - result H|ψ⟩ (write-only)
-/// - dimension: Matrix dimension (2^numQubits)
+/// - rowPointers: CSR row pointers [dimension+1]
+/// - columnIndices: CSR column indices [nnz]
+/// - values: Complex values [nnz]
+/// - input: Input vector [dimension] quantum state |ψ⟩
+/// - output: Output vector [dimension] result H|ψ⟩
+/// - dimension: Matrix dimension (2^qubits)
 /// - row: Thread ID (0 to dimension-1)
-///
-/// Example usage (from Swift):
-/// ```swift
-/// // Build CSR sparse Hamiltonian once
-/// let sparseH = SparseHamiltonian(observable: hamiltonian)
-///
-/// // VQE iteration: compute ⟨ψ|H|ψ⟩ = ⟨ψ|(H|ψ⟩)
-/// for iteration in 0..<100 {
-///     let state = prepareAnsatz(parameters: params)
-///     let energy = sparseH.expectationValue(state: state)
-///     // GPU computes H|ψ⟩ in parallel, then CPU computes inner product
-/// }
-/// ```
+/// - Complexity: O(nnz/dimension) per thread, O(nnz) total
 kernel void csrSparseMatVec(
     device const uint *rowPointers [[buffer(0)]],
     device const uint *columnIndices [[buffer(1)]],
