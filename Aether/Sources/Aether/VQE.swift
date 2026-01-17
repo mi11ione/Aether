@@ -22,7 +22,7 @@ import Foundation
 /// print("Ground state energy: \(result.optimalEnergy)")
 /// ```
 ///
-/// - Complexity: O(iterations × (circuit_depth × 2^n + hamiltonian_sparsity))
+/// - Complexity: O(iterations * (circuit_depth * 2^n + hamiltonian_sparsity))
 /// - Note: Actor-based for thread safety
 /// - SeeAlso: ``HardwareEfficientAnsatz``
 /// - SeeAlso: ``Observable``
@@ -114,7 +114,7 @@ public actor VQE {
     ///   - parameters: Initial ansatz parameters
     ///   - progress: Optional callback receiving iteration and energy
     /// - Returns: Optimization result with ground state energy and parameters
-    /// - Complexity: O(iterations × (circuit_depth × 2^n + hamiltonian_sparsity))
+    /// - Complexity: O(iterations * (circuit_depth * 2^n + hamiltonian_sparsity))
     /// - Precondition: `parameters.count == ansatz.parameterCount`
     /// - SeeAlso: ``Result``
     /// - SeeAlso: ``Progress``

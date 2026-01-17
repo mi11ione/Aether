@@ -29,7 +29,7 @@ import Foundation
 /// print("Optimal cost: \(result.optimalCost)")
 /// ```
 ///
-/// - Complexity: O(iterations × (depth × 2^n + hamiltonian_sparsity))
+/// - Complexity: O(iterations * (depth * 2^n + hamiltonian_sparsity))
 /// - Note: Actor-based for thread safety and concurrent execution prevention
 /// - SeeAlso: ``Result``
 /// - SeeAlso: ``MaxCut``
@@ -152,11 +152,11 @@ public actor QAOA {
     /// ```
     ///
     /// - Parameters:
-    ///   - parameters: Initial parameter vector (length 2×depth for γ⃗ and β⃗)
+    ///   - parameters: Initial parameter vector (length 2*depth for γ⃗ and β⃗)
     ///   - progress: Optional callback receiving iteration count and current cost value
     /// - Returns: Optimization result with cost, parameters, solution probabilities, and convergence info
-    /// - Complexity: O(iterations × (circuit_depth × 2^n + hamiltonian_operations))
-    /// - Precondition: `parameters.count` must equal 2×depth
+    /// - Complexity: O(iterations * (circuit_depth * 2^n + hamiltonian_operations))
+    /// - Precondition: `parameters.count` must equal 2*depth
     /// - SeeAlso: ``Result``
     /// - SeeAlso: ``ConvergenceCriteria``
     @_optimize(speed)

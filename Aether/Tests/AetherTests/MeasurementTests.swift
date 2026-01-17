@@ -721,12 +721,12 @@ struct PauliBasisMeasurementTests {
         #expect(allCases.count == 3)
     }
 
-    @Test("CustomBasisMeasurementResult description")
-    func customBasisMeasurementResultDescription() {
+    @Test("PauliMeasurementResult description")
+    func pauliMeasurementResultDescription() {
         let state = QuantumState(qubits: 1)
         let result = Measurement.measure(0, basis: .z, in: state)
 
-        #expect(result.description.contains("1.0000|0⟩"))
+        #expect(result.description.contains("PauliMeasurement"))
         #expect(result.description.contains("+1") || result.description.contains("-1"))
     }
 }
@@ -1137,6 +1137,197 @@ struct StatevectorSnapshotTests {
         let snapshot2 = Measurement.snapshot(of: state, label: "Second")
 
         #expect(snapshot2.timestamp > snapshot1.timestamp)
+    }
+}
+
+/// Test suite for PartialMeasurementResult description formatting.
+/// Validates human-readable output for both single and multiple qubit measurements.
+@Suite("PartialMeasurementResult Description")
+struct PartialMeasurementResultDescriptionTests {
+    @Test("Single outcome uses singular format")
+    func singleOutcomeSingularFormat() {
+        let state = QuantumState(qubits: 2)
+        let result = Measurement.measure(0, in: state)
+
+        let description = result.description
+        #expect(description.contains("PartialMeasurement"))
+        #expect(description.contains("outcome="))
+        #expect(!description.contains("outcomes="), "Single outcome should use 'outcome=' not 'outcomes='")
+    }
+
+    @Test("Multiple outcomes uses plural format")
+    func multipleOutcomesPluralFormat() {
+        let state = QuantumState(qubits: 3)
+        let result = Measurement.measure([0, 1], in: state)
+
+        let description = result.description
+        #expect(description.contains("PartialMeasurement"))
+        #expect(description.contains("outcomes="), "Multiple outcomes should use 'outcomes='")
+        #expect(description.contains("["), "Multiple outcomes should show array format")
+    }
+
+    @Test("Single outcome description includes state info")
+    func singleOutcomeIncludesState() {
+        let state = QuantumState(qubits: 2)
+        let result = Measurement.measure(0, in: state)
+
+        #expect(result.description.contains("state="))
+    }
+
+    @Test("Multiple outcomes description includes state info")
+    func multipleOutcomesIncludesState() {
+        let ghz = QuantumCircuit.ghz(qubits: 3).execute()
+        let result = Measurement.measure([0, 1, 2], in: ghz)
+
+        #expect(result.description.contains("state="))
+        #expect(result.description.contains("outcomes="))
+    }
+}
+
+/// Test suite for CustomBasisMeasurementResult description formatting.
+/// Validates human-readable output for custom basis measurement results.
+@Suite("CustomBasisMeasurementResult Description")
+struct CustomBasisMeasurementResultDescriptionTests {
+    @Test("Description includes CustomBasisMeasurement prefix")
+    func descriptionIncludesPrefix() {
+        let state = QuantumState(qubits: 1)
+        let customBasis = [
+            Complex(1 / sqrt(2.0), 0),
+            Complex(1 / sqrt(2.0), 0),
+        ]
+
+        let result = Measurement.measure(0, basis: customBasis, in: state)
+
+        #expect(result.description.contains("CustomBasisMeasurement"))
+    }
+
+    @Test("Description includes outcome value")
+    func descriptionIncludesOutcome() {
+        let state = QuantumState(qubits: 1)
+        let customBasis = [
+            Complex(1 / sqrt(2.0), 0),
+            Complex(1 / sqrt(2.0), 0),
+        ]
+
+        let result = Measurement.measure(0, basis: customBasis, in: state)
+
+        #expect(result.description.contains("outcome="))
+        #expect(result.description.contains("0") || result.description.contains("1"))
+    }
+
+    @Test("Description includes state info")
+    func descriptionIncludesState() {
+        let state = QuantumState(qubits: 1)
+        let customBasis = [
+            Complex(1.0, 0),
+            Complex(0.0, 0),
+        ]
+
+        let result = Measurement.measure(0, basis: customBasis, in: state)
+
+        #expect(result.description.contains("state="))
+    }
+
+    @Test("Description format is consistent")
+    func descriptionFormatConsistent() {
+        let state = QuantumState(qubits: 2)
+        let customBasis = [
+            Complex(0.6, 0),
+            Complex(0.8, 0),
+        ]
+
+        let result = Measurement.measure(0, basis: customBasis, in: state)
+
+        let description = result.description
+        #expect(description.hasPrefix("CustomBasisMeasurement:"))
+    }
+}
+
+/// Test suite for auto-sizing histogram function.
+/// Validates histogram(outcomes:) that infers size from max outcome.
+@Suite("Auto-Sizing Histogram")
+struct AutoSizingHistogramTests {
+    @Test("Empty outcomes returns empty histogram")
+    func emptyOutcomesReturnsEmpty() {
+        let outcomes: [Int] = []
+        let histogram = Measurement.histogram(outcomes: outcomes)
+
+        #expect(histogram.isEmpty)
+    }
+
+    @Test("Single outcome creates histogram of size max+1")
+    func singleOutcomeCreatesCorrectSize() {
+        let outcomes = [5]
+        let histogram = Measurement.histogram(outcomes: outcomes)
+
+        #expect(histogram.count == 6)
+        #expect(histogram[5] == 1)
+        for i in 0 ..< 5 {
+            #expect(histogram[i] == 0)
+        }
+    }
+
+    @Test("Histogram counts outcomes correctly")
+    func histogramCountsCorrectly() {
+        let outcomes = [0, 1, 1, 0, 2, 1, 0, 3]
+        let histogram = Measurement.histogram(outcomes: outcomes)
+
+        #expect(histogram.count == 4)
+        #expect(histogram[0] == 3)
+        #expect(histogram[1] == 3)
+        #expect(histogram[2] == 1)
+        #expect(histogram[3] == 1)
+    }
+
+    @Test("Negative outcomes are ignored")
+    func negativeOutcomesIgnored() {
+        let outcomes = [0, -1, 1, -5, 2]
+        let histogram = Measurement.histogram(outcomes: outcomes)
+
+        #expect(histogram.count == 3)
+        #expect(histogram[0] == 1)
+        #expect(histogram[1] == 1)
+        #expect(histogram[2] == 1)
+    }
+
+    @Test("All negative outcomes returns empty")
+    func allNegativeOutcomesReturnsEmpty() {
+        let outcomes = [-1, -2, -3]
+        let histogram = Measurement.histogram(outcomes: outcomes)
+
+        #expect(histogram.isEmpty)
+    }
+
+    @Test("Sparse outcomes create correct histogram")
+    func sparseOutcomesCorrectHistogram() {
+        let outcomes = [0, 10, 0, 10]
+        let histogram = Measurement.histogram(outcomes: outcomes)
+
+        #expect(histogram.count == 11)
+        #expect(histogram[0] == 2)
+        #expect(histogram[10] == 2)
+        for i in 1 ..< 10 {
+            #expect(histogram[i] == 0)
+        }
+    }
+
+    @Test("Large gap in outcomes handled correctly")
+    func largeGapHandled() {
+        let outcomes = [0, 100]
+        let histogram = Measurement.histogram(outcomes: outcomes)
+
+        #expect(histogram.count == 101)
+        #expect(histogram[0] == 1)
+        #expect(histogram[100] == 1)
+    }
+
+    @Test("Mixed positive and negative with zero max")
+    func mixedWithZeroMax() {
+        let outcomes = [-5, -1, 0, -3]
+        let histogram = Measurement.histogram(outcomes: outcomes)
+
+        #expect(histogram.count == 1)
+        #expect(histogram[0] == 1)
     }
 }
 

@@ -198,30 +198,21 @@ public enum QWCGrouper {
         }
 
         mutating func extractMax() -> Int? {
-            while !heap.isEmpty {
-                let top = heap[0]
-                if removed[top.vertex] {
-                    removeTop()
-                    continue
-                }
-                removed[top.vertex] = true
-                removeTop()
-                return top.vertex
-            }
-            return nil
+            guard !heap.isEmpty else { return nil }
+            let top = heap[0]
+            removed[top.vertex] = true
+            removeTop()
+            return top.vertex
         }
 
         mutating func updatePriority(vertex: Int, newSaturation: Int) {
             let index = vertexToIndex[vertex]
-            guard index >= 0, index < heap.count, heap[index].vertex == vertex else { return }
-
             heap[index].saturation = newSaturation
             siftUp(index)
         }
 
         @inline(__always)
         private mutating func removeTop() {
-            guard !heap.isEmpty else { return }
             let lastIndex = heap.count - 1
             if lastIndex > 0 {
                 heap.swapAt(0, lastIndex)

@@ -387,4 +387,17 @@ struct CircuitUnitaryTests {
 
         #expect(abs(unitary[0][0].real - 0.5) < 1e-10)
     }
+
+    @Test("Two-qubit gate with control > target (reverse qubit ordering)")
+    func twoQubitGateControlGreaterThanTarget() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.cnot, to: [1, 0])
+        let unitary = CircuitUnitary.unitary(for: circuit)
+
+        #expect(unitary.count == 4)
+        #expect(unitary[0][0] == Complex(1, 0))
+        #expect(unitary[1][1] == Complex(1, 0))
+        #expect(unitary[2][3] == Complex(1, 0))
+        #expect(unitary[3][2] == Complex(1, 0))
+    }
 }

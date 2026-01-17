@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 @testable import Aether
+import Foundation
 import Testing
 
 /// Test suite for Hermitian observable expectations.
@@ -382,6 +383,19 @@ struct ObservablePauliMultiplicationTests {
         let variance = observable.variance(of: state)
         #expect(variance >= 0)
     }
+
+    @Test("Squared observable filters cancelled terms from coefficient accumulation")
+    func squaredFiltersCancelledTerms() {
+        let observable = Observable(terms: [
+            (coefficient: 1.0, pauliString: PauliString(.x(0))),
+            (coefficient: -1.0, pauliString: PauliString(.x(0))),
+        ])
+
+        let state = QuantumState(qubits: 1)
+        let variance = observable.variance(of: state)
+
+        #expect(abs(variance) < 1e-10, "Variance of cancelled observable should be zero")
+    }
 }
 
 /// Test suite for observable edge cases.
@@ -470,5 +484,246 @@ struct ObservableEdgeCasesTests {
         let description = observable.description
         #expect(description.contains("I"))
         #expect(description.contains("2.5"))
+    }
+
+    @Test("pauliX expectation value is correct")
+    func pauliXExpectation() {
+        let xObs = Observable.pauliX(qubit: 0)
+
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.hadamard, to: 0)
+        let plusState = circuit.execute()
+
+        let expectation = xObs.expectationValue(of: plusState)
+        #expect(abs(expectation - 1.0) < 1e-10, "⟨+|X|+⟩ should be +1")
+    }
+
+    @Test("pauliY expectation value is correct")
+    func pauliYExpectation() {
+        let yObs = Observable.pauliY(qubit: 0)
+
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.sGate, to: 0)
+        let plusIState = circuit.execute()
+
+        let expectation = yObs.expectationValue(of: plusIState)
+        #expect(abs(expectation - 1.0) < 1e-10, "⟨+i|Y|+i⟩ should be +1")
+    }
+
+    @Test("pauliZ factory with custom coefficient")
+    func pauliZFactoryCustomCoefficient() {
+        let zObs = Observable.pauliZ(qubit: 0, coefficient: -3.14)
+
+        #expect(abs(zObs.terms[0].coefficient - -3.14) < 1e-10, "Should use custom coefficient")
+    }
+
+    @Test("Squared observable filters near-zero coefficients from Pauli products")
+    func squaredFiltersNearZeroCoefficients() {
+        let observable = Observable(terms: [
+            (coefficient: 1e-8, pauliString: PauliString(.x(0))),
+            (coefficient: 1e-8, pauliString: PauliString(.y(0))),
+        ])
+
+        let state = QuantumState(qubits: 1)
+        let variance = observable.variance(of: state)
+
+        #expect(abs(variance) < 1e-10, "Variance with tiny coefficients should be near zero")
+    }
+
+    @Test("Squared filters zero-coefficient results from identical Pauli multiplication")
+    func squaredZeroFromIdenticalPaulis() {
+        let tiny = 1e-8
+        let observable = Observable(terms: [
+            (coefficient: tiny, pauliString: PauliString(.z(0))),
+            (coefficient: tiny, pauliString: PauliString(.z(1))),
+        ])
+
+        let state = QuantumState(qubits: 2)
+        let variance = observable.variance(of: state)
+
+        #expect(abs(variance) < 1e-10, "Variance should handle near-zero squared terms")
+    }
+
+    @Test("Threshold at iteration 0 equals initial threshold")
+    func thresholdAtZero() {
+        let schedule = Observable.AdaptiveSchedule(
+            initialThreshold: 0.5,
+            finalThreshold: 0.0,
+            decayRate: 0.1,
+        )
+
+        let threshold = schedule.threshold(at: 0)
+        #expect(
+            abs(threshold - 0.5) < 1e-10,
+            "Threshold at iteration 0 should equal initialThreshold",
+        )
+    }
+
+    @Test("Threshold decays exponentially")
+    func thresholdDecaysExponentially() {
+        let schedule = Observable.AdaptiveSchedule(
+            initialThreshold: 1.0,
+            finalThreshold: 0.0,
+            decayRate: 0.1,
+        )
+
+        let t0 = schedule.threshold(at: 0)
+        let t10 = schedule.threshold(at: 10)
+        let t20 = schedule.threshold(at: 20)
+
+        #expect(t0 > t10, "Threshold should decrease over iterations")
+        #expect(t10 > t20, "Threshold should continue decreasing")
+
+        let expected10 = exp(-1.0)
+        #expect(
+            abs(t10 - expected10) < 1e-10,
+            "Threshold at iteration 10 should follow exponential decay",
+        )
+    }
+
+    @Test("Threshold approaches final threshold at high iterations")
+    func thresholdApproachesFinal() {
+        let schedule = Observable.AdaptiveSchedule(
+            initialThreshold: 1.0,
+            finalThreshold: 0.1,
+            decayRate: 0.1,
+        )
+
+        let t1000 = schedule.threshold(at: 1000)
+
+        #expect(
+            abs(t1000 - 0.1) < 1e-10,
+            "Threshold should approach finalThreshold at high iterations",
+        )
+    }
+
+    @Test("Threshold with non-zero final threshold")
+    func thresholdNonZeroFinal() {
+        let schedule = Observable.AdaptiveSchedule(
+            initialThreshold: 0.5,
+            finalThreshold: 0.05,
+            decayRate: 0.2,
+        )
+
+        let t0 = schedule.threshold(at: 0)
+        let t50 = schedule.threshold(at: 50)
+
+        #expect(
+            abs(t0 - 0.5) < 1e-10,
+            "Initial threshold should be exact",
+        )
+        #expect(
+            t50 >= 0.05,
+            "Threshold should never go below finalThreshold",
+        )
+    }
+
+    @Test("Applying schedule at iteration 0 uses high threshold")
+    func applyingAtIterationZero() {
+        let hamiltonian = Observable(terms: [
+            (coefficient: 1.0, pauliString: PauliString(.z(0))),
+            (coefficient: 0.3, pauliString: PauliString(.z(1))),
+            (coefficient: 0.05, pauliString: PauliString(.x(0))),
+        ])
+
+        let schedule = Observable.AdaptiveSchedule(
+            initialThreshold: 0.5,
+            finalThreshold: 0.0,
+            decayRate: 0.1,
+        )
+
+        let filtered = hamiltonian.applying(schedule: schedule, iteration: 0)
+
+        #expect(
+            filtered.terms.count == 1,
+            "Only terms with |coeff| >= 0.5 should remain at iteration 0",
+        )
+        #expect(
+            filtered.terms[0].coefficient == 1.0,
+            "Largest coefficient term should remain",
+        )
+    }
+
+    @Test("Applying schedule at high iteration uses low threshold")
+    func applyingAtHighIteration() {
+        let hamiltonian = Observable(terms: [
+            (coefficient: 1.0, pauliString: PauliString(.z(0))),
+            (coefficient: 0.3, pauliString: PauliString(.z(1))),
+            (coefficient: 0.05, pauliString: PauliString(.x(0))),
+        ])
+
+        let schedule = Observable.AdaptiveSchedule(
+            initialThreshold: 0.5,
+            finalThreshold: 0.0,
+            decayRate: 0.1,
+        )
+
+        let filtered = hamiltonian.applying(schedule: schedule, iteration: 100)
+
+        #expect(
+            filtered.terms.count == 3,
+            "All terms should remain at high iteration with near-zero threshold",
+        )
+    }
+
+    @Test("Applying schedule progressively includes more terms")
+    func applyingProgressiveInclusion() {
+        let hamiltonian = Observable(terms: [
+            (coefficient: 1.0, pauliString: PauliString(.z(0))),
+            (coefficient: 0.2, pauliString: PauliString(.z(1))),
+            (coefficient: 0.05, pauliString: PauliString(.x(0))),
+        ])
+
+        let schedule = Observable.AdaptiveSchedule.aggressive
+
+        let filtered0 = hamiltonian.applying(schedule: schedule, iteration: 0)
+        let filtered20 = hamiltonian.applying(schedule: schedule, iteration: 20)
+        let filtered50 = hamiltonian.applying(schedule: schedule, iteration: 50)
+
+        #expect(
+            filtered0.terms.count <= filtered20.terms.count,
+            "More terms should be included as iteration increases",
+        )
+        #expect(
+            filtered20.terms.count <= filtered50.terms.count,
+            "Term count should be non-decreasing with iteration",
+        )
+    }
+
+    @Test("Applying with moderate schedule")
+    func applyingModerateSchedule() {
+        let hamiltonian = Observable(terms: [
+            (coefficient: 0.5, pauliString: PauliString(.z(0))),
+            (coefficient: 0.08, pauliString: PauliString(.z(1))),
+            (coefficient: 0.02, pauliString: PauliString(.x(0))),
+        ])
+
+        let filtered = hamiltonian.applying(schedule: .moderate, iteration: 0)
+
+        #expect(
+            filtered.terms.count >= 1,
+            "At least largest term should survive",
+        )
+        #expect(
+            filtered.terms[0].coefficient == 0.5,
+            "Largest term should be first",
+        )
+    }
+
+    @Test("Applying with conservative schedule retains most terms early")
+    func applyingConservativeSchedule() {
+        let hamiltonian = Observable(terms: [
+            (coefficient: 0.5, pauliString: PauliString(.z(0))),
+            (coefficient: 0.05, pauliString: PauliString(.z(1))),
+            (coefficient: 0.02, pauliString: PauliString(.x(0))),
+        ])
+
+        let filtered = hamiltonian.applying(schedule: .conservative, iteration: 0)
+
+        #expect(
+            filtered.terms.count == 3,
+            "Conservative schedule should retain all significant terms",
+        )
     }
 }

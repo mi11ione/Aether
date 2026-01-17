@@ -259,6 +259,26 @@ struct VariationalQuantumEigensolverTests {
         #expect(result.optimalEnergy < 0.0)
     }
 
+    @Test("VQE runs with Observable backend when sparse disabled")
+    func vqeRunsWithObservableBackend() async {
+        let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
+        let ansatz = HardwareEfficientAnsatz(qubits: 1, depth: 1)
+        let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
+
+        let vqe = VQE(
+            hamiltonian: hamiltonian,
+            ansatz: ansatz,
+            optimizer: optimizer,
+            convergence: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
+            useSparseBackend: false,
+        )
+
+        let result = await vqe.run(from: [0.1])
+
+        #expect(result.optimalEnergy < 0.0, "Should find negative ground state energy")
+        #expect(result.optimalEnergy > -1.1, "Energy should be close to -1.0")
+    }
+
     @Test("VQE tracks function evaluations")
     func vqeTracksFunctionEvaluations() async {
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))

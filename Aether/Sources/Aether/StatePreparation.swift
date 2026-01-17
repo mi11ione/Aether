@@ -179,7 +179,6 @@ public extension QuantumState {
             body(0)
             return
         }
-        guard k <= n else { return }
 
         var x = (1 << k) - 1
         let limit = 1 << n

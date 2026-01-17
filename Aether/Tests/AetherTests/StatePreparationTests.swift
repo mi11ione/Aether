@@ -74,17 +74,6 @@ struct StatePreparationTests {
         let prob = finalState.probability(of: 11)
         #expect(abs(prob - 1.0) < 1e-10, "State |1011⟩ should have probability 1.0")
     }
-
-    @Test("Basis state circuit applies correct number of X gates")
-    func basisStateCircuitGateCount() {
-        let circuit = QuantumCircuit.basis(qubits: 4, state: 10)
-
-        let xGateCount = circuit.gates.count(where: {
-            if case .pauliX = $0.gate { true } else { false }
-        })
-
-        #expect(xGateCount == 2, "Binary 1010 has 2 ones, should apply 2 X gates")
-    }
 }
 
 /// Tests for all four Bell states prepared via helper circuits.

@@ -126,7 +126,7 @@ kernel void applySingleQubitGate(
 
 /// Apply CNOT gate: optimized controlled-NOT implementation
 ///
-/// Implements CNOT(control→target) with conditional amplitude swap, avoiding
+/// Implements CNOT(control->target) with conditional amplitude swap, avoiding
 /// complex arithmetic since CNOT only swaps amplitudes when control=1. Each
 /// thread processes one amplitude: if control bit is 1, writes to flipped
 /// target index; if 0, writes unchanged. Uses separate input/output buffers
@@ -296,12 +296,12 @@ kernel void applyToffoli(
 
 // MARK: - CSR Sparse Matrix-Vector Multiply Kernel
 
-/// CSR Sparse Matrix-Vector Multiply: output = H × input for Hamiltonian expectation values
+/// CSR Sparse Matrix-Vector Multiply: output = H * input for Hamiltonian expectation values
 ///
 /// Implements sparse matrix-vector multiplication using CSR (Compressed Sparse Row) format.
 /// Each thread computes one output element by accumulating the dot product of one sparse
-/// row with the input vector: output[row] = Σⱼ H[row,j] × input[j], iterating from
-/// rowPointers[row] to rowPointers[row+1]-1 and accumulating values[k] × input[columnIndices[k]].
+/// row with the input vector: output[row] = Σⱼ H[row,j] * input[j], iterating from
+/// rowPointers[row] to rowPointers[row+1]-1 and accumulating values[k] * input[columnIndices[k]].
 ///
 /// Launches dimension threads (one per matrix row). Each thread reads O(nnz/dimension)
 /// sparse elements on average, performing complex multiplication and addition per non-zero.

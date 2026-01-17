@@ -172,4 +172,14 @@ struct ParameterValueTests {
 
         #expect(set.count == 2)
     }
+
+    @Test("Convenience initializer from Parameter")
+    func convenienceInitializerFromParameter() {
+        let param = Parameter(name: "gamma")
+        let expr = ParameterValue(param)
+
+        #expect(expr.isSymbolic, "Should be symbolic when created from Parameter")
+        #expect(expr.parameter == param, "Should contain the original parameter")
+        #expect(expr == .parameter(param), "Should equal explicit .parameter case")
+    }
 }

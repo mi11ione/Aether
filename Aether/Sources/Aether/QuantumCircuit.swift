@@ -81,7 +81,7 @@ public struct Gate: Equatable, Hashable, CustomStringConvertible, Sendable {
     private static func formatTimestamp(_ time: Double) -> String {
         let formatted = String(format: "%.6f", time)
         let trimmed = formatted.replacingOccurrences(of: #"\.?0+$"#, with: "", options: .regularExpression)
-        return trimmed.isEmpty ? "0" : trimmed
+        return trimmed
     }
 }
 
@@ -272,9 +272,6 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
 
         let operation = Gate(gate, to: qubits, timestamp: timestamp)
         gates.insert(operation, at: index)
-
-        let operationMax: Int = operation.qubits.max() ?? -1
-        if operationMax > cachedMaxQubitUsed { cachedMaxQubitUsed = operationMax }
     }
 
     /// Inserts a gate at a specific position in the circuit (single-qubit convenience)
@@ -898,12 +895,14 @@ public extension QuantumCircuit {
     ///
     /// **Example:**
     /// ```swift
-    /// let qaoaAnsatz = QAOAAnsatz.create(...)
+    /// let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2), (2, 0)])
+    /// let mixer = MixerHamiltonian.x(qubits: 3)
+    /// let ansatz = QuantumCircuit.qaoa(cost: cost, mixer: mixer, qubits: 3, depth: 1)
     ///
     /// let gammaRange = stride(from: 0.0, through: .pi, by: .pi / 10)
     /// let betaRange = stride(from: 0.0, through: .pi, by: .pi / 10)
     ///
-    /// let vectors = qaoaAnsatz.gridSearchVectors(ranges: [
+    /// let vectors = ansatz.gridSearchVectors(ranges: [
     ///     Array(gammaRange),
     ///     Array(betaRange)
     /// ])
@@ -1053,7 +1052,7 @@ public extension QuantumCircuit {
 
     /// Creates Quantum Fourier Transform circuit for frequency domain transformation.
     ///
-    /// Implements |j⟩ → (1/√N)Σₖ exp(2πijk/N)|k⟩ where N = 2ⁿ, a key component in Shor's algorithm
+    /// Implements |j⟩ -> (1/√N)Σₖ exp(2πijk/N)|k⟩ where N = 2ⁿ, a key component in Shor's algorithm
     /// and quantum phase estimation. Applies Hadamard to each qubit followed by controlled-phase
     /// gates with angles π/2, π/4, π/8, ... (decreasing powers of 2), then reverses qubit order
     /// with SWAP gates.
@@ -1152,7 +1151,7 @@ public extension QuantumCircuit {
     /// Creates Grover search algorithm circuit for O(√N) unstructured search.
     ///
     /// Initializes uniform superposition, then repeats oracle (phase flip on target) and diffusion
-    /// (inversion about average) for optimal iterations ⌊π/4 × √(2ⁿ)⌋. Achieves quadratic speedup
+    /// (inversion about average) for optimal iterations ⌊π/4 * √(2ⁿ)⌋. Achieves quadratic speedup
     /// over classical O(N) search.
     ///
     /// - Parameters:
@@ -1327,7 +1326,7 @@ public extension QuantumCircuit {
 
     /// Appends multi-controlled arbitrary single-qubit unitary gate.
     ///
-    /// Applies gate U with n controls: |1⟩⊗ⁿ|ψ⟩ → |1⟩⊗ⁿU|ψ⟩. Pauli gates use optimized basis-specific
+    /// Applies gate U with n controls: |1⟩⊗ⁿ|ψ⟩ -> |1⟩⊗ⁿU|ψ⟩. Pauli gates use optimized basis-specific
     /// decompositions, Hadamard uses Ry sandwich around controlled-Z, and general unitaries use
     /// Gray code decomposition U·Cⁿ(X)·U†·Cⁿ(X)·U.
     ///
@@ -1350,21 +1349,25 @@ public extension QuantumCircuit {
 
         let n = controls.count
 
-        if n == 0 {
-            circuit.append(gate, to: target)
-        } else {
-            switch gate {
-            case .pauliX:
-                appendMultiControlledX(to: &circuit, controls: controls, target: target)
-            case .pauliY:
-                appendMultiControlledY(to: &circuit, controls: controls, target: target)
-            case .pauliZ:
-                appendMultiControlledZ(to: &circuit, controls: controls, target: target)
-            case .hadamard:
+        switch gate {
+        case .pauliX:
+            appendMultiControlledX(to: &circuit, controls: controls, target: target)
+        case .pauliY:
+            appendMultiControlledY(to: &circuit, controls: controls, target: target)
+        case .pauliZ:
+            appendMultiControlledZ(to: &circuit, controls: controls, target: target)
+        case .hadamard:
+            if n == 0 {
+                circuit.append(.hadamard, to: target)
+            } else {
                 circuit.append(.rotationY(.pi / 4), to: target)
                 appendMultiControlledZ(to: &circuit, controls: controls, target: target)
                 circuit.append(.rotationY(-.pi / 4), to: target)
-            default:
+            }
+        default:
+            if n == 0 {
+                circuit.append(gate, to: target)
+            } else {
                 circuit.append(gate, to: target)
                 appendMultiControlledX(to: &circuit, controls: controls, target: target)
 

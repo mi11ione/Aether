@@ -49,32 +49,6 @@ public enum BitUtilities {
         (index >> qubit) & 1
     }
 
-    /// Set bit at specific qubit position to given value
-    ///
-    /// Modifies a basis state index by setting the specified qubit to 0 or 1 using bitwise operations.
-    /// Algorithm: `(index & ~(1 << qubit)) | (value << qubit)` clears target bit then sets it to value.
-    /// Used for basis state construction, measurement collapse, and controlled gate operations.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let state = 5  // |101⟩
-    /// BitUtilities.setBit(state, qubit: 1, value: 1)  // 7 (|111⟩)
-    /// BitUtilities.setBit(state, qubit: 0, value: 0)  // 4 (|100⟩)
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - index: Original basis state index
-    ///   - qubit: Qubit position to modify
-    ///   - value: New bit value (0 or 1)
-    /// - Returns: Modified basis state index
-    /// - Complexity: O(1) - constant bitwise operations (AND, OR, shift)
-    @_effects(readonly)
-    @inlinable
-    @inline(__always)
-    static func setBit(_ index: Int, qubit: Int, value: Int) -> Int {
-        (index & ~(1 << qubit)) | (value << qubit)
-    }
-
     /// Flip bit at specific qubit position
     ///
     /// Toggles the specified qubit: 0->1 or 1->0 using XOR operation. Essential for implementing
@@ -177,32 +151,6 @@ public enum BitUtilities {
             result |= (bit << position)
         }
         return result
-    }
-
-    /// Extract two bits as integer value (optimized for Toffoli gate)
-    ///
-    /// Specialized fast path for the common 2-qubit case avoiding loop overhead entirely with direct
-    /// bit extraction. Algorithm: `((index >> qubit0) & 1) | (((index >> qubit1) & 1) << 1)` extracts
-    /// both bits in parallel. Primarily used for Toffoli gate control qubit checks.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let state = 7  // |111⟩
-    /// BitUtilities.getTwoBits(state, qubit0: 0, qubit1: 1)  // 3
-    /// BitUtilities.getTwoBits(state, qubit0: 1, qubit1: 2)  // 3
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - index: Basis state index
-    ///   - qubit0: First qubit position (becomes bit 0 of result)
-    ///   - qubit1: Second qubit position (becomes bit 1 of result)
-    /// - Returns: Integer 0-3 formed from the two extracted bits
-    /// - Complexity: O(1) - direct bit extraction without loop
-    @_effects(readonly)
-    @inlinable
-    @inline(__always)
-    static func getTwoBits(_ index: Int, qubit0: Int, qubit1: Int) -> Int {
-        ((index >> qubit0) & 1) | (((index >> qubit1) & 1) << 1)
     }
 
     /// Insert zero bit at position, shifting higher bits up

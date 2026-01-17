@@ -185,7 +185,7 @@ enum QAOAAnsatz {
 ///
 /// Parses parameter names once at construction, enabling fast binding without repeated
 /// string parsing in optimization loops. Expands base parameters [γ₀,β₀,...,γₚ₋₁,βₚ₋₁]
-/// to all coefficient-scaled variants (e.g., "gamma_0_c_1.5" = γ₀ × 1.5).
+/// to all coefficient-scaled variants (e.g., "gamma_0_c_1.5" = γ₀ * 1.5).
 ///
 /// Internal use by ``QAOA`` actor for efficient parameter binding during optimization.
 ///

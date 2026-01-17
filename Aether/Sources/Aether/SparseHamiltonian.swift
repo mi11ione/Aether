@@ -79,7 +79,7 @@ public actor SparseHamiltonian {
 
     /// Creates sparse Hamiltonian representation with automatic backend selection.
     ///
-    /// Backend selection priority: Metal GPU (larger systems) → Accelerate Sparse (smaller systems) →
+    /// Backend selection priority: Metal GPU (larger systems) -> Accelerate Sparse (smaller systems) ->
     /// Observable fallback. The sparse representation persists across all VQE iterations, amortizing
     /// construction cost over the entire optimization.
     ///
@@ -135,7 +135,7 @@ public actor SparseHamiltonian {
     }
 
     /// Builds COO matrix from observable terms.
-    /// - Complexity: O(terms × 2ⁿ) construction, O(nnz log nnz) sorting
+    /// - Complexity: O(terms * 2ⁿ) construction, O(nnz log nnz) sorting
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -324,19 +324,19 @@ public actor SparseHamiltonian {
             }
         }
 
-        guard let realMatrix = buildAccelerateSparseMatrix(
+        let realMatrix = buildAccelerateSparseMatrix(
             rows: realRows,
             cols: realCols,
             values: realVals,
             dimension: dimension,
-        ) else { return nil }
+        )
 
-        guard let imagMatrix = buildAccelerateSparseMatrix(
+        let imagMatrix = buildAccelerateSparseMatrix(
             rows: imagRows,
             cols: imagCols,
             values: imagVals,
             dimension: dimension,
-        ) else { return nil }
+        )
 
         return .accelerateSparse(
             realMatrix: realMatrix,
@@ -353,7 +353,7 @@ public actor SparseHamiltonian {
         cols: [Int32],
         values: [Double],
         dimension: Int,
-    ) -> SparseMatrix_Double? {
+    ) -> SparseMatrix_Double {
         let nnz: Int = rows.count
 
         guard nnz > 0 else {
@@ -410,11 +410,9 @@ public actor SparseHamiltonian {
     @_eagerMove
     @_effects(readonly)
     private static func convertComplexToFloat32Pairs(_ complexArray: [Complex<Double>]) -> [(Float, Float)] {
-        guard !complexArray.isEmpty else { return [] }
-
-        return complexArray.withUnsafeBufferPointer { complexBuffer in
-            // Safety: Guard verified non-empty, baseAddress always valid for non-empty buffer
-            let doublePtr = UnsafeRawPointer(complexBuffer.baseAddress!)
+        complexArray.withUnsafeBufferPointer { complexBuffer in
+            guard let baseAddress = complexBuffer.baseAddress else { return [] }
+            let doublePtr = UnsafeRawPointer(baseAddress)
                 .assumingMemoryBound(to: Double.self)
             let doubleCount = complexArray.count * 2
 

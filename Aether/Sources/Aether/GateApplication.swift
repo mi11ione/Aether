@@ -3,8 +3,8 @@
 
 /// CPU-based gate execution using optimized matrix-vector multiplication.
 ///
-/// Transforms quantum states by applying gate matrices without computing full 2^n × 2^n tensor products.
-/// Single-qubit gates apply 2×2 matrices to 2^(n-1) amplitude pairs, two-qubit gates apply 4×4 matrices
+/// Transforms quantum states by applying gate matrices without computing full 2^n * 2^n tensor products.
+/// Single-qubit gates apply 2*2 matrices to 2^(n-1) amplitude pairs, two-qubit gates apply 4*4 matrices
 /// to 2^(n-2) quartets. CNOT, CZ, and Toffoli use conditional swaps instead of matrix multiplication.
 ///
 /// Uses little-endian qubit indexing where qubit 0 is LSB in basis state index. Complexity is O(2^n)

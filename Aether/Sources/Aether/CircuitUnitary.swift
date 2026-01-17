@@ -22,17 +22,13 @@ import Accelerate
 /// or very deep circuits, gate-by-gate execution through ``QuantumSimulator`` is more efficient.
 ///
 /// ```swift
-/// let ansatz = HardwareEfficientAnsatz.create(qubits: 8, depth: 3)
+/// let ansatz = HardwareEfficientAnsatz(qubits: 8, depth: 3)
 /// let circuits = (0..<100).map { i in
-///     ansatz.bind(parameterVector: generateParameters(seed: i))
+///     ansatz.circuit.bound(with: generateParameters(seed: i))
 /// }
 /// let unitaries = circuits.map { CircuitUnitary.unitary(for: $0) }
-/// let evaluator = await MPSBatchEvaluator()
-/// let energies = await evaluator.evaluateExpectationValues(
-///     unitaries: unitaries,
-///     initialState: QuantumState(qubits: 8),
-///     hamiltonian: hamiltonian
-/// )
+/// let evaluator = MPSBatchEvaluator()
+/// let states = await evaluator.evaluate(batch: circuits, from: QuantumState(qubits: 8))
 /// ```
 ///
 /// - Note: Unitary matrices are computed using ``MatrixUtilities`` with Accelerate BLAS for optimal performance.
@@ -261,11 +257,14 @@ public enum CircuitUnitary {
     /// - Parameter qubits: Number of qubits.
     /// - Returns: True if computation is feasible within memory constraints.
     /// - Complexity: O(1).
+    /// - Precondition: `qubits > 0`.
+    /// - Precondition: `qubits <= 30`.
     /// - SeeAlso: ``memoryUsage(for:)`` for estimated memory usage.
     @_effects(readonly)
     @inlinable
     public static func canConvert(qubits: Int) -> Bool {
-        guard qubits > 0, qubits <= 30 else { return false }
+        ValidationUtilities.validatePositiveQubits(qubits)
+        ValidationUtilities.validateMemoryLimit(qubits)
 
         let memoryBytes: Int = memoryUsage(for: qubits)
         let availableMemory: UInt64 = ProcessInfo.processInfo.physicalMemory

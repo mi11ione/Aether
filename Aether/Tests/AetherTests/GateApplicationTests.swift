@@ -511,4 +511,18 @@ struct ConvenienceExtensionTests {
 
         #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-10)
     }
+
+    @Test("applying(gate:to:[Int]) with multi-qubit gate creates Bell state")
+    func applyingWithArrayMultiQubitGate() {
+        let state = QuantumState(qubits: 2)
+            .applying(.hadamard, to: 0)
+            .applying(.cnot, to: [0, 1])
+
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        #expect(abs(state.amplitude(of: 0).real - invSqrt2) < 1e-10, "Bell state |00⟩ amplitude")
+        #expect(abs(state.amplitude(of: 1).magnitude) < 1e-10, "Bell state |01⟩ should be zero")
+        #expect(abs(state.amplitude(of: 2).magnitude) < 1e-10, "Bell state |10⟩ should be zero")
+        #expect(abs(state.amplitude(of: 3).real - invSqrt2) < 1e-10, "Bell state |11⟩ amplitude")
+        #expect(state.isNormalized(), "Bell state should be normalized")
+    }
 }

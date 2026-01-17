@@ -238,6 +238,22 @@ struct SparseHamiltonianBackendTests {
         let value = await sparseH.expectationValue(of: state)
         #expect(abs(value) < 1e-10)
     }
+
+    @Test("Empty observable with large system size uses fallback")
+    func emptyObservableLargeSystem() async {
+        let observable = Observable(terms: [])
+        let sparseH = SparseHamiltonian(observable: observable, systemSize: 8)
+
+        #expect(sparseH.qubits == 8, "Should use specified system size")
+        #expect(sparseH.nnz == 0, "Empty observable has no non-zeros")
+
+        let backendDesc = await sparseH.backendDescription
+        #expect(backendDesc.contains("fallback") || backendDesc.contains("Observable"))
+
+        let state = QuantumState(qubits: 8)
+        let value = await sparseH.expectationValue(of: state)
+        #expect(abs(value) < 1e-10, "Empty Hamiltonian gives zero expectation")
+    }
 }
 
 /// Test suite for sparse Hamiltonian sparsity characteristics.

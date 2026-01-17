@@ -14,13 +14,11 @@ public struct UnitaryPartition: Sendable {
     /// Pauli terms in this partition.
     public let terms: PauliTerms
 
-    /// Diagonalizing unitary (2^n × 2^n).
+    /// Diagonalizing unitary (2^n * 2^n).
     let unitaryMatrix: [[Complex<Double>]]
 
     /// Measurement basis per qubit (all Z after U†).
     public let measurementBasis: [Int: PauliBasis]
-
-    private var qubits: Int { unitaryMatrix.count.trailingZeroBitCount }
 
     init(terms: PauliTerms, unitaryMatrix: [[Complex<Double>]]) {
         self.terms = terms
@@ -55,45 +53,30 @@ public struct UnitaryPartition: Sendable {
 ///
 /// - SeeAlso: ``UnitaryPartition``
 /// - SeeAlso: ``QWCGrouper``
-public struct UnitaryPartitioner {
-    // MARK: - Configuration
+public struct UnitaryPartitioner: Sendable {
+    /// L-BFGS-B iteration limit.
+    public let maxIterations: Int
 
-    /// Variational optimization parameters.
-    @frozen
-    public struct Config: Sendable {
-        /// L-BFGS-B iteration limit (default 100).
-        public let maxIterations: Int
+    /// Gradient norm convergence threshold.
+    public let convergenceTolerance: Double
 
-        /// Gradient norm convergence threshold (default 1e-6).
-        public let convergenceTolerance: Double
+    /// Ansatz layers, 3n parameters per layer.
+    public let circuitDepth: Int
 
-        /// Ansatz layers, 3n parameters per layer (default 3).
-        public let circuitDepth: Int
+    /// Max off-diagonal norm to accept partition.
+    public let diagonalityThreshold: Double
 
-        /// Reserved for future use.
-        public let useAdaptiveDepth: Bool
-
-        /// Max off-diagonal norm to accept partition (default 0.1).
-        public let diagonalityThreshold: Double
-
-        public init(
-            maxIterations: Int = 100,
-            convergenceTolerance: Double = 1e-6,
-            circuitDepth: Int = 3,
-            useAdaptiveDepth: Bool = true,
-            diagonalityThreshold: Double = 0.1,
-        ) {
-            self.maxIterations = maxIterations
-            self.convergenceTolerance = convergenceTolerance
-            self.circuitDepth = circuitDepth
-            self.useAdaptiveDepth = useAdaptiveDepth
-            self.diagonalityThreshold = diagonalityThreshold
-        }
+    public init(
+        maxIterations: Int = 100,
+        convergenceTolerance: Double = 1e-6,
+        circuitDepth: Int = 3,
+        diagonalityThreshold: Double = 0.1,
+    ) {
+        self.maxIterations = maxIterations
+        self.convergenceTolerance = convergenceTolerance
+        self.circuitDepth = circuitDepth
+        self.diagonalityThreshold = diagonalityThreshold
     }
-
-    public let config: Config
-
-    public init(config: Config = .init()) { self.config = config }
 
     // MARK: - Target Operator Construction
 
@@ -199,7 +182,7 @@ public struct UnitaryPartitioner {
                 unitary: eigenvectors,
             )
 
-            if offDiagNorm < config.diagonalityThreshold {
+            if offDiagNorm < diagonalityThreshold {
                 return eigenvectors
             }
         }
@@ -216,7 +199,7 @@ public struct UnitaryPartitioner {
     ) -> [[Complex<Double>]]? {
         let pauliMatrices: [[[Complex<Double>]]] = terms.map { $0.pauliString.toMatrix(qubits: qubits) }
 
-        let numParams: Int = parameterCount(qubits: qubits, depth: config.circuitDepth)
+        let numParams: Int = parameterCount(qubits: qubits, depth: circuitDepth)
         let parameters = [Double](unsafeUninitializedCapacity: numParams) { buffer, count in
             for i in 0 ..< numParams {
                 buffer[i] = Double.random(in: -Double.pi ... Double.pi)
@@ -242,21 +225,21 @@ public struct UnitaryPartitioner {
                     qubits: qubits,
                 )
             },
-            maxIterations: config.maxIterations,
-            tolerance: config.convergenceTolerance,
+            maxIterations: maxIterations,
+            tolerance: convergenceTolerance,
         )
 
         let unitary: [[Complex<Double>]] = buildVariationalUnitary(
             parameters: result.parameters,
             qubits: qubits,
-            depth: config.circuitDepth,
+            depth: circuitDepth,
         )
 
         let targetOperator = buildTargetOperator(terms: terms, qubits: qubits)
 
         let offDiagNorm: Double = computeOffDiagonalNorm(operator: targetOperator, unitary: unitary)
 
-        return offDiagNorm < config.diagonalityThreshold ? unitary : nil
+        return offDiagNorm < diagonalityThreshold ? unitary : nil
     }
 
     // MARK: - Cost and Gradient Functions
@@ -271,7 +254,7 @@ public struct UnitaryPartitioner {
         let unitary = buildVariationalUnitary(
             parameters: parameters,
             qubits: qubits,
-            depth: config.circuitDepth,
+            depth: circuitDepth,
         )
 
         let dimension = 1 << qubits
@@ -349,13 +332,13 @@ public struct UnitaryPartitioner {
 
     // MARK: - Variational Ansatz
 
-    /// Parameter count: depth × qubits × 3 (U3 Euler angles per qubit per layer).
+    /// Parameter count: depth * qubits * 3 (U3 Euler angles per qubit per layer).
     @_effects(readonly)
     private func parameterCount(qubits: Int, depth: Int) -> Int {
         depth * qubits * 3
     }
 
-    /// Builds unitary from hardware-efficient ansatz: [U3 rotations → CNOT ladder] × depth.
+    /// Builds unitary from hardware-efficient ansatz: [U3 rotations -> CNOT ladder] * depth.
     @_optimize(speed)
     @_eagerMove
     private func buildVariationalUnitary(
@@ -749,7 +732,7 @@ public struct UnitaryPartitioner {
 // MARK: - PauliString Matrix Extension
 
 public extension PauliString {
-    /// Computes P|row⟩ = phase × |col⟩ for Pauli string P acting on basis state |row⟩.
+    /// Computes P|row⟩ = phase * |col⟩ for Pauli string P acting on basis state |row⟩.
     ///
     /// X flips bit, Y flips bit with ±i phase, Z applies ±1 phase. Multi-qubit strings
     /// combine via tensor product (phases multiply).
@@ -788,7 +771,7 @@ public extension PauliString {
         return (col, phase)
     }
 
-    /// Converts Pauli string to dense 2^n × 2^n matrix via ``applyToRow(row:)``.
+    /// Converts Pauli string to dense 2^n * 2^n matrix via ``applyToRow(row:)``.
     ///
     /// **Example:**
     /// ```swift

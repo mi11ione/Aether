@@ -11,9 +11,9 @@
 /// gates. Depth controls expressivity: more layers represent more quantum states but increase
 /// optimization difficulty and susceptibility to barren plateaus.
 ///
-/// Construction requires O(depth × qubits) gates with parameter count equal to
-/// depth × qubits × rotations.parametersPerQubit. Circuit depth scales as O(depth × qubits)
-/// for linear/circular entanglement, or O(depth × qubits²) for all-to-all connectivity.
+/// Construction requires O(depth * qubits) gates with parameter count equal to
+/// depth * qubits * rotations.parametersPerQubit. Circuit depth scales as O(depth * qubits)
+/// for linear/circular entanglement, or O(depth * qubits²) for all-to-all connectivity.
 ///
 /// **Example:**
 /// ```swift

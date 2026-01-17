@@ -968,4 +968,543 @@ struct CircuitCoverageTests {
 
         #expect(circuit.highestQubitIndex == 2)
     }
+
+    @Test("Gate description with empty qubits array omits qubit info")
+    func gateDescriptionEmptyQubits() {
+        let gate = Gate(.hadamard, to: [])
+        let desc = gate.description
+
+        #expect(!desc.contains("on qubits"), "Empty qubits should not show 'on qubits' text")
+        #expect(desc.contains("H"), "Description should still contain gate name")
+    }
+
+    @Test("Init with gates exceeding initial qubit count updates maxQubitUsed")
+    func initWithHighQubitGates() {
+        let gates = [
+            Gate(.hadamard, to: 0),
+            Gate(.pauliX, to: 5),
+            Gate(.pauliZ, to: 3),
+        ]
+
+        let circuit = QuantumCircuit(qubits: 2, gates: gates)
+
+        #expect(circuit.highestQubitIndex == 5, "Max qubit should be 5 from gate on qubit 5")
+    }
+
+    @Test("Append with empty qubits array handles gracefully")
+    func appendEmptyQubitsArray() {
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.append(.hadamard, to: [])
+
+        #expect(circuit.count == 1, "Gate should be appended")
+        #expect(circuit.gates[0].qubits.isEmpty, "Gate should have empty qubits")
+        #expect(circuit.highestQubitIndex == 2, "Max qubit should remain qubits-1")
+    }
+
+    @Test("Insert with empty qubits array handles gracefully")
+    func insertEmptyQubitsArray() {
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.append(.pauliX, to: 1)
+        circuit.insert(.hadamard, to: [], at: 0)
+
+        #expect(circuit.count == 2, "Both gates should be present")
+        #expect(circuit.gates[0].qubits.isEmpty, "Inserted gate should have empty qubits")
+        #expect(circuit.highestQubitIndex == 2, "Max qubit should be qubits-1=2 (baseline)")
+    }
+
+    @Test("Remove gate with empty qubits triggers recompute correctly")
+    func removeEmptyQubitsGateThenRecompute() {
+        let gates = [
+            Gate(.hadamard, to: []),
+            Gate(.pauliX, to: 1),
+        ]
+        var circuit = QuantumCircuit(qubits: 3, gates: gates)
+        #expect(circuit.highestQubitIndex == 2, "Max should be qubits-1=2 (baseline)")
+
+        circuit.remove(at: 0)
+        #expect(circuit.highestQubitIndex == 2, "Max should remain qubits-1=2")
+    }
+
+    @Test("Remove highest qubit gate triggers recompute with empty qubits gate remaining")
+    func removeHighestQubitRecomputeWithEmptyQubits() {
+        let gates = [
+            Gate(.hadamard, to: []),
+            Gate(.pauliX, to: 2),
+        ]
+        var circuit = QuantumCircuit(qubits: 2, gates: gates)
+
+        #expect(circuit.highestQubitIndex == 2, "Max should be 2 from X gate")
+
+        circuit.remove(at: 1)
+        #expect(circuit.highestQubitIndex == 1, "After removing qubit 2 gate, max should be qubits-1=1")
+        #expect(circuit.count == 1, "Only empty-qubits gate should remain")
+    }
+
+    @Test("Recompute finds remaining gate at high qubit index")
+    func recomputeFindsRemainingHighQubitGate() {
+        let gates = [
+            Gate(.hadamard, to: 5),
+            Gate(.pauliX, to: 5),
+        ]
+        var circuit = QuantumCircuit(qubits: 2, gates: gates)
+
+        #expect(circuit.highestQubitIndex == 5, "Max should be 5")
+
+        circuit.remove(at: 0)
+        #expect(circuit.highestQubitIndex == 5, "Max should still be 5 from remaining X gate")
+        #expect(circuit.count == 1, "One gate should remain")
+    }
+
+    @Test("Description includes parameter count for parameterized circuits")
+    func parameterizedCircuitDescription() {
+        var circuit = QuantumCircuit(qubits: 2)
+        let theta = Parameter(name: "theta")
+        let phi = Parameter(name: "phi")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+        circuit.append(.rotationZ(.parameter(phi)), to: 1)
+
+        let description = circuit.description
+
+        #expect(description.contains("2 params"), "Description should show parameter count")
+        #expect(description.contains("2 qubits"), "Description should show qubit count")
+        #expect(description.contains("2 gates"), "Description should show gate count")
+    }
+
+    @Test("Multi-controlled U with zero controls applies gate directly")
+    func multiControlledUZeroControls() {
+        var circuit = QuantumCircuit(qubits: 2)
+
+        QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .pauliX, controls: [], target: 0)
+        QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .pauliY, controls: [], target: 1)
+        QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .pauliZ, controls: [], target: 0)
+        QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .hadamard, controls: [], target: 1)
+        QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .tGate, controls: [], target: 0)
+        QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .sGate, controls: [], target: 1)
+
+        #expect(circuit.count == 6, "Should have 6 gates appended directly")
+
+        let state = circuit.execute()
+        #expect(state.isNormalized(), "Result should be normalized")
+    }
+
+    @Test("Multi-controlled X with one control produces CNOT")
+    func multiControlledXOneControlDirect() {
+        var circuit = QuantumCircuit(qubits: 2)
+        QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .pauliX, controls: [0], target: 1)
+
+        #expect(circuit.count == 1, "Should produce single CNOT gate")
+
+        let state = QuantumState(qubits: 2, amplitudes: [.zero, .one, .zero, .zero])
+        let result = circuit.execute(on: state)
+
+        #expect(result.probability(of: 3) > 0.99, "CNOT on |01⟩ should give |11⟩")
+    }
+
+    @Test("Multi-controlled Y with one control produces CY")
+    func multiControlledYOneControl() {
+        var circuit = QuantumCircuit(qubits: 2)
+        QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .pauliY, controls: [0], target: 1)
+
+        #expect(circuit.count == 1, "Should produce single CY gate")
+
+        let state = QuantumState(qubits: 2, amplitudes: [.zero, .one, .zero, .zero])
+        let result = circuit.execute(on: state)
+
+        #expect(result.probability(of: 3) > 0.99, "CY on |01⟩ should give i|11⟩ with prob 1")
+    }
+
+    @Test("Multi-controlled Z with one control produces CZ")
+    func multiControlledZOneControl() {
+        var circuit = QuantumCircuit(qubits: 2)
+        QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .pauliZ, controls: [0], target: 1)
+
+        #expect(circuit.count == 1, "Should produce single CZ gate")
+
+        let plusPlus = QuantumState(qubits: 2, amplitudes: [0.5, 0.5, 0.5, 0.5])
+        let result = circuit.execute(on: plusPlus)
+
+        #expect(result.amplitude(of: 3).real < -0.4, "CZ flips phase of |11⟩ component")
+    }
+
+    @Test("Multi-controlled Z with multiple controls")
+    func multiControlledZMultipleControls() {
+        var circuit = QuantumCircuit(qubits: 3)
+        QuantumCircuit.appendMultiControlledU(to: &circuit, gate: .pauliZ, controls: [0, 1], target: 2)
+
+        #expect(circuit.count > 1, "Should decompose into multiple gates")
+
+        let state = circuit.execute()
+        #expect(state.isNormalized(), "Result should be normalized")
+    }
+
+    @Test("Ancilla expansion when circuit references higher qubit indices")
+    func ancillaExpansionOnExecute() {
+        let gates = [
+            Gate(.hadamard, to: 0),
+            Gate(.pauliX, to: 3),
+        ]
+        let circuit = QuantumCircuit(qubits: 2, gates: gates)
+
+        #expect(circuit.qubits == 2, "Circuit qubits should be 2")
+        #expect(circuit.highestQubitIndex == 3, "Highest qubit should be 3")
+
+        let initialState = QuantumState(qubits: 2)
+        let finalState = circuit.execute(on: initialState, upToIndex: circuit.count)
+
+        #expect(finalState.qubits == 4, "State should expand to 4 qubits (indices 0-3)")
+        #expect(finalState.isNormalized(), "Expanded state should be normalized")
+
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        #expect(
+            abs(finalState.amplitude(of: 0b1000).real - invSqrt2) < 1e-10,
+            "X on qubit 3 flips |0000⟩ component to |1000⟩",
+        )
+        #expect(
+            abs(finalState.amplitude(of: 0b1001).real - invSqrt2) < 1e-10,
+            "X on qubit 3 flips |0001⟩ component to |1001⟩",
+        )
+    }
+}
+
+/// Test suite for parameter shift gradient computation.
+/// Validates circuit shifting for parameter shift rule gradient estimation,
+/// enabling VQE and QAOA gradient-based optimization.
+@Suite("Shifted Circuits")
+struct ShiftedCircuitsTests {
+    @Test("Single parameter shifted circuits have correct values")
+    func singleParameterShiftedCircuits() {
+        var circuit = QuantumCircuit(qubits: 2)
+        let theta = Parameter(name: "theta")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+        circuit.append(.cnot, to: [0, 1])
+
+        let baseValue = 0.5
+        let base = ["theta": baseValue]
+        let shift = Double.pi / 2
+
+        let (plus, minus) = circuit.shiftedCircuits(for: "theta", base: base, shift: shift)
+
+        let plusState = plus.execute()
+        let minusState = minus.execute()
+
+        #expect(plusState.isNormalized(), "Plus circuit should produce normalized state")
+        #expect(minusState.isNormalized(), "Minus circuit should produce normalized state")
+
+        let directPlus = circuit.binding(["theta": baseValue + shift]).execute()
+        let directMinus = circuit.binding(["theta": baseValue - shift]).execute()
+
+        #expect(plusState == directPlus, "Plus circuit should match direct binding")
+        #expect(minusState == directMinus, "Minus circuit should match direct binding")
+    }
+
+    @Test("Multi-parameter circuit shifts only target parameter")
+    func multiParameterShiftOnlyTarget() {
+        var circuit = QuantumCircuit(qubits: 2)
+        let theta = Parameter(name: "theta")
+        let phi = Parameter(name: "phi")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+        circuit.append(.rotationZ(.parameter(phi)), to: 1)
+
+        let base = ["theta": 0.3, "phi": 0.7]
+        let shift = Double.pi / 2
+
+        let (plus, minus) = circuit.shiftedCircuits(for: "theta", base: base, shift: shift)
+
+        let directPlus = circuit.binding(["theta": 0.3 + shift, "phi": 0.7]).execute()
+        let directMinus = circuit.binding(["theta": 0.3 - shift, "phi": 0.7]).execute()
+
+        #expect(plus.execute() == directPlus, "Only theta should be shifted in plus circuit")
+        #expect(minus.execute() == directMinus, "Only theta should be shifted in minus circuit")
+    }
+
+    @Test("Custom shift value works correctly")
+    func customShiftValue() {
+        var circuit = QuantumCircuit(qubits: 1)
+        let theta = Parameter(name: "theta")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+
+        let base = ["theta": 1.0]
+        let customShift = 0.1
+
+        let (plus, minus) = circuit.shiftedCircuits(for: "theta", base: base, shift: customShift)
+
+        let directPlus = circuit.binding(["theta": 1.1]).execute()
+        let directMinus = circuit.binding(["theta": 0.9]).execute()
+
+        #expect(plus.execute() == directPlus, "Custom shift should be applied to plus circuit")
+        #expect(minus.execute() == directMinus, "Custom shift should be applied to minus circuit")
+    }
+
+    @Test("Default shift is pi/2")
+    func defaultShiftIsPiOver2() {
+        var circuit = QuantumCircuit(qubits: 1)
+        let theta = Parameter(name: "theta")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+
+        let base = ["theta": 0.0]
+
+        let (plus, minus) = circuit.shiftedCircuits(for: "theta", base: base)
+
+        let directPlus = circuit.binding(["theta": Double.pi / 2]).execute()
+        let directMinus = circuit.binding(["theta": -Double.pi / 2]).execute()
+
+        #expect(plus.execute() == directPlus, "Default shift should be π/2")
+        #expect(minus.execute() == directMinus, "Default shift should be -π/2")
+    }
+
+    @Test("Vector-based shifted circuits basic functionality")
+    func vectorBasedShiftedCircuits() {
+        var circuit = QuantumCircuit(qubits: 2)
+        let theta0 = Parameter(name: "theta_0")
+        let theta1 = Parameter(name: "theta_1")
+        circuit.append(.rotationY(.parameter(theta0)), to: 0)
+        circuit.append(.rotationY(.parameter(theta1)), to: 1)
+
+        let baseVector = [0.5, 1.0]
+        let shift = Double.pi / 2
+
+        let (plus, minus) = circuit.shiftedCircuits(at: 0, baseVector: baseVector, shift: shift)
+
+        let directPlus = circuit.bound(with: [0.5 + shift, 1.0]).execute()
+        let directMinus = circuit.bound(with: [0.5 - shift, 1.0]).execute()
+
+        #expect(plus.execute() == directPlus, "Vector interface plus should match direct binding")
+        #expect(minus.execute() == directMinus, "Vector interface minus should match direct binding")
+    }
+
+    @Test("Vector-based shifted circuits at different indices")
+    func vectorBasedShiftAtDifferentIndices() {
+        var circuit = QuantumCircuit(qubits: 3)
+        for i in 0 ..< 3 {
+            let param = Parameter(name: "theta_\(i)")
+            circuit.append(.rotationY(.parameter(param)), to: i)
+        }
+
+        let baseVector = [0.1, 0.2, 0.3]
+        let shift = Double.pi / 4
+
+        for index in 0 ..< 3 {
+            let (plus, minus) = circuit.shiftedCircuits(at: index, baseVector: baseVector, shift: shift)
+
+            var expectedPlus = baseVector
+            var expectedMinus = baseVector
+            expectedPlus[index] += shift
+            expectedMinus[index] -= shift
+
+            let directPlus = circuit.bound(with: expectedPlus).execute()
+            let directMinus = circuit.bound(with: expectedMinus).execute()
+
+            #expect(plus.execute() == directPlus, "Shift at index \(index) plus should match")
+            #expect(minus.execute() == directMinus, "Shift at index \(index) minus should match")
+        }
+    }
+
+    @Test("Gradient computation via parameter shift rule")
+    func gradientComputationViaParameterShift() {
+        var circuit = QuantumCircuit(qubits: 1)
+        let theta = Parameter(name: "theta")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+
+        let observable = Observable.pauliZ(qubit: 0)
+
+        let baseValue = 0.5
+        let base = ["theta": baseValue]
+
+        let (plus, minus) = circuit.shiftedCircuits(for: "theta", base: base)
+
+        let plusEnergy = observable.expectationValue(of: plus.execute())
+        let minusEnergy = observable.expectationValue(of: minus.execute())
+        let gradient = (plusEnergy - minusEnergy) / 2.0
+
+        let analyticalGradient = -sin(baseValue)
+
+        #expect(
+            abs(gradient - analyticalGradient) < 1e-10,
+            "Parameter shift gradient should match analytical: got \(gradient), expected \(analyticalGradient)",
+        )
+    }
+}
+
+/// Validates Cartesian product generation for parameter
+/// grid search optimization, enabling systematic
+/// hyperparameter exploration in variational algorithms.
+@Suite("Grid Search Vectors")
+struct GridSearchVectorsTests {
+    @Test("Single parameter single value")
+    func singleParameterSingleValue() {
+        var circuit = QuantumCircuit(qubits: 1)
+        let theta = Parameter(name: "theta")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+
+        let ranges = [[0.5]]
+        let vectors = circuit.gridSearchVectors(ranges: ranges)
+
+        #expect(vectors.count == 1, "Should produce 1 vector")
+        #expect(vectors[0] == [0.5], "Vector should be [0.5]")
+    }
+
+    @Test("Single parameter multiple values")
+    func singleParameterMultipleValues() {
+        var circuit = QuantumCircuit(qubits: 1)
+        let theta = Parameter(name: "theta")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+
+        let ranges: [[Double]] = [[0.0, 0.5, 1.0]]
+        let vectors = circuit.gridSearchVectors(ranges: ranges)
+
+        #expect(vectors.count == 3, "Should produce 3 vectors")
+        #expect(vectors[0] == [0.0], "First vector")
+        #expect(vectors[1] == [0.5], "Second vector")
+        #expect(vectors[2] == [1.0], "Third vector")
+    }
+
+    @Test("Two parameters Cartesian product")
+    func twoParametersCartesianProduct() {
+        var circuit = QuantumCircuit(qubits: 2)
+        let theta = Parameter(name: "theta")
+        let phi = Parameter(name: "phi")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+        circuit.append(.rotationZ(.parameter(phi)), to: 1)
+
+        let ranges: [[Double]] = [[0.0, 1.0], [2.0, 3.0]]
+        let vectors = circuit.gridSearchVectors(ranges: ranges)
+
+        #expect(vectors.count == 4, "Should produce 2*2=4 vectors")
+        #expect(vectors.contains([0.0, 2.0]), "Should contain [0.0, 2.0]")
+        #expect(vectors.contains([0.0, 3.0]), "Should contain [0.0, 3.0]")
+        #expect(vectors.contains([1.0, 2.0]), "Should contain [1.0, 2.0]")
+        #expect(vectors.contains([1.0, 3.0]), "Should contain [1.0, 3.0]")
+    }
+
+    @Test("Three parameters asymmetric ranges")
+    func threeParametersAsymmetricRanges() {
+        var circuit = QuantumCircuit(qubits: 3)
+        for i in 0 ..< 3 {
+            let param = Parameter(name: "p\(i)")
+            circuit.append(.rotationY(.parameter(param)), to: i)
+        }
+
+        let ranges: [[Double]] = [[1.0, 2.0], [3.0], [4.0, 5.0, 6.0]]
+        let vectors = circuit.gridSearchVectors(ranges: ranges)
+
+        #expect(vectors.count == 6, "Should produce 2*1*3=6 vectors")
+        #expect(vectors[0][1] == 3.0, "Middle parameter always 3.0")
+        #expect(vectors.contains([1.0, 3.0, 4.0]), "Should contain first combination")
+        #expect(vectors.contains([2.0, 3.0, 6.0]), "Should contain last combination")
+    }
+
+    @Test("Grid search vectors produce valid circuits")
+    func gridSearchVectorsProduceValidCircuits() {
+        var circuit = QuantumCircuit(qubits: 2)
+        let theta = Parameter(name: "theta")
+        let phi = Parameter(name: "phi")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+        circuit.append(.rotationY(.parameter(phi)), to: 1)
+
+        let ranges: [[Double]] = [[0.0, Double.pi / 2], [0.0, Double.pi]]
+        let vectors = circuit.gridSearchVectors(ranges: ranges)
+
+        for vector in vectors {
+            let bound = circuit.bound(with: vector)
+            let state = bound.execute()
+            #expect(state.isNormalized(), "Bound circuit should produce normalized state")
+        }
+    }
+}
+
+/// Validates batch parameter binding for efficient
+/// parallel circuit generation, enabling vectorized
+/// VQE optimization and gradient computation.
+@Suite("Batch Parameter Binding")
+struct BatchParameterBindingTests {
+    @Test("Batch binding produces correct number of circuits")
+    func batchBindingProducesCorrectCount() {
+        var circuit = QuantumCircuit(qubits: 1)
+        let theta = Parameter(name: "theta")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+
+        let vectors: [[Double]] = [[0.0], [0.5], [1.0], [1.5]]
+        let circuits = circuit.binding(batch: vectors)
+
+        #expect(circuits.count == 4, "Should produce 4 circuits")
+    }
+
+    @Test("Batch binding matches individual binding")
+    func batchBindingMatchesIndividualBinding() {
+        var circuit = QuantumCircuit(qubits: 2)
+        let theta = Parameter(name: "theta")
+        let phi = Parameter(name: "phi")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+        circuit.append(.rotationZ(.parameter(phi)), to: 1)
+
+        let vectors: [[Double]] = [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]
+        let batchCircuits = circuit.binding(batch: vectors)
+
+        for (index, vector) in vectors.enumerated() {
+            let individualCircuit = circuit.bound(with: vector)
+            let batchState = batchCircuits[index].execute()
+            let individualState = individualCircuit.execute()
+
+            #expect(batchState == individualState, "Batch circuit \(index) should match individual binding")
+        }
+    }
+
+    @Test("Batch binding with single vector")
+    func batchBindingWithSingleVector() {
+        var circuit = QuantumCircuit(qubits: 1)
+        let theta = Parameter(name: "theta")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+
+        let vectors: [[Double]] = [[Double.pi / 4]]
+        let circuits = circuit.binding(batch: vectors)
+
+        #expect(circuits.count == 1, "Should produce 1 circuit")
+
+        let state = circuits[0].execute()
+        let expectedProb1 = pow(sin(Double.pi / 8), 2)
+        #expect(abs(state.probability(of: 1) - expectedProb1) < 1e-10, "State should match Ry(π/4)")
+    }
+
+    @Test("Batch binding with many parameters")
+    func batchBindingWithManyParameters() {
+        var circuit = QuantumCircuit(qubits: 4)
+        for i in 0 ..< 4 {
+            let param = Parameter(name: "theta_\(i)")
+            circuit.append(.rotationY(.parameter(param)), to: i)
+        }
+
+        let vectors: [[Double]] = [
+            [0.1, 0.2, 0.3, 0.4],
+            [0.5, 0.6, 0.7, 0.8],
+        ]
+        let circuits = circuit.binding(batch: vectors)
+
+        #expect(circuits.count == 2, "Should produce 2 circuits")
+
+        for bound in circuits {
+            #expect(bound.parameterCount == 0, "Bound circuits should have no free parameters")
+            let state = bound.execute()
+            #expect(state.isNormalized(), "Each circuit should produce normalized state")
+        }
+    }
+
+    @Test("Batch binding integrates with grid search")
+    func batchBindingIntegratesWithGridSearch() {
+        var circuit = QuantumCircuit(qubits: 2)
+        let theta = Parameter(name: "theta")
+        let phi = Parameter(name: "phi")
+        circuit.append(.rotationY(.parameter(theta)), to: 0)
+        circuit.append(.rotationY(.parameter(phi)), to: 1)
+
+        let ranges: [[Double]] = [[0.0, Double.pi / 2], [0.0, Double.pi / 2]]
+        let vectors = circuit.gridSearchVectors(ranges: ranges)
+        let circuits = circuit.binding(batch: vectors)
+
+        #expect(circuits.count == 4, "Grid search should produce 4 vectors, batch should produce 4 circuits")
+
+        for bound in circuits {
+            let state = bound.execute()
+            #expect(state.isNormalized(), "All grid search circuits should produce valid states")
+        }
+    }
 }

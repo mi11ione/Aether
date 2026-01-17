@@ -272,24 +272,6 @@ public struct Observable: CustomStringConvertible, Sendable {
         }
     }
 
-    /// Combines terms with identical Pauli strings by summing coefficients.
-    @_optimize(speed)
-    @_eagerMove
-    private func combineLikeTerms(
-        _ inputTerms: PauliTerms,
-    ) -> PauliTerms {
-        var coefficientMap: [PauliString: Double] = [:]
-        coefficientMap.reserveCapacity(inputTerms.count)
-
-        for i in 0 ..< inputTerms.count {
-            coefficientMap[inputTerms[i].pauliString, default: 0.0] += inputTerms[i].coefficient
-        }
-
-        return coefficientMap.compactMap { key, value in
-            abs(value) > 1e-15 ? (coefficient: value, pauliString: key) : nil
-        }
-    }
-
     // MARK: - Convenience Factories
 
     /// Create Pauli-X observable on a single qubit.

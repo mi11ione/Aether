@@ -585,4 +585,44 @@ struct MPSBatchEvaluatorTests {
         #expect(batch4 >= batch6, "Batch size should decrease with qubit count")
         #expect(batch6 >= batch8, "Batch size monotonically decreases")
     }
+
+    @Test("Evaluator respects maxBatchSize override")
+    func maxBatchSizeOverride() async {
+        let customLimit = 42
+        let evaluator = MPSBatchEvaluator(maxBatchSize: customLimit)
+        let stats = await evaluator.statistics
+
+        #expect(
+            stats.maxBatchSize == customLimit,
+            "Should use provided maxBatchSize override instead of auto-calculated value",
+        )
+    }
+
+    @Test("Custom maxBatchSize triggers chunking at lower threshold")
+    func customMaxBatchSizeChunking() async {
+        let evaluator = MPSBatchEvaluator(maxBatchSize: 5)
+
+        var circuits: [QuantumCircuit] = []
+        for i in 0 ..< 10 {
+            var circuit = QuantumCircuit(qubits: 2)
+            circuit.append(.rotationY(Double(i) * 0.1), to: 0)
+            circuits.append(circuit)
+        }
+
+        let unitaries = circuits.map { CircuitUnitary.unitary(for: $0) }
+        let results = await evaluator.evaluate(
+            batch: unitaries,
+            from: QuantumState(qubits: 2),
+        )
+
+        #expect(results.count == 10, "All circuits should be evaluated despite chunking")
+
+        for (index, circuit) in circuits.enumerated() {
+            let expected = circuit.execute()
+            #expect(
+                abs(results[index].amplitudes[0].real - expected.amplitudes[0].real) < 1e-5,
+                "Circuit \(index) result should match sequential execution",
+            )
+        }
+    }
 }

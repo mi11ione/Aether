@@ -7,37 +7,10 @@ import MetalPerformanceShaders
 
 /// Batched circuit evaluation using Metal Performance Shaders for GPU acceleration.
 ///
-/// Evaluates multiple quantum circuits in parallel on the GPU by converting each circuit to
-/// its unitary matrix representation and executing all matrix-vector multiplications simultaneously.
-/// Uses Metal Performance Shaders framework primitives (MPSMatrix, MPSMatrixVectorMultiplication)
-/// to leverage thousands of GPU cores in parallel. Particularly effective for VQE gradient
-/// computation and QAOA parameter grid search where many circuit variations must be evaluated
-/// with the same initial state.
-///
-/// The evaluator converts each circuit to a 2ⁿ x 2ⁿ unitary matrix once, uploads all matrices
-/// to GPU memory in a single transfer, executes all matrix-vector products in parallel, and
-/// downloads only the results (either full quantum states or scalar expectation values). This
-/// eliminates per-circuit CPU-GPU transfer overhead and enables substantial speedup over
-/// sequential gate-by-gate execution.
-///
-/// Metal Performance Shaders provides high-level GPU primitives optimized for Apple Silicon
-/// architecture. MPSMatrix handles 2D matrix storage on GPU with automatic memory management
-/// via shared storage mode (zero-copy on unified memory systems). MPSMatrixVectorMultiplication
-/// performs batched matrix-vector operations with memory coalescing and parallel execution
-/// across GPU compute units.
-///
-/// Memory requirements scale as dimension² × batch size × 4 bytes for Float32 precision. The
-/// evaluator queries available GPU memory and computes maximum feasible batch size dynamically,
-/// automatically splitting large batches into chunks when necessary. GPU computation uses Float32
-/// while CPU maintains Float64, introducing ~1e-7 relative error acceptable for typical VQE
-/// convergence tolerances.
-///
-/// Batched evaluation provides greatest benefit when batch size exceeds 10 circuits (amortizes
-/// unitary conversion cost) and all circuits share the same initial state. For single circuit
-/// evaluations or states larger than GPU memory capacity, use ``QuantumSimulator`` directly.
-/// When Metal GPU is unavailable, the evaluator falls back to sequential CPU evaluation using
-/// BLAS matrix operations. Typical applications include VQE gradient computation, QAOA grid
-/// search, and population-based optimizers requiring parallel fitness evaluation.
+/// Evaluates multiple quantum circuits in parallel by converting each to its unitary matrix
+/// and executing all matrix-vector multiplications on GPU simultaneously. Automatically
+/// chunks large batches and falls back to BLAS CPU evaluation when Metal is unavailable.
+/// Float32 GPU precision introduces ~1e-7 relative error, acceptable for VQE convergence.
 ///
 /// **Example:**
 /// ```swift
@@ -46,10 +19,8 @@ import MetalPerformanceShaders
 /// let energies = await evaluator.expectationValues(for: unitaries, from: state, observable: H)
 /// ```
 ///
-/// - Note: Actor isolation ensures thread-safe GPU operations and prevents concurrent Metal command buffer execution.
+/// - Complexity: O(batch · 2²ⁿ) GPU, O(batch · 2³ⁿ) CPU fallback
 /// - SeeAlso: ``CircuitUnitary``
-/// - SeeAlso: ``QuantumSimulator``
-/// - SeeAlso: ``SparseHamiltonian``
 public actor MPSBatchEvaluator {
     // MARK: - Metal Resources
 
@@ -497,25 +468,64 @@ public actor MPSBatchEvaluator {
         return resultStates
     }
 
-    /// Sequential CPU fallback using BLAS matrix-vector multiplication.
+    /// Sequential CPU fallback using BLAS cblas_zgemv matrix-vector multiplication.
     @_optimize(speed)
     @_eagerMove
     private func evaluateBatchCPU(
         unitaries: [[[Complex<Double>]]],
         initialState: QuantumState,
     ) -> [QuantumState] {
+        let dimension = initialState.stateSpaceSize
         var resultStates: [QuantumState] = []
         resultStates.reserveCapacity(unitaries.count)
 
-        for unitary in unitaries {
-            let resultAmplitudes: [Complex<Double>] = matrixVectorMultiply(
-                matrix: unitary,
-                vector: initialState.amplitudes,
-            )
+        var matrixInterleaved = [Double](unsafeUninitializedCapacity: dimension * dimension * 2) { _, count in
+            count = dimension * dimension * 2
+        }
+        var result = [Complex<Double>](unsafeUninitializedCapacity: dimension) { _, count in
+            count = dimension
+        }
+        var alpha = (1.0, 0.0)
+        var beta = (0.0, 0.0)
 
-            resultStates.append(
-                QuantumState(qubits: initialState.qubits, amplitudes: resultAmplitudes),
-            )
+        for unitary in unitaries {
+            for col in 0 ..< dimension {
+                for row in 0 ..< dimension {
+                    let idx = (col * dimension + row) * 2
+                    matrixInterleaved[idx] = unitary[row][col].real
+                    matrixInterleaved[idx + 1] = unitary[row][col].imaginary
+                }
+            }
+
+            initialState.amplitudes.withUnsafeBytes { vecBytes in
+                let vecPtr = vecBytes.baseAddress!
+                result.withUnsafeMutableBytes { resBytes in
+                    let resPtr = resBytes.baseAddress!
+                    matrixInterleaved.withUnsafeBytes { matBytes in
+                        let matPtr = matBytes.baseAddress!
+                        withUnsafePointer(to: &alpha) { alphaPtr in
+                            withUnsafePointer(to: &beta) { betaPtr in
+                                cblas_zgemv(
+                                    CblasColMajor,
+                                    CblasNoTrans,
+                                    Int32(dimension),
+                                    Int32(dimension),
+                                    OpaquePointer(alphaPtr),
+                                    OpaquePointer(matPtr),
+                                    Int32(dimension),
+                                    OpaquePointer(vecPtr),
+                                    1,
+                                    OpaquePointer(betaPtr),
+                                    OpaquePointer(resPtr),
+                                    1,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            resultStates.append(QuantumState(qubits: initialState.qubits, amplitudes: result))
         }
 
         return resultStates
@@ -543,66 +553,6 @@ public actor MPSBatchEvaluator {
         }
 
         return allResults
-    }
-
-    /// BLAS-accelerated complex matrix-vector multiplication using cblas_zgemv.
-    @_optimize(speed)
-    @_eagerMove
-    private func matrixVectorMultiply(
-        matrix: [[Complex<Double>]],
-        vector: [Complex<Double>],
-    ) -> [Complex<Double>] {
-        let dimension = vector.count
-
-        var matrixInterleaved = [Double](unsafeUninitializedCapacity: dimension * dimension * 2) { _, count in
-            count = dimension * dimension * 2
-        }
-
-        for col in 0 ..< dimension {
-            for row in 0 ..< dimension {
-                let idx = (col * dimension + row) * 2
-                matrixInterleaved[idx] = matrix[row][col].real
-                matrixInterleaved[idx + 1] = matrix[row][col].imaginary
-            }
-        }
-
-        var result = [Complex<Double>](unsafeUninitializedCapacity: dimension) { _, count in
-            count = dimension
-        }
-
-        var alpha = (1.0, 0.0)
-        var beta = (0.0, 0.0)
-
-        // Safety: all arrays are non-empty (dimension ≥ 1 from valid quantum state)
-        vector.withUnsafeBytes { vecBytes in
-            let vecPtr = vecBytes.baseAddress!
-            result.withUnsafeMutableBytes { resBytes in
-                let resPtr = resBytes.baseAddress!
-                matrixInterleaved.withUnsafeBytes { matBytes in
-                    let matPtr = matBytes.baseAddress!
-                    withUnsafePointer(to: &alpha) { alphaPtr in
-                        withUnsafePointer(to: &beta) { betaPtr in
-                            cblas_zgemv(
-                                CblasColMajor,
-                                CblasNoTrans,
-                                Int32(dimension),
-                                Int32(dimension),
-                                OpaquePointer(alphaPtr),
-                                OpaquePointer(matPtr),
-                                Int32(dimension),
-                                OpaquePointer(vecPtr),
-                                1,
-                                OpaquePointer(betaPtr),
-                                OpaquePointer(resPtr),
-                                1,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        return result
     }
 
     // MARK: - Diagnostics

@@ -152,7 +152,6 @@ public extension Observable {
     /// This is computationally expensive, so caching is essential for practical use. Hash
     /// collisions are detected by comparing actual terms.
     ///
-    /// - Parameter config: Partitioner configuration controlling depth and convergence
     /// - Returns: Array of unitary partitions where each partition defines a measurement circuit
     /// - Complexity: O(g² · iter · depth · 2^(2n)) where g is number of groups, or O(1) if cached
     ///
@@ -162,14 +161,14 @@ public extension Observable {
     /// print("Reduced to \(partitions.count) measurement circuits")
     /// ```
     @_eagerMove
-    func unitaryPartitions(config: UnitaryPartitioner.Config = .init()) async -> [UnitaryPartition] {
+    func unitaryPartitions() async -> [UnitaryPartition] {
         let hash = termsHash()
 
         if let cached = await Self.cache.getUnitaryPartitions(hash: hash, terms: terms) {
             return cached
         }
 
-        let partitioner = UnitaryPartitioner(config: config)
+        let partitioner = UnitaryPartitioner()
         let partitions: [UnitaryPartition] = partitioner.partition(terms: terms)
         await Self.cache.setUnitaryPartitions(hash: hash, terms: terms, partitions: partitions)
         return partitions
@@ -189,7 +188,7 @@ public extension Observable {
 
     /// Strategy for measuring Hamiltonian expectation values.
     @frozen
-    enum MeasurementStrategy {
+    enum MeasurementStrategy: Sendable {
         /// Measure each term independently without optimization.
         case termByTerm
 
@@ -197,7 +196,7 @@ public extension Observable {
         case qwcGrouping
 
         /// Use variational unitary optimization for maximal grouping.
-        case unitaryPartitioning(config: UnitaryPartitioner.Config)
+        case unitaryPartitioning
 
         /// Automatically select best strategy based on problem size.
         case automatic
@@ -218,7 +217,7 @@ public extension Observable {
         switch strategy {
         case .termByTerm: terms.count
         case .qwcGrouping: await qwcGroups().count
-        case let .unitaryPartitioning(config): await unitaryPartitions(config: config).count
+        case .unitaryPartitioning: await unitaryPartitions().count
         case .automatic: await measureCircuitCount(for: selectOptimalStrategy())
         }
     }
@@ -231,7 +230,7 @@ public extension Observable {
         if numTerms < 20 { return .termByTerm }
         if numTerms < 500 { return .qwcGrouping }
 
-        return .unitaryPartitioning(config: .init())
+        return .unitaryPartitioning
     }
 
     // MARK: - Shot Allocation

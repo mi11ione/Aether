@@ -1207,4 +1207,39 @@ struct COBYLAOptimizerTests {
         #expect(abs(result.parameters[0]) < 0.2)
         #expect(abs(result.parameters[1]) < 0.2)
     }
+
+    @Test("Near-zero predicted reduction with negative actual reduction")
+    func nearZeroPredictedReductionWithNegativeActualReduction() async {
+        actor EvalCounter {
+            var count = 0
+            func next() -> Int {
+                count += 1
+                return count
+            }
+        }
+
+        let counter = EvalCounter()
+        let optimizer = COBYLAOptimizer(
+            initialTrustRadius: 1e-5,
+            minTrustRadius: 1e-12,
+            simplexScale: 0.5,
+        )
+
+        let objectiveFunction: @Sendable ([Double]) async -> Double = { _ in
+            let n = await counter.next()
+            if n <= 2 {
+                return 1.0
+            }
+            return 1.0 + 1e-10
+        }
+
+        let result = await optimizer.minimize(
+            objectiveFunction,
+            from: [0.0],
+            using: ConvergenceCriteria(energyTolerance: 1e-14, maxIterations: 5),
+            progress: nil,
+        )
+
+        #expect(result.iterations > 0)
+    }
 }

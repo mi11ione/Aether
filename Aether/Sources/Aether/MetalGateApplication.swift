@@ -62,7 +62,7 @@ private enum MetalResources {
 ///
 /// GPU uses Float32 vs ``GateApplication`` Float64. For most quantum algorithms, precision loss is
 /// negligible compared to typical gate fidelity (99.9%) and decoherence in real hardware. vDSP handles
-/// Float64↔Float32 conversion via vectorized operations. Below 10 qubits CPU is faster due to buffer
+/// Float64<->Float32 conversion via vectorized operations. Below 10 qubits CPU is faster due to buffer
 /// allocation and shader dispatch overhead. At ≥10 qubits GPU parallelism saturates compute units and
 /// amortizes overhead. Shared pipelines compile shaders once at launch and reuse for all instances.
 ///

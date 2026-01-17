@@ -291,3 +291,59 @@ struct CompleteQAOAWorkflowsTests {
         #expect(circuit.qubits == 2)
     }
 }
+
+/// Test suite for QAOAParameterBinder edge cases.
+/// Validates parameter binder handles malformed parameter names gracefully
+/// by skipping them during init parsing. These guards are defensive code.
+@Suite("QAOAParameterBinder Edge Cases")
+struct QAOAParameterBinderEdgeCaseTests {
+    @Test("Binder init skips parameters without _c_ separator")
+    func initSkipsParametersWithoutCoefficientSeparator() {
+        let theta = Parameter(name: "theta_no_coeff")
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.parameter(theta)), to: 0)
+
+        _ = QAOAParameterBinder(ansatz: circuit)
+    }
+
+    @Test("Binder init skips parameters with invalid coefficient")
+    func initSkipsParametersWithInvalidCoefficient() {
+        let theta = Parameter(name: "gamma_0_c_notanumber")
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.parameter(theta)), to: 0)
+
+        _ = QAOAParameterBinder(ansatz: circuit)
+    }
+
+    @Test("Binder init skips parameters without underscore in base name")
+    func initSkipsParametersWithoutUnderscoreInBaseName() {
+        let theta = Parameter(name: "gamma_c_1.5")
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.parameter(theta)), to: 0)
+
+        _ = QAOAParameterBinder(ansatz: circuit)
+    }
+
+    @Test("Binder init skips parameters with non-integer layer")
+    func initSkipsParametersWithNonIntegerLayer() {
+        let theta = Parameter(name: "gamma_abc_c_1.5")
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.parameter(theta)), to: 0)
+
+        _ = QAOAParameterBinder(ansatz: circuit)
+    }
+
+    @Test("Binder correctly binds well-formed QAOA parameters")
+    func bindWellFormedParameters() {
+        let gamma = Parameter(name: "gamma_0_c_-1.0")
+        let beta = Parameter(name: "beta_0_c_1.0")
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.parameter(gamma)), to: 0)
+        circuit.append(.rotationX(.parameter(beta)), to: 0)
+
+        let binder = QAOAParameterBinder(ansatz: circuit)
+        let bound = binder.bind(baseParameters: [0.5, 0.25])
+
+        #expect(bound.parameters.isEmpty, "Well-formed parameters should be bound")
+    }
+}

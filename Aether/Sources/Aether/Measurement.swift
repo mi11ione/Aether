@@ -65,7 +65,7 @@ public struct PartialMeasurementResult: Equatable, CustomStringConvertible {
     ///
     /// - Precondition: `outcomes.count == 1`
     public var outcome: Int {
-        precondition(outcomes.count == 1, "outcome property only valid for single-qubit measurement")
+        ValidationUtilities.validateArrayCount(outcomes, expected: 1, name: "outcomes")
         return outcomes[0]
     }
 
@@ -583,7 +583,7 @@ public enum Measurement {
     ///
     /// Performs measurement in specified Pauli eigenbasis, returning eigenvalue ±1
     /// instead of computational basis outcome 0/1. Rotates to computational basis
-    /// (H for X, S†H for Y, identity for Z), measures, maps outcome 0→+1 and 1→-1,
+    /// (H for X, S†H for Y, identity for Z), measures, maps outcome 0->+1 and 1->-1,
     /// then rotates back. Essential for observable expectation values and quantum
     /// chemistry applications.
     ///
@@ -622,7 +622,7 @@ public enum Measurement {
     ///
     /// Measures tensor product of Pauli operators (e.g., X₀⊗Y₁⊗Z₂). Applies basis
     /// rotations to diagonalize each Pauli operator, measures all qubits in computational
-    /// basis, maps each outcome to eigenvalue (0→+1, 1→-1), computes product eigenvalue
+    /// basis, maps each outcome to eigenvalue (0->+1, 1->-1), computes product eigenvalue
     /// λ = ∏ᵢ λᵢ, and rotates collapsed state back to original basis. This is the
     /// fundamental operation for Hamiltonian expectation values in VQE and quantum chemistry.
     ///
@@ -697,7 +697,7 @@ public enum Measurement {
     ///
     /// Performs measurement in custom basis defined by provided basis state |ψ⟩ = c₀|0⟩ + c₁|1⟩
     /// (2-element complex array). Projects onto {|ψ⟩, |ψ⊥⟩} where |ψ⊥⟩ is constructed via
-    /// unitarity. Constructs unitary U rotating |ψ⟩→|0⟩, applies U, measures in computational
+    /// unitarity. Constructs unitary U rotating |ψ⟩->|0⟩, applies U, measures in computational
     /// basis, and applies U† to collapsed state.
     ///
     /// **Example:**

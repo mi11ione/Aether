@@ -1259,7 +1259,7 @@ public struct SPSAOptimizer: Optimizer {
                     let byteIndex = i / 8
                     let bitIndex = i % 8
                     let bit = (randomBytes[byteIndex] >> bitIndex) & 1
-                    buffer[i] = 1.0 - 2.0 * Double(bit) // branchless: 0→+1, 1→-1
+                    buffer[i] = 1.0 - 2.0 * Double(bit) // branchless: 0->+1, 1->-1
                 }
                 count = n
             }

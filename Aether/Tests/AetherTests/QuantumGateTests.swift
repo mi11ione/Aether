@@ -498,3 +498,281 @@ struct MatrixUtilityTests {
         #expect(!QuantumGate.isIdentityMatrix(almostIdentity, tolerance: 1e-12))
     }
 }
+
+/// Test suite for symbolic parameter extraction from gates.
+/// Validates parameters() method for U1, U2, U3 gates with symbolic
+/// and concrete parameter values, ensuring correct parameter discovery.
+@Suite("Symbolic Parameter Extraction")
+struct SymbolicParameterExtractionTests {
+    @Test("isParameterized returns false for non-parameterized gates")
+    func isParameterizedFalseForNonParameterized() {
+        #expect(!QuantumGate.hadamard.isParameterized)
+        #expect(!QuantumGate.pauliX.isParameterized)
+        #expect(!QuantumGate.cnot.isParameterized)
+        #expect(!QuantumGate.toffoli.isParameterized)
+    }
+
+    @Test("isParameterized returns false for gates with concrete values")
+    func isParameterizedFalseForConcreteValues() {
+        #expect(!QuantumGate.rotationY(.pi / 4).isParameterized)
+        #expect(!QuantumGate.u1(lambda: 1.5).isParameterized)
+        #expect(!QuantumGate.u2(phi: 0.5, lambda: 1.0).isParameterized)
+        #expect(!QuantumGate.u3(theta: 0.1, phi: 0.2, lambda: 0.3).isParameterized)
+    }
+
+    @Test("isParameterized returns true for gates with symbolic parameters")
+    func isParameterizedTrueForSymbolic() {
+        let theta = Parameter(name: "theta")
+        #expect(QuantumGate.rotationY(.parameter(theta)).isParameterized)
+        #expect(QuantumGate.u1(lambda: .parameter(theta)).isParameterized)
+    }
+
+    @Test("U1 parameters() returns symbolic parameter")
+    func u1ParametersWithSymbolic() {
+        let lambda = Parameter(name: "lambda")
+        let gate = QuantumGate.u1(lambda: .parameter(lambda))
+        let params = gate.parameters()
+
+        #expect(params.count == 1, "U1 with symbolic lambda should have 1 parameter")
+        #expect(params.contains(lambda), "U1 should contain the lambda parameter")
+    }
+
+    @Test("U1 parameters() returns empty for concrete value")
+    func u1ParametersWithConcrete() {
+        let gate = QuantumGate.u1(lambda: .value(1.5))
+        let params = gate.parameters()
+
+        #expect(params.isEmpty, "U1 with concrete lambda should have no parameters")
+    }
+
+    @Test("U2 parameters() returns both symbolic parameters")
+    func u2ParametersWithBothSymbolic() {
+        let phi = Parameter(name: "phi")
+        let lambda = Parameter(name: "lambda")
+        let gate = QuantumGate.u2(phi: .parameter(phi), lambda: .parameter(lambda))
+        let params = gate.parameters()
+
+        #expect(params.count == 2, "U2 with both symbolic should have 2 parameters")
+        #expect(params.contains(phi), "U2 should contain phi parameter")
+        #expect(params.contains(lambda), "U2 should contain lambda parameter")
+    }
+
+    @Test("U2 parameters() returns only symbolic parameter when mixed")
+    func u2ParametersWithMixed() {
+        let phi = Parameter(name: "phi")
+        let gate = QuantumGate.u2(phi: .parameter(phi), lambda: .value(1.0))
+        let params = gate.parameters()
+
+        #expect(params.count == 1, "U2 with one symbolic should have 1 parameter")
+        #expect(params.contains(phi), "U2 should contain phi parameter")
+    }
+
+    @Test("U2 parameters() returns empty for all concrete")
+    func u2ParametersWithAllConcrete() {
+        let gate = QuantumGate.u2(phi: .value(0.5), lambda: .value(1.0))
+        let params = gate.parameters()
+
+        #expect(params.isEmpty, "U2 with all concrete should have no parameters")
+    }
+
+    @Test("U3 parameters() returns all three symbolic parameters")
+    func u3ParametersWithAllSymbolic() {
+        let theta = Parameter(name: "theta")
+        let phi = Parameter(name: "phi")
+        let lambda = Parameter(name: "lambda")
+        let gate = QuantumGate.u3(
+            theta: .parameter(theta),
+            phi: .parameter(phi),
+            lambda: .parameter(lambda),
+        )
+        let params = gate.parameters()
+
+        #expect(params.count == 3, "U3 with all symbolic should have 3 parameters")
+        #expect(params.contains(theta), "U3 should contain theta parameter")
+        #expect(params.contains(phi), "U3 should contain phi parameter")
+        #expect(params.contains(lambda), "U3 should contain lambda parameter")
+    }
+
+    @Test("U3 parameters() returns only symbolic parameters when mixed")
+    func u3ParametersWithMixed() {
+        let theta = Parameter(name: "theta")
+        let lambda = Parameter(name: "lambda")
+        let gate = QuantumGate.u3(
+            theta: .parameter(theta),
+            phi: .value(0.5),
+            lambda: .parameter(lambda),
+        )
+        let params = gate.parameters()
+
+        #expect(params.count == 2, "U3 with two symbolic should have 2 parameters")
+        #expect(params.contains(theta), "U3 should contain theta parameter")
+        #expect(params.contains(lambda), "U3 should contain lambda parameter")
+    }
+
+    @Test("U3 parameters() returns empty for all concrete")
+    func u3ParametersWithAllConcrete() {
+        let gate = QuantumGate.u3(theta: .value(0.1), phi: .value(0.2), lambda: .value(0.3))
+        let params = gate.parameters()
+
+        #expect(params.isEmpty, "U3 with all concrete should have no parameters")
+    }
+}
+
+/// Test suite for parameter binding in quantum gates.
+/// Validates bound(with:) method for phase, U1, U2, U3, and controlled gates,
+/// ensuring correct parameter substitution for variational circuits.
+@Suite("Parameter Binding")
+struct ParameterBindingTests {
+    @Test("Phase bound() substitutes symbolic parameter")
+    func phaseBoundSubstitutes() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.phase(.parameter(theta))
+        let bound = gate.bound(with: ["theta": .pi / 4])
+
+        #expect(!bound.isParameterized, "Bound phase should not be parameterized")
+
+        let expected = QuantumGate.phase(.pi / 4).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound phase matrix should match")
+    }
+
+    @Test("U1 bound() substitutes symbolic parameter")
+    func u1BoundSubstitutes() {
+        let lambda = Parameter(name: "lambda")
+        let gate = QuantumGate.u1(lambda: .parameter(lambda))
+        let bound = gate.bound(with: ["lambda": .pi / 4])
+
+        #expect(!bound.isParameterized, "Bound U1 should not be parameterized")
+
+        let expected = QuantumGate.u1(lambda: .pi / 4).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound U1 matrix should match")
+    }
+
+    @Test("U2 bound() substitutes both symbolic parameters")
+    func u2BoundSubstitutes() {
+        let phi = Parameter(name: "phi")
+        let lambda = Parameter(name: "lambda")
+        let gate = QuantumGate.u2(phi: .parameter(phi), lambda: .parameter(lambda))
+        let bound = gate.bound(with: ["phi": .pi / 2, "lambda": .pi / 4])
+
+        #expect(!bound.isParameterized, "Bound U2 should not be parameterized")
+
+        let expected = QuantumGate.u2(phi: .pi / 2, lambda: .pi / 4).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound U2 matrix should match")
+    }
+
+    @Test("U3 bound() substitutes all three symbolic parameters")
+    func u3BoundSubstitutes() {
+        let theta = Parameter(name: "theta")
+        let phi = Parameter(name: "phi")
+        let lambda = Parameter(name: "lambda")
+        let gate = QuantumGate.u3(
+            theta: .parameter(theta),
+            phi: .parameter(phi),
+            lambda: .parameter(lambda),
+        )
+        let bound = gate.bound(with: ["theta": .pi / 3, "phi": .pi / 4, "lambda": .pi / 6])
+
+        #expect(!bound.isParameterized, "Bound U3 should not be parameterized")
+
+        let expected = QuantumGate.u3(theta: .pi / 3, phi: .pi / 4, lambda: .pi / 6).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound U3 matrix should match")
+    }
+
+    @Test("Controlled phase bound() substitutes symbolic parameter")
+    func controlledPhaseBoundSubstitutes() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.controlledPhase(.parameter(theta))
+        let bound = gate.bound(with: ["theta": .pi / 2])
+
+        #expect(!bound.isParameterized, "Bound controlled phase should not be parameterized")
+
+        let expected = QuantumGate.controlledPhase(.pi / 2).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound controlled phase matrix should match")
+    }
+
+    @Test("Controlled rotation X bound() substitutes symbolic parameter")
+    func controlledRotationXBoundSubstitutes() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.controlledRotationX(.parameter(theta))
+        let bound = gate.bound(with: ["theta": .pi / 4])
+
+        #expect(!bound.isParameterized, "Bound CRx should not be parameterized")
+
+        let expected = QuantumGate.controlledRotationX(.pi / 4).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound CRx matrix should match")
+    }
+
+    @Test("Controlled rotation Y bound() substitutes symbolic parameter")
+    func controlledRotationYBoundSubstitutes() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.controlledRotationY(.parameter(theta))
+        let bound = gate.bound(with: ["theta": .pi / 3])
+
+        #expect(!bound.isParameterized, "Bound CRy should not be parameterized")
+
+        let expected = QuantumGate.controlledRotationY(.pi / 3).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound CRy matrix should match")
+    }
+
+    @Test("Controlled rotation Z bound() substitutes symbolic parameter")
+    func controlledRotationZBoundSubstitutes() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.controlledRotationZ(.parameter(theta))
+        let bound = gate.bound(with: ["theta": .pi / 6])
+
+        #expect(!bound.isParameterized, "Bound CRz should not be parameterized")
+
+        let expected = QuantumGate.controlledRotationZ(.pi / 6).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound CRz matrix should match")
+    }
+}
+
+/// Test suite for custom gate matrix retrieval.
+/// Validates that custom single-qubit and two-qubit gates
+/// correctly return their provided matrices.
+@Suite("Custom Gate Matrix")
+struct CustomGateMatrixTests {
+    @Test("Custom two-qubit gate matrix() returns provided matrix")
+    func customTwoQubitMatrixReturnsProvided() {
+        let customMatrix: [[Complex<Double>]] = [
+            [.one, .zero, .zero, .zero],
+            [.zero, .one, .zero, .zero],
+            [.zero, .zero, .zero, .one],
+            [.zero, .zero, .one, .zero],
+        ]
+
+        let gate = QuantumGate.customTwoQubit(matrix: customMatrix)
+        let retrieved = gate.matrix()
+
+        #expect(QuantumGate.matricesEqual(customMatrix, retrieved),
+                "Custom two-qubit gate should return its provided matrix")
+    }
+
+    @Test("Custom two-qubit gate preserves complex values")
+    func customTwoQubitPreservesComplexValues() {
+        let c = Complex<Double>(0.5, 0.5)
+        let d = Complex<Double>(0.5, -0.5)
+        let customMatrix: [[Complex<Double>]] = [
+            [.one, .zero, .zero, .zero],
+            [.zero, c, d, .zero],
+            [.zero, d, c, .zero],
+            [.zero, .zero, .zero, .one],
+        ]
+
+        let gate = QuantumGate.customTwoQubit(matrix: customMatrix)
+        let retrieved = gate.matrix()
+
+        #expect(retrieved[1][1].real == c.real, "Complex real part should be preserved")
+        #expect(retrieved[1][1].imaginary == c.imaginary, "Complex imaginary part should be preserved")
+        #expect(retrieved[1][2].real == d.real, "Complex real part should be preserved")
+        #expect(retrieved[1][2].imaginary == d.imaginary, "Complex imaginary part should be preserved")
+    }
+}

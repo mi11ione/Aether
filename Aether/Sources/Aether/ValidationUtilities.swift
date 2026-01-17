@@ -766,18 +766,6 @@ public enum ValidationUtilities {
         precondition(allocation[index] != nil, "Allocation must contain entry for term index \(index)")
     }
 
-    /// Validate that bypass flag is enabled (for testing-only code paths)
-    ///
-    /// - Parameter bypass: Bypass validation flag
-    /// - Precondition: bypass == true
-    /// - Complexity: O(1)
-    @_effects(readonly)
-    @inlinable
-    @inline(__always)
-    static func validateBypassEnabled(_ bypass: Bool) {
-        precondition(bypass, "This initializer is for testing only")
-    }
-
     /// Validates that a coupling dictionary key specifies exactly 1 or 2 qubits
     ///
     /// - Parameters:

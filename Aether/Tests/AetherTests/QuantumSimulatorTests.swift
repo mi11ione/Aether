@@ -208,4 +208,34 @@ struct QuantumSimulatorTests {
         #expect(finalState.isNormalized())
         #expect(await tracker.progressCalled)
     }
+
+    @Test("Progress percentage computes correctly for non-zero total")
+    func progressPercentageNonZeroTotal() {
+        let progress = QuantumSimulator.Progress(executed: 5, total: 10)
+
+        #expect(
+            abs(progress.percentage - 0.5) < 1e-10,
+            "Progress should be 50% when 5 of 10 gates executed",
+        )
+    }
+
+    @Test("Progress percentage returns zero for zero total")
+    func progressPercentageZeroTotal() {
+        let progress = QuantumSimulator.Progress(executed: 0, total: 0)
+
+        #expect(
+            progress.percentage == 0.0,
+            "Progress should be 0.0 when total is zero to avoid division by zero",
+        )
+    }
+
+    @Test("Progress percentage computes full completion")
+    func progressPercentageFullCompletion() {
+        let progress = QuantumSimulator.Progress(executed: 20, total: 20)
+
+        #expect(
+            abs(progress.percentage - 1.0) < 1e-10,
+            "Progress should be 100% when all gates executed",
+        )
+    }
 }

@@ -8,8 +8,8 @@ private let invSqrt2: Double = 1.0 / 2.0.squareRoot()
 
 /// Quantum gate as unitary transformation U where U†U = I, ensuring probability conservation and reversibility.
 ///
-/// Single-qubit gates operate as 2×2 complex matrices on C², two-qubit gates as 4×4 on C⁴, and the
-/// three-qubit Toffoli as 8×8 on C⁸. Includes Pauli gates (X, Y, Z), Hadamard for superposition,
+/// Single-qubit gates operate as 2*2 complex matrices on C², two-qubit gates as 4*4 on C⁴, and the
+/// three-qubit Toffoli as 8*8 on C⁸. Includes Pauli gates (X, Y, Z), Hadamard for superposition,
 /// phase gates (P, S, T), rotation gates (Rx, Ry, Rz), IBM universal gates (U1, U2, U3), controlled
 /// variants (CNOT, CZ, CY, CH, controlled rotations), and multi-qubit gates (SWAP, √SWAP, Toffoli).
 ///
@@ -899,7 +899,7 @@ public extension QuantumGate {
         guard matrix.allSatisfy({ $0.count == n }) else { return false }
 
         // Compute U†U = I directly without allocating intermediate matrices
-        // (U†U)[i][j] = Σₖ conj(U[k][i]) × U[k][j]
+        // (U†U)[i][j] = Σₖ conj(U[k][i]) * U[k][j]
         for i in 0 ..< n {
             for j in 0 ..< n {
                 var sum: Complex<Double> = .zero

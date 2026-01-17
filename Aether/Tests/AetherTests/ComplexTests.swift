@@ -127,6 +127,18 @@ struct ComplexSpecialValuesTests {
         #expect(abs(i.real) < 1e-10)
         #expect(abs(i.imaginary - 1.0) < 1e-10)
     }
+
+    @Test("Double.zero and Float.zero protocol members")
+    func zeroProtocolMembers() {
+        #expect(Double.zero == 0.0)
+        #expect(Float.zero == 0.0)
+    }
+
+    @Test("Double.squareRoot and Float.squareRoot protocol members")
+    func squareRootProtocolMembers() {
+        #expect(abs(Double.squareRoot(of: 16.0) - 4.0) < 1e-10)
+        #expect(abs(Float.squareRoot(of: 25.0) - 5.0) < 1e-6)
+    }
 }
 
 /// Test suite for Euler's identity and exponential form.
