@@ -16,7 +16,6 @@ private enum MetalResources {
         return MetalUtilities.loadLibrary(device: device)
     }()
 
-    // Lazily compiled pipeline states (shared across all instances)
     fileprivate static let singleQubitPipeline: MTLComputePipelineState? = {
         guard let device, let library,
               let function = library.makeFunction(name: "applySingleQubitGate")
@@ -81,19 +80,43 @@ private enum MetalResources {
 public actor MetalGateApplication {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
-
-    // Compute pipeline states (shared, not per-instance)
     private let singleQubitPipeline: MTLComputePipelineState
     private let cnotPipeline: MTLComputePipelineState
     private let twoQubitPipeline: MTLComputePipelineState
     private let toffoliPipeline: MTLComputePipelineState
 
-    /// Minimum qubit count for GPU acceleration (states with fewer qubits use CPU)
+    /// Minimum qubit count for GPU acceleration under default (fast) policy.
     ///
     /// Below this threshold (n < 10), CPU execution via ``GateApplication`` is faster due to GPU
     /// overhead (buffer allocation, shader dispatch, Float64->Float32 conversion). At n=10 (1024 amplitudes),
     /// parallelism benefit begins to outweigh overhead.
+    ///
+    /// For policy-aware threshold selection, use ``minimumQubitCountForGPU(policy:)`` instead.
+    ///
+    /// - SeeAlso: ``minimumQubitCountForGPU(policy:)``
+    /// - SeeAlso: ``PrecisionPolicy``
     public static let minimumQubitCountForGPU = 10
+
+    /// Minimum qubit count for GPU acceleration under specified precision policy.
+    ///
+    /// Returns policy-specific threshold: `.fast` = 10, `.balanced` = 12, `.accurate` = Int.max.
+    /// States with fewer qubits than the threshold use CPU execution for better precision
+    /// or lower overhead.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let threshold = MetalGateApplication.minimumQubitCountForGPU(policy: .balanced)
+    /// ```
+    ///
+    /// - Parameter policy: Precision policy governing GPU threshold
+    /// - Returns: Minimum qubit count for GPU acceleration under this policy
+    /// - Complexity: O(1)
+    /// - SeeAlso: ``PrecisionPolicy``
+    @_effects(readonly)
+    @inlinable
+    public static func minimumQubitCountForGPU(policy: PrecisionPolicy) -> Int {
+        policy.gpuQubitThreshold
+    }
 
     // MARK: - Conversion Helpers
 
@@ -467,30 +490,37 @@ public actor MetalGateApplication {
 private let sharedMetalGateApplication: MetalGateApplication? = MetalGateApplication()
 
 public extension GateApplication {
-    /// Apply gate with automatic CPU/GPU selection based on state size
+    /// Apply gate with automatic CPU/GPU selection based on state size and precision policy.
     ///
-    /// Routes to GPU (``MetalGateApplication``) for states with ≥10 qubits, otherwise uses CPU.
-    /// Automatically falls back to CPU if Metal unavailable or GPU computation fails. Optimal
-    /// default for most use cases: exploits GPU parallelism for large states while avoiding
-    /// overhead for small states. Uses cached GPU executor to avoid per-call allocation.
+    /// Routes to GPU (``MetalGateApplication``) when state size exceeds policy threshold,
+    /// otherwise uses CPU. Automatically falls back to CPU if Metal unavailable or GPU
+    /// computation fails. Policy-aware threshold selection: `.fast` = 10 qubits,
+    /// `.balanced` = 12 qubits, `.accurate` = CPU only.
     ///
     /// **Example:**
     /// ```swift
-    /// let small = QuantumState(qubits: 5)
-    /// let large = QuantumState(qubits: 15)
-    /// let r1 = await GateApplication.applyHybrid(.hadamard, to: 0, state: small)  // CPU
-    /// let r2 = await GateApplication.applyHybrid(.hadamard, to: 0, state: large)  // GPU
+    /// let state = QuantumState(qubits: 11)
+    /// let r1 = await GateApplication.applyHybrid(.hadamard, to: 0, state: state)  // GPU (.fast)
+    /// let r2 = await GateApplication.applyHybrid(.hadamard, to: 0, state: state, policy: .balanced)  // CPU
+    /// let r3 = await GateApplication.applyHybrid(.hadamard, to: 0, state: state, policy: .accurate)  // CPU
     /// ```
     ///
     /// - Parameters:
     ///   - gate: Quantum gate to apply
     ///   - qubits: Target qubit indices
     ///   - state: Input quantum state
+    ///   - policy: Precision policy governing GPU threshold (default: `.fast`)
     /// - Returns: Transformed state (via GPU or CPU)
     /// - Complexity: O(2^n) time
+    /// - SeeAlso: ``PrecisionPolicy``
     @_eagerMove
-    static func applyHybrid(_ gate: QuantumGate, to qubits: [Int], state: QuantumState) async -> QuantumState {
-        if state.qubits >= MetalGateApplication.minimumQubitCountForGPU,
+    static func applyHybrid(
+        _ gate: QuantumGate,
+        to qubits: [Int],
+        state: QuantumState,
+        policy: PrecisionPolicy = .fast,
+    ) async -> QuantumState {
+        if PrecisionPolicy.shouldUseGPU(qubits: state.qubits, policy: policy),
            let metalApp = sharedMetalGateApplication
         {
             return await metalApp.apply(gate, to: qubits, state: state)
@@ -499,24 +529,31 @@ public extension GateApplication {
         return apply(gate, to: qubits, state: state)
     }
 
-    /// Apply gate to single qubit with automatic CPU/GPU selection
+    /// Apply gate to single qubit with automatic CPU/GPU selection.
     ///
     /// Wraps qubit index in array and delegates to main applyHybrid method.
     ///
     /// **Example:**
     /// ```swift
-    /// let result = await GateApplication.applyHybrid(.hadamard, to: 0, state: state)
+    /// let result = await GateApplication.applyHybrid(.hadamard, to: 0, state: state, policy: .balanced)
     /// ```
     ///
     /// - Parameters:
     ///   - gate: Quantum gate to apply
     ///   - qubit: Target qubit index
     ///   - state: Input quantum state
+    ///   - policy: Precision policy governing GPU threshold (default: `.fast`)
     /// - Returns: Transformed state (via GPU or CPU)
     /// - Complexity: O(2^n) time
+    /// - SeeAlso: ``PrecisionPolicy``
     @_eagerMove
-    static func applyHybrid(_ gate: QuantumGate, to qubit: Int, state: QuantumState) async -> QuantumState {
-        await applyHybrid(gate, to: [qubit], state: state)
+    static func applyHybrid(
+        _ gate: QuantumGate,
+        to qubit: Int,
+        state: QuantumState,
+        policy: PrecisionPolicy = .fast,
+    ) async -> QuantumState {
+        await applyHybrid(gate, to: [qubit], state: state, policy: policy)
     }
 }
 

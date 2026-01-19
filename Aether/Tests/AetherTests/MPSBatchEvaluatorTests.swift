@@ -527,6 +527,7 @@ struct MPSBatchEvaluatorTests {
             isMetalAvailable: false,
             maxBatchSize: 100,
             deviceName: "CPU",
+            precisionPolicy: .fast,
         )
 
         #expect(stats.deviceName == "CPU", "Should show CPU when Metal unavailable")
@@ -624,5 +625,36 @@ struct MPSBatchEvaluatorTests {
                 "Circuit \(index) result should match sequential execution",
             )
         }
+    }
+
+    @Test("Precision policy is exposed and matches initialization")
+    func precisionPolicyProperty() {
+        let fastEvaluator = MPSBatchEvaluator(precisionPolicy: .fast)
+        let balancedEvaluator = MPSBatchEvaluator(precisionPolicy: .balanced)
+        let accurateEvaluator = MPSBatchEvaluator(precisionPolicy: .accurate)
+
+        #expect(fastEvaluator.precisionPolicy == .fast, "Fast policy should be exposed correctly")
+        #expect(balancedEvaluator.precisionPolicy == .balanced, "Balanced policy should be exposed correctly")
+        #expect(accurateEvaluator.precisionPolicy == .accurate, "Accurate policy should be exposed correctly")
+    }
+
+    @Test("Accurate precision policy forces CPU execution")
+    func accuratePolicyForcesCPU() async {
+        let evaluator = MPSBatchEvaluator(precisionPolicy: .accurate)
+
+        #expect(!evaluator.isMetalAvailable, "Accurate policy should disable Metal")
+
+        let stats = await evaluator.statistics
+        #expect(stats.deviceName == "CPU", "Accurate policy should report CPU device")
+        #expect(!stats.isMetalAvailable, "Statistics should reflect Metal unavailable")
+    }
+
+    @Test("BatchEvaluatorStatistics includes precision policy")
+    func statisticsIncludesPrecisionPolicy() async {
+        let evaluator = MPSBatchEvaluator(precisionPolicy: .balanced)
+        let stats = await evaluator.statistics
+
+        #expect(stats.precisionPolicy == .balanced, "Statistics should include precision policy")
+        #expect(stats.description.contains("Precision Policy"), "Description should show precision policy")
     }
 }

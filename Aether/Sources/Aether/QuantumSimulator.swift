@@ -6,14 +6,17 @@ import Foundation
 /// Asynchronous quantum circuit executor with automatic GPU acceleration.
 ///
 /// Actor-isolated simulator for non-blocking circuit execution with progress tracking. Uses
-/// ``GateApplication`` (CPU) for circuits under 10 qubits and ``MetalGateApplication`` (GPU)
-/// for larger circuits when Metal is available. Progress callbacks batch every 5 gates.
+/// ``GateApplication`` (CPU) for circuits below precision policy threshold and ``MetalGateApplication``
+/// (GPU) for larger circuits when Metal is available. Progress callbacks batch every 5 gates.
+///
+/// Precision policy controls CPU/GPU threshold: `.fast` (≥10 qubits), `.balanced` (≥12 qubits),
+/// `.accurate` (CPU-only). GPU uses Float32 (~1e-7 precision), CPU uses Float64 (~1e-15 precision).
 ///
 /// For synchronous execution without progress tracking, use ``QuantumCircuit/execute()`` directly.
 ///
 /// **Example:**
 /// ```swift
-/// let simulator = QuantumSimulator()
+/// let simulator = QuantumSimulator(precisionPolicy: .balanced)
 /// var circuit = QuantumCircuit(qubits: 10)
 /// circuit.append(.hadamard, to: 0)
 /// circuit.append(.cnot, to: [0, 1])
@@ -29,7 +32,10 @@ import Foundation
 /// })
 /// ```
 ///
-/// - SeeAlso: ``QuantumCircuit/execute()``, ``MetalGateApplication``, ``GateApplication``
+/// - SeeAlso: ``QuantumCircuit/execute()``
+/// - SeeAlso: ``MetalGateApplication``
+/// - SeeAlso: ``GateApplication``
+/// - SeeAlso: ``PrecisionPolicy``
 public actor QuantumSimulator {
     /// Execution progress information
     public struct Progress: Sendable {
@@ -45,30 +51,38 @@ public actor QuantumSimulator {
         }
     }
 
-    /// Whether Metal GPU acceleration is enabled
+    /// Precision policy controlling GPU/CPU backend selection.
+    public let precisionPolicy: PrecisionPolicy
+
+    /// Whether Metal GPU acceleration is enabled (derived from precision policy).
     private let useMetalAcceleration: Bool
 
     /// Metal GPU backend (initialized if acceleration enabled)
     private var metalApplication: MetalGateApplication?
 
-    /// Creates a quantum simulator with optional GPU acceleration
+    /// Creates a quantum simulator with specified precision policy.
     ///
-    /// Initializes actor-isolated simulator. If Metal acceleration is enabled,
-    /// GPU will automatically be used for circuits with ≥10 qubits. Falls back
-    /// to CPU for smaller circuits or if Metal is unavailable.
+    /// Initializes actor-isolated simulator with precision-aware backend selection.
+    /// GPU threshold varies by policy: `.fast` ≥10 qubits, `.balanced` ≥12 qubits,
+    /// `.accurate` forces CPU-only execution for maximum precision.
     ///
     /// **Example:**
     /// ```swift
-    /// // With GPU acceleration (default)
-    /// let simulator = await QuantumSimulator()
+    /// // Fast mode with GPU acceleration (default)
+    /// let simulator = QuantumSimulator()
     ///
-    /// // CPU only (disable GPU)
-    /// let cpuSimulator = await QuantumSimulator(useMetalAcceleration: false)
+    /// // Balanced mode with higher GPU threshold
+    /// let balanced = QuantumSimulator(precisionPolicy: .balanced)
+    ///
+    /// // Accurate mode - CPU only for maximum precision
+    /// let accurate = QuantumSimulator(precisionPolicy: .accurate)
     /// ```
     ///
-    /// - Parameter useMetalAcceleration: Enable Metal GPU for circuits with ≥10 qubits (default: true)
-    public init(useMetalAcceleration: Bool = true) {
-        self.useMetalAcceleration = useMetalAcceleration
+    /// - Parameter precisionPolicy: Precision policy governing GPU threshold (default: `.fast`)
+    /// - SeeAlso: ``PrecisionPolicy``
+    public init(precisionPolicy: PrecisionPolicy = .fast) {
+        self.precisionPolicy = precisionPolicy
+        useMetalAcceleration = precisionPolicy.isGPUEnabled
         if useMetalAcceleration {
             metalApplication = MetalGateApplication()
         }
@@ -127,7 +141,7 @@ public actor QuantumSimulator {
         let maxQubit: Int = circuit.highestQubitIndex
         var state = QuantumCircuit.expandStateForAncilla(startState, maxQubit: maxQubit)
 
-        let useGPU: Bool = useMetalAcceleration && metalApplication != nil && state.qubits >= MetalGateApplication.minimumQubitCountForGPU
+        let useGPU: Bool = useMetalAcceleration && metalApplication != nil && PrecisionPolicy.shouldUseGPU(qubits: state.qubits, policy: precisionPolicy)
         let progressMultiplier: Double = operationCount > 0 ? 1.0 / Double(operationCount) : 0.0
         let lastIndex: Int = operationCount - 1
         let operations = circuit.gates

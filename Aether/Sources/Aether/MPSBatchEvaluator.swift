@@ -27,6 +27,7 @@ public actor MPSBatchEvaluator {
     private let device: MTLDevice?
     private let commandQueue: MTLCommandQueue?
     private let maxBatchSize: Int
+    private let _precisionPolicy: PrecisionPolicy
 
     /// Whether Metal GPU acceleration is available on this system.
     ///
@@ -45,6 +46,23 @@ public actor MPSBatchEvaluator {
         device != nil && commandQueue != nil
     }
 
+    /// Precision policy controlling GPU/CPU backend selection.
+    ///
+    /// Returns the precision policy configured at initialization. When `.accurate`,
+    /// forces CPU-only execution regardless of Metal availability for maximum Float64
+    /// precision in phase-sensitive algorithms and deep circuits.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let evaluator = MPSBatchEvaluator(precisionPolicy: .accurate)
+    /// print("Policy: \(evaluator.precisionPolicy)")  // "Accurate (CPU-only, tolerance: 1e-10)"
+    /// ```
+    ///
+    /// - SeeAlso: ``PrecisionPolicy``
+    public nonisolated var precisionPolicy: PrecisionPolicy {
+        _precisionPolicy
+    }
+
     // MARK: - Initialization
 
     /// Creates batched evaluator with automatic GPU resource management.
@@ -55,16 +73,32 @@ public actor MPSBatchEvaluator {
     /// CPU evaluation using BLAS when Metal is unavailable. Batch size scales inversely
     /// with qubit count due to exponential memory growth of unitary matrices.
     ///
-    /// - Parameter maxBatchSize: Optional override for automatic batch size calculation.
+    /// Precision policy controls GPU availability: `.accurate` forces CPU-only execution
+    /// for maximum Float64 precision, while `.fast` and `.balanced` permit GPU acceleration
+    /// when Metal is available.
+    ///
+    /// - Parameters:
+    ///   - maxBatchSize: Optional override for automatic batch size calculation.
+    ///   - precisionPolicy: Precision policy controlling GPU/CPU backend selection (default: `.fast`).
     ///
     /// **Example:**
     /// ```swift
     /// let evaluator = MPSBatchEvaluator()
     /// let limited = MPSBatchEvaluator(maxBatchSize: 50)
+    /// let accurate = MPSBatchEvaluator(precisionPolicy: .accurate)  // Forces CPU
     /// ```
-    public init(maxBatchSize: Int? = nil) {
-        device = MTLCreateSystemDefaultDevice()
-        commandQueue = device?.makeCommandQueue()
+    ///
+    /// - SeeAlso: ``PrecisionPolicy``
+    public init(maxBatchSize: Int? = nil, precisionPolicy: PrecisionPolicy = .fast) {
+        _precisionPolicy = precisionPolicy
+
+        if precisionPolicy.isGPUEnabled {
+            device = MTLCreateSystemDefaultDevice()
+            commandQueue = device?.makeCommandQueue()
+        } else {
+            device = nil
+            commandQueue = nil
+        }
 
         if let overrideMaxBatch = maxBatchSize {
             self.maxBatchSize = overrideMaxBatch
@@ -178,7 +212,7 @@ public actor MPSBatchEvaluator {
             from: initialState,
         )
 
-        let sparseH = SparseHamiltonian(observable: observable, systemSize: initialState.qubits)
+        let sparseH = SparseHamiltonian(observable: observable, systemSize: initialState.qubits, precisionPolicy: _precisionPolicy)
 
         return await computeExpectationValues(states: states, hamiltonian: sparseH)
     }
@@ -593,8 +627,8 @@ public actor MPSBatchEvaluator {
     /// Device and memory statistics for batch evaluator.
     ///
     /// Provides diagnostic information including Metal availability, device name,
-    /// and maximum batch size. Useful for debugging performance issues or verifying
-    /// GPU acceleration status.
+    /// maximum batch size, and precision policy. Useful for debugging performance
+    /// issues or verifying GPU acceleration status.
     ///
     /// **Example:**
     /// ```swift
@@ -608,6 +642,7 @@ public actor MPSBatchEvaluator {
             isMetalAvailable: isMetalAvailable,
             maxBatchSize: maxBatchSize,
             deviceName: device?.name ?? "CPU",
+            precisionPolicy: _precisionPolicy,
         )
     }
 }
@@ -616,8 +651,8 @@ public actor MPSBatchEvaluator {
 
 /// Diagnostic information for batch evaluator GPU configuration.
 ///
-/// Captures Metal availability, device name, and maximum batch size for performance
-/// analysis and debugging. Returned by ``MPSBatchEvaluator/statistics``.
+/// Captures Metal availability, device name, maximum batch size, and precision policy
+/// for performance analysis and debugging. Returned by ``MPSBatchEvaluator/statistics``.
 ///
 /// **Example:**
 /// ```swift
@@ -637,11 +672,15 @@ public struct BatchEvaluatorStatistics: Sendable, Equatable, CustomStringConvert
     /// Metal device name or "CPU" when Metal unavailable.
     public let deviceName: String
 
+    /// Precision policy controlling GPU/CPU backend selection.
+    public let precisionPolicy: PrecisionPolicy
+
     /// Creates statistics with specified configuration values.
-    public init(isMetalAvailable: Bool, maxBatchSize: Int, deviceName: String) {
+    public init(isMetalAvailable: Bool, maxBatchSize: Int, deviceName: String, precisionPolicy: PrecisionPolicy) {
         self.isMetalAvailable = isMetalAvailable
         self.maxBatchSize = maxBatchSize
         self.deviceName = deviceName
+        self.precisionPolicy = precisionPolicy
     }
 
     @inlinable
@@ -651,6 +690,7 @@ public struct BatchEvaluatorStatistics: Sendable, Equatable, CustomStringConvert
           Metal Available: \(isMetalAvailable)
           Device: \(deviceName)
           Max Batch Size: \(maxBatchSize)
+          Precision Policy: \(precisionPolicy)
         """
     }
 }

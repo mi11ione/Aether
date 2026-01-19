@@ -251,7 +251,7 @@ struct VariationalQuantumEigensolverTests {
             ansatz: ansatz,
             optimizer: optimizer,
             convergence: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
-            useMetalAcceleration: false,
+            precisionPolicy: .accurate,
         )
 
         let result = await vqe.run(from: [0.1])

@@ -15,6 +15,9 @@ import Foundation
 /// GPU/Accelerate acceleration for molecular systems with typical 0.01-1% sparsity. Circuit depth remains
 /// shallow for NISQ compatibility.
 ///
+/// Precision policy controls CPU/GPU backend selection: `.fast` (≥10 qubits GPU), `.balanced` (≥12 qubits GPU),
+/// `.accurate` (CPU-only). GPU uses Float32 with Kahan summation, CPU uses Float64 for maximum precision.
+///
 /// **Example:**
 /// ```swift
 /// let vqe = VQE(hamiltonian: h2Hamiltonian, ansatz: ansatz, optimizer: COBYLAOptimizer())
@@ -29,6 +32,7 @@ import Foundation
 /// - SeeAlso: ``SparseHamiltonian``
 /// - SeeAlso: ``Optimizer``
 /// - SeeAlso: ``ConvergenceCriteria``
+/// - SeeAlso: ``PrecisionPolicy``
 public actor VQE {
     // MARK: - Configuration
 
@@ -50,6 +54,9 @@ public actor VQE {
     /// Quantum simulator for circuit execution
     private let simulator: QuantumSimulator
 
+    /// Precision policy controlling GPU/CPU backend selection.
+    public let precisionPolicy: PrecisionPolicy
+
     // MARK: - State
 
     /// Current optimization iteration
@@ -66,10 +73,14 @@ public actor VQE {
     /// GPU/Accelerate. Falls back to Observable for term-by-term measurement if sparse construction fails.
     /// Typical molecular Hamiltonians achieve 0.01-1% sparsity enabling substantial acceleration.
     ///
+    /// Precision policy controls backend selection: `.fast` uses GPU at lower thresholds for maximum speed,
+    /// `.balanced` raises thresholds for better precision, `.accurate` forces CPU-only for Float64 precision.
+    ///
     /// **Example:**
     /// ```swift
     /// let ansatz = HardwareEfficientAnsatz(qubits: 4, depth: 3)
     /// let vqe = VQE(hamiltonian: hamiltonian, ansatz: ansatz, optimizer: COBYLAOptimizer())
+    /// let accurate = VQE(hamiltonian: h, ansatz: a, optimizer: o, precisionPolicy: .accurate)
     /// ```
     ///
     /// - Parameters:
@@ -78,22 +89,24 @@ public actor VQE {
     ///   - optimizer: Classical optimization algorithm
     ///   - convergence: Termination criteria
     ///   - useSparseBackend: Enable sparse matrix acceleration
-    ///   - useMetalAcceleration: Enable Metal GPU execution
+    ///   - precisionPolicy: Precision policy governing GPU threshold (default: `.fast`)
     /// - Complexity: O(hamiltonian_construction)
+    /// - SeeAlso: ``PrecisionPolicy``
     public init(
         hamiltonian: Observable,
         ansatz: HardwareEfficientAnsatz,
         optimizer: Optimizer,
         convergence: ConvergenceCriteria = .init(),
         useSparseBackend: Bool = true,
-        useMetalAcceleration: Bool = true,
+        precisionPolicy: PrecisionPolicy = .fast,
     ) {
         self.hamiltonian = hamiltonian
         self.ansatz = ansatz
         self.optimizer = optimizer
         self.convergence = convergence
-        sparseHamiltonian = useSparseBackend ? SparseHamiltonian(observable: hamiltonian) : nil
-        simulator = QuantumSimulator(useMetalAcceleration: useMetalAcceleration)
+        self.precisionPolicy = precisionPolicy
+        sparseHamiltonian = useSparseBackend ? SparseHamiltonian(observable: hamiltonian, precisionPolicy: precisionPolicy) : nil
+        simulator = QuantumSimulator(precisionPolicy: precisionPolicy)
     }
 
     // MARK: - Execution

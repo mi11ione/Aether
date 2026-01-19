@@ -119,7 +119,7 @@ struct QuantumSimulatorTests {
 
     @Test("Simulator with Metal disabled works correctly")
     func simulatorWithoutMetalWorks() async {
-        let simulator = QuantumSimulator(useMetalAcceleration: false)
+        let simulator = QuantumSimulator(precisionPolicy: .accurate)
 
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
@@ -135,7 +135,7 @@ struct QuantumSimulatorTests {
     func simulatorUsesMetalAcceleration() async {
         guard MetalGateApplication() != nil else { return }
 
-        let simulator = QuantumSimulator(useMetalAcceleration: true)
+        let simulator = QuantumSimulator(precisionPolicy: .fast)
 
         var circuit = QuantumCircuit(qubits: 12)
         circuit.append(.hadamard, to: 0)
@@ -152,7 +152,7 @@ struct QuantumSimulatorTests {
     func simulatorUsesMetalWithProgress() async {
         guard MetalGateApplication() != nil else { return }
 
-        let simulator = QuantumSimulator(useMetalAcceleration: true)
+        let simulator = QuantumSimulator(precisionPolicy: .fast)
 
         var circuit = QuantumCircuit(qubits: 12)
         for _ in 0 ..< 8 {
@@ -237,5 +237,86 @@ struct QuantumSimulatorTests {
             abs(progress.percentage - 1.0) < 1e-10,
             "Progress should be 100% when all gates executed",
         )
+    }
+}
+
+/// Test suite for PrecisionPolicy enum.
+/// Validates tolerance values, description
+/// formatting, and default policy.
+@Suite("Precision Policy")
+struct PrecisionPolicyTests {
+    @Test("Tolerance returns correct values for each policy")
+    func toleranceValues() {
+        #expect(
+            abs(PrecisionPolicy.fast.tolerance - 1e-5) < 1e-15,
+            "Fast policy should have 1e-5 tolerance",
+        )
+        #expect(
+            abs(PrecisionPolicy.balanced.tolerance - 1e-7) < 1e-15,
+            "Balanced policy should have 1e-7 tolerance",
+        )
+        #expect(
+            abs(PrecisionPolicy.accurate.tolerance - 1e-10) < 1e-15,
+            "Accurate policy should have 1e-10 tolerance",
+        )
+    }
+
+    @Test("Description formats correctly for accurate policy")
+    func descriptionAccurate() {
+        let description = PrecisionPolicy.accurate.description
+
+        #expect(description.contains("Accurate"), "Should contain policy name")
+        #expect(description.contains("CPU-only"), "Should indicate CPU-only execution")
+        #expect(description.contains("1e-10"), "Should show tolerance value")
+    }
+
+    @Test("Description formats correctly for all policies")
+    func descriptionAllPolicies() {
+        let fastDesc = PrecisionPolicy.fast.description
+        let balancedDesc = PrecisionPolicy.balanced.description
+        let accurateDesc = PrecisionPolicy.accurate.description
+
+        #expect(fastDesc.contains("Fast"), "Fast description should contain policy name")
+        #expect(fastDesc.contains("10"), "Fast description should show GPU threshold")
+
+        #expect(balancedDesc.contains("Balanced"), "Balanced description should contain policy name")
+        #expect(balancedDesc.contains("12"), "Balanced description should show GPU threshold")
+
+        #expect(accurateDesc.contains("Accurate"), "Accurate description should contain policy name")
+    }
+
+    @Test("Default policy returns fast")
+    func defaultPolicy() {
+        #expect(
+            PrecisionPolicy.default == .fast,
+            "Default precision policy should be .fast",
+        )
+    }
+
+    @Test("GPU qubit threshold values are correct")
+    func gpuQubitThreshold() {
+        #expect(PrecisionPolicy.fast.gpuQubitThreshold == 10, "Fast should use 10 qubits")
+        #expect(PrecisionPolicy.balanced.gpuQubitThreshold == 12, "Balanced should use 12 qubits")
+        #expect(PrecisionPolicy.accurate.gpuQubitThreshold == Int.max, "Accurate should disable GPU")
+    }
+
+    @Test("isGPUEnabled returns correct values")
+    func isGPUEnabled() {
+        #expect(PrecisionPolicy.fast.isGPUEnabled, "Fast should enable GPU")
+        #expect(PrecisionPolicy.balanced.isGPUEnabled, "Balanced should enable GPU")
+        #expect(!PrecisionPolicy.accurate.isGPUEnabled, "Accurate should disable GPU")
+    }
+
+    @Test("shouldUseGPU respects policy and qubit count")
+    func shouldUseGPU() {
+        #expect(!PrecisionPolicy.shouldUseGPU(qubits: 9, policy: .fast), "9 qubits below fast threshold")
+        #expect(PrecisionPolicy.shouldUseGPU(qubits: 10, policy: .fast), "10 qubits meets fast threshold")
+        #expect(PrecisionPolicy.shouldUseGPU(qubits: 15, policy: .fast), "15 qubits above fast threshold")
+
+        #expect(!PrecisionPolicy.shouldUseGPU(qubits: 11, policy: .balanced), "11 qubits below balanced threshold")
+        #expect(PrecisionPolicy.shouldUseGPU(qubits: 12, policy: .balanced), "12 qubits meets balanced threshold")
+
+        #expect(!PrecisionPolicy.shouldUseGPU(qubits: 20, policy: .accurate), "Accurate never uses GPU")
+        #expect(!PrecisionPolicy.shouldUseGPU(qubits: 100, policy: .accurate), "Accurate never uses GPU regardless of size")
     }
 }

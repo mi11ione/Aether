@@ -39,6 +39,9 @@ import Foundation
 public actor QAOA {
     // MARK: - Configuration
 
+    /// Precision policy controlling GPU/CPU backend selection.
+    private let _precisionPolicy: PrecisionPolicy
+
     /// Cost Hamiltonian H_p encoding optimization problem
     private let costHamiltonian: Observable
 
@@ -100,11 +103,12 @@ public actor QAOA {
     ///   - optimizer: Classical parameter optimization algorithm
     ///   - convergence: Termination criteria for optimization loop
     ///   - sparseBackend: Enable sparse Hamiltonian hardware acceleration
-    ///   - metalAcceleration: Enable Metal GPU for quantum circuit execution
+    ///   - precisionPolicy: Precision policy controlling GPU/CPU backend selection
     /// - Precondition: `qubits` must be positive and ≤30 for memory constraints
     /// - SeeAlso: ``run(from:progress:)``
     /// - SeeAlso: ``MaxCut``
     /// - SeeAlso: ``MixerHamiltonian``
+    /// - SeeAlso: ``PrecisionPolicy``
     public init(
         cost: Observable,
         mixer: Observable? = nil,
@@ -113,16 +117,17 @@ public actor QAOA {
         optimizer: Optimizer = COBYLAOptimizer(tolerance: 1e-6),
         convergence: ConvergenceCriteria = ConvergenceCriteria(),
         sparseBackend: Bool = true,
-        metalAcceleration: Bool = true,
+        precisionPolicy: PrecisionPolicy = .fast,
     ) {
+        _precisionPolicy = precisionPolicy
         costHamiltonian = cost
         mixerHamiltonian = mixer ?? MixerHamiltonian.x(qubits: qubits)
         self.qubits = qubits
         self.depth = depth
         self.optimizer = optimizer
         self.convergence = convergence
-        sparseHamiltonian = sparseBackend ? SparseHamiltonian(observable: cost) : nil
-        simulator = QuantumSimulator(useMetalAcceleration: metalAcceleration)
+        sparseHamiltonian = sparseBackend ? SparseHamiltonian(observable: cost, precisionPolicy: precisionPolicy) : nil
+        simulator = QuantumSimulator(precisionPolicy: precisionPolicy)
 
         ansatz = QuantumCircuit.qaoa(
             cost: costHamiltonian,
@@ -248,6 +253,22 @@ public actor QAOA {
     }
 
     // MARK: - State Queries
+
+    /// Precision policy controlling GPU/CPU backend selection.
+    ///
+    /// Returns the precision policy configured at initialization. Controls backend selection
+    /// for both quantum simulator circuit execution and sparse Hamiltonian expectation values.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let qaoa = QAOA(cost: cost, qubits: 4, depth: 2, precisionPolicy: .balanced)
+    /// print("Policy: \(qaoa.precisionPolicy)")  // "Balanced (GPU threshold: 12 qubits, tolerance: 1e-7)"
+    /// ```
+    ///
+    /// - SeeAlso: ``PrecisionPolicy``
+    public var precisionPolicy: PrecisionPolicy {
+        _precisionPolicy
+    }
 
     /// Current optimization iteration and cost value.
     ///

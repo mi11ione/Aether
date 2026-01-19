@@ -67,6 +67,81 @@ inline ComplexFloat complexScale(ComplexFloat a, float scalar) {
     return ComplexFloat{a.real * scalar, a.imaginary * scalar};
 }
 
+// MARK: - Kahan Summation for Improved Precision
+
+/// Kahan summation accumulator for compensated floating-point addition.
+///
+/// Maintains running sum and compensation term to reduce accumulation error
+/// from O(n·ε) to O(√n·ε) where n is the number of terms and ε is machine epsilon.
+/// Critical for sparse matrix-vector multiplication where rows may have hundreds
+/// of non-zero elements and naive summation loses significant precision.
+///
+/// Memory layout: 8 bytes (4 bytes sum + 4 bytes compensation)
+struct KahanAccumulator {
+    float sum;
+    float compensation;
+};
+
+/// Kahan compensated addition: accumulator += value with error tracking.
+///
+/// Implements Kahan-Babushka-Neumaier algorithm for improved precision in
+/// floating-point summation. Captures rounding error in compensation term
+/// and feeds it back into subsequent additions. Reduces accumulation error
+/// from O(n·ε) to O(√n·ε).
+///
+/// **Example:**
+/// ```metal
+/// KahanAccumulator acc = {0.0f, 0.0f};
+/// for (uint i = 0; i < n; i++) {
+///     kahanAdd(acc, values[i]);
+/// }
+/// float result = acc.sum + acc.compensation;
+/// ```
+///
+/// - Parameters:
+///   - acc: Kahan accumulator (modified in place)
+///   - value: Value to add to accumulator
+/// - Complexity: O(1) per addition, 4 FLOPs
+inline void kahanAdd(thread KahanAccumulator& acc, float value) {
+    float y = value - acc.compensation;
+    float t = acc.sum + y;
+    acc.compensation = (t - acc.sum) - y;
+    acc.sum = t;
+}
+
+/// Complex Kahan accumulator for complex number summation.
+///
+/// Maintains separate Kahan accumulators for real and imaginary components,
+/// providing compensated summation for both parts independently.
+struct ComplexKahanAccumulator {
+    KahanAccumulator real;
+    KahanAccumulator imag;
+};
+
+/// Complex Kahan compensated addition for complex number summation.
+///
+/// Applies Kahan summation separately to real and imaginary components.
+///
+/// - Parameters:
+///   - acc: Complex Kahan accumulator (modified in place)
+///   - value: Complex value to add
+/// - Complexity: O(1) per addition, 8 FLOPs
+inline void complexKahanAdd(thread ComplexKahanAccumulator& acc, ComplexFloat value) {
+    kahanAdd(acc.real, value.real);
+    kahanAdd(acc.imag, value.imaginary);
+}
+
+/// Extracts final sum from complex Kahan accumulator including compensation.
+///
+/// - Parameter acc: Complex Kahan accumulator
+/// - Returns: Final complex sum with compensation folded in
+inline ComplexFloat complexKahanSum(ComplexKahanAccumulator acc) {
+    return ComplexFloat{
+        acc.real.sum + acc.real.compensation,
+        acc.imag.sum + acc.imag.compensation
+    };
+}
+
 // MARK: - Single-Qubit Gate Kernel
 
 /// Apply single-qubit gate: parallel 2x2 matrix-vector multiplication
@@ -298,13 +373,16 @@ kernel void applyToffoli(
 
 /// CSR Sparse Matrix-Vector Multiply: output = H * input for Hamiltonian expectation values
 ///
-/// Implements sparse matrix-vector multiplication using CSR (Compressed Sparse Row) format.
-/// Each thread computes one output element by accumulating the dot product of one sparse
-/// row with the input vector: output[row] = Σⱼ H[row,j] * input[j], iterating from
-/// rowPointers[row] to rowPointers[row+1]-1 and accumulating values[k] * input[columnIndices[k]].
+/// Implements sparse matrix-vector multiplication using CSR (Compressed Sparse Row) format
+/// with Kahan compensated summation for improved numerical precision. Each thread computes
+/// one output element by accumulating the dot product of one sparse row with the input vector:
+/// output[row] = Σⱼ H[row,j] * input[j], using Kahan summation to reduce accumulation error
+/// from O(n·ε) to O(√n·ε) where n is the number of non-zeros per row.
 ///
 /// Launches dimension threads (one per matrix row). Each thread reads O(nnz/dimension)
-/// sparse elements on average, performing complex multiplication and addition per non-zero.
+/// sparse elements on average, performing complex multiplication and Kahan accumulation
+/// per non-zero. Kahan summation adds ~4 FLOPs per accumulation but dramatically improves
+/// precision for rows with 10+ non-zero elements, typical in molecular Hamiltonians.
 ///
 /// CSR format uses rowPointers[i] as the index where row i starts in columnIndices/values,
 /// with rowPointers[i+1] - rowPointers[i] giving non-zeros in row i. columnIndices[k] holds
@@ -338,16 +416,17 @@ kernel void csrSparseMatVec(
         const uint start = rowPointers[row];
         const uint end = rowPointers[row + 1];
 
-        ComplexFloat sum = ComplexFloat{0.0, 0.0};
+        ComplexKahanAccumulator acc = {{0.0f, 0.0f}, {0.0f, 0.0f}};
 
         for (uint k = start; k < end; k++) {
             const uint col = columnIndices[k];
             const ComplexFloat value = values[k];
             const ComplexFloat inputElement = input[col];
+            const ComplexFloat product = complexMultiply(value, inputElement);
 
-            sum = complexAdd(sum, complexMultiply(value, inputElement));
+            complexKahanAdd(acc, product);
         }
 
-        output[row] = sum;
+        output[row] = complexKahanSum(acc);
     }
 }

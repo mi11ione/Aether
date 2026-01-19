@@ -279,6 +279,33 @@ struct QAOABackendSelectionTests {
             #expect(termCount == 2, "Observable backend should report correct term count")
         }
     }
+
+    @Test("Precision policy is exposed and matches initialization")
+    func precisionPolicyProperty() async {
+        let cost = MaxCut.hamiltonian(edges: [(0, 1)])
+
+        let fastQAOA = QAOA(cost: cost, qubits: 2, depth: 1, precisionPolicy: .fast)
+        let balancedQAOA = QAOA(cost: cost, qubits: 2, depth: 1, precisionPolicy: .balanced)
+        let accurateQAOA = QAOA(cost: cost, qubits: 2, depth: 1, precisionPolicy: .accurate)
+
+        let fastPolicy = await fastQAOA.precisionPolicy
+        let balancedPolicy = await balancedQAOA.precisionPolicy
+        let accuratePolicy = await accurateQAOA.precisionPolicy
+
+        #expect(fastPolicy == .fast, "Fast policy should be exposed correctly")
+        #expect(balancedPolicy == .balanced, "Balanced policy should be exposed correctly")
+        #expect(accuratePolicy == .accurate, "Accurate policy should be exposed correctly")
+    }
+
+    @Test("Precision policy defaults to fast")
+    func precisionPolicyDefault() async {
+        let cost = MaxCut.hamiltonian(edges: [(0, 1)])
+        let qaoa = QAOA(cost: cost, qubits: 2, depth: 1)
+
+        let policy = await qaoa.precisionPolicy
+
+        #expect(policy == .fast, "Default precision policy should be .fast")
+    }
 }
 
 /// Test suite for QAOA with different optimizers.

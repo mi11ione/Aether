@@ -9,17 +9,21 @@ import Accelerate
 /// Hamiltonians exhibit 0.01% to 1% sparsity, storing only non-zero elements enables orders of magnitude
 /// speedup over term-by-term measurement in VQE and QAOA.
 ///
-/// Backend selection occurs automatically at initialization based on system size and hardware availability.
-/// Metal GPU backend activates for larger systems when Metal is available, using custom CSR kernels with
-/// Float32 precision. Accelerate Sparse backend handles smaller systems using AMX-accelerated sparse BLAS
-/// on decomposed real/imaginary components. Observable backend provides guaranteed fallback with term-by-term
-/// measurement.
+/// Backend selection occurs automatically at initialization based on system size, hardware availability,
+/// and precision policy. Metal GPU backend activates for larger systems when Metal is available and policy
+/// permits, using custom CSR kernels with Float32 precision and Kahan summation for improved accumulation.
+/// Accelerate Sparse backend handles smaller systems using AMX-accelerated sparse BLAS on decomposed
+/// real/imaginary components. Observable backend provides guaranteed fallback with term-by-term measurement.
+///
+/// Precision policy controls backend selection: `.fast` uses Metal at ≥10 qubits,
+/// `.balanced` uses Metal at ≥12 qubits with higher precision threshold, `.accurate` forces Accelerate
+/// or Observable backends only (no GPU) for maximum Float64 precision.
 ///
 /// **Example:**
 ///
 /// ```swift
 /// let hamiltonian = Observable(terms: [(1.0, PauliString([.z(0)]))])
-/// let sparse = SparseHamiltonian(observable: hamiltonian)
+/// let sparse = SparseHamiltonian(observable: hamiltonian, precisionPolicy: .balanced)
 /// let state = QuantumState(qubits: 1)
 /// let energy = await sparse.expectationValue(of: state)
 /// ```
@@ -27,6 +31,7 @@ import Accelerate
 /// - SeeAlso: ``Observable``
 /// - SeeAlso: ``VQE``
 /// - SeeAlso: ``QAOA``
+/// - SeeAlso: ``PrecisionPolicy``
 public actor SparseHamiltonian {
     private enum Backend {
         case metalGPU(
@@ -66,6 +71,9 @@ public actor SparseHamiltonian {
     /// Count of non-zero matrix elements, typically 0.01% to 1% of dimension² for molecular Hamiltonians.
     public nonisolated let nnz: Int
 
+    /// Precision policy controlling backend selection.
+    public nonisolated let precisionPolicy: PrecisionPolicy
+
     /// Sparsity ratio (nnz / dimension²).
     @inlinable
     public nonisolated var sparsity: Double {
@@ -79,23 +87,32 @@ public actor SparseHamiltonian {
 
     /// Creates sparse Hamiltonian representation with automatic backend selection.
     ///
-    /// Backend selection priority: Metal GPU (larger systems) -> Accelerate Sparse (smaller systems) ->
-    /// Observable fallback. The sparse representation persists across all VQE iterations, amortizing
-    /// construction cost over the entire optimization.
+    /// Backend selection priority based on precision policy: Metal GPU (when policy permits and
+    /// system size exceeds policy threshold) -> Accelerate Sparse (smaller systems or `.accurate`)
+    /// -> Observable fallback. The sparse representation persists across all VQE iterations,
+    /// amortizing construction cost over the entire optimization.
+    ///
+    /// Policy-specific thresholds for Metal GPU (uses ``PrecisionPolicy/gpuQubitThreshold``):
+    /// - `.fast`: ≥10 qubits
+    /// - `.balanced`: ≥12 qubits (higher precision threshold)
+    /// - `.accurate`: never (CPU-only for maximum precision)
     ///
     /// **Example:**
     ///
     /// ```swift
     /// let h = Observable(terms: [(1.0, PauliString([.z(0)]))])
-    /// let sparse = SparseHamiltonian(observable: h)
+    /// let sparse = SparseHamiltonian(observable: h, precisionPolicy: .balanced)
     /// let stats = await sparse.statistics
     /// ```
     ///
     /// - Parameters:
     ///   - observable: Quantum observable H = Σᵢ cᵢ Pᵢ.
     ///   - systemSize: Total qubits in system. When nil, inferred from maximum qubit index in observable.
-    public init(observable: Observable, systemSize: Int? = nil) {
+    ///   - precisionPolicy: Precision policy governing backend selection (default: `.fast`).
+    /// - SeeAlso: ``PrecisionPolicy``
+    public init(observable: Observable, systemSize: Int? = nil, precisionPolicy: PrecisionPolicy = .fast) {
         self.observable = observable
+        self.precisionPolicy = precisionPolicy
 
         var maxQubit: Int = -1
         for (_, pauliString) in observable.terms {
@@ -110,10 +127,15 @@ public actor SparseHamiltonian {
         let cooMatrix: [COOElement] = Self.buildCOOMatrix(from: observable, dimension: dimension)
         nnz = cooMatrix.count
 
-        if qubits >= 8, let metalBackend = Self.tryMetalGPUBackend(
-            cooMatrix: cooMatrix,
-            dimension: dimension,
-        ) {
+        let metalGPUThreshold = precisionPolicy.gpuQubitThreshold
+
+        if precisionPolicy.isGPUEnabled,
+           qubits >= metalGPUThreshold,
+           let metalBackend = Self.tryMetalGPUBackend(
+               cooMatrix: cooMatrix,
+               dimension: dimension,
+           )
+        {
             backend = metalBackend
         } else if let accelerateBackend = Self.tryAccelerateSparseBackend(
             cooMatrix: cooMatrix,

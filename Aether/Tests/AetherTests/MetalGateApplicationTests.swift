@@ -256,4 +256,37 @@ struct MetalGateApplicationTests {
             #expect(abs(cpuAmp.imaginary - gpuAmp.imaginary) < 1e-5)
         }
     }
+
+    @Test("minimumQubitCountForGPU returns correct threshold for each policy")
+    func minimumQubitCountForGPUPolicy() {
+        let fastThreshold = MetalGateApplication.minimumQubitCountForGPU(policy: .fast)
+        let balancedThreshold = MetalGateApplication.minimumQubitCountForGPU(policy: .balanced)
+        let accurateThreshold = MetalGateApplication.minimumQubitCountForGPU(policy: .accurate)
+
+        #expect(fastThreshold == 10, "Fast policy should use 10 qubit threshold")
+        #expect(balancedThreshold == 12, "Balanced policy should use 12 qubit threshold")
+        #expect(accurateThreshold == Int.max, "Accurate policy should disable GPU entirely")
+    }
+
+    @Test("minimumQubitCountForGPU matches static constant for fast policy")
+    func minimumQubitCountForGPUConsistency() {
+        let staticThreshold = MetalGateApplication.minimumQubitCountForGPU
+        let policyThreshold = MetalGateApplication.minimumQubitCountForGPU(policy: .fast)
+
+        #expect(
+            staticThreshold == policyThreshold,
+            "Static constant should match fast policy threshold",
+        )
+    }
+
+    @Test("applyHybrid respects precision policy GPU threshold")
+    func hybridRespectsPolicy() async {
+        let state = QuantumState(qubits: 11)
+
+        let fastResult = await GateApplication.applyHybrid(.hadamard, to: 0, state: state, policy: .fast)
+        let balancedResult = await GateApplication.applyHybrid(.hadamard, to: 0, state: state, policy: .balanced)
+
+        #expect(fastResult.isNormalized(), "Fast policy result should be normalized")
+        #expect(balancedResult.isNormalized(), "Balanced policy result should be normalized")
+    }
 }
