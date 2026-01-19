@@ -66,15 +66,13 @@ extension Float: ComplexScalar {
 /// Provides complete arithmetic operations, polar/cartesian conversions, and Euler's formula
 /// for phase representation.
 ///
-/// **Quantum computing context**: Complex amplitudes encode quantum state probabilities where
-/// |ψ|² represents measurement probability (Born rule). Inner products use complex conjugation.
-///
-/// **Precision**: Use `Complex<Double>` for quantum state amplitudes (default). Use `Complex<Float>`
-/// for GPU computations where 7 decimal digits suffice. Equality uses epsilon-based comparison
-/// (1e-10 for Double, 1e-6 for Float) suitable for floating-point quantum computations.
-///
-/// **Performance**: All operations are O(1). Optimized with fused multiply-add (FMA) for
-/// ``magnitudeSquared`` and division. Specialized for Double and Float at compile time.
+/// In quantum computing, complex amplitudes encode quantum state probabilities where |ψ|² represents
+/// measurement probability (Born rule), and inner products use complex conjugation. Use
+/// `Complex<Double>` for quantum state amplitudes (default) or `Complex<Float>` for GPU computations
+/// where 7 decimal digits suffice. Equality uses epsilon-based comparison (1e-10 for Double, 1e-6
+/// for Float) suitable for floating-point quantum computations. All operations are O(1), optimized
+/// with fused multiply-add (FMA) for ``magnitudeSquared`` and division, specialized for Double and
+/// Float at compile time.
 ///
 /// **Example:**
 /// ```swift

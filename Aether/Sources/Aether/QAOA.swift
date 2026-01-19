@@ -30,7 +30,6 @@ import Foundation
 /// ```
 ///
 /// - Complexity: O(iterations * (depth * 2^n + hamiltonian_sparsity))
-/// - Note: Actor-based for thread safety and concurrent execution prevention
 /// - SeeAlso: ``Result``
 /// - SeeAlso: ``MaxCut``
 /// - SeeAlso: ``MixerHamiltonian``

@@ -8,13 +8,11 @@ import Accelerate
 /// Centralizes common matrix operations used throughout the quantum simulator for gate composition,
 /// unitarity validation, and operator transformations. All operations use Apple's Accelerate BLAS
 ///
-/// **Quantum Context**: Essential for gate algebra (composing sequential gates into single unitary),
-/// verifying gate correctness (U†U = I), and basis transformations (U†OU). Matrix multiplication
-/// is the fundamental operation for gate fusion optimization and circuit compilation.
-///
-/// **Performance**: BLAS-accelerated matrix operations provide speedup over naive loops via
-/// SIMD vectorization and cache optimization. Critical for unitary partitioning, circuit optimization,
-/// and multi-gate composition in variational algorithms.
+/// Essential for gate algebra (composing sequential gates into single unitary), verifying gate
+/// correctness (U†U = I), and basis transformations (U†OU). Matrix multiplication is the fundamental
+/// operation for gate fusion optimization and circuit compilation. BLAS-accelerated operations
+/// provide speedup over naive loops via SIMD vectorization and cache optimization, critical for
+/// unitary partitioning, circuit optimization, and multi-gate composition in variational algorithms.
 ///
 /// **Example:**
 /// ```swift

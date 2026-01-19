@@ -26,7 +26,6 @@ import Foundation
 /// ```
 ///
 /// - Complexity: O(iterations * (circuit_depth * 2^n + hamiltonian_sparsity))
-/// - Note: Actor-based for thread safety
 /// - SeeAlso: ``HardwareEfficientAnsatz``
 /// - SeeAlso: ``Observable``
 /// - SeeAlso: ``SparseHamiltonian``

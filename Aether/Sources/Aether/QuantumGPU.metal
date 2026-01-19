@@ -160,7 +160,7 @@ inline ComplexFloat complexKahanSum(ComplexKahanAccumulator acc) {
 /// Each thread reads 2 amplitudes and writes 2 amplitudes. Adjacent threads access
 /// nearby memory for coalesced bandwidth.
 ///
-/// **Parameters:**:
+/// Parameters:
 /// - amplitudes: Input/output state vector (2^n complex amplitudes)
 /// - targetQubit: Qubit index to apply gate to (0 to n-1)
 /// - gateMatrix: 2x2 unitary matrix [g00, g01, g10, g11] row-major
@@ -210,7 +210,7 @@ kernel void applySingleQubitGate(
 /// Launches 2^n threads (one per amplitude). Each thread reads 1 amplitude
 /// and writes 1 amplitude. Write pattern depends on qubit indices.
 ///
-/// **Parameters:**
+/// Parameters:
 /// - amplitudes: Input state vector (read-only)
 /// - controlQubit: Control qubit index (0 to n-1)
 /// - targetQubit: Target qubit index (0 to n-1, ≠ control)
@@ -258,7 +258,7 @@ kernel void applyCNOT(
 /// Each thread reads 4 amplitudes and writes 4 amplitudes, performing 16 complex
 /// multiplications and 12 complex additions.
 ///
-/// **Parameters:**
+/// Parameters:
 /// - amplitudes: Input/output state vector (2^n complex amplitudes)
 /// - controlQubit: Control qubit index (0 to n-1)
 /// - targetQubit: Target qubit index (0 to n-1, ≠ control)
@@ -335,7 +335,7 @@ kernel void applyTwoQubitGate(
 /// Launches 2^n threads (one per amplitude). Each thread reads 1 amplitude and
 /// writes 1 amplitude. Approximately 25% of threads perform the swap operation.
 ///
-/// **Parameters:**
+/// Parameters:
 /// - amplitudes: Input state vector (read-only)
 /// - control1Qubit: First control qubit index (0 to n-1)
 /// - control2Qubit: Second control qubit index (0 to n-1, ≠ control1)
@@ -394,7 +394,7 @@ kernel void applyToffoli(
 /// let energy = sparseH.expectationValue(state: state)
 /// ```
 ///
-/// **Parameters:**
+/// Parameters:
 /// - rowPointers: CSR row pointers [dimension+1]
 /// - columnIndices: CSR column indices [nnz]
 /// - values: Complex values [nnz]

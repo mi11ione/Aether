@@ -1587,17 +1587,12 @@ public struct COBYLAOptimizer: Optimizer {
 
     // MARK: - Linear Model Construction
 
-    /// Build linear model from simplex interpolation points
+    /// Build linear model from simplex interpolation points.
     ///
-    /// Constructs linear approximation: m(x) = f(x₀) + g^T(x - x₀)
-    /// where gradient g is computed via least squares from simplex points.
-    ///
-    /// **Algorithm:**
-    /// 1. Form matrix Y where Y[i] = simplex[i].parameters - baseParameters
-    /// 2. Form vector f where f[i] = simplex[i].value - baseValue
-    /// 3. Solve least squares: g = (Y^T Y)^(-1) Y^T f
-    ///
-    /// For well-conditioned simplex, this gives accurate gradient estimate.
+    /// Constructs linear approximation m(x) = f(x₀) + gᵀ(x - x₀) where the gradient g is computed
+    /// via least squares from simplex points. The algorithm forms matrix Y with rows Y[i] = simplex[i].parameters - baseParameters
+    /// and vector f with f[i] = simplex[i].value - baseValue, then solves the least squares problem g = (YᵀY)⁻¹Yᵀf.
+    /// For a well-conditioned simplex, this yields an accurate gradient estimate.
     ///
     /// - Parameters:
     ///   - simplex: Array of n+1 interpolation points

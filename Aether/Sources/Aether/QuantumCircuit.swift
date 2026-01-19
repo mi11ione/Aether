@@ -1431,16 +1431,12 @@ public extension QuantumCircuit {
         }
     }
 
-    /// Appends multi-controlled X (NOT) gate using ladder decomposition with ancilla qubits
+    /// Appends multi-controlled X (NOT) gate using ladder decomposition with ancilla qubits.
     ///
-    /// Implements Cⁿ(X) gate using Toffoli decomposition for arbitrary control count.
-    /// Uses ancilla qubits automatically allocated beyond the maximum qubit index.
-    ///
-    /// **Decomposition:**
-    /// - 0 controls: X gate
-    /// - 1 control: CNOT gate
-    /// - 2 controls: Toffoli gate
-    /// - n controls (n≥3): Ladder of Toffoli gates with n-2 ancilla qubits
+    /// Implements Cⁿ(X) gate using Toffoli decomposition for arbitrary control count, with ancilla
+    /// qubits automatically allocated beyond the maximum qubit index. For zero controls this reduces
+    /// to an X gate, for one control a CNOT, and for two controls a Toffoli. With n≥3 controls,
+    /// the decomposition uses a ladder of Toffoli gates requiring n-2 ancilla qubits.
     ///
     /// - Parameters:
     ///   - circuit: Circuit to append gates to

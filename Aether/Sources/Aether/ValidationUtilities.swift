@@ -762,6 +762,261 @@ public enum ValidationUtilities {
         )
     }
 
+    // MARK: - Density Matrix Validations
+
+    /// Validate that number of qubits is within density matrix memory limits
+    ///
+    /// Density matrices require 2^(2n) complex numbers (4^n scaling), severely limiting
+    /// practical qubit counts. At 14 qubits: 4^14 * 16 bytes ≈ 4.3 GB.
+    ///
+    /// - Parameter qubits: Number of qubits to validate
+    /// - Precondition: qubits must be <= 14
+    /// - Complexity: O(1)
+    /// - Note: 14-qubit limit = 4^14 elements ≈ 4.3GB for Complex<Double>
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateDensityMatrixMemoryLimit(_ qubits: Int) {
+        precondition(
+            qubits <= 14,
+            "Density matrix simulation limited to 14 qubits (4^n scaling, got \(qubits) qubits requiring \(1 << (2 * qubits)) elements)",
+        )
+    }
+
+    /// Validate that density matrix element count matches dimension squared
+    ///
+    /// - Parameters:
+    ///   - elements: Flattened density matrix elements (row-major)
+    ///   - dimension: Expected matrix dimension (2^qubits)
+    /// - Precondition: elements.count == dimension * dimension
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateDensityMatrixElementCount(_ elements: [Complex<Double>], dimension: Int) {
+        let expectedCount = dimension * dimension
+        precondition(
+            elements.count == expectedCount,
+            "Density matrix element count must be \(dimension)*\(dimension) = \(expectedCount) (got \(elements.count))",
+        )
+    }
+
+    /// Validate that noise channel error probability is in valid range [0, 1]
+    ///
+    /// - Parameters:
+    ///   - probability: Error probability to validate
+    ///   - name: Channel name for error message
+    /// - Precondition: 0 <= probability <= 1
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateErrorProbability(_ probability: Double, name: String) {
+        precondition(
+            probability >= 0.0 && probability <= 1.0,
+            "\(name) error probability must be in [0, 1] (got \(probability))",
+        )
+    }
+
+    /// Validate that damping parameter gamma is in valid range [0, 1]
+    ///
+    /// - Parameters:
+    ///   - gamma: Damping parameter to validate
+    ///   - name: Channel name for error message
+    /// - Precondition: 0 <= gamma <= 1
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateDampingParameter(_ gamma: Double, name: String) {
+        precondition(
+            gamma >= 0.0 && gamma <= 1.0,
+            "\(name) damping parameter gamma must be in [0, 1] (got \(gamma))",
+        )
+    }
+
+    /// Validate that thermal population is in valid range [0, 0.5]
+    ///
+    /// - Parameters:
+    ///   - population: Thermal population to validate
+    ///   - name: Channel name for error message
+    /// - Precondition: 0 <= population <= 0.5
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateThermalPopulation(_ population: Double, name: String) {
+        precondition(
+            population >= 0.0 && population <= 0.5,
+            "\(name) thermal population must be in [0, 0.5] (got \(population))",
+        )
+    }
+
+    /// Validate that matrix determinant is non-singular
+    ///
+    /// - Parameters:
+    ///   - determinant: Computed determinant value
+    ///   - tolerance: Minimum absolute value for non-singularity
+    ///   - name: Matrix name for error message
+    /// - Precondition: |determinant| > tolerance
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateNonSingularDeterminant(_ determinant: Double, tolerance: Double = 1e-15, name: String) {
+        precondition(
+            abs(determinant) > tolerance,
+            "\(name) is singular (determinant ≈ 0, got \(determinant))",
+        )
+    }
+
+    /// Validate T₂ coherence time constraint: T₂ ≤ 2*T₁
+    ///
+    /// Physical constraint from decoherence theory: T₂ cannot exceed 2*T₁.
+    ///
+    /// - Parameters:
+    ///   - t2: T₂ coherence time
+    ///   - t1: T₁ relaxation time
+    ///   - index: Optional qubit index for per-qubit validation
+    /// - Precondition: T₂ ≤ 2*T₁
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateT2Constraint(_ t2: Double, t1: Double, index: Int? = nil) {
+        let indexStr = index.map { "[\($0)]" } ?? ""
+        precondition(
+            t2 <= 2 * t1 + 1e-10,
+            "T₂\(indexStr) must be ≤ 2*T₁\(indexStr) (got T₂=\(t2), T₁=\(t1))",
+        )
+    }
+
+    /// Validate that all elements in array are positive
+    ///
+    /// - Parameters:
+    ///   - values: Array of values to validate
+    ///   - name: Array name for error message
+    /// - Precondition: All values > 0
+    /// - Complexity: O(n)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateAllPositive(_ values: [Double], name: String) {
+        precondition(
+            values.allSatisfy { $0 > 0 },
+            "All \(name) values must be positive",
+        )
+    }
+
+    /// Validate that confusion matrix is valid for measurement error model
+    ///
+    /// Confusion matrix M must be 2*2 with rows summing to 1.0 (stochastic matrix).
+    /// M[i][j] = P(measure j | prepared i).
+    ///
+    /// - Parameter matrix: 2*2 confusion matrix to validate
+    /// - Precondition: Matrix is 2*2, all elements in [0,1], rows sum to 1.0
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateConfusionMatrix(_ matrix: [[Double]]) {
+        precondition(matrix.count == 2, "Confusion matrix must be 2*2 (got \(matrix.count) rows)")
+        precondition(matrix[0].count == 2, "Confusion matrix must be 2*2 (row 0 has \(matrix[0].count) columns)")
+        precondition(matrix[1].count == 2, "Confusion matrix must be 2*2 (row 1 has \(matrix[1].count) columns)")
+
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                precondition(
+                    matrix[i][j] >= 0.0 && matrix[i][j] <= 1.0,
+                    "Confusion matrix elements must be in [0, 1] (got \(matrix[i][j]) at [\(i)][\(j)])",
+                )
+            }
+            let rowSum = matrix[i][0] + matrix[i][1]
+            precondition(
+                abs(rowSum - 1.0) < 1e-10,
+                "Confusion matrix rows must sum to 1.0 (row \(i) sums to \(rowSum))",
+            )
+        }
+    }
+
+    /// Validate that Kraus operators satisfy completeness relation Σᵢ Kᵢ†Kᵢ = I
+    ///
+    /// This is the fundamental constraint for quantum channels to preserve trace.
+    ///
+    /// - Parameters:
+    ///   - krausOperators: Array of Kraus operator matrices
+    ///   - tolerance: Numerical tolerance for identity check (default 1e-10)
+    /// - Precondition: Σᵢ Kᵢ†Kᵢ = I within tolerance
+    /// - Complexity: O(k * n³) where k = number of Kraus operators, n = matrix dimension
+    @_effects(readonly)
+    static func validateKrausCompleteness(_ krausOperators: [[[Complex<Double>]]], tolerance: Double = 1e-10) {
+        precondition(!krausOperators.isEmpty, "Kraus operators array must not be empty")
+
+        let n = krausOperators[0].count
+        var sum = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: n), count: n)
+
+        for kraus in krausOperators {
+            let kDagger = MatrixUtilities.hermitianConjugate(kraus)
+            let product = MatrixUtilities.matrixMultiply(kDagger, kraus)
+            for i in 0 ..< n {
+                for j in 0 ..< n {
+                    sum[i][j] = sum[i][j] + product[i][j]
+                }
+            }
+        }
+
+        for i in 0 ..< n {
+            for j in 0 ..< n {
+                let expected: Complex<Double> = (i == j) ? .one : .zero
+                let diff = sum[i][j] - expected
+                precondition(
+                    diff.magnitudeSquared < tolerance * tolerance,
+                    "Kraus operators violate completeness relation at [\(i)][\(j)]: expected \(expected), got \(sum[i][j])",
+                )
+            }
+        }
+    }
+
+    // MARK: - Qubit Count Validations
+
+    /// Validate that two qubit counts are equal.
+    ///
+    /// - Parameters:
+    ///   - count1: First qubit count
+    ///   - count2: Second qubit count
+    ///   - name1: Description of first count
+    ///   - name2: Description of second count
+    /// - Precondition: count1 == count2
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateQubitCountsEqual(_ count1: Int, _ count2: Int, name1: String, name2: String) {
+        precondition(
+            count1 == count2,
+            "\(name1) (\(count1)) must equal \(name2) (\(count2))",
+        )
+    }
+
+    /// Validate that qubit count is within a limit.
+    ///
+    /// - Parameters:
+    ///   - count: Qubit count to validate
+    ///   - limit: Maximum allowed count
+    ///   - name: Description of the count
+    ///   - limitName: Description of the limit
+    /// - Precondition: count <= limit
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateQubitCountWithinLimit(_ count: Int, limit: Int, name: String, limitName: String) {
+        precondition(
+            count <= limit,
+            "\(name) (\(count)) must not exceed \(limitName) (\(limit))",
+        )
+    }
+
     // MARK: - Special Validations
 
     /// Validate that allocation dictionary contains required index
@@ -1007,5 +1262,34 @@ public enum ValidationUtilities {
             parameterCount == 0,
             "Cannot execute circuit with symbolic parameters. Use binding(_:) or bound(with:) first.",
         )
+    }
+
+    // MARK: - Error Mitigation Validations
+
+    /// Validate ZNE scale factors array.
+    ///
+    /// - Parameter scaleFactors: Array of noise scale factors
+    /// - Precondition: Array has at least 2 elements, contains 1.0, and all values are positive
+    /// - Complexity: O(n)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateZNEScaleFactors(_ scaleFactors: [Double]) {
+        precondition(scaleFactors.count >= 2, "ZNE requires at least 2 scale factors")
+        precondition(scaleFactors.contains(1.0), "Scale factors must include 1.0 (unscaled)")
+        precondition(scaleFactors.allSatisfy { $0 > 0 }, "All scale factors must be positive")
+    }
+
+    /// Validates PEC error probability is in valid range.
+    ///
+    /// - Parameter probability: Error probability to validate
+    /// - Precondition: 0 ≤ probability < 0.75 (depolarizing channel invertible limit)
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validatePECErrorProbability(_ probability: Double) {
+        precondition(probability >= 0 && probability < 0.75,
+                     "PEC error probability must be in [0, 0.75)")
     }
 }

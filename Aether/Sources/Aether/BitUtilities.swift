@@ -8,10 +8,9 @@
 /// basis state indices in little-endian qubit ordering (qubit 0 is LSB). Essential for gate
 /// application logic, measurement outcome extraction, and control qubit evaluation.
 ///
-/// **Qubit Ordering Convention**: Little-endian where qubit 0 is least significant bit.
+/// Uses little-endian qubit ordering where qubit 0 is the least significant bit.
 /// Basis state |q₂q₁q₀⟩ maps to integer q₂x4 + q₁x2 + q₀x1. Example: |101⟩ = 5 (binary 0b101).
-///
-/// **Performance**: All operations are O(1) bitwise operations compiled to single CPU instructions
+/// All operations are O(1) bitwise operations compiled to single CPU instructions
 /// (shift, AND, OR, XOR) for zero-cost abstractions.
 ///
 /// **Example:**
