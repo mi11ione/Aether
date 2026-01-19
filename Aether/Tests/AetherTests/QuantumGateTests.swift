@@ -131,7 +131,6 @@ struct GateMatrixTests {
 
         #expect(matrix.count == 4)
         #expect(matrix[0].count == 4)
-
         #expect(matrix[0][0] == .one)
         #expect(matrix[1][1] == .one)
         #expect(matrix[2][3] == .one)
@@ -732,6 +731,348 @@ struct ParameterBindingTests {
         let expected = QuantumGate.controlledRotationZ(.pi / 6).matrix()
         let actual = bound.matrix()
         #expect(QuantumGate.matricesEqual(expected, actual), "Bound CRz matrix should match")
+    }
+}
+
+/// Test suite for gate inverse property.
+/// Validates U†U = I for all gate types including parameterized gates,
+/// custom gates, and gates with symbolic parameters.
+@Suite("Gate Inverse Property")
+struct GateInverseTests {
+    @Test("Hermitian gates are self-inverse")
+    func hermitianGatesSelfInverse() {
+        let hermitianGates: [QuantumGate] = [
+            .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
+            .swap, .cnot, .cz, .toffoli,
+        ]
+
+        for gate in hermitianGates {
+            #expect(gate.inverse == gate, "\(gate) should be self-inverse")
+        }
+    }
+
+    @Test("Phase gate inverse negates angle")
+    func phaseInverseNegatesAngle() {
+        let angle = Double.pi / 4
+        let gate = QuantumGate.phase(angle)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "P(θ)P(-θ) should equal I")
+    }
+
+    @Test("Phase gate inverse with symbolic parameter")
+    func phaseInverseSymbolic() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.phase(.parameter(theta))
+        let inverse = gate.inverse
+
+        if case let .phase(negatedAngle) = inverse {
+            #expect(negatedAngle.isSymbolic, "Inverse should have symbolic parameter")
+            if case let .negatedParameter(p) = negatedAngle {
+                #expect(p == theta, "Should negate the same parameter")
+            }
+        }
+    }
+
+    @Test("S gate inverse is Phase(-π/2)")
+    func sGateInverse() {
+        let gate = QuantumGate.sGate
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "S·S† should equal I")
+    }
+
+    @Test("T gate inverse is Phase(-π/4)")
+    func tGateInverse() {
+        let gate = QuantumGate.tGate
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "T·T† should equal I")
+    }
+
+    @Test("RotationX inverse negates angle")
+    func rotationXInverse() {
+        let angle = Double.pi / 3
+        let gate = QuantumGate.rotationX(angle)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "Rx(θ)Rx(-θ) should equal I")
+    }
+
+    @Test("RotationX inverse with symbolic parameter")
+    func rotationXInverseSymbolic() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.rotationX(.parameter(theta))
+        let inverse = gate.inverse
+
+        if case let .rotationX(negatedAngle) = inverse {
+            #expect(negatedAngle.isSymbolic, "Inverse should have symbolic parameter")
+        }
+    }
+
+    @Test("RotationY inverse negates angle")
+    func rotationYInverse() {
+        let angle = Double.pi / 5
+        let gate = QuantumGate.rotationY(angle)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "Ry(θ)Ry(-θ) should equal I")
+    }
+
+    @Test("RotationZ inverse negates angle")
+    func rotationZInverse() {
+        let angle = Double.pi / 6
+        let gate = QuantumGate.rotationZ(angle)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "Rz(θ)Rz(-θ) should equal I")
+    }
+
+    @Test("U1 inverse negates lambda")
+    func u1Inverse() {
+        let lambda = Double.pi / 4
+        let gate = QuantumGate.u1(lambda: lambda)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "U1(λ)U1(-λ) should equal I")
+    }
+
+    @Test("U1 inverse with symbolic parameter")
+    func u1InverseSymbolic() {
+        let lambda = Parameter(name: "lambda")
+        let gate = QuantumGate.u1(lambda: .parameter(lambda))
+        let inverse = gate.inverse
+
+        if case let .u1(negatedLambda) = inverse {
+            #expect(negatedLambda.isSymbolic, "Inverse should have symbolic parameter")
+        }
+    }
+
+    @Test("U2 inverse returns U3 with negated theta")
+    func u2Inverse() {
+        let phi = Double.pi / 4
+        let lambda = Double.pi / 3
+        let gate = QuantumGate.u2(phi: phi, lambda: lambda)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "U2(φ,λ)U2†(φ,λ) should equal I")
+    }
+
+    @Test("U2 inverse with symbolic parameters returns U3")
+    func u2InverseSymbolic() {
+        let phi = Parameter(name: "phi")
+        let lambda = Parameter(name: "lambda")
+        let gate = QuantumGate.u2(phi: .parameter(phi), lambda: .parameter(lambda))
+        let inverse = gate.inverse
+
+        if case let .u3(newTheta, newPhi, newLambda) = inverse {
+            if case let .value(thetaVal) = newTheta {
+                #expect(abs(thetaVal + .pi / 2) < 1e-10, "Theta should be -π/2")
+            }
+            #expect(newPhi.isSymbolic, "Inverse phi should be symbolic")
+            #expect(newLambda.isSymbolic, "Inverse lambda should be symbolic")
+        }
+    }
+
+    @Test("U3 inverse negates and reorders parameters")
+    func u3Inverse() {
+        let theta = Double.pi / 4
+        let phi = Double.pi / 3
+        let lambda = Double.pi / 6
+        let gate = QuantumGate.u3(theta: theta, phi: phi, lambda: lambda)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "U3(θ,φ,λ)U3†(θ,φ,λ) should equal I")
+    }
+
+    @Test("U3 inverse with symbolic parameters")
+    func u3InverseSymbolic() {
+        let theta = Parameter(name: "theta")
+        let phi = Parameter(name: "phi")
+        let lambda = Parameter(name: "lambda")
+        let gate = QuantumGate.u3(theta: .parameter(theta), phi: .parameter(phi), lambda: .parameter(lambda))
+        let inverse = gate.inverse
+
+        if case let .u3(newTheta, newPhi, newLambda) = inverse {
+            #expect(newTheta.isSymbolic, "Inverse theta should be symbolic")
+            #expect(newPhi.isSymbolic, "Inverse phi should be symbolic")
+            #expect(newLambda.isSymbolic, "Inverse lambda should be symbolic")
+        }
+    }
+
+    @Test("SX gate inverse satisfies SX·SX† = I")
+    func sxInverse() {
+        let gate = QuantumGate.sx
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "SX·SX† should equal I")
+    }
+
+    @Test("SY gate inverse satisfies SY·SY† = I")
+    func syInverse() {
+        let gate = QuantumGate.sy
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "SY·SY† should equal I")
+    }
+
+    @Test("Controlled phase inverse negates angle")
+    func controlledPhaseInverse() {
+        let angle = Double.pi / 3
+        let gate = QuantumGate.controlledPhase(angle)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "CP(θ)CP(-θ) should equal I")
+    }
+
+    @Test("Controlled phase inverse with symbolic parameter")
+    func controlledPhaseInverseSymbolic() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.controlledPhase(.parameter(theta))
+        let inverse = gate.inverse
+
+        if case let .controlledPhase(negatedAngle) = inverse {
+            #expect(negatedAngle.isSymbolic, "Inverse should have symbolic parameter")
+        }
+    }
+
+    @Test("Controlled rotation X inverse negates angle")
+    func controlledRotationXInverse() {
+        let angle = Double.pi / 4
+        let gate = QuantumGate.controlledRotationX(angle)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "CRx(θ)CRx(-θ) should equal I")
+    }
+
+    @Test("Controlled rotation X inverse with symbolic parameter")
+    func controlledRotationXInverseSymbolic() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.controlledRotationX(.parameter(theta))
+        let inverse = gate.inverse
+
+        if case let .controlledRotationX(negatedAngle) = inverse {
+            #expect(negatedAngle.isSymbolic, "Inverse should have symbolic parameter")
+        }
+    }
+
+    @Test("Controlled rotation Y inverse negates angle")
+    func controlledRotationYInverse() {
+        let angle = Double.pi / 5
+        let gate = QuantumGate.controlledRotationY(angle)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "CRy(θ)CRy(-θ) should equal I")
+    }
+
+    @Test("Controlled rotation Y inverse with symbolic parameter")
+    func controlledRotationYInverseSymbolic() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.controlledRotationY(.parameter(theta))
+        let inverse = gate.inverse
+
+        if case let .controlledRotationY(negatedAngle) = inverse {
+            #expect(negatedAngle.isSymbolic, "Inverse should have symbolic parameter")
+        }
+    }
+
+    @Test("Controlled rotation Z inverse negates angle")
+    func controlledRotationZInverse() {
+        let angle = Double.pi / 6
+        let gate = QuantumGate.controlledRotationZ(angle)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "CRz(θ)CRz(-θ) should equal I")
+    }
+
+    @Test("Controlled rotation Z inverse with symbolic parameter")
+    func controlledRotationZInverseSymbolic() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.controlledRotationZ(.parameter(theta))
+        let inverse = gate.inverse
+
+        if case let .controlledRotationZ(negatedAngle) = inverse {
+            #expect(negatedAngle.isSymbolic, "Inverse should have symbolic parameter")
+        }
+    }
+
+    @Test("CY gate is self-inverse")
+    func cyInverse() {
+        let gate = QuantumGate.cy
+        let inverse = gate.inverse
+
+        #expect(gate == inverse, "CY should be self-inverse")
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "CY·CY should equal I")
+    }
+
+    @Test("CH gate is self-inverse")
+    func chInverse() {
+        let gate = QuantumGate.ch
+        let inverse = gate.inverse
+
+        #expect(gate == inverse, "CH should be self-inverse")
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "CH·CH should equal I")
+    }
+
+    @Test("sqrtSwap inverse satisfies √SWAP·√SWAP† = I")
+    func sqrtSwapInverse() {
+        let gate = QuantumGate.sqrtSwap
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "√SWAP·√SWAP† should equal I")
+    }
+
+    @Test("Custom single-qubit gate inverse is hermitian conjugate")
+    func customSingleQubitInverse() {
+        let angle = Double.pi / 6
+        let customMatrix: [[Complex<Double>]] = [
+            [Complex(cos(angle), 0), Complex(-sin(angle), 0)],
+            [Complex(sin(angle), 0), Complex(cos(angle), 0)],
+        ]
+
+        let gate = QuantumGate.customSingleQubit(matrix: customMatrix)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "Custom·Custom† should equal I")
+    }
+
+    @Test("Custom two-qubit gate inverse is hermitian conjugate")
+    func customTwoQubitInverse() {
+        let c = Complex<Double>(0.5, 0.5)
+        let d = Complex<Double>(0.5, -0.5)
+        let customMatrix: [[Complex<Double>]] = [
+            [.one, .zero, .zero, .zero],
+            [.zero, c, d, .zero],
+            [.zero, d, c, .zero],
+            [.zero, .zero, .zero, .one],
+        ]
+
+        let gate = QuantumGate.customTwoQubit(matrix: customMatrix)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "Custom·Custom† should equal I")
     }
 }
 

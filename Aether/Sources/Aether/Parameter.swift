@@ -99,6 +99,9 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     /// Concrete numerical value (fixed, no binding required)
     case value(Double)
 
+    /// Negated symbolic parameter (-θ) for gate inverse computation
+    case negatedParameter(Parameter)
+
     /// Whether expression contains symbolic parameter
     ///
     /// **Example:**
@@ -113,8 +116,10 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     /// - Complexity: O(1)
     @inlinable
     public var isSymbolic: Bool {
-        if case .parameter = self { return true }
-        return false
+        switch self {
+        case .parameter, .negatedParameter: true
+        case .value: false
+        }
     }
 
     /// Extract symbolic parameter if present
@@ -136,8 +141,10 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     /// - Complexity: O(1)
     @inlinable
     public var parameter: Parameter? {
-        if case let .parameter(p) = self { return p }
-        return nil
+        switch self {
+        case let .parameter(p), let .negatedParameter(p): p
+        case .value: nil
+        }
     }
 
     /// Evaluate parameter value with bindings
@@ -167,11 +174,16 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     @inlinable
     public func evaluate(using bindings: [String: Double]) -> Double {
         switch self {
-        case let .value(v): return v
+        case let .value(v):
+            return v
         case let .parameter(p):
             ValidationUtilities.validateParameterBinding(p.name, in: bindings)
             // Safety: validateParameterBinding guarantees key exists
             return bindings[p.name]!
+        case let .negatedParameter(p):
+            ValidationUtilities.validateParameterBinding(p.name, in: bindings)
+            // Safety: validateParameterBinding guarantees key exists
+            return -bindings[p.name]!
         }
     }
 
@@ -180,6 +192,40 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
         switch self {
         case let .parameter(p): p.name
         case let .value(v): String(format: "%.3f", v)
+        case let .negatedParameter(p): "-\(p.name)"
+        }
+    }
+
+    /// Negated parameter value for gate inverse computation
+    ///
+    /// Returns a new parameter value with negated sign. For concrete values, directly
+    /// negates the number. For symbolic parameters, creates a negated expression that
+    /// evaluates to the negative of the bound value. Negating twice returns the original.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let concrete = ParameterValue.value(1.57)
+    /// print(concrete.negated)  // .value(-1.57)
+    ///
+    /// let theta = Parameter(name: "theta")
+    /// let symbolic = ParameterValue.parameter(theta)
+    /// print(symbolic.negated)  // .negatedParameter(theta)
+    ///
+    /// let bindings = ["theta": 1.0]
+    /// print(symbolic.negated.evaluate(using: bindings))  // -1.0
+    /// ```
+    ///
+    /// - Complexity: O(1)
+    @_optimize(speed)
+    @inlinable
+    public var negated: ParameterValue {
+        switch self {
+        case let .value(v):
+            .value(-v)
+        case let .parameter(p):
+            .negatedParameter(p)
+        case let .negatedParameter(p):
+            .parameter(p)
         }
     }
 }

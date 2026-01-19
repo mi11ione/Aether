@@ -649,6 +649,18 @@ public enum ValidationUtilities {
         precondition(qubitsRequired == 1, "Multi-controlled U requires single-qubit gate (got \(qubitsRequired)-qubit gate)")
     }
 
+    /// Validate that gate is a two-qubit gate for KAK decomposition.
+    ///
+    /// - Parameter qubitsRequired: Number of qubits required by the gate
+    /// - Precondition: qubitsRequired == 2
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateTwoQubitGate(_ qubitsRequired: Int) {
+        precondition(qubitsRequired == 2, "KAK decomposition requires two-qubit gate (got \(qubitsRequired)-qubit gate)")
+    }
+
     // MARK: - Educational Algorithm Validations
 
     /// Validate qubit count for educational algorithms

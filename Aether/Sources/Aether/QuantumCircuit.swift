@@ -116,6 +116,23 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     public private(set) var qubits: Int
     @usableFromInline var cachedMaxQubitUsed: Int
 
+    /// When true, append automatically cancels adjacent identity pairs (H-H, X-X, CNOT-CNOT, etc.)
+    ///
+    /// Enabling this provides O(1) per-append optimization that immediately removes gates forming
+    /// identity when appended. For full optimization including rotation merging and commutation
+    /// reordering, call ``optimized()`` after circuit construction.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var circuit = QuantumCircuit(qubits: 2, autoOptimize: true)
+    /// circuit.append(.hadamard, to: 0)
+    /// circuit.append(.hadamard, to: 0)  // Automatically cancelled
+    /// print(circuit.count)  // 0
+    /// ```
+    ///
+    /// - SeeAlso: ``optimized()``
+    public var autoOptimize: Bool
+
     /// Number of gates in the circuit
     ///
     /// - Complexity: O(1)
@@ -133,7 +150,9 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     /// Initializes a circuit with no gate operations. Gates can be added via append or insert methods.
     /// Circuit auto-expands if gates reference qubits beyond initial size (up to 30 qubits maximum).
     ///
-    /// - Parameter qubits: Number of qubits (1-30)
+    /// - Parameters:
+    ///   - qubits: Number of qubits (1-30)
+    ///   - autoOptimize: When true, automatically cancel adjacent identity pairs on append (default: false)
     /// - Precondition: qubits > 0
     /// - Complexity: O(1)
     ///
@@ -142,12 +161,19 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     /// var circuit = QuantumCircuit(qubits: 3)
     /// circuit.append(.hadamard, to: 0)
     /// print(circuit.count)  // 1
+    ///
+    /// // With auto-optimization
+    /// var opt = QuantumCircuit(qubits: 2, autoOptimize: true)
+    /// opt.append(.hadamard, to: 0)
+    /// opt.append(.hadamard, to: 0)  // Cancelled automatically
+    /// print(opt.count)  // 0
     /// ```
-    public init(qubits: Int) {
+    public init(qubits: Int, autoOptimize: Bool = false) {
         ValidationUtilities.validatePositiveQubits(qubits)
         self.qubits = qubits
         cachedMaxQubitUsed = qubits - 1
         gates = []
+        self.autoOptimize = autoOptimize
     }
 
     /// Creates a circuit with predefined gate operations
@@ -158,6 +184,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     /// - Parameters:
     ///   - qubits: Number of qubits (1-30)
     ///   - gates: Initial gate operations to include
+    ///   - autoOptimize: When true, automatically cancel adjacent identity pairs on append (default: false)
     /// - Precondition: qubits > 0
     /// - Complexity: O(n) where n is number of operations
     ///
@@ -169,10 +196,11 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     /// ]
     /// let circuit = QuantumCircuit(qubits: 2, gates: ops)
     /// ```
-    public init(qubits: Int, gates: [Gate]) {
+    public init(qubits: Int, gates: [Gate], autoOptimize: Bool = false) {
         ValidationUtilities.validatePositiveQubits(qubits)
         self.qubits = qubits
         self.gates = gates
+        self.autoOptimize = autoOptimize
         var maxQubit: Int = qubits - 1
         for operation in gates {
             let gateMax: Int = operation.qubits.max() ?? -1
@@ -214,6 +242,18 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
             let newqubits: Int = maxQubit + 1
             ValidationUtilities.validateMemoryLimit(newqubits)
             self.qubits = newqubits
+        }
+
+        if autoOptimize,
+           let last = gates.last,
+           last.qubits == qubits,
+           CircuitOptimizer.gatesFormIdentity(last.gate, gate)
+        {
+            gates.removeLast()
+            if gates.isEmpty {
+                cachedMaxQubitUsed = self.qubits - 1
+            }
+            return
         }
 
         let operation = Gate(gate, to: qubits, timestamp: timestamp)
@@ -344,6 +384,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
         cachedMaxQubitUsed = qubits - 1
     }
 
+    /// Recomputes cached maximum qubit index by scanning all gate operations.
     @inline(__always)
     private mutating func recomputeMaxQubitCache() {
         var maxQubit: Int = qubits - 1
@@ -784,6 +825,144 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
 
         return "QuantumCircuit(\(qubits) qubits, \(gates.count) gates): \(gateList)\(suffix)"
     }
+
+    // MARK: - Circuit Analysis
+
+    /// Circuit depth (minimum sequential time steps assuming unlimited parallelism)
+    ///
+    /// Depth is the critical path length: gates on different qubits execute in parallel,
+    /// gates on same qubit must be sequential. Key metric for quantum hardware execution time
+    /// since decoherence limits total circuit duration.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var circuit = QuantumCircuit(qubits: 2)
+    /// circuit.append(.hadamard, to: 0)    // depth 1
+    /// circuit.append(.hadamard, to: 1)    // depth 1 (parallel)
+    /// circuit.append(.cnot, to: [0, 1])   // depth 2
+    /// print(circuit.depth)  // 2
+    /// ```
+    ///
+    /// - Complexity: O(n) where n = gate count
+    /// - SeeAlso: ``CircuitOptimizer/computeDepth(_:)``
+    @_optimize(speed)
+    public var depth: Int {
+        CircuitOptimizer.computeDepth(self)
+    }
+
+    /// Gate count by type for resource estimation
+    ///
+    /// Returns dictionary mapping each gate type to its occurrence count. Useful for
+    /// comparing algorithm costs, estimating hardware error rates (different gates have
+    /// different fidelities), and tracking optimization effectiveness.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let circuit = QuantumCircuit.grover(qubits: 3, target: 5)
+    /// let counts = circuit.gateCount
+    /// print("CNOTs: \(counts[.cnot] ?? 0)")
+    /// print("Hadamards: \(counts[.hadamard] ?? 0)")
+    /// ```
+    ///
+    /// - Complexity: O(n) where n = gate count
+    /// - SeeAlso: ``CircuitOptimizer/gateCount(_:)``
+    @_optimize(speed)
+    public var gateCount: [QuantumGate: Int] {
+        CircuitOptimizer.gateCount(self)
+    }
+
+    /// CNOT-equivalent two-qubit gate count
+    ///
+    /// CNOTs are the standard metric for two-qubit gate cost on most hardware.
+    /// Other two-qubit gates convert to CNOT-equivalents: CZ = 1, SWAP = 3, Toffoli = 6.
+    /// Lower CNOT count generally means higher circuit fidelity.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var circuit = QuantumCircuit(qubits: 3)
+    /// circuit.append(.swap, to: [0, 1])  // 3 CNOTs equivalent
+    /// circuit.append(.cnot, to: [1, 2])  // 1 CNOT
+    /// print(circuit.cnotCount)  // 4
+    /// ```
+    ///
+    /// - Complexity: O(n) where n = gate count
+    /// - SeeAlso: ``CircuitOptimizer/cnotEquivalentCount(_:)``
+    @_optimize(speed)
+    public var cnotCount: Int {
+        CircuitOptimizer.cnotEquivalentCount(self)
+    }
+
+    // MARK: - Circuit Transformations
+
+    /// Inverse circuit implementing U† where original circuit implements U
+    ///
+    /// Constructs the adjoint circuit by reversing gate order and taking each gate's inverse:
+    /// (G₁G₂...Gₙ)† = Gₙ†...G₂†G₁†. The inverse satisfies U†U = UU† = I, making it essential
+    /// for uncomputation in phase estimation, error mitigation, and reversible computing.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var circuit = QuantumCircuit(qubits: 2)
+    /// circuit.append(.hadamard, to: 0)
+    /// circuit.append(.cnot, to: [0, 1])
+    /// circuit.append(.rotationZ(.pi/4), to: 1)
+    ///
+    /// let inverse = circuit.inverse()
+    /// // Contains: Rz(-π/4) on 1, CNOT on [0,1], H on 0
+    ///
+    /// // Verify: circuit followed by inverse = identity
+    /// var combined = circuit
+    /// for gate in inverse.gates {
+    ///     combined.append(gate.gate, to: gate.qubits)
+    /// }
+    /// // combined implements I (identity)
+    /// ```
+    ///
+    /// - Returns: New circuit implementing U†
+    /// - Complexity: O(n) where n = gate count
+    /// - Note: Symbolic parameters are preserved with negated angles where applicable
+    /// - SeeAlso: ``QuantumGate/inverse``
+    @_optimize(speed)
+    @_eagerMove
+    public func inverse() -> QuantumCircuit {
+        var result = QuantumCircuit(qubits: qubits)
+
+        for operation in gates.reversed() {
+            result.append(operation.gate.inverse, to: operation.qubits, timestamp: operation.timestamp)
+        }
+
+        return result
+    }
+
+    /// Optimized circuit with reduced gate count and depth
+    ///
+    /// Applies the full optimization pipeline: identity cancellation removes adjacent inverse
+    /// pairs (H-H, CNOT-CNOT), single-qubit fusion merges consecutive rotations, commutation
+    /// reordering brings cancellable pairs adjacent. Result is semantically equivalent to
+    /// original but typically has fewer gates and lower depth.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var circuit = QuantumCircuit(qubits: 2)
+    /// circuit.append(.hadamard, to: 0)
+    /// circuit.append(.hadamard, to: 0)  // Cancels with previous
+    /// circuit.append(.rotationZ(.pi/4), to: 1)
+    /// circuit.append(.rotationZ(.pi/4), to: 1)  // Merges to Rz(π/2)
+    ///
+    /// let optimized = circuit.optimized()
+    /// print(circuit.count)     // 4
+    /// print(optimized.count)   // 1 (just Rz(π/2))
+    /// ```
+    ///
+    /// - Returns: Optimized circuit (may be same if no optimizations apply)
+    /// - Complexity: O(n²) where n = gate count
+    /// - Precondition: Circuit must contain only concrete parameters
+    /// - SeeAlso: ``CircuitOptimizer/optimize(_:)``
+    @_optimize(speed)
+    @_eagerMove
+    public func optimized() -> QuantumCircuit {
+        CircuitOptimizer.optimize(self)
+    }
 }
 
 // MARK: - Batch Operations
@@ -1034,6 +1213,13 @@ public extension QuantumCircuit {
     ///
     /// Produces equal superposition over all basis states: (Σᵢ|i⟩)/√(2ⁿ)
     ///
+    /// **Example:**
+    /// ```swift
+    /// let circuit = QuantumCircuit.uniformSuperposition(qubits: 3)
+    /// let state = circuit.execute()
+    /// // All 8 basis states have probability 1/8
+    /// ```
+    ///
     /// - Parameter qubits: Number of qubits
     /// - Returns: Circuit that creates uniform superposition
     /// - Complexity: O(n) where n = qubits
@@ -1153,6 +1339,14 @@ public extension QuantumCircuit {
     /// Initializes uniform superposition, then repeats oracle (phase flip on target) and diffusion
     /// (inversion about average) for optimal iterations ⌊π/4 * √(2ⁿ)⌋. Achieves quadratic speedup
     /// over classical O(N) search.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let circuit = QuantumCircuit.grover(qubits: 3, target: 5)
+    /// let state = circuit.execute()
+    /// let (mostLikely, prob) = state.mostProbableState()
+    /// // mostLikely = 5 with high probability
+    /// ```
     ///
     /// - Parameters:
     ///   - qubits: Number of qubits (search space size = 2ⁿ, maximum n=10)
@@ -1578,6 +1772,7 @@ public extension QuantumCircuit {
             }
         }
 
+        /// Parses qubit indices from coupling key string (e.g., "0-1" or "01" or "0").
         private static func parseQubitIndices(from key: String) -> [Int] {
             ValidationUtilities.validateNonEmptyString(key, name: "Coupling key")
 
@@ -1594,6 +1789,12 @@ public extension QuantumCircuit {
         }
 
         /// Creates Ising problem for quadratic function minimization
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let problem = IsingProblem.quadraticMinimum(qubits: 4)
+        /// let circuit = QuantumCircuit.annealing(qubits: 4, problem: problem)
+        /// ```
         public static func quadraticMinimum(qubits: Int = 4) -> IsingProblem {
             ValidationUtilities.validateMinimumQubits(qubits, min: 2, algorithmName: "Quadratic minimum")
 

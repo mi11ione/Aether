@@ -182,4 +182,106 @@ struct ParameterValueTests {
         #expect(expr.parameter == param, "Should contain the original parameter")
         #expect(expr == .parameter(param), "Should equal explicit .parameter case")
     }
+
+    @Test("Negated parameter is symbolic")
+    func negatedParameterIsSymbolic() {
+        let param = Parameter(name: "theta")
+        let expr = ParameterValue.negatedParameter(param)
+
+        #expect(expr.isSymbolic, "Negated parameter should be symbolic")
+    }
+
+    @Test("Extract parameter from negated parameter expression")
+    func extractParameterFromNegatedParameter() {
+        let param = Parameter(name: "theta")
+        let expr = ParameterValue.negatedParameter(param)
+
+        let extracted = expr.parameter
+        #expect(extracted == param, "Should extract original parameter from negated expression")
+    }
+
+    @Test("Evaluate negated parameter expression with binding")
+    func evaluateNegatedParameterExpressionWithBinding() {
+        let param = Parameter(name: "theta")
+        let expr = ParameterValue.negatedParameter(param)
+        let bindings = ["theta": 2.5]
+
+        let result = expr.evaluate(using: bindings)
+        #expect(abs(result - -2.5) < 1e-10, "Negated parameter should evaluate to negative of bound value")
+    }
+
+    @Test("Negated parameter expression description shows minus sign")
+    func negatedParameterExpressionDescription() {
+        let param = Parameter(name: "theta")
+        let expr = ParameterValue.negatedParameter(param)
+
+        #expect(expr.description == "-theta", "Description should show minus sign before parameter name")
+    }
+
+    @Test("Negating concrete value returns negated value")
+    func negatingConcreteValue() {
+        let expr = ParameterValue.value(1.5)
+        let negated = expr.negated
+
+        if case let .value(v) = negated {
+            #expect(abs(v - -1.5) < 1e-10, "Negated value should be -1.5")
+        }
+    }
+
+    @Test("Negating symbolic parameter returns negated parameter")
+    func negatingSymbolicParameter() {
+        let param = Parameter(name: "theta")
+        let expr = ParameterValue.parameter(param)
+        let negated = expr.negated
+
+        #expect(negated == .negatedParameter(param), "Negating parameter should produce negatedParameter")
+    }
+
+    @Test("Negating negated parameter returns original parameter")
+    func negatingNegatedParameterReturnsOriginal() {
+        let param = Parameter(name: "theta")
+        let expr = ParameterValue.negatedParameter(param)
+        let doubleNegated = expr.negated
+
+        #expect(doubleNegated == .parameter(param), "Double negation should return original parameter")
+    }
+
+    @Test("Double negation of concrete value returns original")
+    func doubleNegationOfConcreteValue() {
+        let expr = ParameterValue.value(3.14)
+        let doubleNegated = expr.negated.negated
+
+        if case let .value(v) = doubleNegated {
+            #expect(abs(v - 3.14) < 1e-10, "Double negation should return original value")
+        }
+    }
+
+    @Test("Negated parameter equality")
+    func negatedParameterEquality() {
+        let param1 = Parameter(name: "theta")
+        let param2 = Parameter(name: "theta")
+        let param3 = Parameter(name: "phi")
+
+        let expr1 = ParameterValue.negatedParameter(param1)
+        let expr2 = ParameterValue.negatedParameter(param2)
+        let expr3 = ParameterValue.negatedParameter(param3)
+        let expr4 = ParameterValue.parameter(param1)
+
+        #expect(expr1 == expr2, "Same negated parameters should be equal")
+        #expect(expr1 != expr3, "Different negated parameters should not be equal")
+        #expect(expr1 != expr4, "Negated parameter should not equal non-negated parameter")
+    }
+
+    @Test("Negated parameter hashability")
+    func negatedParameterHashability() {
+        let param = Parameter(name: "theta")
+        let negated = ParameterValue.negatedParameter(param)
+        let regular = ParameterValue.parameter(param)
+
+        var set = Set<ParameterValue>()
+        set.insert(negated)
+        set.insert(regular)
+
+        #expect(set.count == 2, "Negated and regular parameter values should hash differently")
+    }
 }

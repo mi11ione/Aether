@@ -14,11 +14,15 @@ let package = Package(
     products: [
         .library(
             name: "Aether",
-            targets: ["Aether"]
+            targets: ["Aether"],
         ),
         .executable(
             name: "AetherDemo",
-            targets: ["AetherDemo"]
+            targets: ["AetherDemo"],
+        ),
+        .executable(
+            name: "AetherBenchmarks",
+            targets: ["AetherBenchmarks"],
         ),
     ],
     targets: [
@@ -34,7 +38,7 @@ let package = Package(
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency"),
                 .define("ACCELERATE_NEW_LAPACK"),
-            ]
+            ],
         ),
 
         .executableTarget(
@@ -44,7 +48,17 @@ let package = Package(
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency"),
                 .define("ACCELERATE_NEW_LAPACK"),
-            ]
+            ],
+        ),
+
+        .executableTarget(
+            name: "AetherBenchmarks",
+            dependencies: ["Aether"],
+            path: "Sources/AetherBenchmarks",
+            swiftSettings: [
+                .enableExperimentalFeature("StrictConcurrency"),
+                .define("ACCELERATE_NEW_LAPACK"),
+            ],
         ),
 
         .testTarget(
@@ -54,8 +68,18 @@ let package = Package(
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency"),
                 .define("ACCELERATE_NEW_LAPACK"),
-            ]
+            ],
+        ),
+
+        .testTarget(
+            name: "AetherScalabilityTests",
+            dependencies: ["Aether"],
+            path: "Tests/AetherScalabilityTests",
+            swiftSettings: [
+                .enableExperimentalFeature("StrictConcurrency"),
+                .define("ACCELERATE_NEW_LAPACK"),
+            ],
         ),
     ],
-    swiftLanguageModes: [.v6]
+    swiftLanguageModes: [.v6],
 )

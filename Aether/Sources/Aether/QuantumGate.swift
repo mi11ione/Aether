@@ -453,7 +453,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
             .controlledRotationY(.value(theta.evaluate(using: bindings)))
         case let .controlledRotationZ(theta):
             .controlledRotationZ(.value(theta.evaluate(using: bindings)))
-        default: self // Non-parameterized gates return unchanged
+        default: self
         }
     }
 
@@ -471,8 +471,88 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     @inlinable
     public var isHermitian: Bool {
         switch self {
-        case .pauliX, .pauliY, .pauliZ, .hadamard, .swap: true
+        case .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .identity, .cnot, .cz, .toffoli: true
         default: false
+        }
+    }
+
+    /// Inverse (adjoint) gate U† satisfying U†U = UU† = I.
+    ///
+    /// For unitary gates, the inverse equals the Hermitian conjugate (conjugate transpose).
+    /// Hermitian gates are self-inverse (U† = U). Rotation gates invert by negating angles.
+    /// Non-Hermitian gates like S, T, √X, √Y, √SWAP return their adjoint as custom matrices.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// QuantumGate.hadamard.inverse  // .hadamard (Hermitian)
+    /// QuantumGate.sGate.inverse  // .phase(-π/2)
+    /// QuantumGate.rotationZ(.pi/4).inverse  // .rotationZ(-π/4)
+    ///
+    /// let gate = QuantumGate.tGate
+    /// let product = QuantumGate.matrixMultiply(gate.matrix(), gate.inverse.matrix())
+    /// QuantumGate.isIdentityMatrix(product)  // true
+    /// ```
+    ///
+    /// - Complexity: O(1) for most gates, O(n²) for custom gates requiring matrix conjugation
+    /// - Note: Symbolic parameters preserved with negated values where applicable
+    @_optimize(speed)
+    @inlinable
+    public var inverse: QuantumGate {
+        switch self {
+        case .identity, .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .cnot, .cz, .toffoli:
+            return self
+        case let .phase(angle):
+            return .phase(angle.negated)
+        case .sGate:
+            return .phase(.value(-.pi / 2.0))
+        case .tGate:
+            return .phase(.value(-.pi / 4.0))
+        case let .rotationX(theta):
+            return .rotationX(theta.negated)
+        case let .rotationY(theta):
+            return .rotationY(theta.negated)
+        case let .rotationZ(theta):
+            return .rotationZ(theta.negated)
+        case let .u1(lambda):
+            return .u1(lambda: lambda.negated)
+        case let .u2(phi, lambda):
+            return .u3(theta: .value(-.pi / 2), phi: lambda.negated, lambda: phi.negated)
+        case let .u3(theta, phi, lambda):
+            return .u3(theta: theta.negated, phi: lambda.negated, lambda: phi.negated)
+        case .sx:
+            let adjoint: [[Complex<Double>]] = [
+                [Complex(0.5, -0.5), Complex(0.5, 0.5)],
+                [Complex(0.5, 0.5), Complex(0.5, -0.5)],
+            ]
+            return .customSingleQubit(matrix: adjoint)
+        case .sy:
+            let adjoint: [[Complex<Double>]] = [
+                [Complex(0.5, -0.5), Complex(0.5, -0.5)],
+                [Complex(-0.5, 0.5), Complex(0.5, -0.5)],
+            ]
+            return .customSingleQubit(matrix: adjoint)
+        case let .controlledPhase(theta):
+            return .controlledPhase(theta.negated)
+        case let .controlledRotationX(theta):
+            return .controlledRotationX(theta.negated)
+        case let .controlledRotationY(theta):
+            return .controlledRotationY(theta.negated)
+        case let .controlledRotationZ(theta):
+            return .controlledRotationZ(theta.negated)
+        case .cy, .ch:
+            return self
+        case .sqrtSwap:
+            let adjoint: [[Complex<Double>]] = [
+                [.one, .zero, .zero, .zero],
+                [.zero, Complex(0.5, -0.5), Complex(0.5, 0.5), .zero],
+                [.zero, Complex(0.5, 0.5), Complex(0.5, -0.5), .zero],
+                [.zero, .zero, .zero, .one],
+            ]
+            return .customTwoQubit(matrix: adjoint)
+        case let .customSingleQubit(matrix):
+            return .customSingleQubit(matrix: MatrixUtilities.hermitianConjugate(matrix))
+        case let .customTwoQubit(matrix):
+            return .customTwoQubit(matrix: MatrixUtilities.hermitianConjugate(matrix))
         }
     }
 
@@ -877,8 +957,8 @@ public extension QuantumGate {
     ///
     /// Checks if matrix preserves quantum state normalization through unitary condition.
     /// All valid quantum gates must be unitary for probability conservation and
-    /// reversibility. Verifies U†U = I where U† is conjugate transpose, using numerical
-    /// tolerance (1e-10) for floating-point comparison.
+    /// reversibility. Computes (U†U)[i][j] = Σₖ conj(U[k][i]) * U[k][j] directly without
+    /// allocating intermediate matrices, using numerical tolerance (1e-10) for comparison.
     ///
     /// - Parameter matrix: Square complex matrix to check
     /// - Returns: True if unitary within tolerance (1e-10)
@@ -898,8 +978,6 @@ public extension QuantumGate {
         let n: Int = matrix.count
         guard matrix.allSatisfy({ $0.count == n }) else { return false }
 
-        // Compute U†U = I directly without allocating intermediate matrices
-        // (U†U)[i][j] = Σₖ conj(U[k][i]) * U[k][j]
         for i in 0 ..< n {
             for j in 0 ..< n {
                 var sum: Complex<Double> = .zero
