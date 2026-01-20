@@ -74,6 +74,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     // MARK: - Multi-Qubit Gates
 
     case toffoli
+    indirect case controlled(gate: QuantumGate, controls: [Int])
 
     // MARK: - Convenience Constructors
 
@@ -313,6 +314,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// Number of qubits this gate operates on
     ///
     /// Single-qubit gates return 1, two-qubit gates return 2, Toffoli returns 3.
+    /// For controlled gates, returns the sum of inner gate qubits and control count.
     /// Used for circuit validation and gate application.
     ///
     /// **Example:**
@@ -320,6 +322,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     /// QuantumGate.hadamard.qubitsRequired  // 1
     /// QuantumGate.cnot.qubitsRequired  // 2
     /// QuantumGate.toffoli.qubitsRequired  // 3
+    /// QuantumGate.controlled(gate: .pauliX, controls: [0, 1]).qubitsRequired  // 3
     /// ```
     @inlinable
     public var qubitsRequired: Int {
@@ -331,6 +334,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
              .controlledRotationX, .controlledRotationY, .controlledRotationZ,
              .swap, .sqrtSwap, .customTwoQubit: 2
         case .toffoli: 3
+        case let .controlled(gate, controls): gate.qubitsRequired + controls.count
         }
     }
 
@@ -402,6 +406,9 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
             if let p = lambda.parameter { params.append(p) }
             return Set(params)
 
+        case let .controlled(gate, _):
+            return gate.parameters()
+
         default: return []
         }
     }
@@ -453,6 +460,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
             .controlledRotationY(.value(theta.evaluate(using: bindings)))
         case let .controlledRotationZ(theta):
             .controlledRotationZ(.value(theta.evaluate(using: bindings)))
+        case let .controlled(gate, controls):
+            .controlled(gate: gate.bound(with: bindings), controls: controls)
         default: self
         }
     }
@@ -553,6 +562,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
             return .customSingleQubit(matrix: MatrixUtilities.hermitianConjugate(matrix))
         case let .customTwoQubit(matrix):
             return .customTwoQubit(matrix: MatrixUtilities.hermitianConjugate(matrix))
+        case let .controlled(gate, controls):
+            return .controlled(gate: gate.inverse, controls: controls)
         }
     }
 
@@ -644,6 +655,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
             return controlledRotationZMatrix(theta: theta.evaluate(using: [:]))
         case let .customSingleQubit(matrix): return matrix
         case let .customTwoQubit(matrix): return matrix
+        case let .controlled(gate, controls):
+            return controlledMatrix(gate: gate, controlCount: controls.count)
         }
     }
 
@@ -895,6 +908,35 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
+    @_optimize(speed)
+    private func controlledMatrix(gate: QuantumGate, controlCount: Int) -> [[Complex<Double>]] {
+        let gateMatrix = gate.matrix()
+        let gateSize = gateMatrix.count
+        let totalQubits = controlCount + gate.qubitsRequired
+        let dimension = 1 << totalQubits
+
+        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: dimension), count: dimension)
+
+        let controlMask = (1 << controlCount) - 1
+        let controlShift = gate.qubitsRequired
+
+        for row in 0 ..< dimension {
+            let controlBits = row >> controlShift
+            let targetBits = row & ((1 << controlShift) - 1)
+
+            if controlBits == controlMask {
+                for col in 0 ..< gateSize {
+                    let fullCol = (controlBits << controlShift) | col
+                    result[row][fullCol] = gateMatrix[targetBits][col]
+                }
+            } else {
+                result[row][row] = .one
+            }
+        }
+
+        return result
+    }
+
     // MARK: - CustomStringConvertible
 
     /// Human-readable gate representation
@@ -946,6 +988,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         case let .controlledRotationY(theta): "CRy(\(theta))"
         case let .controlledRotationZ(theta): "CRz(\(theta))"
         case .customTwoQubit: "CustomU(4x4)"
+        case let .controlled(gate, controls): "C^\(controls.count)(\(gate))"
         }
     }
 }
@@ -1184,6 +1227,68 @@ public extension QuantumGate {
             return .customSingleQubit(matrix: matrix)
         } else {
             return .customTwoQubit(matrix: matrix)
+        }
+    }
+}
+
+// MARK: - Controlled Gate Utilities
+
+public extension QuantumGate {
+    /// Whether this gate can be directly executed without decomposition
+    ///
+    /// Returns true for all built-in gate types (single-qubit, two-qubit, and Toffoli).
+    /// Returns false for `.controlled` gates which require decomposition or special handling
+    /// for execution on quantum hardware or simulators.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// QuantumGate.hadamard.isNativeGate  // true
+    /// QuantumGate.cnot.isNativeGate  // true
+    /// QuantumGate.toffoli.isNativeGate  // true
+    /// QuantumGate.controlled(gate: .pauliX, controls: [0, 1]).isNativeGate  // false
+    /// ```
+    @inlinable
+    var isNativeGate: Bool {
+        switch self {
+        case .controlled: false
+        default: true
+        }
+    }
+
+    /// Extract base gate and full control list from nested controlled gates
+    ///
+    /// Flattens nested `.controlled(.controlled(...))` structures into a single base gate
+    /// and combined control list. Useful for optimizing gate application and decomposition.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let singleControl = QuantumGate.controlled(gate: .pauliX, controls: [0])
+    /// let (gate1, controls1) = singleControl.flattenControlled()
+    /// // gate1 = .pauliX, controls1 = [0]
+    ///
+    /// let nested = QuantumGate.controlled(
+    ///     gate: .controlled(gate: .hadamard, controls: [1]),
+    ///     controls: [0]
+    /// )
+    /// let (gate2, controls2) = nested.flattenControlled()
+    /// // gate2 = .hadamard, controls2 = [0, 1]
+    ///
+    /// let nonControlled = QuantumGate.pauliZ
+    /// let (gate3, controls3) = nonControlled.flattenControlled()
+    /// // gate3 = .pauliZ, controls3 = []
+    /// ```
+    ///
+    /// - Returns: Tuple of (baseGate, allControls) where baseGate is the innermost non-controlled gate
+    ///   and allControls is the combined list of all control qubits from outer to inner
+    /// - Complexity: O(d) where d is the nesting depth of controlled gates
+    @_optimize(speed)
+    func flattenControlled() -> (gate: QuantumGate, controls: [Int]) {
+        switch self {
+        case let .controlled(innerGate, controls):
+            let (baseGate, innerControls) = innerGate.flattenControlled()
+            return (baseGate, controls + innerControls)
+        default:
+            return (self, [])
         }
     }
 }

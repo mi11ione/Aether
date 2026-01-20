@@ -107,6 +107,9 @@ public enum CircuitUnitary {
 
         case .toffoli:
             return expandToffoliGate(control1: qubits[0], control2: qubits[1], target: qubits[2], dimension: dimension)
+
+        case .controlled:
+            return expandControlledGate(gate: gate, qubits: qubits, dimension: dimension)
         }
     }
 
@@ -215,6 +218,28 @@ public enum CircuitUnitary {
                 fullMatrix[row][flippedRow] = Complex<Double>(1, 0)
             } else {
                 fullMatrix[row][row] = Complex<Double>(1, 0)
+            }
+        }
+
+        return fullMatrix
+    }
+
+    @_optimize(speed)
+    @_eagerMove
+    private static func expandControlledGate(
+        gate: QuantumGate,
+        qubits _: [Int],
+        dimension: Int,
+    ) -> [[Complex<Double>]] {
+        let gateMatrix = gate.matrix()
+        var fullMatrix: [[Complex<Double>]] = Array(
+            repeating: Array(repeating: Complex<Double>.zero, count: dimension),
+            count: dimension,
+        )
+
+        for row in 0 ..< dimension {
+            for col in 0 ..< dimension {
+                fullMatrix[row][col] = gateMatrix[row][col]
             }
         }
 

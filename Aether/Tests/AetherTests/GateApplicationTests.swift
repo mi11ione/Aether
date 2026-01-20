@@ -526,3 +526,133 @@ struct ConvenienceExtensionTests {
         #expect(state.isNormalized(), "Bell state should be normalized")
     }
 }
+
+/// Test suite for the .controlled gate case in GateApplication.
+/// Validates that controlled gates with arbitrary control configurations work correctly.
+/// Note: For .controlled gates, the qubits array passed to apply should contain
+/// only the target qubits (not control qubits), as controls are embedded in the gate.
+@Suite("Controlled Gate Application")
+struct ControlledGateApplicationTests {
+    @Test("Controlled-X with single control flips target when control is 1")
+    func controlledXSingleControl() {
+        var amplitudes = [Complex<Double>](repeating: .zero, count: 4)
+        amplitudes[1] = .one
+        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
+
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        let newState = GateApplication.apply(controlledX, to: [1], state: state)
+
+        #expect(
+            abs(newState.amplitude(of: 3).real - 1.0) < 1e-10,
+            "Target should flip to |11⟩ when control is 1",
+        )
+        #expect(
+            abs(newState.amplitude(of: 1).magnitude) < 1e-10,
+            "Original |01⟩ state should be zero after flip",
+        )
+        #expect(newState.isNormalized(), "Controlled-X should preserve normalization")
+    }
+
+    @Test("Controlled-X leaves state unchanged when control is 0")
+    func controlledXControlZero() {
+        let state = QuantumState(qubits: 2)
+
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        let newState = GateApplication.apply(controlledX, to: [1], state: state)
+
+        #expect(
+            abs(newState.amplitude(of: 0).real - 1.0) < 1e-10,
+            "State should remain |00⟩ when control is 0",
+        )
+        #expect(newState.isNormalized(), "Controlled-X should preserve normalization")
+    }
+
+    @Test("Controlled-Z with single control applies phase when target is 1")
+    func controlledZSingleControl() {
+        let amplitudes = [Complex<Double>](repeating: Complex(0.5, 0.0), count: 4)
+        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
+
+        let controlledZ = QuantumGate.controlled(gate: .pauliZ, controls: [0])
+        let newState = GateApplication.apply(controlledZ, to: [1], state: state)
+
+        #expect(
+            abs(newState.amplitude(of: 0).real - 0.5) < 1e-10,
+            "Amplitude for |00⟩ should be unchanged",
+        )
+        #expect(newState.isNormalized(), "Controlled-Z should preserve normalization")
+    }
+
+    @Test("Controlled gate with two controls (CCX-like)")
+    func controlledGateTwoControls() {
+        var amplitudes = [Complex<Double>](repeating: .zero, count: 8)
+        amplitudes[3] = .one
+        let state = QuantumState(qubits: 3, amplitudes: amplitudes)
+
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0, 1])
+        let newState = GateApplication.apply(controlledX, to: [2], state: state)
+
+        #expect(
+            abs(newState.amplitude(of: 7).real - 1.0) < 1e-10,
+            "Target should flip to |111⟩ when both controls are 1",
+        )
+        #expect(
+            abs(newState.amplitude(of: 3).magnitude) < 1e-10,
+            "Original |011⟩ state should be zero after flip",
+        )
+        #expect(newState.isNormalized(), "Double-controlled-X should preserve normalization")
+    }
+
+    @Test("Controlled Hadamard applies superposition when control is 1")
+    func controlledHadamard() {
+        var amplitudes = [Complex<Double>](repeating: .zero, count: 4)
+        amplitudes[1] = .one
+        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
+
+        let controlledH = QuantumGate.controlled(gate: .hadamard, controls: [0])
+        let newState = GateApplication.apply(controlledH, to: [1], state: state)
+
+        let expectedAmplitude = 1.0 / sqrt(2.0)
+        #expect(
+            abs(newState.amplitude(of: 1).real - expectedAmplitude) < 1e-10,
+            "Amplitude for |01⟩ should be 1/sqrt(2)",
+        )
+        #expect(
+            abs(newState.amplitude(of: 3).real - expectedAmplitude) < 1e-10,
+            "Amplitude for |11⟩ should be 1/sqrt(2)",
+        )
+        #expect(newState.isNormalized(), "Controlled-H should preserve normalization")
+    }
+
+    @Test("Controlled rotation gate applies rotation when control is 1")
+    func controlledRotation() {
+        var amplitudes = [Complex<Double>](repeating: .zero, count: 4)
+        amplitudes[1] = .one
+        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
+
+        let controlledRy = QuantumGate.controlled(gate: .rotationY(.pi), controls: [0])
+        let newState = GateApplication.apply(controlledRy, to: [1], state: state)
+
+        #expect(
+            abs(newState.amplitude(of: 3).real - 1.0) < 1e-10,
+            "Ry(pi) should flip |0⟩ to |1⟩ on target when control is 1",
+        )
+        #expect(newState.isNormalized(), "Controlled-Ry should preserve normalization")
+    }
+
+    @Test("Controlled gate twice returns original state for self-inverse gates")
+    func controlledGateTwiceIsIdentity() {
+        var amplitudes = [Complex<Double>](repeating: .zero, count: 4)
+        amplitudes[3] = .one
+        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
+
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        let state1 = GateApplication.apply(controlledX, to: [1], state: state)
+        let state2 = GateApplication.apply(controlledX, to: [1], state: state1)
+
+        #expect(
+            abs(state2.amplitude(of: 3).real - 1.0) < 1e-10,
+            "Applying controlled-X twice should return to original |11⟩ state",
+        )
+        #expect(state == state2, "Controlled-X applied twice should return original state")
+    }
+}

@@ -135,7 +135,7 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     ///
     /// Creates density matrix from flattened row-major element array. Validates that
     /// element count matches dimension squared. Does not validate positive semidefiniteness
-    /// or trace normalization for performance; use ``isHermitian()`` and ``isTraceNormalized()`` to check.
+    /// or trace normalization for performance; use `isHermitian()` and `isTraceNormalized()` to check.
     ///
     /// **Example:**
     /// ```swift

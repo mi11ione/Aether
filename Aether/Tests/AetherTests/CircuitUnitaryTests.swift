@@ -400,4 +400,70 @@ struct CircuitUnitaryTests {
         #expect(unitary[2][3] == Complex(1, 0))
         #expect(unitary[3][2] == Complex(1, 0))
     }
+
+    @Test("Controlled gate via .controlled case produces correct unitary")
+    func controlledGateUnitary() {
+        var circuit = QuantumCircuit(qubits: 3)
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0, 1])
+        circuit.append(controlledX, to: [0, 1, 2])
+        let unitary = CircuitUnitary.unitary(for: circuit)
+
+        #expect(unitary.count == 8, "Controlled gate unitary should have dimension 8 for 3 qubits")
+
+        for i in 0 ..< 6 {
+            #expect(
+                abs(unitary[i][i].real - 1.0) < 1e-10,
+                "Diagonal element \(i) should be 1 when controls not both set",
+            )
+        }
+
+        #expect(
+            abs(unitary[6][7].real - 1.0) < 1e-10,
+            "Element [6][7] should be 1 for controlled-X flip when both controls are 1",
+        )
+        #expect(
+            abs(unitary[7][6].real - 1.0) < 1e-10,
+            "Element [7][6] should be 1 for controlled-X flip when both controls are 1",
+        )
+    }
+
+    @Test("Controlled Hadamard gate produces correct unitary structure")
+    func controlledHadamardUnitary() {
+        var circuit = QuantumCircuit(qubits: 2)
+        let controlledH = QuantumGate.controlled(gate: .hadamard, controls: [0])
+        circuit.append(controlledH, to: [0, 1])
+        let unitary = CircuitUnitary.unitary(for: circuit)
+
+        #expect(unitary.count == 4, "Controlled-H unitary should have dimension 4 for 2 qubits")
+
+        #expect(
+            abs(unitary[0][0].real - 1.0) < 1e-10,
+            "Element [0][0] should be 1 when control is 0",
+        )
+        #expect(
+            abs(unitary[1][1].real - 1.0) < 1e-10,
+            "Element [1][1] should be 1 when control is 0",
+        )
+    }
+
+    @Test("Controlled rotation gate produces correct unitary")
+    func controlledRotationUnitary() {
+        var circuit = QuantumCircuit(qubits: 2)
+        let controlledRy = QuantumGate.controlled(gate: .rotationY(.pi / 2), controls: [0])
+        circuit.append(controlledRy, to: [0, 1])
+        let unitary = CircuitUnitary.unitary(for: circuit)
+
+        #expect(unitary.count == 4, "Controlled-Ry unitary should have dimension 4 for 2 qubits")
+
+        #expect(
+            abs(unitary[0][0].real - 1.0) < 1e-10,
+            "Element [0][0] should be 1 when control is 0",
+        )
+
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        #expect(
+            abs(unitary[2][2].real - invSqrt2) < 1e-10,
+            "Element [2][2] should be cos(pi/4) when control is 1",
+        )
+    }
 }

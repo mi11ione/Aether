@@ -80,6 +80,9 @@ public enum GateApplication {
 
         case .toffoli:
             return applyToffoli(control1: qubits[0], control2: qubits[1], target: qubits[2], state: state)
+
+        case let .controlled(innerGate, controls):
+            return applyControlledGate(gate: innerGate, controls: controls, targetQubits: qubits, state: state)
         }
     }
 
@@ -303,6 +306,65 @@ public enum GateApplication {
                     buffer[i ^ targetMask] = state.amplitudes[i]
                 } else {
                     buffer[i] = state.amplitudes[i]
+                }
+            }
+            count = stateSize
+        }
+
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+    }
+
+    // MARK: - Controlled Gate Application
+
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applyControlledGate(
+        gate: QuantumGate,
+        controls: [Int],
+        targetQubits: [Int],
+        state: QuantumState,
+    ) -> QuantumState {
+        let stateSize = state.stateSpaceSize
+        var controlMask = 0
+        for control in controls {
+            controlMask |= BitUtilities.bitMask(qubit: control)
+        }
+
+        let gateMatrix = gate.matrix()
+        let gateSize = gateMatrix.count
+        let targetCount = gate.qubitsRequired
+
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                buffer[i] = .zero
+            }
+
+            for i in 0 ..< stateSize {
+                if (i & controlMask) == controlMask {
+                    var targetBits = 0
+                    for (idx, qubit) in targetQubits.enumerated() where idx < targetCount {
+                        if (i & BitUtilities.bitMask(qubit: qubit)) != 0 {
+                            targetBits |= (1 << idx)
+                        }
+                    }
+
+                    for col in 0 ..< gateSize {
+                        var newIndex = i
+                        for (idx, qubit) in targetQubits.enumerated() where idx < targetCount {
+                            let colBit = (col >> idx) & 1
+                            let mask = BitUtilities.bitMask(qubit: qubit)
+                            if colBit == 1 {
+                                newIndex |= mask
+                            } else {
+                                newIndex &= ~mask
+                            }
+                        }
+                        buffer[i] = buffer[i] + gateMatrix[targetBits][col] * state.amplitudes[newIndex]
+                    }
+                } else {
+                    buffer[i] = buffer[i] + state.amplitudes[i]
                 }
             }
             count = stateSize

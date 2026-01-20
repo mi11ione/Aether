@@ -1508,3 +1508,285 @@ struct BatchParameterBindingTests {
         }
     }
 }
+
+@Suite("Phase Estimation Circuit")
+struct PhaseEstimationCircuitTests {
+    @Test("Correct total qubit count with default eigenstate qubits")
+    func correctTotalQubitCountDefault() {
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: 3)
+
+        #expect(circuit.qubits == 4, "Circuit should have precisionQubits + 1 = 4 qubits")
+    }
+
+    @Test("Correct total qubit count with custom eigenstate qubits")
+    func correctTotalQubitCountCustom() {
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: 2, eigenstateQubits: 3)
+
+        #expect(circuit.qubits == 5, "Circuit should have precisionQubits + eigenstateQubits = 5 qubits")
+    }
+
+    @Test("Hadamards applied to precision qubits")
+    func hadamardsAppliedToPrecisionQubits() {
+        let precisionQubits = 3
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: precisionQubits)
+
+        var hadamardCount = 0
+        for i in 0 ..< precisionQubits {
+            let gate = circuit.gates[i]
+            if case .hadamard = gate.gate {
+                hadamardCount += 1
+                #expect(gate.qubits == [i], "Hadamard \(i) should be on qubit \(i)")
+            }
+        }
+
+        #expect(hadamardCount == precisionQubits, "Should have \(precisionQubits) Hadamard gates at start")
+    }
+
+    @Test("Contains controlled operations")
+    func containsControlledOperations() {
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: 2)
+
+        let hasControlledOps = circuit.gates.contains { gate in
+            switch gate.gate {
+            case .cnot, .cz, .cy, .ch, .controlledPhase, .controlledRotationZ, .controlledRotationY:
+                true
+            default:
+                false
+            }
+        }
+
+        #expect(hasControlledOps, "Phase estimation circuit should contain controlled operations")
+    }
+
+    @Test("Ends with inverse QFT pattern")
+    func endsWithInverseQFTPattern() {
+        let precisionQubits = 3
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: precisionQubits)
+
+        let lastGates = circuit.gates.suffix(precisionQubits)
+        let lastGateTypes = lastGates.map(\.gate)
+
+        let hasHadamards = lastGateTypes.contains { gate in
+            if case .hadamard = gate { return true }
+            return false
+        }
+
+        #expect(hasHadamards, "Circuit should end with Hadamard gates from inverse QFT")
+    }
+
+    @Test("PauliZ with eigenstate 1 yields phase 0.5")
+    func pauliZWithEigenstate1YieldsPhaseHalf() {
+        let precisionQubits = 4
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: precisionQubits)
+
+        var initialAmps = [Complex<Double>](repeating: .zero, count: 1 << (precisionQubits + 1))
+        initialAmps[1 << precisionQubits] = .one
+        let initialState = QuantumState(qubits: precisionQubits + 1, amplitudes: initialAmps)
+
+        let finalState = circuit.execute(on: initialState)
+
+        let (mostProbable, probability) = finalState.mostProbableState()
+        let eigenstateQubitValue = (mostProbable >> precisionQubits) & 1
+
+        #expect(eigenstateQubitValue == 1, "Eigenstate qubit should remain |1⟩, got \(eigenstateQubitValue)")
+        #expect(probability > 0.5, "Most probable state should have significant probability, got \(probability)")
+    }
+
+    @Test("PauliZ with eigenstate 0 yields phase 0")
+    func pauliZWithEigenstate0YieldsPhaseZero() {
+        let precisionQubits = 3
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: precisionQubits)
+
+        let initialState = QuantumState(qubits: precisionQubits + 1)
+        let finalState = circuit.execute(on: initialState)
+
+        let probability = finalState.probability(of: 0)
+
+        #expect(probability > 0.9, "PauliZ eigenstate |0⟩ should yield phase 0 with high probability, got \(probability)")
+    }
+
+    @Test("Identity gate yields phase 0")
+    func identityGateYieldsPhaseZero() {
+        let precisionQubits = 3
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .identity, precisionQubits: precisionQubits)
+
+        let initialState = QuantumState(qubits: precisionQubits + 1)
+        let finalState = circuit.execute(on: initialState)
+
+        let probability = finalState.probability(of: 0)
+
+        #expect(probability > 0.99, "Identity gate should yield phase 0 with high probability, got \(probability)")
+    }
+
+    @Test("1 precision qubit provides 1-bit accuracy")
+    func onePrecisionQubitProvides1BitAccuracy() {
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: 1)
+
+        var initialAmps = [Complex<Double>](repeating: .zero, count: 4)
+        initialAmps[2] = .one
+        let initialState = QuantumState(qubits: 2, amplitudes: initialAmps)
+
+        let finalState = circuit.execute(on: initialState)
+
+        let (mostProbable, probability) = finalState.mostProbableState()
+        let eigenstateQubit = (mostProbable >> 1) & 1
+
+        #expect(eigenstateQubit == 1, "Eigenstate qubit should remain |1⟩, got \(eigenstateQubit)")
+        #expect(probability > 0.5, "Most probable state should have probability > 0.5, got \(probability)")
+    }
+
+    @Test("2 precision qubits provides 2-bit accuracy")
+    func twoPrecisionQubitsProvides2BitAccuracy() {
+        let precisionQubits = 2
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: precisionQubits)
+
+        var initialAmps = [Complex<Double>](repeating: .zero, count: 8)
+        initialAmps[1 << precisionQubits] = .one
+        let initialState = QuantumState(qubits: precisionQubits + 1, amplitudes: initialAmps)
+
+        let finalState = circuit.execute(on: initialState)
+
+        let (mostProbable, probability) = finalState.mostProbableState()
+        let eigenstateQubitValue = (mostProbable >> precisionQubits) & 1
+
+        #expect(eigenstateQubitValue == 1, "Eigenstate qubit should remain |1⟩, got \(eigenstateQubitValue)")
+        #expect(probability > 0.8, "With 2 precision qubits, most probable state should have probability > 0.8, got \(probability)")
+    }
+
+    @Test("3 precision qubits provides 3-bit accuracy")
+    func threePrecisionQubitsProvides3BitAccuracy() {
+        let precisionQubits = 3
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: precisionQubits)
+
+        var initialAmps = [Complex<Double>](repeating: .zero, count: 16)
+        initialAmps[1 << precisionQubits] = .one
+        let initialState = QuantumState(qubits: precisionQubits + 1, amplitudes: initialAmps)
+
+        let finalState = circuit.execute(on: initialState)
+
+        let (mostProbable, probability) = finalState.mostProbableState()
+        let eigenstateQubitValue = (mostProbable >> precisionQubits) & 1
+
+        #expect(eigenstateQubitValue == 1, "Eigenstate qubit should remain |1⟩, got \(eigenstateQubitValue)")
+        #expect(probability > 0.9, "With 3 precision qubits, most probable state should have probability > 0.9, got \(probability)")
+    }
+
+    @Test("Minimum precision of 1 qubit works")
+    func minimumPrecision1QubitWorks() {
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: 1)
+
+        #expect(circuit.qubits == 2, "Minimum precision circuit should have 2 qubits")
+        #expect(circuit.count > 0, "Circuit should have gates")
+
+        let finalState = circuit.execute()
+
+        #expect(finalState.isNormalized(), "Final state should be normalized")
+    }
+
+    @Test("Multiple eigenstate qubits")
+    func multipleEigenstateQubits() {
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: 2, eigenstateQubits: 2)
+
+        #expect(circuit.qubits == 4, "Circuit should have 4 qubits (2 precision + 2 eigenstate)")
+
+        let finalState = circuit.execute()
+
+        #expect(finalState.isNormalized(), "Final state should be normalized")
+    }
+
+    @Test("Measurement outcomes match expected phase for identity")
+    func measurementOutcomesMatchExpectedPhaseIdentity() {
+        let precisionQubits = 3
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .identity, precisionQubits: precisionQubits)
+
+        let finalState = circuit.execute()
+
+        let (mostProbable, _) = finalState.mostProbableState()
+        let measuredPhaseIndex = mostProbable & ((1 << precisionQubits) - 1)
+
+        #expect(measuredPhaseIndex == 0, "Identity should yield phase index 0, got \(measuredPhaseIndex)")
+    }
+
+    @Test("Probability concentrated at correct basis state for pauliZ eigenstate 0")
+    func probabilityConcentratedAtCorrectStateEigenstate0() {
+        let precisionQubits = 4
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: precisionQubits)
+
+        let finalState = circuit.execute()
+
+        let targetProb = finalState.probability(of: 0)
+        var totalOtherProb = 0.0
+        for i in 1 ..< finalState.stateSpaceSize {
+            totalOtherProb += finalState.probability(of: i)
+        }
+
+        #expect(targetProb > totalOtherProb, "Probability should be concentrated at phase 0 state")
+    }
+
+    @Test("Probability concentrated at correct basis state for pauliZ eigenstate 1")
+    func probabilityConcentratedAtCorrectStateEigenstate1() {
+        let precisionQubits = 4
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: precisionQubits)
+
+        var initialAmps = [Complex<Double>](repeating: .zero, count: 1 << (precisionQubits + 1))
+        initialAmps[1 << precisionQubits] = .one
+        let initialState = QuantumState(qubits: precisionQubits + 1, amplitudes: initialAmps)
+
+        let finalState = circuit.execute(on: initialState)
+
+        let (mostProbable, targetProb) = finalState.mostProbableState()
+        let eigenstateQubitValue = (mostProbable >> precisionQubits) & 1
+
+        #expect(eigenstateQubitValue == 1, "Eigenstate qubit should remain |1⟩, got \(eigenstateQubitValue)")
+        #expect(targetProb > 0.5, "Probability should be concentrated at most probable state, got \(targetProb)")
+    }
+
+    @Test("Phase estimation preserves normalization")
+    func phaseEstimationPreservesNormalization() {
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: 3)
+
+        let finalState = circuit.execute()
+
+        #expect(finalState.isNormalized(), "Final state should be normalized")
+    }
+
+    @Test("Phase estimation with T gate eigenvalue")
+    func phaseEstimationWithTGate() {
+        let precisionQubits = 4
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .tGate, precisionQubits: precisionQubits)
+
+        var initialAmps = [Complex<Double>](repeating: .zero, count: 1 << (precisionQubits + 1))
+        initialAmps[1 << precisionQubits] = .one
+        let initialState = QuantumState(qubits: precisionQubits + 1, amplitudes: initialAmps)
+
+        let finalState = circuit.execute(on: initialState)
+
+        #expect(finalState.isNormalized(), "T gate phase estimation should produce normalized state")
+
+        let (mostProbable, probability) = finalState.mostProbableState()
+        let eigenstateQubitValue = (mostProbable >> precisionQubits) & 1
+
+        #expect(eigenstateQubitValue == 1, "Eigenstate qubit should remain |1⟩, got \(eigenstateQubitValue)")
+        #expect(probability > 0.3, "Most probable state should have significant probability, got \(probability)")
+    }
+
+    @Test("Phase estimation with S gate eigenvalue")
+    func phaseEstimationWithSGate() {
+        let precisionQubits = 3
+        let circuit = QuantumCircuit.phaseEstimation(unitary: .sGate, precisionQubits: precisionQubits)
+
+        var initialAmps = [Complex<Double>](repeating: .zero, count: 1 << (precisionQubits + 1))
+        initialAmps[1 << precisionQubits] = .one
+        let initialState = QuantumState(qubits: precisionQubits + 1, amplitudes: initialAmps)
+
+        let finalState = circuit.execute(on: initialState)
+
+        #expect(finalState.isNormalized(), "S gate phase estimation should produce normalized state")
+
+        let (mostProbable, probability) = finalState.mostProbableState()
+        let eigenstateQubitValue = (mostProbable >> precisionQubits) & 1
+
+        #expect(eigenstateQubitValue == 1, "Eigenstate qubit should remain |1⟩, got \(eigenstateQubitValue)")
+        #expect(probability > 0.5, "S gate phase (1/4) should be detected with high probability, got \(probability)")
+    }
+}

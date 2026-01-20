@@ -1660,20 +1660,22 @@ struct KAKDecompositionEdgeCasesTests {
 
     @Test("Decomposition preserves unitary semantics")
     func decompositionPreservesSemantics() {
-        let decomposed = CircuitOptimizer.kakDecomposition(.swap)
+        let decomposed = ControlledGateDecomposer.decompose(gate: .pauliX, controls: [0, 1], target: 2)
 
-        var circuit = QuantumCircuit(qubits: 2)
+        #expect(!decomposed.isEmpty, "Controlled gate decomposition should produce non-empty gate sequence")
+
+        var circuit = QuantumCircuit(qubits: 3)
         for (gate, qubits) in decomposed {
             circuit.append(gate, to: qubits)
         }
 
-        let initialState = QuantumState(qubits: 2)
-        let originalState = GateApplication.apply(.swap, to: [0, 1], state: initialState)
+        let initialState = QuantumState(qubits: 3)
+        let originalState = GateApplication.apply(.toffoli, to: [0, 1, 2], state: initialState)
         let decomposedState = circuit.execute()
 
         for i in 0 ..< originalState.stateSpaceSize {
             let diff = (originalState.amplitude(of: i) - decomposedState.amplitude(of: i)).magnitude
-            #expect(diff < 1e-6, "Decomposed SWAP should produce same state as original")
+            #expect(diff < 1e-6, "Decomposed Toffoli should produce same state as original")
         }
     }
 
@@ -1919,9 +1921,9 @@ struct ZYZDecompositionPhiRotationTests {
 
         #expect(gate.qubitsRequired == 1, "Decomposed gate should be single-qubit")
 
-        if case .u3 = gate {
-            #expect(true, "Hadamard should decompose to U3")
-        }
+        var isDecomposed = false
+        if case .u3 = gate { isDecomposed = true }
+        #expect(isDecomposed, "Hadamard should decompose to U3")
     }
 
     @Test("Pure Z rotation decomposes to U1 or identity")

@@ -502,6 +502,7 @@ struct CumulativeWeightTruncationTests {
 
 /// Test suite for no truncation strategy.
 /// Validates that .none preserves all singular values and produces exact decomposition.
+/// The default truncation mode used when maximum accuracy is required.
 @Suite("SVDDecomposition - No Truncation")
 struct NoTruncationTests {
     @Test("Truncation .none keeps all singular values")
@@ -646,6 +647,7 @@ struct TruncationErrorTests {
 
 /// Test suite for edge cases in SVD decomposition.
 /// Validates correct behavior for 1x1, rectangular, and square matrices.
+/// Covers zero matrices, identity matrices, and various aspect ratios.
 @Suite("SVDDecomposition - Edge Cases")
 struct SVDEdgeCasesTests {
     @Test("1x1 matrix decomposition")
@@ -802,6 +804,7 @@ struct SVDEdgeCasesTests {
 
 /// Test suite for unitary properties of U and V matrices.
 /// Validates that U and V have orthonormal columns, essential for quantum gate decompositions.
+/// Ensures orthonormality is preserved even after truncation operations.
 @Suite("SVDDecomposition - Unitary Properties")
 struct UnitaryPropertiesTests {
     @Test("U has orthonormal columns: U-dagger * U = I")
@@ -957,6 +960,7 @@ struct UnitaryPropertiesTests {
 
 /// Test suite for complex-valued matrix SVD.
 /// Validates correct handling of complex phases and Hermitian properties.
+/// Tests unitary matrices, scaled unitaries, and pure imaginary matrices.
 @Suite("SVDDecomposition - Complex Matrix Properties")
 struct ComplexMatrixPropertiesTests {
     @Test("Pure imaginary matrix decomposition")
@@ -1119,6 +1123,7 @@ struct ZeroMatrixTruncationEdgeCasesTests {
 
 /// Test suite for SVDResult structure.
 /// Validates that the result structure contains correctly shaped arrays.
+/// Ensures dimensional consistency between U, singular values, and V-dagger.
 @Suite("SVDDecomposition - Result Structure")
 struct SVDResultStructureTests {
     @Test("SVDResult contains non-empty arrays")

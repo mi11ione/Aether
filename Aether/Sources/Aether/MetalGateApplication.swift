@@ -258,6 +258,9 @@ public actor MetalGateApplication {
 
         case .toffoli:
             applyToffoli(control1: qubits[0], control2: qubits[1], target: qubits[2], state: state)
+
+        case let .controlled(innerGate, controls):
+            applyControlledGate(gate: innerGate, controls: controls, targetQubits: qubits, state: state)
         }
     }
 
@@ -481,6 +484,16 @@ public actor MetalGateApplication {
         }
 
         return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+    }
+
+    @_eagerMove
+    private func applyControlledGate(
+        gate: QuantumGate,
+        controls: [Int],
+        targetQubits: [Int],
+        state: QuantumState,
+    ) -> QuantumState {
+        GateApplication.applyControlledGate(gate: gate, controls: controls, targetQubits: targetQubits, state: state)
     }
 }
 

@@ -1334,6 +1334,113 @@ public extension QuantumCircuit {
         return circuit
     }
 
+    /// Creates Quantum Phase Estimation circuit for eigenvalue extraction.
+    ///
+    /// Implements QPE algorithm that extracts the phase φ from eigenvalue equation U|ψ⟩ = e^(2πiφ)|ψ⟩.
+    /// Uses precision qubits to store the binary representation of φ and controlled-U^(2^k) operations
+    /// to encode phase information, followed by inverse QFT to extract the phase bits.
+    ///
+    /// The circuit structure:
+    /// 1. Apply Hadamard to all precision qubits (superposition)
+    /// 2. Apply controlled-U^(2^k) for k in 0..<precisionQubits (phase kickback)
+    /// 3. Apply inverse QFT to precision register (extract phase)
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let qpeCircuit = QuantumCircuit.phaseEstimation(
+    ///     unitary: .pauliZ,
+    ///     precisionQubits: 3,
+    ///     eigenstateQubits: 1
+    /// )
+    /// let state = qpeCircuit.execute()
+    /// let (result, _) = state.mostProbableState()
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - unitary: Single-qubit unitary gate U whose eigenvalue phase to estimate
+    ///   - precisionQubits: Number of qubits for phase precision (determines accuracy as 2^(-n))
+    ///   - eigenstateQubits: Number of qubits for eigenstate register (default: 1)
+    /// - Returns: Circuit implementing quantum phase estimation
+    /// - Precondition: precisionQubits >= 1
+    /// - Precondition: eigenstateQubits >= 1
+    /// - Precondition: unitary must be a single-qubit gate
+    /// - Complexity: O(n²) gates where n = precisionQubits
+    ///
+    /// - SeeAlso: ``inverseQFT(qubits:)``
+    /// - SeeAlso: ``ControlledGateDecomposer/controlledPower(of:power:control:targetQubits:)``
+    @_eagerMove
+    static func phaseEstimation(
+        unitary: QuantumGate,
+        precisionQubits: Int,
+        eigenstateQubits: Int = 1,
+    ) -> QuantumCircuit {
+        ValidationUtilities.validatePositiveInt(precisionQubits, name: "precisionQubits")
+        ValidationUtilities.validatePositiveInt(eigenstateQubits, name: "eigenstateQubits")
+        ValidationUtilities.validateControlledGateIsSingleQubit(unitary.qubitsRequired)
+
+        let totalQubits = precisionQubits + eigenstateQubits
+        var circuit = QuantumCircuit(qubits: totalQubits)
+
+        for i in 0 ..< precisionQubits {
+            circuit.append(.hadamard, to: i)
+        }
+
+        let targetQubits = Array(precisionQubits ..< totalQubits)
+
+        for k in 0 ..< precisionQubits {
+            let controlQubit = precisionQubits - 1 - k
+            let gates = ControlledGateDecomposer.controlledPower(
+                of: unitary,
+                power: k,
+                control: controlQubit,
+                targetQubits: targetQubits,
+            )
+
+            for (gate, qubits) in gates {
+                circuit.append(gate, to: qubits)
+            }
+        }
+
+        let inverseQFTGates = inverseQFTGates(qubits: precisionQubits)
+        for (gate, qubits) in inverseQFTGates {
+            circuit.append(gate, to: qubits)
+        }
+
+        return circuit
+    }
+
+    /// Generate inverse QFT gate sequence for specified qubit range.
+    ///
+    /// Produces the gate sequence for inverse Quantum Fourier Transform operating on
+    /// qubits 0..<qubits. Swaps qubits first to reverse bit order, then applies inverse
+    /// controlled rotations and Hadamards in reverse order of forward QFT.
+    ///
+    /// - Parameter qubits: Number of qubits for inverse QFT
+    /// - Returns: Array of (gate, qubits) tuples implementing inverse QFT
+    /// - Complexity: O(n²) gates where n = qubits
+    @_optimize(speed)
+    private static func inverseQFTGates(qubits: Int) -> [(gate: QuantumGate, qubits: [Int])] {
+        var gates: [(gate: QuantumGate, qubits: [Int])] = []
+
+        let swapCount = qubits / 2
+        for i in 0 ..< swapCount {
+            let j = qubits - 1 - i
+            gates.append((.swap, [i, j]))
+        }
+
+        for target in (0 ..< qubits).reversed() {
+            for control in (target + 1 ..< qubits).reversed() {
+                let k = control - target + 1
+                let theta = -Double.pi / Double(1 << k)
+                gates.append((.controlledPhase(theta), [control, target]))
+            }
+
+            gates.append((.hadamard, [target]))
+        }
+
+        return gates
+    }
+
     /// Creates Grover search algorithm circuit for O(√N) unstructured search.
     ///
     /// Initializes uniform superposition, then repeats oracle (phase flip on target) and diffusion

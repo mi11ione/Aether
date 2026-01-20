@@ -1117,3 +1117,438 @@ struct CustomGateMatrixTests {
         #expect(retrieved[1][2].imaginary == d.imaginary, "Complex imaginary part should be preserved")
     }
 }
+
+@Suite("Controlled Gate isNativeGate")
+struct ControlledGateIsNativeGateTests {
+    @Test("Controlled gate returns false for isNativeGate")
+    func controlledReturnsFalse() {
+        let gate = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        #expect(!gate.isNativeGate, "Controlled gate should not be a native gate")
+    }
+
+    @Test("PauliX returns true for isNativeGate")
+    func pauliXReturnsTrue() {
+        #expect(QuantumGate.pauliX.isNativeGate, "PauliX should be a native gate")
+    }
+
+    @Test("PauliY returns true for isNativeGate")
+    func pauliYReturnsTrue() {
+        #expect(QuantumGate.pauliY.isNativeGate, "PauliY should be a native gate")
+    }
+
+    @Test("PauliZ returns true for isNativeGate")
+    func pauliZReturnsTrue() {
+        #expect(QuantumGate.pauliZ.isNativeGate, "PauliZ should be a native gate")
+    }
+
+    @Test("Hadamard returns true for isNativeGate")
+    func hadamardReturnsTrue() {
+        #expect(QuantumGate.hadamard.isNativeGate, "Hadamard should be a native gate")
+    }
+
+    @Test("CNOT returns true for isNativeGate")
+    func cnotReturnsTrue() {
+        #expect(QuantumGate.cnot.isNativeGate, "CNOT should be a native gate")
+    }
+
+    @Test("Toffoli returns true for isNativeGate")
+    func toffoliReturnsTrue() {
+        #expect(QuantumGate.toffoli.isNativeGate, "Toffoli should be a native gate")
+    }
+
+    @Test("Phase returns true for isNativeGate")
+    func phaseReturnsTrue() {
+        #expect(QuantumGate.phase(.pi / 4).isNativeGate, "Phase should be a native gate")
+    }
+
+    @Test("RotationX returns true for isNativeGate")
+    func rotationXReturnsTrue() {
+        #expect(QuantumGate.rotationX(.pi / 3).isNativeGate, "RotationX should be a native gate")
+    }
+
+    @Test("RotationY returns true for isNativeGate")
+    func rotationYReturnsTrue() {
+        #expect(QuantumGate.rotationY(.pi / 3).isNativeGate, "RotationY should be a native gate")
+    }
+
+    @Test("RotationZ returns true for isNativeGate")
+    func rotationZReturnsTrue() {
+        #expect(QuantumGate.rotationZ(.pi / 3).isNativeGate, "RotationZ should be a native gate")
+    }
+
+    @Test("SWAP returns true for isNativeGate")
+    func swapReturnsTrue() {
+        #expect(QuantumGate.swap.isNativeGate, "SWAP should be a native gate")
+    }
+
+    @Test("CZ returns true for isNativeGate")
+    func czReturnsTrue() {
+        #expect(QuantumGate.cz.isNativeGate, "CZ should be a native gate")
+    }
+
+    @Test("Identity returns true for isNativeGate")
+    func identityReturnsTrue() {
+        #expect(QuantumGate.identity.isNativeGate, "Identity should be a native gate")
+    }
+
+    @Test("S gate returns true for isNativeGate")
+    func sGateReturnsTrue() {
+        #expect(QuantumGate.sGate.isNativeGate, "S gate should be a native gate")
+    }
+
+    @Test("T gate returns true for isNativeGate")
+    func tGateReturnsTrue() {
+        #expect(QuantumGate.tGate.isNativeGate, "T gate should be a native gate")
+    }
+}
+
+@Suite("Controlled Gate flattenControlled")
+struct ControlledGateFlattenControlledTests {
+    @Test("Non-controlled gate returns self with empty controls")
+    func nonControlledReturnsSelf() {
+        let gate = QuantumGate.pauliX
+        let (baseGate, controls) = gate.flattenControlled()
+
+        #expect(baseGate == .pauliX, "Base gate should be pauliX")
+        #expect(controls.isEmpty, "Controls should be empty for non-controlled gate")
+    }
+
+    @Test("Hadamard returns self with empty controls")
+    func hadamardReturnsSelf() {
+        let gate = QuantumGate.hadamard
+        let (baseGate, controls) = gate.flattenControlled()
+
+        #expect(baseGate == .hadamard, "Base gate should be hadamard")
+        #expect(controls.isEmpty, "Controls should be empty for hadamard")
+    }
+
+    @Test("Single controlled returns base gate and controls")
+    func singleControlledReturnsBaseAndControls() {
+        let gate = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        let (baseGate, controls) = gate.flattenControlled()
+
+        #expect(baseGate == .pauliX, "Base gate should be pauliX")
+        #expect(controls == [0], "Controls should be [0]")
+    }
+
+    @Test("Single controlled with multiple controls")
+    func singleControlledMultipleControls() {
+        let gate = QuantumGate.controlled(gate: .hadamard, controls: [0, 1])
+        let (baseGate, controls) = gate.flattenControlled()
+
+        #expect(baseGate == .hadamard, "Base gate should be hadamard")
+        #expect(controls == [0, 1], "Controls should be [0, 1]")
+    }
+
+    @Test("Nested controlled flattens all controls")
+    func nestedControlledFlattensAll() {
+        let inner = QuantumGate.controlled(gate: .pauliZ, controls: [1])
+        let outer = QuantumGate.controlled(gate: inner, controls: [0])
+        let (baseGate, controls) = outer.flattenControlled()
+
+        #expect(baseGate == .pauliZ, "Base gate should be pauliZ")
+        #expect(controls == [0, 1], "Controls should be [0, 1]")
+    }
+
+    @Test("Deeply nested controlled accumulates all controls")
+    func deeplyNestedAccumulatesAllControls() {
+        let level1 = QuantumGate.controlled(gate: .rotationX(.pi / 4), controls: [2])
+        let level2 = QuantumGate.controlled(gate: level1, controls: [1])
+        let level3 = QuantumGate.controlled(gate: level2, controls: [0])
+        let (baseGate, controls) = level3.flattenControlled()
+
+        if case let .rotationX(angle) = baseGate {
+            #expect(abs(angle.evaluate(using: [:]) - .pi / 4) < 1e-10, "Base gate should be rotationX(pi/4)")
+        }
+        #expect(controls == [0, 1, 2], "Controls should be [0, 1, 2]")
+    }
+
+    @Test("Three levels of nesting preserves order")
+    func threeLevelsPreservesOrder() {
+        let level1 = QuantumGate.controlled(gate: .pauliY, controls: [3])
+        let level2 = QuantumGate.controlled(gate: level1, controls: [2])
+        let level3 = QuantumGate.controlled(gate: level2, controls: [0, 1])
+        let (baseGate, controls) = level3.flattenControlled()
+
+        #expect(baseGate == .pauliY, "Base gate should be pauliY")
+        #expect(controls == [0, 1, 2, 3], "Controls should be [0, 1, 2, 3]")
+    }
+}
+
+@Suite("Controlled Gate Properties")
+struct ControlledGatePropertiesTests {
+    @Test("qubitsRequired equals baseGate qubits plus control count")
+    func qubitsRequiredEqualsBaseGatePlusControlCount() {
+        let singleControl = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        #expect(singleControl.qubitsRequired == 2, "Single-controlled X should require 2 qubits")
+
+        let doubleControl = QuantumGate.controlled(gate: .pauliX, controls: [0, 1])
+        #expect(doubleControl.qubitsRequired == 3, "Double-controlled X should require 3 qubits")
+
+        let tripleControl = QuantumGate.controlled(gate: .pauliX, controls: [0, 1, 2])
+        #expect(tripleControl.qubitsRequired == 4, "Triple-controlled X should require 4 qubits")
+    }
+
+    @Test("qubitsRequired with two-qubit base gate")
+    func qubitsRequiredWithTwoQubitBase() {
+        let controlledSwap = QuantumGate.controlled(gate: .swap, controls: [0])
+        #expect(controlledSwap.qubitsRequired == 3, "Controlled SWAP should require 3 qubits")
+
+        let doubleControlledCnot = QuantumGate.controlled(gate: .cnot, controls: [0, 1])
+        #expect(doubleControlledCnot.qubitsRequired == 4, "Double-controlled CNOT should require 4 qubits")
+    }
+
+    @Test("parameters returns inner gate parameters")
+    func parametersReturnsInnerGateParameters() {
+        let theta = Parameter(name: "theta")
+        let controlledRy = QuantumGate.controlled(gate: .rotationY(.parameter(theta)), controls: [0])
+        let params = controlledRy.parameters()
+
+        #expect(params.count == 1, "Controlled Ry should have 1 parameter")
+        #expect(params.contains(theta), "Parameters should contain theta")
+    }
+
+    @Test("parameters returns empty for non-parameterized inner gate")
+    func parametersReturnsEmptyForNonParameterizedInner() {
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        let params = controlledX.parameters()
+
+        #expect(params.isEmpty, "Controlled X should have no parameters")
+    }
+
+    @Test("parameters returns multiple parameters from inner gate")
+    func parametersReturnsMultipleFromInner() {
+        let theta = Parameter(name: "theta")
+        let phi = Parameter(name: "phi")
+        let lambda = Parameter(name: "lambda")
+        let u3 = QuantumGate.u3(
+            theta: .parameter(theta),
+            phi: .parameter(phi),
+            lambda: .parameter(lambda),
+        )
+        let controlledU3 = QuantumGate.controlled(gate: u3, controls: [0])
+        let params = controlledU3.parameters()
+
+        #expect(params.count == 3, "Controlled U3 should have 3 parameters")
+        #expect(params.contains(theta), "Parameters should contain theta")
+        #expect(params.contains(phi), "Parameters should contain phi")
+        #expect(params.contains(lambda), "Parameters should contain lambda")
+    }
+
+    @Test("bound binds inner gate and preserves controls")
+    func boundBindsInnerAndPreservesControls() {
+        let theta = Parameter(name: "theta")
+        let controlledRy = QuantumGate.controlled(gate: .rotationY(.parameter(theta)), controls: [0, 1])
+        let bound = controlledRy.bound(with: ["theta": .pi / 4])
+
+        #expect(!bound.isParameterized, "Bound gate should not be parameterized")
+
+        if case let .controlled(innerGate, controls) = bound {
+            #expect(controls == [0, 1], "Controls should be preserved after binding")
+            if case let .rotationY(angle) = innerGate {
+                #expect(abs(angle.evaluate(using: [:]) - .pi / 4) < 1e-10, "Inner gate angle should be pi/4")
+            }
+        }
+    }
+
+    @Test("inverse inverts inner gate and preserves controls")
+    func inverseInvertsInnerAndPreservesControls() {
+        let controlledRz = QuantumGate.controlled(gate: .rotationZ(.pi / 3), controls: [0, 1])
+        let inverse = controlledRz.inverse
+
+        if case let .controlled(innerGate, controls) = inverse {
+            #expect(controls == [0, 1], "Controls should be preserved after inversion")
+            if case let .rotationZ(angle) = innerGate {
+                #expect(abs(angle.evaluate(using: [:]) + .pi / 3) < 1e-10, "Inverse angle should be -pi/3")
+            }
+        }
+    }
+
+    @Test("inverse of controlled Hermitian gate is self")
+    func inverseOfControlledHermitianIsSelf() {
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        let inverse = controlledX.inverse
+
+        #expect(inverse == controlledX, "Inverse of controlled-X should equal itself")
+    }
+
+    @Test("description format is C^n(gate)")
+    func descriptionFormatIsCN() {
+        let singleControl = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        #expect(singleControl.description == "C^1(X)", "Single controlled X description should be C^1(X)")
+
+        let doubleControl = QuantumGate.controlled(gate: .hadamard, controls: [0, 1])
+        #expect(doubleControl.description == "C^2(H)", "Double controlled H description should be C^2(H)")
+
+        let tripleControl = QuantumGate.controlled(gate: .pauliZ, controls: [0, 1, 2])
+        #expect(tripleControl.description == "C^3(Z)", "Triple controlled Z description should be C^3(Z)")
+    }
+
+    @Test("description with parameterized inner gate")
+    func descriptionWithParameterizedInner() {
+        let theta = Parameter(name: "theta")
+        let controlledRy = QuantumGate.controlled(gate: .rotationY(.parameter(theta)), controls: [0])
+        #expect(controlledRy.description.contains("C^1"), "Description should contain C^1")
+        #expect(controlledRy.description.contains("Ry"), "Description should contain Ry")
+        #expect(controlledRy.description.contains("theta"), "Description should contain theta")
+    }
+}
+
+@Suite("Controlled Gate Matrix")
+struct ControlledGateMatrixTests {
+    @Test("Single-controlled X matches CNOT matrix")
+    func singleControlledXMatchesCNOT() {
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        let cnotGate = QuantumGate.cnot
+
+        let controlledMatrix = controlledX.matrix()
+        let cnotMatrix = cnotGate.matrix()
+
+        #expect(QuantumGate.matricesEqual(controlledMatrix, cnotMatrix),
+                "Controlled-X matrix should match CNOT matrix")
+    }
+
+    @Test("Single-controlled Z matches CZ matrix")
+    func singleControlledZMatchesCZ() {
+        let controlledZ = QuantumGate.controlled(gate: .pauliZ, controls: [0])
+        let czGate = QuantumGate.cz
+
+        let controlledMatrix = controlledZ.matrix()
+        let czMatrix = czGate.matrix()
+
+        #expect(QuantumGate.matricesEqual(controlledMatrix, czMatrix),
+                "Controlled-Z matrix should match CZ matrix")
+    }
+
+    @Test("Double-controlled X matches Toffoli matrix")
+    func doubleControlledXMatchesToffoli() {
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0, 1])
+        let toffoliGate = QuantumGate.toffoli
+
+        let controlledMatrix = controlledX.matrix()
+        let toffoliMatrix = toffoliGate.matrix()
+
+        #expect(QuantumGate.matricesEqual(controlledMatrix, toffoliMatrix),
+                "Double-controlled-X matrix should match Toffoli matrix")
+    }
+
+    @Test("Identity on non-controlled subspace for single control")
+    func identityOnNonControlledSubspaceSingleControl() {
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        let matrix = controlledX.matrix()
+
+        #expect(abs(matrix[0][0].real - 1.0) < 1e-10, "matrix[0][0] should be 1")
+        #expect(abs(matrix[0][0].imaginary) < 1e-10, "matrix[0][0] imaginary should be 0")
+        #expect(abs(matrix[1][1].real - 1.0) < 1e-10, "matrix[1][1] should be 1")
+        #expect(abs(matrix[1][1].imaginary) < 1e-10, "matrix[1][1] imaginary should be 0")
+
+        for i in 0 ..< 2 {
+            for j in 0 ..< 4 {
+                if i != j {
+                    #expect(abs(matrix[i][j].magnitude) < 1e-10,
+                            "Off-diagonal elements in non-controlled subspace should be 0")
+                }
+            }
+        }
+    }
+
+    @Test("Gate action on controlled subspace for single control")
+    func gateActionOnControlledSubspaceSingleControl() {
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        let matrix = controlledX.matrix()
+
+        #expect(abs(matrix[2][3].real - 1.0) < 1e-10, "matrix[2][3] should be 1 (X gate action)")
+        #expect(abs(matrix[3][2].real - 1.0) < 1e-10, "matrix[3][2] should be 1 (X gate action)")
+        #expect(abs(matrix[2][2].magnitude) < 1e-10, "matrix[2][2] should be 0")
+        #expect(abs(matrix[3][3].magnitude) < 1e-10, "matrix[3][3] should be 0")
+    }
+
+    @Test("Identity on non-controlled subspace for double control")
+    func identityOnNonControlledSubspaceDoubleControl() {
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0, 1])
+        let matrix = controlledX.matrix()
+
+        for i in 0 ..< 6 {
+            #expect(abs(matrix[i][i].real - 1.0) < 1e-10, "Diagonal element \(i) should be 1")
+            #expect(abs(matrix[i][i].imaginary) < 1e-10, "Diagonal element \(i) imaginary should be 0")
+            for j in 0 ..< 8 {
+                if i != j {
+                    #expect(abs(matrix[i][j].magnitude) < 1e-10,
+                            "Off-diagonal element [\(i)][\(j)] in non-controlled subspace should be 0")
+                }
+            }
+        }
+    }
+
+    @Test("Gate action on controlled subspace for double control")
+    func gateActionOnControlledSubspaceDoubleControl() {
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0, 1])
+        let matrix = controlledX.matrix()
+
+        #expect(abs(matrix[6][7].real - 1.0) < 1e-10, "matrix[6][7] should be 1 (X gate action)")
+        #expect(abs(matrix[7][6].real - 1.0) < 1e-10, "matrix[7][6] should be 1 (X gate action)")
+        #expect(abs(matrix[6][6].magnitude) < 1e-10, "matrix[6][6] should be 0")
+        #expect(abs(matrix[7][7].magnitude) < 1e-10, "matrix[7][7] should be 0")
+    }
+
+    @Test("Controlled gate matrix is unitary")
+    func controlledGateMatrixIsUnitary() {
+        let controlledH = QuantumGate.controlled(gate: .hadamard, controls: [0])
+        let matrix = controlledH.matrix()
+
+        #expect(QuantumGate.isUnitary(matrix), "Controlled Hadamard matrix should be unitary")
+    }
+
+    @Test("Double-controlled gate matrix is unitary")
+    func doubleControlledGateMatrixIsUnitary() {
+        let controlledH = QuantumGate.controlled(gate: .hadamard, controls: [0, 1])
+        let matrix = controlledH.matrix()
+
+        #expect(QuantumGate.isUnitary(matrix), "Double-controlled Hadamard matrix should be unitary")
+    }
+
+    @Test("Controlled rotation gate matrix is unitary")
+    func controlledRotationMatrixIsUnitary() {
+        let controlledRy = QuantumGate.controlled(gate: .rotationY(.pi / 4), controls: [0])
+        let matrix = controlledRy.matrix()
+
+        #expect(QuantumGate.isUnitary(matrix), "Controlled Ry matrix should be unitary")
+    }
+
+    @Test("Controlled gate matrix has correct dimensions")
+    func controlledGateMatrixHasCorrectDimensions() {
+        let singleControl = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        let singleMatrix = singleControl.matrix()
+        #expect(singleMatrix.count == 4, "Single-controlled gate should have 4x4 matrix")
+        #expect(singleMatrix.allSatisfy { $0.count == 4 }, "All rows should have 4 columns")
+
+        let doubleControl = QuantumGate.controlled(gate: .pauliX, controls: [0, 1])
+        let doubleMatrix = doubleControl.matrix()
+        #expect(doubleMatrix.count == 8, "Double-controlled gate should have 8x8 matrix")
+        #expect(doubleMatrix.allSatisfy { $0.count == 8 }, "All rows should have 8 columns")
+
+        let tripleControl = QuantumGate.controlled(gate: .pauliX, controls: [0, 1, 2])
+        let tripleMatrix = tripleControl.matrix()
+        #expect(tripleMatrix.count == 16, "Triple-controlled gate should have 16x16 matrix")
+        #expect(tripleMatrix.allSatisfy { $0.count == 16 }, "All rows should have 16 columns")
+    }
+
+    @Test("Controlled gate with two-qubit base has correct dimensions")
+    func controlledTwoQubitBaseHasCorrectDimensions() {
+        let controlledSwap = QuantumGate.controlled(gate: .swap, controls: [0])
+        let matrix = controlledSwap.matrix()
+
+        #expect(matrix.count == 8, "Controlled SWAP should have 8x8 matrix")
+        #expect(matrix.allSatisfy { $0.count == 8 }, "All rows should have 8 columns")
+    }
+
+    @Test("Controlled-controlled gate inverse produces identity")
+    func controlledControlledInverseProducesIdentity() {
+        let controlledRz = QuantumGate.controlled(gate: .rotationZ(.pi / 5), controls: [0, 1])
+        let inverse = controlledRz.inverse
+
+        let product = QuantumGate.matrixMultiply(controlledRz.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product),
+                "Controlled Rz times its inverse should equal identity")
+    }
+}

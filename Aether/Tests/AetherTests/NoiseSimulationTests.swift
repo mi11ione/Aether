@@ -6,180 +6,235 @@ import Foundation
 import Testing
 
 /// Test suite for Kraus operator completeness relation validation.
-/// A valid quantum channel requires Σᵢ Kᵢ†Kᵢ = I (trace preservation).
-/// Validates all noise channels satisfy this fundamental constraint.
+/// Validates Σᵢ Kᵢ†Kᵢ = I (trace preservation) for all noise channels.
+/// Tests depolarizing, amplitude damping, phase damping, and bit/phase flip channels.
 @Suite("Noise Channel Kraus Completeness")
 struct NoiseChannelKrausCompletenessTests {
     @Test("Depolarizing channel satisfies Kraus completeness")
     func depolarizingCompleteness() {
         let channel = DepolarizingChannel(errorProbability: 0.1)
-        let sum = computeKrausSum(channel.krausOperators)
-
-        #expect(isIdentity(sum), "Σᵢ Kᵢ†Kᵢ should equal I for depolarizing channel")
-    }
-
-    @Test("Amplitude damping channel satisfies Kraus completeness")
-    func amplitudeDampingCompleteness() {
-        let channel = AmplitudeDampingChannel(gamma: 0.2)
-        let sum = computeKrausSum(channel.krausOperators)
-
-        #expect(isIdentity(sum), "Σᵢ Kᵢ†Kᵢ should equal I for amplitude damping")
-    }
-
-    @Test("Phase damping channel satisfies Kraus completeness")
-    func phaseDampingCompleteness() {
-        let channel = PhaseDampingChannel(gamma: 0.15)
-        let sum = computeKrausSum(channel.krausOperators)
-
-        #expect(isIdentity(sum), "Σᵢ Kᵢ†Kᵢ should equal I for phase damping")
-    }
-
-    @Test("Bit flip channel satisfies Kraus completeness")
-    func bitFlipCompleteness() {
-        let channel = BitFlipChannel(errorProbability: 0.05)
-        let sum = computeKrausSum(channel.krausOperators)
-
-        #expect(isIdentity(sum), "Σᵢ Kᵢ†Kᵢ should equal I for bit flip")
-    }
-
-    @Test("Phase flip channel satisfies Kraus completeness")
-    func phaseFlipCompleteness() {
-        let channel = PhaseFlipChannel(errorProbability: 0.05)
-        let sum = computeKrausSum(channel.krausOperators)
-
-        #expect(isIdentity(sum), "Σᵢ Kᵢ†Kᵢ should equal I for phase flip")
-    }
-
-    @Test("Bit-phase flip channel satisfies Kraus completeness")
-    func bitPhaseFlipCompleteness() {
-        let channel = BitPhaseFlipChannel(errorProbability: 0.05)
-        let sum = computeKrausSum(channel.krausOperators)
-
-        #expect(isIdentity(sum), "Σᵢ Kᵢ†Kᵢ should equal I for bit-phase flip")
-    }
-
-    @Test("Generalized amplitude damping satisfies Kraus completeness")
-    func generalizedAmplitudeDampingCompleteness() {
-        let channel = GeneralizedAmplitudeDampingChannel(gamma: 0.1, thermalPopulation: 0.2)
-        let sum = computeKrausSum(channel.krausOperators)
-
-        #expect(isIdentity(sum), "Σᵢ Kᵢ†Kᵢ should equal I for generalized amplitude damping")
-    }
-
-    @Test("Two-qubit depolarizing satisfies Kraus completeness")
-    func twoQubitDepolarizingCompleteness() {
-        let channel = TwoQubitDepolarizingChannel(errorProbability: 0.05)
-        let sum = computeKrausSum4x4(channel.krausOperators)
-
-        #expect(isIdentity4x4(sum), "Σᵢ Kᵢ†Kᵢ should equal I for two-qubit depolarizing")
-    }
-
-    @Test("Kraus completeness holds for edge error probabilities")
-    func edgeCaseCompleteness() {
-        let zeroError = DepolarizingChannel(errorProbability: 0.0)
-        let maxError = DepolarizingChannel(errorProbability: 0.75)
-
-        #expect(isIdentity(computeKrausSum(zeroError.krausOperators)),
-                "Zero error should satisfy completeness")
-        #expect(isIdentity(computeKrausSum(maxError.krausOperators)),
-                "Maximum error should satisfy completeness")
-    }
-
-    private func computeKrausSum(_ operators: [[[Complex<Double>]]]) -> [[Complex<Double>]] {
         var sum: [[Complex<Double>]] = [[.zero, .zero], [.zero, .zero]]
-
-        for k in operators {
-            let kDagger = hermitianConjugate2x2(k)
-            let product = multiply2x2(kDagger, k)
+        for k in channel.krausOperators {
+            let kDagger = MatrixUtilities.hermitianConjugate(k)
+            let product = MatrixUtilities.matrixMultiply(kDagger, k)
             for i in 0 ..< 2 {
                 for j in 0 ..< 2 {
                     sum[i][j] = sum[i][j] + product[i][j]
                 }
             }
         }
-
-        return sum
+        let tolerance = 1e-10
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                let expected: Complex<Double> = (i == j) ? .one : .zero
+                let diff = sum[i][j] - expected
+                #expect(diff.magnitudeSquared <= tolerance * tolerance, "Σᵢ Kᵢ†Kᵢ[\(i)][\(j)] should equal identity for depolarizing channel")
+            }
+        }
     }
 
-    private func computeKrausSum4x4(_ operators: [[[Complex<Double>]]]) -> [[Complex<Double>]] {
-        var sum = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: 4), count: 4)
+    @Test("Amplitude damping channel satisfies Kraus completeness")
+    func amplitudeDampingCompleteness() {
+        let channel = AmplitudeDampingChannel(gamma: 0.2)
+        var sum: [[Complex<Double>]] = [[.zero, .zero], [.zero, .zero]]
+        for k in channel.krausOperators {
+            let kDagger = MatrixUtilities.hermitianConjugate(k)
+            let product = MatrixUtilities.matrixMultiply(kDagger, k)
+            for i in 0 ..< 2 {
+                for j in 0 ..< 2 {
+                    sum[i][j] = sum[i][j] + product[i][j]
+                }
+            }
+        }
+        let tolerance = 1e-10
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                let expected: Complex<Double> = (i == j) ? .one : .zero
+                let diff = sum[i][j] - expected
+                #expect(diff.magnitudeSquared <= tolerance * tolerance, "Σᵢ Kᵢ†Kᵢ[\(i)][\(j)] should equal identity for amplitude damping")
+            }
+        }
+    }
 
-        for k in operators {
-            let kDagger = hermitianConjugate4x4(k)
-            let product = multiply4x4(kDagger, k)
+    @Test("Phase damping channel satisfies Kraus completeness")
+    func phaseDampingCompleteness() {
+        let channel = PhaseDampingChannel(gamma: 0.15)
+        var sum: [[Complex<Double>]] = [[.zero, .zero], [.zero, .zero]]
+        for k in channel.krausOperators {
+            let kDagger = MatrixUtilities.hermitianConjugate(k)
+            let product = MatrixUtilities.matrixMultiply(kDagger, k)
+            for i in 0 ..< 2 {
+                for j in 0 ..< 2 {
+                    sum[i][j] = sum[i][j] + product[i][j]
+                }
+            }
+        }
+        let tolerance = 1e-10
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                let expected: Complex<Double> = (i == j) ? .one : .zero
+                let diff = sum[i][j] - expected
+                #expect(diff.magnitudeSquared <= tolerance * tolerance, "Σᵢ Kᵢ†Kᵢ[\(i)][\(j)] should equal identity for phase damping")
+            }
+        }
+    }
+
+    @Test("Bit flip channel satisfies Kraus completeness")
+    func bitFlipCompleteness() {
+        let channel = BitFlipChannel(errorProbability: 0.05)
+        var sum: [[Complex<Double>]] = [[.zero, .zero], [.zero, .zero]]
+        for k in channel.krausOperators {
+            let kDagger = MatrixUtilities.hermitianConjugate(k)
+            let product = MatrixUtilities.matrixMultiply(kDagger, k)
+            for i in 0 ..< 2 {
+                for j in 0 ..< 2 {
+                    sum[i][j] = sum[i][j] + product[i][j]
+                }
+            }
+        }
+        let tolerance = 1e-10
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                let expected: Complex<Double> = (i == j) ? .one : .zero
+                let diff = sum[i][j] - expected
+                #expect(diff.magnitudeSquared <= tolerance * tolerance, "Σᵢ Kᵢ†Kᵢ[\(i)][\(j)] should equal identity for bit flip")
+            }
+        }
+    }
+
+    @Test("Phase flip channel satisfies Kraus completeness")
+    func phaseFlipCompleteness() {
+        let channel = PhaseFlipChannel(errorProbability: 0.05)
+        var sum: [[Complex<Double>]] = [[.zero, .zero], [.zero, .zero]]
+        for k in channel.krausOperators {
+            let kDagger = MatrixUtilities.hermitianConjugate(k)
+            let product = MatrixUtilities.matrixMultiply(kDagger, k)
+            for i in 0 ..< 2 {
+                for j in 0 ..< 2 {
+                    sum[i][j] = sum[i][j] + product[i][j]
+                }
+            }
+        }
+        let tolerance = 1e-10
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                let expected: Complex<Double> = (i == j) ? .one : .zero
+                let diff = sum[i][j] - expected
+                #expect(diff.magnitudeSquared <= tolerance * tolerance, "Σᵢ Kᵢ†Kᵢ[\(i)][\(j)] should equal identity for phase flip")
+            }
+        }
+    }
+
+    @Test("Bit-phase flip channel satisfies Kraus completeness")
+    func bitPhaseFlipCompleteness() {
+        let channel = BitPhaseFlipChannel(errorProbability: 0.05)
+        var sum: [[Complex<Double>]] = [[.zero, .zero], [.zero, .zero]]
+        for k in channel.krausOperators {
+            let kDagger = MatrixUtilities.hermitianConjugate(k)
+            let product = MatrixUtilities.matrixMultiply(kDagger, k)
+            for i in 0 ..< 2 {
+                for j in 0 ..< 2 {
+                    sum[i][j] = sum[i][j] + product[i][j]
+                }
+            }
+        }
+        let tolerance = 1e-10
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                let expected: Complex<Double> = (i == j) ? .one : .zero
+                let diff = sum[i][j] - expected
+                #expect(diff.magnitudeSquared <= tolerance * tolerance, "Σᵢ Kᵢ†Kᵢ[\(i)][\(j)] should equal identity for bit-phase flip")
+            }
+        }
+    }
+
+    @Test("Generalized amplitude damping satisfies Kraus completeness")
+    func generalizedAmplitudeDampingCompleteness() {
+        let channel = GeneralizedAmplitudeDampingChannel(gamma: 0.1, thermalPopulation: 0.2)
+        var sum: [[Complex<Double>]] = [[.zero, .zero], [.zero, .zero]]
+        for k in channel.krausOperators {
+            let kDagger = MatrixUtilities.hermitianConjugate(k)
+            let product = MatrixUtilities.matrixMultiply(kDagger, k)
+            for i in 0 ..< 2 {
+                for j in 0 ..< 2 {
+                    sum[i][j] = sum[i][j] + product[i][j]
+                }
+            }
+        }
+        let tolerance = 1e-10
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                let expected: Complex<Double> = (i == j) ? .one : .zero
+                let diff = sum[i][j] - expected
+                #expect(diff.magnitudeSquared <= tolerance * tolerance, "Σᵢ Kᵢ†Kᵢ[\(i)][\(j)] should equal identity for generalized amplitude damping")
+            }
+        }
+    }
+
+    @Test("Two-qubit depolarizing satisfies Kraus completeness")
+    func twoQubitDepolarizingCompleteness() {
+        let channel = TwoQubitDepolarizingChannel(errorProbability: 0.05)
+        var sum = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: 4), count: 4)
+        for k in channel.krausOperators {
+            let kDagger = MatrixUtilities.hermitianConjugate(k)
+            let product = MatrixUtilities.matrixMultiply(kDagger, k)
             for i in 0 ..< 4 {
                 for j in 0 ..< 4 {
                     sum[i][j] = sum[i][j] + product[i][j]
                 }
             }
         }
-
-        return sum
-    }
-
-    private func isIdentity(_ matrix: [[Complex<Double>]], tolerance: Double = 1e-10) -> Bool {
-        for i in 0 ..< 2 {
-            for j in 0 ..< 2 {
-                let expected: Complex<Double> = (i == j) ? .one : .zero
-                let diff = matrix[i][j] - expected
-                if diff.magnitudeSquared > tolerance * tolerance {
-                    return false
-                }
-            }
-        }
-        return true
-    }
-
-    private func isIdentity4x4(_ matrix: [[Complex<Double>]], tolerance: Double = 1e-10) -> Bool {
+        let tolerance = 1e-10
         for i in 0 ..< 4 {
             for j in 0 ..< 4 {
                 let expected: Complex<Double> = (i == j) ? .one : .zero
-                let diff = matrix[i][j] - expected
-                if diff.magnitudeSquared > tolerance * tolerance {
-                    return false
+                let diff = sum[i][j] - expected
+                #expect(diff.magnitudeSquared <= tolerance * tolerance, "Σᵢ Kᵢ†Kᵢ[\(i)][\(j)] should equal identity for two-qubit depolarizing")
+            }
+        }
+    }
+
+    @Test("Kraus completeness holds for edge error probabilities")
+    func edgeCaseCompleteness() {
+        let zeroError = DepolarizingChannel(errorProbability: 0.0)
+        let maxError = DepolarizingChannel(errorProbability: 0.75)
+        let tolerance = 1e-10
+
+        var sumZero: [[Complex<Double>]] = [[.zero, .zero], [.zero, .zero]]
+        for k in zeroError.krausOperators {
+            let kDagger = MatrixUtilities.hermitianConjugate(k)
+            let product = MatrixUtilities.matrixMultiply(kDagger, k)
+            for i in 0 ..< 2 {
+                for j in 0 ..< 2 {
+                    sumZero[i][j] = sumZero[i][j] + product[i][j]
                 }
             }
         }
-        return true
-    }
-
-    private func hermitianConjugate2x2(_ m: [[Complex<Double>]]) -> [[Complex<Double>]] {
-        [[m[0][0].conjugate, m[1][0].conjugate],
-         [m[0][1].conjugate, m[1][1].conjugate]]
-    }
-
-    private func hermitianConjugate4x4(_ m: [[Complex<Double>]]) -> [[Complex<Double>]] {
-        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: 4), count: 4)
-        for i in 0 ..< 4 {
-            for j in 0 ..< 4 {
-                result[i][j] = m[j][i].conjugate
-            }
-        }
-        return result
-    }
-
-    private func multiply2x2(_ a: [[Complex<Double>]], _ b: [[Complex<Double>]]) -> [[Complex<Double>]] {
-        var result: [[Complex<Double>]] = [[.zero, .zero], [.zero, .zero]]
         for i in 0 ..< 2 {
             for j in 0 ..< 2 {
-                for k in 0 ..< 2 {
-                    result[i][j] = result[i][j] + a[i][k] * b[k][j]
-                }
+                let expected: Complex<Double> = (i == j) ? .one : .zero
+                let diff = sumZero[i][j] - expected
+                #expect(diff.magnitudeSquared <= tolerance * tolerance, "Zero error Σᵢ Kᵢ†Kᵢ[\(i)][\(j)] should equal identity")
             }
         }
-        return result
-    }
 
-    private func multiply4x4(_ a: [[Complex<Double>]], _ b: [[Complex<Double>]]) -> [[Complex<Double>]] {
-        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: 4), count: 4)
-        for i in 0 ..< 4 {
-            for j in 0 ..< 4 {
-                for k in 0 ..< 4 {
-                    result[i][j] = result[i][j] + a[i][k] * b[k][j]
+        var sumMax: [[Complex<Double>]] = [[.zero, .zero], [.zero, .zero]]
+        for k in maxError.krausOperators {
+            let kDagger = MatrixUtilities.hermitianConjugate(k)
+            let product = MatrixUtilities.matrixMultiply(kDagger, k)
+            for i in 0 ..< 2 {
+                for j in 0 ..< 2 {
+                    sumMax[i][j] = sumMax[i][j] + product[i][j]
                 }
             }
         }
-        return result
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                let expected: Complex<Double> = (i == j) ? .one : .zero
+                let diff = sumMax[i][j] - expected
+                #expect(diff.magnitudeSquared <= tolerance * tolerance, "Maximum error Σᵢ Kᵢ†Kᵢ[\(i)][\(j)] should equal identity")
+            }
+        }
     }
 }
 

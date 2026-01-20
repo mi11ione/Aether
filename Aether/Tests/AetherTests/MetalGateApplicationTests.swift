@@ -289,4 +289,87 @@ struct MetalGateApplicationTests {
         #expect(fastResult.isNormalized(), "Fast policy result should be normalized")
         #expect(balancedResult.isNormalized(), "Balanced policy result should be normalized")
     }
+
+    @Test("Metal applies controlled gate with single control")
+    func metalAppliesControlledGateSingleControl() async {
+        guard let metal = MetalGateApplication() else { return }
+
+        var amplitudes = [Complex<Double>](repeating: .zero, count: 16)
+        amplitudes[1] = .one
+        let state = QuantumState(qubits: 4, amplitudes: amplitudes)
+
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0])
+        let newState = await metal.apply(controlledX, to: [1], state: state)
+
+        #expect(newState.isNormalized(), "Controlled-X via Metal should preserve normalization")
+
+        #expect(
+            abs(newState.amplitude(of: 3).real - 1.0) < 1e-5,
+            "Target should flip to |0011⟩ when control is 1",
+        )
+        #expect(
+            abs(newState.amplitude(of: 1).magnitude) < 1e-5,
+            "Original |0001⟩ state should be zero after flip",
+        )
+    }
+
+    @Test("Metal applies controlled gate with two controls")
+    func metalAppliesControlledGateTwoControls() async {
+        guard let metal = MetalGateApplication() else { return }
+
+        var amplitudes = [Complex<Double>](repeating: .zero, count: 16)
+        amplitudes[3] = .one
+        let state = QuantumState(qubits: 4, amplitudes: amplitudes)
+
+        let controlledX = QuantumGate.controlled(gate: .pauliX, controls: [0, 1])
+        let newState = await metal.apply(controlledX, to: [2], state: state)
+
+        #expect(newState.isNormalized(), "Double-controlled-X via Metal should preserve normalization")
+
+        #expect(
+            abs(newState.amplitude(of: 7).real - 1.0) < 1e-5,
+            "Target should flip to |0111⟩ when both controls are 1",
+        )
+    }
+
+    @Test("Metal controlled gate matches CPU result")
+    func metalControlledMatchesCPU() async {
+        guard let metal = MetalGateApplication() else { return }
+
+        var amplitudes = [Complex<Double>](repeating: .zero, count: 16)
+        amplitudes[1] = .one
+        let state = QuantumState(qubits: 4, amplitudes: amplitudes)
+
+        let controlledH = QuantumGate.controlled(gate: .hadamard, controls: [0])
+        let cpuState = GateApplication.apply(controlledH, to: [1], state: state)
+        let gpuState = await metal.apply(controlledH, to: [1], state: state)
+
+        for i in 0 ..< cpuState.stateSpaceSize {
+            let cpuAmp = cpuState.amplitude(of: i)
+            let gpuAmp = gpuState.amplitude(of: i)
+
+            #expect(
+                abs(cpuAmp.real - gpuAmp.real) < 1e-5,
+                "CPU and GPU real parts should match for amplitude \(i)",
+            )
+            #expect(
+                abs(cpuAmp.imaginary - gpuAmp.imaginary) < 1e-5,
+                "CPU and GPU imaginary parts should match for amplitude \(i)",
+            )
+        }
+    }
+
+    @Test("Metal controlled rotation gate preserves normalization")
+    func metalControlledRotationPreservesNormalization() async {
+        guard let metal = MetalGateApplication() else { return }
+
+        var amplitudes = [Complex<Double>](repeating: .zero, count: 16)
+        amplitudes[3] = .one
+        let state = QuantumState(qubits: 4, amplitudes: amplitudes)
+
+        let controlledRy = QuantumGate.controlled(gate: .rotationY(.pi / 4), controls: [0, 1])
+        let newState = await metal.apply(controlledRy, to: [2], state: state)
+
+        #expect(newState.isNormalized(), "Controlled-Ry via Metal should preserve normalization")
+    }
 }
