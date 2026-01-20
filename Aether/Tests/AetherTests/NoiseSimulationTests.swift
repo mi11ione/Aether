@@ -521,6 +521,51 @@ struct TwoQubitDepolarizingTests {
 
         #expect(result.purity() < dm.purity(), "Should reduce purity")
     }
+
+    @Test("Two-qubit depolarizing preserves trace on 2-qubit system")
+    func twoQubitDepolarizingPreservesTrace() {
+        let channel = TwoQubitDepolarizingChannel(errorProbability: 0.05)
+        let dm = DensityMatrix(qubits: 2)
+        let result = channel.apply(to: dm, qubits: [0, 1])
+
+        #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be exactly preserved for 2-qubit system")
+    }
+
+    @Test("Two-qubit depolarizing preserves trace on larger system")
+    func twoQubitDepolarizingPreservesTraceLargerSystem() {
+        let channel = TwoQubitDepolarizingChannel(errorProbability: 0.05)
+        let dm = DensityMatrix(qubits: 4)
+        let result = channel.apply(to: dm, qubits: [1, 2])
+
+        #expect(abs(result.trace() - 1.0) < 1e-9, "Trace should be preserved for 4-qubit system")
+    }
+
+    @Test("Preserves trace on 2-qubit system")
+    func preservesTrace2Qubit() {
+        let channel = TwoQubitDepolarizingChannel(errorProbability: 0.1)
+        let dm = DensityMatrix(qubits: 2)
+        let result = channel.apply(to: dm, qubits: [0, 1])
+
+        #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be exactly preserved")
+    }
+
+    @Test("Preserves trace on larger system")
+    func preservesTraceLargerSystem() {
+        let channel = TwoQubitDepolarizingChannel(errorProbability: 0.1)
+        let dm = DensityMatrix(qubits: 4)
+        let result = channel.apply(to: dm, qubits: [1, 2])
+
+        #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved on 4-qubit system")
+    }
+
+    @Test("Preserves trace on 5-qubit system with non-adjacent qubits")
+    func preservesTraceNonAdjacent() {
+        let channel = TwoQubitDepolarizingChannel(errorProbability: 0.05)
+        let dm = DensityMatrix(qubits: 5)
+        let result = channel.apply(to: dm, qubits: [0, 3])
+
+        #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved for non-adjacent qubits")
+    }
 }
 
 /// Test suite for user-defined Kraus operators.
@@ -1261,6 +1306,17 @@ struct TimingAwareNoiseModelTests {
         #expect(models.count == 5, "Should have 5 measurement error models")
     }
 
+    @Test("Apply all noise handles two-qubit gate (CNOT)")
+    func applyAllNoiseTwoQubitGate() {
+        let profile = HardwareNoiseProfile.linearChain(qubits: 5)
+        let model = TimingAwareNoiseModel(profile: profile)
+        let dm = DensityMatrix(qubits: 5)
+
+        let result = model.applyAllNoise(after: .cnot, targetQubits: [0, 1], to: dm)
+
+        #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved")
+    }
+
     @Test("Apply all noise handles three-qubit gate (Toffoli)")
     func applyAllNoiseThreeQubitGate() {
         let profile = HardwareNoiseProfile.linearChain(qubits: 5)
@@ -1292,6 +1348,7 @@ struct TimingAwareNoiseModelTests {
 
         let result = model.applyTwoQubitNoise(qubits: [0, 1], to: dm)
 
+        #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved")
         #expect(result.purity() < 1.0, "Noise should reduce purity")
     }
 }

@@ -1292,4 +1292,117 @@ public enum ValidationUtilities {
         precondition(probability >= 0 && probability < 0.75,
                      "PEC error probability must be in [0, 0.75)")
     }
+
+    // MARK: - MPS Tensor Validations
+
+    /// Validate that MPS tensor element count matches bond dimensions.
+    ///
+    /// For a rank-3 tensor A[alpha,i,beta], the total element count must equal
+    /// leftBondDimension * 2 * rightBondDimension (physical dimension is always 2 for qubits).
+    ///
+    /// - Parameters:
+    ///   - elements: Flattened tensor elements
+    ///   - leftBond: Left bond dimension
+    ///   - rightBond: Right bond dimension
+    /// - Precondition: elements.count == leftBond * 2 * rightBond
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateMPSTensorElementCount(_ elements: [Complex<Double>], leftBond: Int, rightBond: Int) {
+        let expectedCount = leftBond * 2 * rightBond
+        precondition(
+            elements.count == expectedCount,
+            "MPS tensor element count must be \(leftBond) * 2 * \(rightBond) = \(expectedCount) (got \(elements.count))",
+        )
+    }
+
+    /// Validate that qubit count is within MPS limits.
+    ///
+    /// MPS supports up to 1000 qubits efficiently due to O(n * chi^2) memory scaling.
+    ///
+    /// - Parameter qubits: Number of qubits to validate
+    /// - Precondition: 1 <= qubits <= 1000
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateMPSQubitCount(_ qubits: Int) {
+        precondition(
+            qubits >= 1 && qubits <= 1000,
+            "MPS qubit count must be in range 1...1000 (got \(qubits))",
+        )
+    }
+
+    /// Validate that site index is within MPS bounds.
+    ///
+    /// - Parameters:
+    ///   - site: Site index to validate
+    ///   - qubits: Total number of qubits in the MPS
+    /// - Precondition: 0 <= site < qubits
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateMPSSiteIndex(_ site: Int, qubits: Int) {
+        precondition(
+            site >= 0 && site < qubits,
+            "MPS site index \(site) out of bounds (valid range: 0..<\(qubits))",
+        )
+    }
+
+    /// Validate that qubit count is within limit for MPS to statevector conversion.
+    ///
+    /// Converting MPS to full statevector requires O(2^n) memory, limiting practical
+    /// conversion to small systems.
+    ///
+    /// - Parameter qubits: Number of qubits to validate
+    /// - Precondition: qubits <= 20
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateMPSToStatevectorLimit(_ qubits: Int) {
+        precondition(
+            qubits <= 20,
+            "MPS to statevector conversion limited to 20 qubits (got \(qubits))",
+        )
+    }
+
+    /// Validate LAPACK operation succeeded (info == 0).
+    ///
+    /// LAPACK routines return info=0 on success, negative values for invalid arguments,
+    /// and positive values for algorithm-specific failures (e.g., convergence issues).
+    ///
+    /// - Parameters:
+    ///   - info: LAPACK return code to validate
+    ///   - operation: Description of the LAPACK operation for error message
+    /// - Precondition: info == 0
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateLAPACKSuccess(_ info: Int32, operation: String) {
+        precondition(info == 0, "LAPACK \(operation) failed with info=\(info)")
+    }
+
+    /// Validate adjacent MPS tensor bond dimensions match.
+    ///
+    /// For MPS tensor contraction, the right bond dimension of the left tensor must
+    /// equal the left bond dimension of the right tensor to ensure valid contraction.
+    ///
+    /// - Parameters:
+    ///   - leftRight: Right bond dimension of left tensor
+    ///   - rightLeft: Left bond dimension of right tensor
+    /// - Precondition: leftRight == rightLeft
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateBondDimensionMatch(_ leftRight: Int, _ rightLeft: Int) {
+        precondition(
+            leftRight == rightLeft,
+            "Adjacent tensor bond dimensions must match (got \(leftRight) and \(rightLeft))",
+        )
+    }
 }

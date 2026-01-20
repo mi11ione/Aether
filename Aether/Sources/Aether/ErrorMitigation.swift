@@ -386,7 +386,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
         let coefficients = solveLeastSquares(matrix: vandermonde, rows: n, cols: m, rhs: y)
 
-        return coefficients.isEmpty ? data[0].value : coefficients[0]
+        return coefficients[0]
     }
 
     /// Exponential extrapolation: E(λ) = a + b·exp(-c·λ).
@@ -416,17 +416,12 @@ public struct ZeroNoiseExtrapolation: Sendable {
         let b = (y0 - y2) / (expCx0 - expCx2 + 1e-15)
         let a = y0 - b * expCx0
 
-        let result = a + b
-        return result.isFinite ? result : extrapolateLinear(data: data)
+        return a + b
     }
 
     /// Richardson extrapolation for systematic error cancellation.
     @_optimize(speed)
     private func extrapolateRichardson(data: [(scale: Double, value: Double)]) -> Double {
-        guard data.count >= 2 else {
-            return data.first?.value ?? 0
-        }
-
         var values = data.map(\.value)
         var scales = data.map(\.scale)
 
@@ -763,14 +758,13 @@ public struct ProbabilisticErrorCancellation: Sendable {
         return (0, decomposition.signs[0])
     }
 
-    /// Get Pauli gate for index (0=I, 1=X, 2=Y, 3=Z).
+    /// Get Pauli gate for index (1=X, 2=Y, 3=Z).
     @_effects(readonly)
     private func pauliGateForIndex(_ index: Int) -> QuantumGate {
         switch index {
         case 1: .pauliX
         case 2: .pauliY
-        case 3: .pauliZ
-        default: .identity
+        default: .pauliZ
         }
     }
 }

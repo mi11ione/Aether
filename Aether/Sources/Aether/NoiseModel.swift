@@ -663,26 +663,18 @@ public struct TimingAwareNoiseModel: Sendable {
     /// Hardware profile with per-qubit parameters.
     public let profile: HardwareNoiseProfile
 
-    /// Base noise model for gate errors.
-    public let baseModel: NoiseModel
+    /// Idle noise configuration with per-qubit T₁/T₂.
+    public let idleConfig: IdleNoiseConfig
 
     /// Create timing-aware model from hardware profile.
     ///
     /// - Parameter profile: Hardware noise profile with per-qubit parameters
     public init(profile: HardwareNoiseProfile) {
         self.profile = profile
-
-        let idleConfig = IdleNoiseConfig(
+        idleConfig = IdleNoiseConfig(
             perQubitT1: profile.qubitParameters.map(\.t1),
             perQubitT2: profile.qubitParameters.map(\.t2),
             timings: profile.gateTimings,
-        )
-
-        baseModel = NoiseModel(
-            singleQubitNoise: nil,
-            twoQubitNoise: nil,
-            measurementError: nil,
-            idleNoiseConfig: idleConfig,
         )
     }
 
@@ -729,10 +721,6 @@ public struct TimingAwareNoiseModel: Sendable {
         gateTime: Double,
         to matrix: DensityMatrix,
     ) -> DensityMatrix {
-        guard let idleConfig = baseModel.idleNoiseConfig else {
-            return matrix
-        }
-
         var result = matrix
 
         for qubit in 0 ..< profile.qubitCount where !activeQubits.contains(qubit) {

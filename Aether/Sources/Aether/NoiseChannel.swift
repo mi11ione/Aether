@@ -697,7 +697,7 @@ public struct TwoQubitDepolarizingChannel: Sendable {
                         let colIdx = ((col >> q0) & 1) | (((col >> q1) & 1) << 1)
 
                         let kElement = kraus[rowIdx][a]
-                        let kDaggerElement = kraus[b][colIdx].conjugate
+                        let kDaggerElement = kraus[colIdx][b].conjugate
                         let rhoElement = matrix.element(row: aRow, col: bCol)
 
                         sum = sum + kElement * rhoElement * kDaggerElement

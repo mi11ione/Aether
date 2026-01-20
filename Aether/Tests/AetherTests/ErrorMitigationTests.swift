@@ -901,4 +901,143 @@ struct ErrorMitigationEdgeCasesTests {
         // swiftformat:disable:next preferKeyPath
         #expect(corrected.values.allSatisfy { $0.isFinite }, "All values should be finite")
     }
+
+    @Test("Local folding with empty circuit covers zero gate branch")
+    func localFoldingEmptyCircuit() {
+        let zne = ZeroNoiseExtrapolation(foldingStrategy: .local)
+        let circuit = QuantumCircuit(qubits: 1)
+
+        let folded = zne.fold(circuit: circuit, scaleFactor: 2.0)
+
+        #expect(folded.count == 0, "Empty circuit should remain empty after local folding")
+        #expect(folded.qubits == 1, "Should preserve qubit count")
+    }
+
+    @Test("Linear extrapolation with degenerate x values falls back to mean")
+    func linearExtrapolationDegenerateCase() async {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 1, 1],
+            method: .linear,
+        )
+        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.pauliX, to: 0)
+
+        let result = await zne.mitigate(
+            circuit: circuit,
+            observable: Observable.pauliZ(qubit: 0),
+            simulator: simulator,
+        )
+
+        #expect(result.mitigatedValue.isFinite, "Degenerate linear should return mean value")
+        #expect(abs(result.mitigatedValue - -1.0) < 0.1, "Should approximate -1 for X|0⟩")
+    }
+
+    @Test("Exponential extrapolation with insufficient data falls back to linear")
+    func exponentialInsufficientData() async {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 2],
+            method: .exponential,
+        )
+        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.hadamard, to: 0)
+
+        let result = await zne.mitigate(
+            circuit: circuit,
+            observable: Observable.pauliZ(qubit: 0),
+            simulator: simulator,
+        )
+
+        #expect(result.mitigatedValue.isFinite, "Should fall back to linear with < 3 data points")
+        #expect(result.noisyValues.count == 2, "Should have only 2 scale factors")
+    }
+
+    @Test("Exponential extrapolation with non-monotonic data triggers fallback")
+    func exponentialNonMonotonicData() async {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 2, 3],
+            method: .exponential,
+        )
+        let noise = NoiseModel.depolarizing(singleQubitError: 0.5, twoQubitError: 0.5)
+        let simulator = DensityMatrixSimulator(noiseModel: noise)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.hadamard, to: 0)
+
+        let result = await zne.mitigate(
+            circuit: circuit,
+            observable: Observable.pauliZ(qubit: 0),
+            simulator: simulator,
+        )
+
+        #expect(result.mitigatedValue.isFinite, "Should handle invalid exponential fit with fallback")
+    }
+
+    @Test("Exponential extrapolation with non-finite intermediate triggers linear fallback")
+    func exponentialNonFiniteFallback() async {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 1.001, 1.002],
+            method: .exponential,
+        )
+        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.pauliX, to: 0)
+
+        let result = await zne.mitigate(
+            circuit: circuit,
+            observable: Observable.pauliZ(qubit: 0),
+            simulator: simulator,
+        )
+
+        #expect(result.mitigatedValue.isFinite,
+                "Should fall back to linear when exponential produces non-finite result")
+    }
+
+    @Test("Polynomial extrapolation with zero Vandermonde determinant handles empty coefficients")
+    func polynomialDegenerateVandermonde() async {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 1, 1],
+            method: .polynomial(degree: 2),
+        )
+        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.pauliX, to: 0)
+
+        let result = await zne.mitigate(
+            circuit: circuit,
+            observable: Observable.pauliZ(qubit: 0),
+            simulator: simulator,
+        )
+
+        #expect(result.mitigatedValue.isFinite,
+                "Degenerate Vandermonde should return first data value")
+    }
+
+    @Test("ZNEResult improvement factor returns 0 when scale 1.0 not found")
+    func improvementFactorMissingScaleOne() {
+        let result = ZNEResult(
+            mitigatedValue: 0.5,
+            noisyValues: [(scale: 2.0, value: 0.6), (scale: 3.0, value: 0.7)],
+            method: .richardson,
+            scaleFactors: [2, 3],
+        )
+
+        #expect(result.improvementFactor == 0,
+                "Improvement factor should be 0 when scale 1.0 is missing")
+    }
+
+    @Test("ZNEResult improvement factor returns 0 when noisy value is zero")
+    func improvementFactorZeroNoisyValue() {
+        let result = ZNEResult(
+            mitigatedValue: 0.5,
+            noisyValues: [(scale: 1.0, value: 0.0), (scale: 2.0, value: 0.1)],
+            method: .richardson,
+            scaleFactors: [1, 2],
+        )
+
+        #expect(result.improvementFactor == 0,
+                "Improvement factor should be 0 when noisy value at scale 1.0 is zero")
+    }
 }
