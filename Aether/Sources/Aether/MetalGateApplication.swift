@@ -261,6 +261,9 @@ public actor MetalGateApplication {
 
         case let .controlled(innerGate, controls):
             applyControlledGate(gate: innerGate, controls: controls, targetQubits: qubits, state: state)
+
+        case .customUnitary:
+            GateApplication.applyMultiQubitGate(gate: gate, qubits: qubits, state: state)
         }
     }
 

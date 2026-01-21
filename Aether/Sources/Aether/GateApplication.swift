@@ -83,6 +83,9 @@ public enum GateApplication {
 
         case let .controlled(innerGate, controls):
             return applyControlledGate(gate: innerGate, controls: controls, targetQubits: qubits, state: state)
+
+        case .customUnitary:
+            return applyMultiQubitGate(gate: gate, qubits: qubits, state: state)
         }
     }
 
@@ -365,6 +368,59 @@ public enum GateApplication {
                     }
                 } else {
                     buffer[i] = buffer[i] + state.amplitudes[i]
+                }
+            }
+            count = stateSize
+        }
+
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+    }
+
+    // MARK: - Multi-Qubit Gate Application
+
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applyMultiQubitGate(
+        gate: QuantumGate,
+        qubits: [Int],
+        state: QuantumState,
+    ) -> QuantumState {
+        let gateMatrix = gate.matrix()
+        let gateSize = gateMatrix.count
+        let stateSize = state.stateSpaceSize
+
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                buffer[i] = .zero
+            }
+
+            for i in 0 ..< stateSize {
+                var rowBits = 0
+                for (idx, qubit) in qubits.enumerated() {
+                    if (i & BitUtilities.bitMask(qubit: qubit)) != 0 {
+                        rowBits |= (1 << idx)
+                    }
+                }
+
+                for col in 0 ..< gateSize {
+                    let matrixElement = gateMatrix[rowBits][col]
+                    if matrixElement.real == 0, matrixElement.imaginary == 0 {
+                        continue
+                    }
+
+                    var sourceIndex = i
+                    for (idx, qubit) in qubits.enumerated() {
+                        let colBit = (col >> idx) & 1
+                        let mask = BitUtilities.bitMask(qubit: qubit)
+                        if colBit == 1 {
+                            sourceIndex |= mask
+                        } else {
+                            sourceIndex &= ~mask
+                        }
+                    }
+                    buffer[i] = buffer[i] + matrixElement * state.amplitudes[sourceIndex]
                 }
             }
             count = stateSize

@@ -1552,3 +1552,128 @@ struct ControlledGateMatrixTests {
                 "Controlled Rz times its inverse should equal identity")
     }
 }
+
+/// Test suite for customUnitary multi-qubit gate case.
+/// Validates qubitsRequired calculation, inverse via Hermitian conjugate,
+/// description format, and matrix retrieval for arbitrary unitary matrices.
+@Suite("CustomUnitary Gate")
+struct CustomUnitaryGateTests {
+    @Test("customUnitary qubitsRequired returns 1 for 2x2 matrix")
+    func customUnitaryQubitsRequired1() {
+        let matrix: [[Complex<Double>]] = [
+            [.one, .zero],
+            [.zero, .one],
+        ]
+        let gate = QuantumGate.customUnitary(matrix: matrix)
+
+        #expect(gate.qubitsRequired == 1, "2x2 customUnitary should require 1 qubit")
+    }
+
+    @Test("customUnitary qubitsRequired returns 2 for 4x4 matrix")
+    func customUnitaryQubitsRequired2() {
+        let matrix: [[Complex<Double>]] = [
+            [.one, .zero, .zero, .zero],
+            [.zero, .one, .zero, .zero],
+            [.zero, .zero, .one, .zero],
+            [.zero, .zero, .zero, .one],
+        ]
+        let gate = QuantumGate.customUnitary(matrix: matrix)
+
+        #expect(gate.qubitsRequired == 2, "4x4 customUnitary should require 2 qubits")
+    }
+
+    @Test("customUnitary qubitsRequired returns 3 for 8x8 matrix")
+    func customUnitaryQubitsRequired3() {
+        var matrix: [[Complex<Double>]] = Array(
+            repeating: Array(repeating: Complex<Double>.zero, count: 8),
+            count: 8,
+        )
+        for i in 0 ..< 8 {
+            matrix[i][i] = .one
+        }
+        let gate = QuantumGate.customUnitary(matrix: matrix)
+
+        #expect(gate.qubitsRequired == 3, "8x8 customUnitary should require 3 qubits")
+    }
+
+    @Test("customUnitary inverse returns Hermitian conjugate")
+    func customUnitaryInverse() {
+        let angle = Double.pi / 6
+        let c = cos(angle)
+        let s = sin(angle)
+        let matrix: [[Complex<Double>]] = [
+            [Complex(c, 0), Complex(-s, 0)],
+            [Complex(s, 0), Complex(c, 0)],
+        ]
+        let gate = QuantumGate.customUnitary(matrix: matrix)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "customUnitary times its inverse should equal identity")
+    }
+
+    @Test("customUnitary inverse for complex matrix")
+    func customUnitaryInverseComplex() {
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        let matrix: [[Complex<Double>]] = [
+            [Complex(invSqrt2, 0), Complex(invSqrt2, 0)],
+            [Complex(invSqrt2, 0), Complex(-invSqrt2, 0)],
+        ]
+        let gate = QuantumGate.customUnitary(matrix: matrix)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "customUnitary Hadamard times its inverse should equal identity")
+    }
+
+    @Test("customUnitary description format for 2x2")
+    func customUnitaryDescription2x2() {
+        let matrix: [[Complex<Double>]] = [
+            [.one, .zero],
+            [.zero, .one],
+        ]
+        let gate = QuantumGate.customUnitary(matrix: matrix)
+
+        #expect(gate.description == "CustomU(2x2)", "2x2 customUnitary description should be CustomU(2x2)")
+    }
+
+    @Test("customUnitary description format for 4x4")
+    func customUnitaryDescription4x4() {
+        let matrix: [[Complex<Double>]] = [
+            [.one, .zero, .zero, .zero],
+            [.zero, .one, .zero, .zero],
+            [.zero, .zero, .one, .zero],
+            [.zero, .zero, .zero, .one],
+        ]
+        let gate = QuantumGate.customUnitary(matrix: matrix)
+
+        #expect(gate.description == "CustomU(4x4)", "4x4 customUnitary description should be CustomU(4x4)")
+    }
+
+    @Test("customUnitary description format for 8x8")
+    func customUnitaryDescription8x8() {
+        var matrix: [[Complex<Double>]] = Array(
+            repeating: Array(repeating: Complex<Double>.zero, count: 8),
+            count: 8,
+        )
+        for i in 0 ..< 8 {
+            matrix[i][i] = .one
+        }
+        let gate = QuantumGate.customUnitary(matrix: matrix)
+
+        #expect(gate.description == "CustomU(8x8)", "8x8 customUnitary description should be CustomU(8x8)")
+    }
+
+    @Test("customUnitary matrix returns provided matrix")
+    func customUnitaryMatrixReturns() {
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        let matrix: [[Complex<Double>]] = [
+            [Complex(invSqrt2, 0), Complex(invSqrt2, 0)],
+            [Complex(invSqrt2, 0), Complex(-invSqrt2, 0)],
+        ]
+        let gate = QuantumGate.customUnitary(matrix: matrix)
+        let retrieved = gate.matrix()
+
+        #expect(QuantumGate.matricesEqual(matrix, retrieved), "customUnitary should return its provided matrix")
+    }
+}

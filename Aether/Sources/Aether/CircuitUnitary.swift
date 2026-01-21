@@ -110,6 +110,9 @@ public enum CircuitUnitary {
 
         case .controlled:
             return expandControlledGate(gate: gate, qubits: qubits, dimension: dimension)
+
+        case .customUnitary:
+            return expandMultiQubitGate(gate: gate, qubits: qubits, dimension: dimension)
         }
     }
 
@@ -240,6 +243,51 @@ public enum CircuitUnitary {
         for row in 0 ..< dimension {
             for col in 0 ..< dimension {
                 fullMatrix[row][col] = gateMatrix[row][col]
+            }
+        }
+
+        return fullMatrix
+    }
+
+    @_optimize(speed)
+    @_eagerMove
+    private static func expandMultiQubitGate(
+        gate: QuantumGate,
+        qubits: [Int],
+        dimension: Int,
+    ) -> [[Complex<Double>]] {
+        let gateMatrix = gate.matrix()
+        let gateSize = gateMatrix.count
+        var fullMatrix: [[Complex<Double>]] = Array(
+            repeating: Array(repeating: Complex<Double>.zero, count: dimension),
+            count: dimension,
+        )
+
+        for row in 0 ..< dimension {
+            var gateRow = 0
+            for (idx, qubit) in qubits.enumerated() {
+                if (row & (1 << qubit)) != 0 {
+                    gateRow |= (1 << idx)
+                }
+            }
+
+            for gateCol in 0 ..< gateSize {
+                let matrixElement = gateMatrix[gateRow][gateCol]
+                if matrixElement.real == 0, matrixElement.imaginary == 0 {
+                    continue
+                }
+
+                var col = row
+                for (idx, qubit) in qubits.enumerated() {
+                    let colBit = (gateCol >> idx) & 1
+                    let mask = 1 << qubit
+                    if colBit == 1 {
+                        col |= mask
+                    } else {
+                        col &= ~mask
+                    }
+                }
+                fullMatrix[row][col] = matrixElement
             }
         }
 

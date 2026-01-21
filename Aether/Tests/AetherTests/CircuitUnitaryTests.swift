@@ -466,4 +466,78 @@ struct CircuitUnitaryTests {
             "Element [2][2] should be cos(pi/4) when control is 1",
         )
     }
+
+    @Test("customUnitary gate in circuit produces correct unitary")
+    func customUnitaryInCircuit() {
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        let hadamardMatrix: [[Complex<Double>]] = [
+            [Complex(invSqrt2, 0), Complex(invSqrt2, 0)],
+            [Complex(invSqrt2, 0), Complex(-invSqrt2, 0)],
+        ]
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.customUnitary(matrix: hadamardMatrix), to: 0)
+        let unitary = CircuitUnitary.unitary(for: circuit)
+
+        #expect(abs(unitary[0][0].real - invSqrt2) < 1e-10, "customUnitary [0][0] should match Hadamard")
+        #expect(abs(unitary[0][1].real - invSqrt2) < 1e-10, "customUnitary [0][1] should match Hadamard")
+        #expect(abs(unitary[1][0].real - invSqrt2) < 1e-10, "customUnitary [1][0] should match Hadamard")
+        #expect(abs(unitary[1][1].real + invSqrt2) < 1e-10, "customUnitary [1][1] should match Hadamard")
+    }
+
+    @Test("Two-qubit customUnitary gate in circuit produces correct unitary")
+    func twoQubitCustomUnitaryInCircuit() {
+        let cnotMatrix: [[Complex<Double>]] = [
+            [.one, .zero, .zero, .zero],
+            [.zero, .one, .zero, .zero],
+            [.zero, .zero, .zero, .one],
+            [.zero, .zero, .one, .zero],
+        ]
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.customUnitary(matrix: cnotMatrix), to: [0, 1])
+        let unitary = CircuitUnitary.unitary(for: circuit)
+
+        #expect(unitary.count == 4, "Two-qubit customUnitary should produce 4x4 unitary")
+        #expect(abs(unitary[0][0].real - 1.0) < 1e-10, "customUnitary CNOT [0][0] should be 1")
+        #expect(abs(unitary[1][1].real - 1.0) < 1e-10, "customUnitary CNOT [1][1] should be 1")
+        #expect(abs(unitary[2][3].real - 1.0) < 1e-10, "customUnitary CNOT [2][3] should be 1")
+        #expect(abs(unitary[3][2].real - 1.0) < 1e-10, "customUnitary CNOT [3][2] should be 1")
+    }
+
+    @Test("Three-qubit customUnitary gate in circuit produces correct unitary")
+    func threeQubitCustomUnitaryInCircuit() {
+        var toffoliMatrix: [[Complex<Double>]] = Array(
+            repeating: Array(repeating: Complex<Double>.zero, count: 8),
+            count: 8,
+        )
+        for i in 0 ..< 6 {
+            toffoliMatrix[i][i] = .one
+        }
+        toffoliMatrix[6][7] = .one
+        toffoliMatrix[7][6] = .one
+
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.append(.customUnitary(matrix: toffoliMatrix), to: [0, 1, 2])
+        let unitary = CircuitUnitary.unitary(for: circuit)
+
+        #expect(unitary.count == 8, "Three-qubit customUnitary should produce 8x8 unitary")
+        #expect(abs(unitary[0][0].real - 1.0) < 1e-10, "customUnitary Toffoli [0][0] should be 1")
+        #expect(abs(unitary[6][7].real - 1.0) < 1e-10, "customUnitary Toffoli [6][7] should be 1")
+        #expect(abs(unitary[7][6].real - 1.0) < 1e-10, "customUnitary Toffoli [7][6] should be 1")
+    }
+
+    @Test("customUnitary gate in multi-qubit system expands correctly")
+    func customUnitaryExpandsInLargerSystem() {
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        let hadamardMatrix: [[Complex<Double>]] = [
+            [Complex(invSqrt2, 0), Complex(invSqrt2, 0)],
+            [Complex(invSqrt2, 0), Complex(-invSqrt2, 0)],
+        ]
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.customUnitary(matrix: hadamardMatrix), to: 0)
+        let unitary = CircuitUnitary.unitary(for: circuit)
+
+        #expect(unitary.count == 4, "customUnitary on qubit 0 in 2-qubit system should produce 4x4 unitary")
+        #expect(abs(unitary[0][0].real - invSqrt2) < 1e-10, "customUnitary expansion [0][0] should match")
+        #expect(abs(unitary[0][1].real - invSqrt2) < 1e-10, "customUnitary expansion [0][1] should match")
+    }
 }

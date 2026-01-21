@@ -75,6 +75,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
 
     case toffoli
     indirect case controlled(gate: QuantumGate, controls: [Int])
+    case customUnitary(matrix: [[Complex<Double>]])
 
     // MARK: - Convenience Constructors
 
@@ -329,12 +330,24 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         switch self {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
              .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
-             .u1, .u2, .u3, .sx, .sy, .customSingleQubit: 1
+             .u1, .u2, .u3, .sx, .sy, .customSingleQubit:
+            return 1
         case .cnot, .cz, .cy, .ch, .controlledPhase,
              .controlledRotationX, .controlledRotationY, .controlledRotationZ,
-             .swap, .sqrtSwap, .customTwoQubit: 2
-        case .toffoli: 3
-        case let .controlled(gate, controls): gate.qubitsRequired + controls.count
+             .swap, .sqrtSwap, .customTwoQubit:
+            return 2
+        case .toffoli:
+            return 3
+        case let .controlled(gate, controls):
+            return gate.qubitsRequired + controls.count
+        case let .customUnitary(matrix):
+            var qubits = 0
+            var dim = matrix.count
+            while dim > 1 {
+                qubits += 1
+                dim >>= 1
+            }
+            return qubits
         }
     }
 
@@ -564,6 +577,8 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
             return .customTwoQubit(matrix: MatrixUtilities.hermitianConjugate(matrix))
         case let .controlled(gate, controls):
             return .controlled(gate: gate.inverse, controls: controls)
+        case let .customUnitary(matrix):
+            return .customUnitary(matrix: MatrixUtilities.hermitianConjugate(matrix))
         }
     }
 
@@ -657,6 +672,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         case let .customTwoQubit(matrix): return matrix
         case let .controlled(gate, controls):
             return controlledMatrix(gate: gate, controlCount: controls.count)
+        case let .customUnitary(matrix): return matrix
         }
     }
 
@@ -989,6 +1005,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         case let .controlledRotationZ(theta): "CRz(\(theta))"
         case .customTwoQubit: "CustomU(4x4)"
         case let .controlled(gate, controls): "C^\(controls.count)(\(gate))"
+        case let .customUnitary(matrix): "CustomU(\(matrix.count)x\(matrix.count))"
         }
     }
 }
