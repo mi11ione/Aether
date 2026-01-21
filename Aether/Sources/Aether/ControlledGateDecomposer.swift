@@ -298,10 +298,6 @@ public enum ControlledGateDecomposer {
         ValidationUtilities.validateNonNegativeInt(power, name: "power")
         ValidationUtilities.validateNonEmpty(targetQubits, name: "targetQubits")
 
-        if power == 0 {
-            return []
-        }
-
         let baseMatrix = gate.matrix()
         let poweredMatrix = matrixPower(baseMatrix, exponent: 1 << power)
 

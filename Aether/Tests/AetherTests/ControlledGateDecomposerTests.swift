@@ -441,12 +441,12 @@ struct ToffoliLadderDecompositionTests {
 }
 
 /// Test suite for controlledPower() phase estimation operations.
-/// Validates C-U^(2^k) construction including power 0 (identity),
+/// Validates C-U^(2^k) construction including power 0 (U^1),
 /// power 1 (U^2), power 2 (U^4), and matrix correctness verification.
 @Suite("Controlled Power Operations")
 struct ControlledPowerOperationsTests {
-    @Test("Power 0 returns empty sequence")
-    func power0ReturnsEmptySequence() {
+    @Test("Power 0 returns controlled U (U^1)")
+    func power0ReturnsControlledU() {
         let result = ControlledGateDecomposer.controlledPower(
             of: .pauliX,
             power: 0,
@@ -454,7 +454,7 @@ struct ControlledPowerOperationsTests {
             targetQubits: [1],
         )
 
-        #expect(result.isEmpty, "Power 0 should return empty sequence (identity)")
+        #expect(!result.isEmpty, "Power 0 should return controlled-U (U^(2^0) = U^1 = U)")
     }
 
     @Test("Power 1 returns controlled U squared")
