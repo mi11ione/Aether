@@ -779,9 +779,7 @@ public enum CircuitOptimizer {
             let normX = x.reduce(0.0) { $0 + $1.magnitudeSquared }.squareRoot()
             if normX < 1e-15 { continue }
 
-            let alpha = x[0].magnitude > 1e-15
-                ? -normX * Complex(phase: x[0].phase)
-                : Complex(-normX, 0)
+            let alpha = -normX * Complex(phase: x[0].phase)
 
             x[0] = x[0] - alpha
             let normV = x.reduce(0.0) { $0 + $1.magnitudeSquared }.squareRoot()

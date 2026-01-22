@@ -210,7 +210,7 @@ public enum GroverOracle: Sendable {
 /// print(result.isTarget)  // Whether it matches target
 /// ```
 ///
-/// - SeeAlso: ``QuantumState/groverResult(oracle:iterations:)``
+/// - SeeAlso: ``QuantumState/groverResult(oracle:iterations:searchQubits:)``
 @frozen
 public struct GroverResult: Sendable, CustomStringConvertible {
     /// The measured basis state index
