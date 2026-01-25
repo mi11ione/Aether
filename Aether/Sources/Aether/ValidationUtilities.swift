@@ -1405,4 +1405,19 @@ public enum ValidationUtilities {
             "Adjacent tensor bond dimensions must match (got \(leftRight) and \(rightLeft))",
         )
     }
+
+    /// Validate that multiplexor unitaries array is not empty.
+    ///
+    /// Multiplexor gates require at least one unitary matrix in the unitaries array
+    /// to determine dimensions and construct the block-diagonal matrix.
+    ///
+    /// - Parameter unitaries: Array of unitary matrices for multiplexor
+    /// - Precondition: !unitaries.isEmpty
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateMultiplexorNotEmpty(_ unitaries: [[[Complex<Double>]]]) {
+        precondition(!unitaries.isEmpty, "Multiplexor unitaries array must not be empty")
+    }
 }

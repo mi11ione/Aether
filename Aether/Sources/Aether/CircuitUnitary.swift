@@ -102,16 +102,16 @@ public enum CircuitUnitary {
             let targetQubit: Int = qubits[0]
             return expandSingleQubitGate(gate: gate, targetQubit: targetQubit, dimension: dimension)
 
-        case .cnot, .cz, .cy, .ch, .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ, .swap, .sqrtSwap, .customTwoQubit:
+        case .cnot, .cz, .cy, .ch, .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ, .swap, .sqrtSwap, .iswap, .sqrtISwap, .fswap, .givens, .xx, .customTwoQubit:
             return expandTwoQubitGate(gate: gate, control: qubits[0], target: qubits[1], dimension: dimension)
 
-        case .toffoli:
+        case .toffoli, .fredkin:
             return expandToffoliGate(control1: qubits[0], control2: qubits[1], target: qubits[2], dimension: dimension)
 
         case .controlled:
             return expandControlledGate(gate: gate, qubits: qubits, dimension: dimension)
 
-        case .customUnitary:
+        case .customUnitary, .diagonal, .multiplexor:
             return expandMultiQubitGate(gate: gate, qubits: qubits, dimension: dimension)
         }
     }

@@ -1,6 +1,8 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
+import Foundation
+
 /// CPU-based gate execution using optimized matrix-vector multiplication.
 ///
 /// Transforms quantum states by applying gate matrices without computing full 2^n * 2^n tensor products.
@@ -75,17 +77,29 @@ public enum GateApplication {
         case .cy, .ch, .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ, .customTwoQubit:
             return applyTwoQubitGate(gate: gate, control: qubits[0], target: qubits[1], state: state)
 
-        case .swap, .sqrtSwap:
+        case .swap, .sqrtSwap, .sqrtISwap, .givens, .xx:
             return applyTwoQubitGate(gate: gate, control: qubits[0], target: qubits[1], state: state)
+
+        case .iswap:
+            return applyISwap(qubit1: qubits[0], qubit2: qubits[1], state: state)
+
+        case .fswap:
+            return applyFSwap(qubit1: qubits[0], qubit2: qubits[1], state: state)
 
         case .toffoli:
             return applyToffoli(control1: qubits[0], control2: qubits[1], target: qubits[2], state: state)
 
+        case .fredkin:
+            return applyFredkin(control: qubits[0], target1: qubits[1], target2: qubits[2], state: state)
+
         case let .controlled(innerGate, controls):
             return applyControlledGate(gate: innerGate, controls: controls, targetQubits: qubits, state: state)
 
-        case .customUnitary:
+        case .customUnitary, .multiplexor:
             return applyMultiQubitGate(gate: gate, qubits: qubits, state: state)
+
+        case let .diagonal(phases):
+            return applyDiagonal(phases: phases, qubits: qubits, state: state)
         }
     }
 
@@ -310,6 +324,172 @@ public enum GateApplication {
                 } else {
                     buffer[i] = state.amplitudes[i]
                 }
+            }
+            count = stateSize
+        }
+
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+    }
+
+    // MARK: - Fredkin Gate Application
+
+    /// Apply Fredkin (CSWAP) via conditional bit swap
+    ///
+    /// Swaps target1 and target2 qubits when control is |1⟩, does nothing when |0⟩. Implemented as
+    /// conditional swap without matrix multiplication, avoiding 8x8 matrix operations. For each
+    /// amplitude where control bit is set and target bits differ, swaps to the index with target
+    /// bits exchanged.
+    ///
+    /// - Complexity: O(2^n) - one pass through state
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applyFredkin(
+        control: Int,
+        target1: Int,
+        target2: Int,
+        state: QuantumState,
+    ) -> QuantumState {
+        let stateSize = state.stateSpaceSize
+        let controlMask = BitUtilities.bitMask(qubit: control)
+        let target1Mask = BitUtilities.bitMask(qubit: target1)
+        let target2Mask = BitUtilities.bitMask(qubit: target2)
+
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                if (i & controlMask) != 0 {
+                    let bit1 = (i & target1Mask) != 0
+                    let bit2 = (i & target2Mask) != 0
+                    if bit1 != bit2 {
+                        let swapped = i ^ target1Mask ^ target2Mask
+                        buffer[swapped] = state.amplitudes[i]
+                    } else {
+                        buffer[i] = state.amplitudes[i]
+                    }
+                } else {
+                    buffer[i] = state.amplitudes[i]
+                }
+            }
+            count = stateSize
+        }
+
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+    }
+
+    // MARK: - iSWAP Gate Application
+
+    /// Apply iSWAP via conditional swap with i phase
+    ///
+    /// Swaps |01⟩ and |10⟩ states with multiplication by imaginary unit i. States |00⟩ and |11⟩
+    /// remain unchanged. Implemented as conditional swap with phase, avoiding 4x4 matrix multiplication.
+    /// For pairs where exactly one qubit is set, swaps amplitudes and multiplies by i.
+    ///
+    /// - Complexity: O(2^n) - one pass through state
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applyISwap(
+        qubit1: Int,
+        qubit2: Int,
+        state: QuantumState,
+    ) -> QuantumState {
+        let stateSize = state.stateSpaceSize
+        let mask1 = BitUtilities.bitMask(qubit: qubit1)
+        let mask2 = BitUtilities.bitMask(qubit: qubit2)
+        let bothMask = mask1 | mask2
+        let iPhase = Complex<Double>(0, 1)
+
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                let bits = i & bothMask
+                if bits == mask1 {
+                    let swapped = (i ^ mask1) | mask2
+                    buffer[swapped] = state.amplitudes[i] * iPhase
+                } else if bits == mask2 {
+                    let swapped = (i ^ mask2) | mask1
+                    buffer[swapped] = state.amplitudes[i] * iPhase
+                } else {
+                    buffer[i] = state.amplitudes[i]
+                }
+            }
+            count = stateSize
+        }
+
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+    }
+
+    // MARK: - FSWAP Gate Application
+
+    /// Apply FSWAP via swap with conditional negation
+    ///
+    /// Swaps |01⟩ and |10⟩ states like regular SWAP, but negates |11⟩ state amplitude. States |00⟩
+    /// remain unchanged. Implements fermionic swap operation without 4x4 matrix multiplication.
+    /// Particularly useful for fermionic simulations where antisymmetry must be preserved.
+    ///
+    /// - Complexity: O(2^n) - one pass through state
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applyFSwap(
+        qubit1: Int,
+        qubit2: Int,
+        state: QuantumState,
+    ) -> QuantumState {
+        let stateSize = state.stateSpaceSize
+        let mask1 = BitUtilities.bitMask(qubit: qubit1)
+        let mask2 = BitUtilities.bitMask(qubit: qubit2)
+        let bothMask = mask1 | mask2
+
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                let bits = i & bothMask
+                if bits == mask1 {
+                    let swapped = (i ^ mask1) | mask2
+                    buffer[swapped] = state.amplitudes[i]
+                } else if bits == mask2 {
+                    let swapped = (i ^ mask2) | mask1
+                    buffer[swapped] = state.amplitudes[i]
+                } else if bits == bothMask {
+                    buffer[i] = -state.amplitudes[i]
+                } else {
+                    buffer[i] = state.amplitudes[i]
+                }
+            }
+            count = stateSize
+        }
+
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+    }
+
+    // MARK: - Diagonal Gate Application
+
+    /// Apply diagonal gate via phase multiplication
+    ///
+    /// Multiplies each amplitude by e^{i*phase[index]} where index is computed from the specified
+    /// qubit bits. Diagonal gates preserve computational basis states, only modifying phases.
+    /// Avoids full matrix multiplication since diagonal matrices have trivial action on basis states.
+    ///
+    /// - Complexity: O(2^n) - one pass through state
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applyDiagonal(
+        phases: [Double],
+        qubits: [Int],
+        state: QuantumState,
+    ) -> QuantumState {
+        let stateSize = state.stateSpaceSize
+
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                let phaseIndex = BitUtilities.getBits(i, qubits: qubits)
+                let phase = phases[phaseIndex]
+                let phaseFactor = Complex<Double>(Foundation.cos(phase), Foundation.sin(phase))
+                buffer[i] = state.amplitudes[i] * phaseFactor
             }
             count = stateSize
         }

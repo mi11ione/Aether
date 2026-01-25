@@ -253,16 +253,16 @@ public actor MetalGateApplication {
         case .cnot:
             applyCNOT(control: qubits[0], target: qubits[1], state: state)
 
-        case .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ, .swap, .sqrtSwap, .cz, .cy, .ch, .customTwoQubit:
+        case .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ, .swap, .sqrtSwap, .iswap, .sqrtISwap, .fswap, .givens, .xx, .cz, .cy, .ch, .customTwoQubit:
             applyTwoQubitGate(gate: gate, control: qubits[0], target: qubits[1], state: state)
 
-        case .toffoli:
+        case .toffoli, .fredkin:
             applyToffoli(control1: qubits[0], control2: qubits[1], target: qubits[2], state: state)
 
         case let .controlled(innerGate, controls):
             applyControlledGate(gate: innerGate, controls: controls, targetQubits: qubits, state: state)
 
-        case .customUnitary:
+        case .customUnitary, .diagonal, .multiplexor:
             GateApplication.applyMultiQubitGate(gate: gate, qubits: qubits, state: state)
         }
     }

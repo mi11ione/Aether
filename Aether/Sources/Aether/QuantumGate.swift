@@ -4,7 +4,7 @@
 import Accelerate
 
 /// Precomputed 1/√2 for Hadamard and related gates
-private let invSqrt2: Double = 1.0 / 2.0.squareRoot()
+@usableFromInline let invSqrt2: Double = 1.0 / 2.0.squareRoot()
 
 /// Quantum gate as unitary transformation U where U†U = I, ensuring probability conservation and reversibility.
 ///
@@ -36,7 +36,7 @@ private let invSqrt2: Double = 1.0 / 2.0.squareRoot()
 /// - SeeAlso: ``GateApplication`` for CPU execution
 /// - SeeAlso: ``Parameter`` for symbolic parameters
 /// - SeeAlso: ``ParameterValue`` for concrete/symbolic values
-public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable {
+@frozen public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable {
     // MARK: - Single-Qubit Gates
 
     case identity
@@ -69,12 +69,20 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     case controlledRotationZ(ParameterValue)
     case swap
     case sqrtSwap
+    case iswap
+    case sqrtISwap
+    case fswap
+    case givens(ParameterValue)
+    case xx(ParameterValue)
     case customTwoQubit(matrix: [[Complex<Double>]])
 
     // MARK: - Multi-Qubit Gates
 
     case toffoli
+    case fredkin
     indirect case controlled(gate: QuantumGate, controls: [Int])
+    case diagonal(phases: [Double])
+    case multiplexor(unitaries: [[[Complex<Double>]]])
     case customUnitary(matrix: [[Complex<Double>]])
 
     // MARK: - Convenience Constructors
@@ -242,6 +250,50 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         .controlledRotationZ(.value(theta))
     }
 
+    /// Create Givens rotation gate with concrete angle value
+    ///
+    /// Convenience method for creating Givens rotation gates with concrete (non-symbolic) angles.
+    /// The Givens rotation G(theta) performs a rotation in the |01> - |10> subspace, commonly used
+    /// in quantum chemistry for fermionic simulations and variational algorithms.
+    /// For symbolic parameters, pass a ``Parameter`` directly.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let gate = QuantumGate.givens(.pi / 4)
+    /// ```
+    ///
+    /// - Parameter theta: Rotation angle in radians
+    /// - Returns: Givens rotation gate with concrete angle
+    /// - Complexity: O(1)
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
+    @inlinable
+    public static func givens(_ theta: Double) -> QuantumGate {
+        .givens(.value(theta))
+    }
+
+    /// Create XX (Molmer-Sorensen) gate with concrete angle value
+    ///
+    /// Convenience method for creating XX interaction gates with concrete (non-symbolic) angles.
+    /// The XX gate implements exp(-i * theta * X tensor X), native to trapped-ion quantum computers
+    /// and used in the Molmer-Sorensen entangling scheme.
+    /// For symbolic parameters, pass a ``Parameter`` directly.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let gate = QuantumGate.xx(.pi / 4)
+    /// ```
+    ///
+    /// - Parameter theta: Interaction angle in radians
+    /// - Returns: XX gate with concrete angle
+    /// - Complexity: O(1)
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
+    @inlinable
+    public static func xx(_ theta: Double) -> QuantumGate {
+        .xx(.value(theta))
+    }
+
     /// Create U1 gate with concrete lambda parameter
     ///
     /// Convenience method for creating U1 (phase) gates with concrete angle.
@@ -334,10 +386,35 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
             return 1
         case .cnot, .cz, .cy, .ch, .controlledPhase,
              .controlledRotationX, .controlledRotationY, .controlledRotationZ,
-             .swap, .sqrtSwap, .customTwoQubit:
+             .swap, .sqrtSwap, .iswap, .sqrtISwap, .fswap,
+             .givens, .xx, .customTwoQubit:
             return 2
-        case .toffoli:
+        case .toffoli, .fredkin:
             return 3
+        case let .diagonal(phases):
+            var qubits = 0
+            var dim = phases.count
+            while dim > 1 {
+                qubits += 1
+                dim >>= 1
+            }
+            return qubits
+        case let .multiplexor(unitaries):
+            ValidationUtilities.validateMultiplexorNotEmpty(unitaries)
+            let unitaryDim = unitaries[0].count
+            var targetQubits = 0
+            var dim = unitaryDim
+            while dim > 1 {
+                targetQubits += 1
+                dim >>= 1
+            }
+            var controlQubits = 0
+            var count = unitaries.count
+            while count > 1 {
+                controlQubits += 1
+                count >>= 1
+            }
+            return targetQubits + controlQubits
         case let .controlled(gate, controls):
             return gate.qubitsRequired + controls.count
         case let .customUnitary(matrix):
@@ -396,7 +473,9 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
              let .controlledPhase(angle),
              let .controlledRotationX(angle),
              let .controlledRotationY(angle),
-             let .controlledRotationZ(angle):
+             let .controlledRotationZ(angle),
+             let .givens(angle),
+             let .xx(angle):
             if let p = angle.parameter { return [p] }
             return []
 
@@ -473,6 +552,10 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
             .controlledRotationY(.value(theta.evaluate(using: bindings)))
         case let .controlledRotationZ(theta):
             .controlledRotationZ(.value(theta.evaluate(using: bindings)))
+        case let .givens(theta):
+            .givens(.value(theta.evaluate(using: bindings)))
+        case let .xx(theta):
+            .xx(.value(theta.evaluate(using: bindings)))
         case let .controlled(gate, controls):
             .controlled(gate: gate.bound(with: bindings), controls: controls)
         default: self
@@ -493,7 +576,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     @inlinable
     public var isHermitian: Bool {
         switch self {
-        case .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .identity, .cnot, .cz, .toffoli: true
+        case .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .identity, .cnot, .cz, .toffoli, .fswap, .fredkin: true
         default: false
         }
     }
@@ -521,7 +604,7 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
     @inlinable
     public var inverse: QuantumGate {
         switch self {
-        case .identity, .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .cnot, .cz, .toffoli:
+        case .identity, .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .cnot, .cz, .toffoli, .fswap, .fredkin:
             return self
         case let .phase(angle):
             return .phase(angle.negated)
@@ -571,6 +654,30 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
                 [.zero, .zero, .zero, .one],
             ]
             return .customTwoQubit(matrix: adjoint)
+        case .iswap:
+            let adjoint: [[Complex<Double>]] = [
+                [.one, .zero, .zero, .zero],
+                [.zero, .zero, -Complex.i, .zero],
+                [.zero, -Complex.i, .zero, .zero],
+                [.zero, .zero, .zero, .one],
+            ]
+            return .customTwoQubit(matrix: adjoint)
+        case .sqrtISwap:
+            let adjoint: [[Complex<Double>]] = [
+                [.one, .zero, .zero, .zero],
+                [.zero, Complex(invSqrt2, 0.0), Complex(0.0, -invSqrt2), .zero],
+                [.zero, Complex(0.0, -invSqrt2), Complex(invSqrt2, 0.0), .zero],
+                [.zero, .zero, .zero, .one],
+            ]
+            return .customTwoQubit(matrix: adjoint)
+        case let .givens(theta):
+            return .givens(theta.negated)
+        case let .xx(theta):
+            return .xx(theta.negated)
+        case let .diagonal(phases):
+            return .diagonal(phases: phases.map { -$0 })
+        case let .multiplexor(unitaries):
+            return .multiplexor(unitaries: unitaries.map { MatrixUtilities.hermitianConjugate($0) })
         case let .customSingleQubit(matrix):
             return .customSingleQubit(matrix: MatrixUtilities.hermitianConjugate(matrix))
         case let .customTwoQubit(matrix):
@@ -668,6 +775,20 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         case let .controlledRotationZ(theta):
             ValidationUtilities.validateConcrete(theta, name: "controlled rotation Z angle")
             return controlledRotationZMatrix(theta: theta.evaluate(using: [:]))
+        case .iswap: return iswapMatrix()
+        case .sqrtISwap: return sqrtISwapMatrix()
+        case .fswap: return fswapMatrix()
+        case let .givens(theta):
+            ValidationUtilities.validateConcrete(theta, name: "Givens angle")
+            return givensMatrix(theta: theta.evaluate(using: [:]))
+        case let .xx(theta):
+            ValidationUtilities.validateConcrete(theta, name: "XX angle")
+            return xxMatrix(theta: theta.evaluate(using: [:]))
+        case .fredkin: return fredkinMatrix()
+        case let .diagonal(phases):
+            return diagonalMatrix(phases: phases)
+        case let .multiplexor(unitaries):
+            return multiplexorMatrix(unitaries: unitaries)
         case let .customSingleQubit(matrix): return matrix
         case let .customTwoQubit(matrix): return matrix
         case let .controlled(gate, controls):
@@ -873,6 +994,60 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         ]
     }
 
+    @_optimize(speed)
+    private func iswapMatrix() -> [[Complex<Double>]] {
+        [
+            [.one, .zero, .zero, .zero],
+            [.zero, .zero, Complex.i, .zero],
+            [.zero, Complex.i, .zero, .zero],
+            [.zero, .zero, .zero, .one],
+        ]
+    }
+
+    @_optimize(speed)
+    private func sqrtISwapMatrix() -> [[Complex<Double>]] {
+        [
+            [.one, .zero, .zero, .zero],
+            [.zero, Complex(invSqrt2, 0.0), Complex(0.0, invSqrt2), .zero],
+            [.zero, Complex(0.0, invSqrt2), Complex(invSqrt2, 0.0), .zero],
+            [.zero, .zero, .zero, .one],
+        ]
+    }
+
+    @_optimize(speed)
+    private func fswapMatrix() -> [[Complex<Double>]] {
+        [
+            [.one, .zero, .zero, .zero],
+            [.zero, .zero, .one, .zero],
+            [.zero, .one, .zero, .zero],
+            [.zero, .zero, .zero, Complex(-1.0, 0.0)],
+        ]
+    }
+
+    @_optimize(speed)
+    private func givensMatrix(theta: Double) -> [[Complex<Double>]] {
+        let c: Complex<Double> = Complex(cos(theta), 0.0)
+        let s: Complex<Double> = Complex(sin(theta), 0.0)
+        return [
+            [.one, .zero, .zero, .zero],
+            [.zero, c, -s, .zero],
+            [.zero, s, c, .zero],
+            [.zero, .zero, .zero, .one],
+        ]
+    }
+
+    @_optimize(speed)
+    private func xxMatrix(theta: Double) -> [[Complex<Double>]] {
+        let c: Complex<Double> = Complex(cos(theta), 0.0)
+        let iSin: Complex<Double> = Complex(0.0, -sin(theta))
+        return [
+            [c, .zero, .zero, iSin],
+            [.zero, c, iSin, .zero],
+            [.zero, iSin, c, .zero],
+            [iSin, .zero, .zero, c],
+        ]
+    }
+
     private func controlledRotationXMatrix(theta: Double) -> [[Complex<Double>]] {
         let halfTheta: Double = theta / 2.0
         let c: Complex<Double> = Complex(cos(halfTheta), 0.0)
@@ -922,6 +1097,53 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
             [.zero, .zero, .zero, .zero, .zero, .zero, .zero, .one],
             [.zero, .zero, .zero, .zero, .zero, .zero, .one, .zero],
         ]
+    }
+
+    @_optimize(speed)
+    private func fredkinMatrix() -> [[Complex<Double>]] {
+        [
+            [.one, .zero, .zero, .zero, .zero, .zero, .zero, .zero],
+            [.zero, .one, .zero, .zero, .zero, .zero, .zero, .zero],
+            [.zero, .zero, .one, .zero, .zero, .zero, .zero, .zero],
+            [.zero, .zero, .zero, .one, .zero, .zero, .zero, .zero],
+            [.zero, .zero, .zero, .zero, .one, .zero, .zero, .zero],
+            [.zero, .zero, .zero, .zero, .zero, .zero, .one, .zero],
+            [.zero, .zero, .zero, .zero, .zero, .one, .zero, .zero],
+            [.zero, .zero, .zero, .zero, .zero, .zero, .zero, .one],
+        ]
+    }
+
+    @_optimize(speed)
+    @_effects(readonly)
+    private func diagonalMatrix(phases: [Double]) -> [[Complex<Double>]] {
+        let n = phases.count
+        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: n), count: n)
+        for i in 0 ..< n {
+            result[i][i] = Complex<Double>(phase: phases[i])
+        }
+        return result
+    }
+
+    @_optimize(speed)
+    @_effects(readonly)
+    private func multiplexorMatrix(unitaries: [[[Complex<Double>]]]) -> [[Complex<Double>]] {
+        ValidationUtilities.validateMultiplexorNotEmpty(unitaries)
+        let numUnitaries = unitaries.count
+        let unitaryDim = unitaries[0].count
+        let totalDim = numUnitaries * unitaryDim
+
+        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: totalDim), count: totalDim)
+
+        for (blockIndex, unitary) in unitaries.enumerated() {
+            let rowOffset = blockIndex * unitaryDim
+            for i in 0 ..< unitaryDim {
+                for j in 0 ..< unitaryDim {
+                    result[rowOffset + i][rowOffset + j] = unitary[i][j]
+                }
+            }
+        }
+
+        return result
     }
 
     @_optimize(speed)
@@ -998,12 +1220,20 @@ public enum QuantumGate: Equatable, Hashable, CustomStringConvertible, Sendable 
         case .ch: "CH"
         case .swap: "SWAP"
         case .sqrtSwap: "√SWAP"
+        case .iswap: "iSWAP"
+        case .sqrtISwap: "√iSWAP"
+        case .fswap: "FSWAP"
+        case let .givens(theta): "Givens(\(theta))"
+        case let .xx(theta): "XX(\(theta))"
         case .toffoli: "Toffoli"
+        case .fredkin: "Fredkin"
         case let .controlledPhase(theta): "CP(\(theta))"
         case let .controlledRotationX(theta): "CRx(\(theta))"
         case let .controlledRotationY(theta): "CRy(\(theta))"
         case let .controlledRotationZ(theta): "CRz(\(theta))"
         case .customTwoQubit: "CustomU(4x4)"
+        case let .diagonal(phases): "Diagonal(\(phases.count))"
+        case let .multiplexor(unitaries): "Multiplexor(\(unitaries.count)x\(String(describing: unitaries.first?.count)))"
         case let .controlled(gate, controls): "C^\(controls.count)(\(gate))"
         case let .customUnitary(matrix): "CustomU(\(matrix.count)x\(matrix.count))"
         }
@@ -1298,6 +1528,8 @@ public extension QuantumGate {
     /// - Returns: Tuple of (baseGate, allControls) where baseGate is the innermost non-controlled gate
     ///   and allControls is the combined list of all control qubits from outer to inner
     /// - Complexity: O(d) where d is the nesting depth of controlled gates
+    @inlinable
+    @_effects(readonly)
     @_optimize(speed)
     func flattenControlled() -> (gate: QuantumGate, controls: [Int]) {
         switch self {
