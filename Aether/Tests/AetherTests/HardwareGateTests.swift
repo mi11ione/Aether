@@ -1014,3 +1014,438 @@ struct HardwareGateInverseTests {
         }
     }
 }
+
+/// Test suite for YY (Ising-YY) interaction gate matrix properties.
+/// Validates unitarity, identity at theta=0, inverse relationship,
+/// and correct matrix element structure for the RYY rotation gate.
+@Suite("YY Gate Properties")
+struct YYGatePropertiesTests {
+    @Test("YY gate requires 2 qubits")
+    func yyRequiresTwoQubits() {
+        #expect(QuantumGate.yy(0.5).qubitsRequired == 2, "YY gate should require exactly 2 qubits for the two-body interaction")
+    }
+
+    @Test("YY gate matrix is unitary for multiple angles")
+    func yyIsUnitaryForMultipleAngles() {
+        let angles = [0.0, Double.pi / 4, Double.pi / 2, Double.pi]
+        for angle in angles {
+            let matrix = QuantumGate.yy(angle).matrix()
+            #expect(QuantumGate.isUnitary(matrix), "YY(\(angle)) matrix should be unitary to preserve quantum state norms")
+        }
+    }
+
+    @Test("YY(0) equals identity matrix")
+    func yyZeroIsIdentity() {
+        let matrix = QuantumGate.yy(0.0).matrix()
+        #expect(QuantumGate.isIdentityMatrix(matrix), "YY(0) should equal the identity matrix since cos(0)=1 and sin(0)=0")
+    }
+
+    @Test("YY gate is not Hermitian")
+    func yyIsNotHermitian() {
+        #expect(!QuantumGate.yy(0.5).isHermitian, "YY gate with nonzero angle should not be Hermitian since it is a parameterized rotation")
+    }
+
+    @Test("YY inverse is YY(-theta)")
+    func yyInverseIsNegatedTheta() {
+        let theta = 1.234
+        let yyMatrix = QuantumGate.yy(theta).matrix()
+        let yyInverseMatrix = QuantumGate.yy(-theta).matrix()
+        let product = QuantumGate.matrixMultiply(yyMatrix, yyInverseMatrix)
+        #expect(QuantumGate.isIdentityMatrix(product), "YY(theta) * YY(-theta) should equal identity confirming inverse relationship")
+    }
+
+    @Test("YY matrix has correct structure for theta=pi/4")
+    func yyMatrixStructureAtPiOverFour() {
+        let theta = Double.pi / 4
+        let matrix = QuantumGate.yy(theta).matrix()
+        let cosTheta = cos(theta)
+        let sinTheta = sin(theta)
+
+        #expect(abs(matrix[0][0].real - cosTheta) < 1e-10, "YY(pi/4)[0][0] real part should be cos(pi/4)")
+        #expect(abs(matrix[0][0].imaginary) < 1e-10, "YY(pi/4)[0][0] imaginary part should be zero")
+
+        #expect(abs(matrix[0][1].real) < 1e-10, "YY(pi/4)[0][1] real part should be zero")
+        #expect(abs(matrix[0][1].imaginary) < 1e-10, "YY(pi/4)[0][1] imaginary part should be zero")
+
+        #expect(abs(matrix[0][2].real) < 1e-10, "YY(pi/4)[0][2] real part should be zero")
+        #expect(abs(matrix[0][2].imaginary) < 1e-10, "YY(pi/4)[0][2] imaginary part should be zero")
+
+        #expect(abs(matrix[0][3].real) < 1e-10, "YY(pi/4)[0][3] real part should be zero for i*sin(pi/4)")
+        #expect(abs(matrix[0][3].imaginary - sinTheta) < 1e-10, "YY(pi/4)[0][3] imaginary part should be sin(pi/4)")
+
+        #expect(abs(matrix[1][1].real - cosTheta) < 1e-10, "YY(pi/4)[1][1] real part should be cos(pi/4)")
+        #expect(abs(matrix[1][1].imaginary) < 1e-10, "YY(pi/4)[1][1] imaginary part should be zero")
+
+        #expect(abs(matrix[1][2].real) < 1e-10, "YY(pi/4)[1][2] real part should be zero for -i*sin(pi/4)")
+        #expect(abs(matrix[1][2].imaginary - -sinTheta) < 1e-10, "YY(pi/4)[1][2] imaginary part should be -sin(pi/4)")
+
+        #expect(abs(matrix[2][1].real) < 1e-10, "YY(pi/4)[2][1] real part should be zero for -i*sin(pi/4)")
+        #expect(abs(matrix[2][1].imaginary - -sinTheta) < 1e-10, "YY(pi/4)[2][1] imaginary part should be -sin(pi/4)")
+
+        #expect(abs(matrix[2][2].real - cosTheta) < 1e-10, "YY(pi/4)[2][2] real part should be cos(pi/4)")
+        #expect(abs(matrix[2][2].imaginary) < 1e-10, "YY(pi/4)[2][2] imaginary part should be zero")
+
+        #expect(abs(matrix[3][0].real) < 1e-10, "YY(pi/4)[3][0] real part should be zero for i*sin(pi/4)")
+        #expect(abs(matrix[3][0].imaginary - sinTheta) < 1e-10, "YY(pi/4)[3][0] imaginary part should be sin(pi/4)")
+
+        #expect(abs(matrix[3][3].real - cosTheta) < 1e-10, "YY(pi/4)[3][3] real part should be cos(pi/4)")
+        #expect(abs(matrix[3][3].imaginary) < 1e-10, "YY(pi/4)[3][3] imaginary part should be zero")
+    }
+}
+
+/// Test suite for YY (Ising-YY) interaction gate application to quantum states.
+/// Validates identity behavior at theta=0, entanglement creation,
+/// normalization preservation, and inverse recovery on multi-qubit states.
+@Suite("YY Gate Application")
+struct YYGateApplicationTests {
+    @Test("YY(0) on |00⟩ gives |00⟩")
+    func yyZeroOnZeroZeroIsIdentity() {
+        let state = QuantumState(qubits: 2)
+        let result = GateApplication.apply(.yy(0.0), to: [0, 1], state: state)
+
+        #expect(abs(result.probability(of: 0) - 1.0) < 1e-10, "YY(0) should leave |00⟩ unchanged since it acts as identity")
+        #expect(abs(result.amplitude(of: 0).real - 1.0) < 1e-10, "YY(0) on |00⟩ should have amplitude 1 for |00⟩ real part")
+        #expect(abs(result.amplitude(of: 0).imaginary) < 1e-10, "YY(0) on |00⟩ should have amplitude 0 for |00⟩ imaginary part")
+    }
+
+    @Test("YY(pi/2) on |00⟩ produces correct amplitudes")
+    func yyPiOverTwoOnZeroZero() {
+        let state = QuantumState(qubits: 2)
+        let result = GateApplication.apply(.yy(.pi / 2), to: [0, 1], state: state)
+
+        let cosVal = cos(Double.pi / 2)
+        let sinVal = sin(Double.pi / 2)
+
+        let amp00 = result.amplitude(of: 0)
+        #expect(abs(amp00.real - cosVal) < 1e-10, "YY(pi/2) on |00⟩: |00⟩ amplitude real part should be cos(pi/2)")
+        #expect(abs(amp00.imaginary) < 1e-10, "YY(pi/2) on |00⟩: |00⟩ amplitude imaginary part should be zero")
+
+        let amp01 = result.amplitude(of: 1)
+        #expect(abs(amp01.real) < 1e-10, "YY(pi/2) on |00⟩: |01⟩ amplitude real part should be zero")
+        #expect(abs(amp01.imaginary) < 1e-10, "YY(pi/2) on |00⟩: |01⟩ amplitude imaginary part should be zero")
+
+        let amp10 = result.amplitude(of: 2)
+        #expect(abs(amp10.real) < 1e-10, "YY(pi/2) on |00⟩: |10⟩ amplitude real part should be zero")
+        #expect(abs(amp10.imaginary) < 1e-10, "YY(pi/2) on |00⟩: |10⟩ amplitude imaginary part should be zero")
+
+        let amp11 = result.amplitude(of: 3)
+        #expect(abs(amp11.real) < 1e-10, "YY(pi/2) on |00⟩: |11⟩ amplitude real part should be zero for i*sin(pi/2)")
+        #expect(abs(amp11.imaginary - sinVal) < 1e-10, "YY(pi/2) on |00⟩: |11⟩ amplitude imaginary part should be sin(pi/2)")
+    }
+
+    @Test("YY gate preserves state normalization")
+    func yyPreservesNormalization() {
+        var state = QuantumState(qubits: 2)
+        state.setAmplitude(0, to: Complex(0.5, 0.0))
+        state.setAmplitude(1, to: Complex(0.0, 0.5))
+        state.setAmplitude(2, to: Complex(0.5, 0.0))
+        state.setAmplitude(3, to: Complex(0.0, 0.5))
+
+        let result = GateApplication.apply(.yy(0.789), to: [0, 1], state: state)
+
+        #expect(result.isNormalized(), "YY gate should preserve quantum state normalization for any input state")
+    }
+
+    @Test("YY(theta) followed by YY(-theta) returns to original state")
+    func yyForwardThenInverseRecoversState() {
+        var state = QuantumState(qubits: 2)
+        state.setAmplitude(0, to: Complex(0.5, 0.0))
+        state.setAmplitude(1, to: Complex(0.5, 0.0))
+        state.setAmplitude(2, to: Complex(0.5, 0.0))
+        state.setAmplitude(3, to: Complex(0.5, 0.0))
+
+        let theta = 0.567
+        let afterForward = GateApplication.apply(.yy(theta), to: [0, 1], state: state)
+        let afterInverse = GateApplication.apply(.yy(-theta), to: [0, 1], state: afterForward)
+
+        for i in 0 ..< 4 {
+            let original = state.amplitude(of: i)
+            let recovered = afterInverse.amplitude(of: i)
+            #expect(abs(original.real - recovered.real) < 1e-10, "YY(-theta) should invert YY(theta) for amplitude \(i) real part")
+            #expect(abs(original.imaginary - recovered.imaginary) < 1e-10, "YY(-theta) should invert YY(theta) for amplitude \(i) imaginary part")
+        }
+    }
+
+    @Test("YY on superposition state produces correct result")
+    func yyOnSuperpositionState() {
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        var state = QuantumState(qubits: 2)
+        state.setAmplitude(0, to: Complex(invSqrt2, 0.0))
+        state.setAmplitude(1, to: Complex(invSqrt2, 0.0))
+
+        let theta = Double.pi / 4
+        let result = GateApplication.apply(.yy(theta), to: [0, 1], state: state)
+
+        let cosTheta = cos(theta)
+        let sinTheta = sin(theta)
+
+        let expectedAmp0 = Complex(invSqrt2 * cosTheta, 0.0)
+        let expectedAmp1 = Complex(invSqrt2 * cosTheta, 0.0)
+        let expectedAmp2 = Complex(0.0, -invSqrt2 * sinTheta)
+        let expectedAmp3 = Complex(0.0, invSqrt2 * sinTheta)
+
+        let amp0 = result.amplitude(of: 0)
+        #expect(abs(amp0.real - expectedAmp0.real) < 1e-10, "YY(pi/4) on (|00⟩+|01⟩)/sqrt(2): |00⟩ real part should match cos component")
+        #expect(abs(amp0.imaginary - expectedAmp0.imaginary) < 1e-10, "YY(pi/4) on (|00⟩+|01⟩)/sqrt(2): |00⟩ imaginary part should be zero")
+
+        let amp1 = result.amplitude(of: 1)
+        #expect(abs(amp1.real - expectedAmp1.real) < 1e-10, "YY(pi/4) on (|00⟩+|01⟩)/sqrt(2): |01⟩ real part should match cos component")
+        #expect(abs(amp1.imaginary - expectedAmp1.imaginary) < 1e-10, "YY(pi/4) on (|00⟩+|01⟩)/sqrt(2): |01⟩ imaginary part should be zero")
+
+        let amp2 = result.amplitude(of: 2)
+        #expect(abs(amp2.real - expectedAmp2.real) < 1e-10, "YY(pi/4) on (|00⟩+|01⟩)/sqrt(2): |10⟩ real part should be zero")
+        #expect(abs(amp2.imaginary - expectedAmp2.imaginary) < 1e-10, "YY(pi/4) on (|00⟩+|01⟩)/sqrt(2): |10⟩ imaginary part should match -sin component")
+
+        let amp3 = result.amplitude(of: 3)
+        #expect(abs(amp3.real - expectedAmp3.real) < 1e-10, "YY(pi/4) on (|00⟩+|01⟩)/sqrt(2): |11⟩ real part should be zero")
+        #expect(abs(amp3.imaginary - expectedAmp3.imaginary) < 1e-10, "YY(pi/4) on (|00⟩+|01⟩)/sqrt(2): |11⟩ imaginary part should match sin component")
+    }
+
+    @Test("YY gate symmetry: same result regardless of qubit order assignment")
+    func yyGateSymmetry() {
+        var state = QuantumState(qubits: 2)
+        state.setAmplitude(0, to: Complex(0.6, 0.0))
+        state.setAmplitude(1, to: Complex(0.0, 0.4))
+        state.setAmplitude(2, to: Complex(0.4, 0.0))
+        state.setAmplitude(3, to: Complex(0.0, 0.6))
+
+        let theta = 0.789
+        let matrix = QuantumGate.yy(theta).matrix()
+
+        let isSymmetric0103 = abs(matrix[0][3].imaginary - matrix[3][0].imaginary) < 1e-10
+        #expect(isSymmetric0103, "YY matrix should have symmetric i*sin(theta) in [0][3] and [3][0] positions")
+
+        let isSymmetric1221 = abs(matrix[1][2].imaginary - matrix[2][1].imaginary) < 1e-10
+        #expect(isSymmetric1221, "YY matrix should have symmetric -i*sin(theta) in [1][2] and [2][1] positions")
+
+        let diagonalsEqual = abs(matrix[0][0].real - matrix[1][1].real) < 1e-10
+            && abs(matrix[1][1].real - matrix[2][2].real) < 1e-10
+            && abs(matrix[2][2].real - matrix[3][3].real) < 1e-10
+        #expect(diagonalsEqual, "YY matrix diagonal elements should all equal cos(theta) reflecting qubit exchange symmetry")
+    }
+}
+
+/// Test suite for ZZ (Ising-ZZ) interaction gate matrix properties.
+/// Validates unitarity, identity at theta=0, diagonal structure,
+/// inverse relationship, and correct phase entries for the RZZ rotation gate.
+@Suite("ZZ Gate Properties")
+struct ZZGatePropertiesTests {
+    @Test("ZZ gate requires 2 qubits")
+    func zzRequiresTwoQubits() {
+        #expect(QuantumGate.zz(0.5).qubitsRequired == 2, "ZZ gate should require exactly 2 qubits for the two-body interaction")
+    }
+
+    @Test("ZZ gate matrix is unitary for multiple angles")
+    func zzIsUnitaryForMultipleAngles() {
+        let angles = [0.0, Double.pi / 4, Double.pi / 2, Double.pi]
+        for angle in angles {
+            let matrix = QuantumGate.zz(angle).matrix()
+            #expect(QuantumGate.isUnitary(matrix), "ZZ(\(angle)) matrix should be unitary to preserve quantum state norms")
+        }
+    }
+
+    @Test("ZZ(0) equals identity matrix")
+    func zzZeroIsIdentity() {
+        let matrix = QuantumGate.zz(0.0).matrix()
+        #expect(QuantumGate.isIdentityMatrix(matrix), "ZZ(0) should equal the identity matrix since e^(i*0)=1")
+    }
+
+    @Test("ZZ gate is not Hermitian")
+    func zzIsNotHermitian() {
+        #expect(!QuantumGate.zz(0.5).isHermitian, "ZZ gate with nonzero angle should not be Hermitian since it is a parameterized rotation")
+    }
+
+    @Test("ZZ gate is diagonal: all off-diagonal elements are zero")
+    func zzIsDiagonal() {
+        let theta = 0.789
+        let matrix = QuantumGate.zz(theta).matrix()
+        for row in 0 ..< 4 {
+            for col in 0 ..< 4 {
+                if row != col {
+                    #expect(abs(matrix[row][col].real) < 1e-10, "ZZ(\(theta))[\(row)][\(col)] real part should be zero for off-diagonal element")
+                    #expect(abs(matrix[row][col].imaginary) < 1e-10, "ZZ(\(theta))[\(row)][\(col)] imaginary part should be zero for off-diagonal element")
+                }
+            }
+        }
+    }
+
+    @Test("ZZ inverse is ZZ(-theta)")
+    func zzInverseIsNegatedTheta() {
+        let theta = 1.234
+        let zzMatrix = QuantumGate.zz(theta).matrix()
+        let zzInverseMatrix = QuantumGate.zz(-theta).matrix()
+        let product = QuantumGate.matrixMultiply(zzMatrix, zzInverseMatrix)
+        #expect(QuantumGate.isIdentityMatrix(product), "ZZ(theta) * ZZ(-theta) should equal identity confirming inverse relationship")
+    }
+
+    @Test("ZZ matrix has correct diagonal: diag(e^(-itheta), e^(itheta), e^(itheta), e^(-itheta))")
+    func zzDiagonalValuesAtPiOverFour() {
+        let theta = Double.pi / 4
+        let matrix = QuantumGate.zz(theta).matrix()
+
+        let negPhaseReal = cos(-theta)
+        let negPhaseImag = sin(-theta)
+        let posPhaseReal = cos(theta)
+        let posPhaseImag = sin(theta)
+
+        #expect(abs(matrix[0][0].real - negPhaseReal) < 1e-10, "ZZ(pi/4)[0][0] real part should be cos(-pi/4) for e^(-i*pi/4)")
+        #expect(abs(matrix[0][0].imaginary - negPhaseImag) < 1e-10, "ZZ(pi/4)[0][0] imaginary part should be sin(-pi/4) for e^(-i*pi/4)")
+
+        #expect(abs(matrix[1][1].real - posPhaseReal) < 1e-10, "ZZ(pi/4)[1][1] real part should be cos(pi/4) for e^(i*pi/4)")
+        #expect(abs(matrix[1][1].imaginary - posPhaseImag) < 1e-10, "ZZ(pi/4)[1][1] imaginary part should be sin(pi/4) for e^(i*pi/4)")
+
+        #expect(abs(matrix[2][2].real - posPhaseReal) < 1e-10, "ZZ(pi/4)[2][2] real part should be cos(pi/4) for e^(i*pi/4)")
+        #expect(abs(matrix[2][2].imaginary - posPhaseImag) < 1e-10, "ZZ(pi/4)[2][2] imaginary part should be sin(pi/4) for e^(i*pi/4)")
+
+        #expect(abs(matrix[3][3].real - negPhaseReal) < 1e-10, "ZZ(pi/4)[3][3] real part should be cos(-pi/4) for e^(-i*pi/4)")
+        #expect(abs(matrix[3][3].imaginary - negPhaseImag) < 1e-10, "ZZ(pi/4)[3][3] imaginary part should be sin(-pi/4) for e^(-i*pi/4)")
+    }
+}
+
+/// Test suite for ZZ (Ising-ZZ) interaction gate application to quantum states.
+/// Validates phase shifts on computational basis states, normalization preservation,
+/// probability invariance for diagonal gates, and inverse recovery on arbitrary states.
+@Suite("ZZ Gate Application")
+struct ZZGateApplicationTests {
+    @Test("ZZ(0) on |00⟩ gives |00⟩")
+    func zzZeroOnZeroZeroIsIdentity() {
+        let state = QuantumState(qubits: 2)
+        let result = GateApplication.apply(.zz(0.0), to: [0, 1], state: state)
+
+        #expect(abs(result.probability(of: 0) - 1.0) < 1e-10, "ZZ(0) should leave |00⟩ unchanged since it acts as identity")
+        #expect(abs(result.amplitude(of: 0).real - 1.0) < 1e-10, "ZZ(0) on |00⟩ should have amplitude 1 for |00⟩ real part")
+        #expect(abs(result.amplitude(of: 0).imaginary) < 1e-10, "ZZ(0) on |00⟩ should have amplitude 0 for |00⟩ imaginary part")
+    }
+
+    @Test("ZZ on |00⟩ applies e^(-itheta) phase")
+    func zzOnZeroZeroAppliesNegativePhase() {
+        let theta = Double.pi / 4
+        var state = QuantumState(qubits: 2)
+        state.setAmplitude(0, to: .one)
+
+        let result = GateApplication.apply(.zz(theta), to: [0, 1], state: state)
+
+        let amp = result.amplitude(of: 0)
+        #expect(abs(amp.real - cos(-theta)) < 1e-10, "ZZ(pi/4) on |00⟩ should give e^(-i*pi/4) phase: real part cos(-pi/4)")
+        #expect(abs(amp.imaginary - sin(-theta)) < 1e-10, "ZZ(pi/4) on |00⟩ should give e^(-i*pi/4) phase: imaginary part sin(-pi/4)")
+    }
+
+    @Test("ZZ on |01⟩ applies e^(itheta) phase")
+    func zzOnZeroOneAppliesPositivePhase() {
+        let theta = Double.pi / 4
+        var state = QuantumState(qubits: 2)
+        state.setAmplitude(0, to: .zero)
+        state.setAmplitude(1, to: .one)
+
+        let result = GateApplication.apply(.zz(theta), to: [0, 1], state: state)
+
+        let amp = result.amplitude(of: 1)
+        #expect(abs(amp.real - cos(theta)) < 1e-10, "ZZ(pi/4) on |01⟩ should give e^(i*pi/4) phase: real part cos(pi/4)")
+        #expect(abs(amp.imaginary - sin(theta)) < 1e-10, "ZZ(pi/4) on |01⟩ should give e^(i*pi/4) phase: imaginary part sin(pi/4)")
+    }
+
+    @Test("ZZ on |10⟩ applies e^(itheta) phase")
+    func zzOnOneZeroAppliesPositivePhase() {
+        let theta = Double.pi / 4
+        var state = QuantumState(qubits: 2)
+        state.setAmplitude(0, to: .zero)
+        state.setAmplitude(2, to: .one)
+
+        let result = GateApplication.apply(.zz(theta), to: [0, 1], state: state)
+
+        let amp = result.amplitude(of: 2)
+        #expect(abs(amp.real - cos(theta)) < 1e-10, "ZZ(pi/4) on |10⟩ should give e^(i*pi/4) phase: real part cos(pi/4)")
+        #expect(abs(amp.imaginary - sin(theta)) < 1e-10, "ZZ(pi/4) on |10⟩ should give e^(i*pi/4) phase: imaginary part sin(pi/4)")
+    }
+
+    @Test("ZZ on |11⟩ applies e^(-itheta) phase")
+    func zzOnOneOneAppliesNegativePhase() {
+        let theta = Double.pi / 4
+        var state = QuantumState(qubits: 2)
+        state.setAmplitude(0, to: .zero)
+        state.setAmplitude(3, to: .one)
+
+        let result = GateApplication.apply(.zz(theta), to: [0, 1], state: state)
+
+        let amp = result.amplitude(of: 3)
+        #expect(abs(amp.real - cos(-theta)) < 1e-10, "ZZ(pi/4) on |11⟩ should give e^(-i*pi/4) phase: real part cos(-pi/4)")
+        #expect(abs(amp.imaginary - sin(-theta)) < 1e-10, "ZZ(pi/4) on |11⟩ should give e^(-i*pi/4) phase: imaginary part sin(-pi/4)")
+    }
+
+    @Test("ZZ preserves normalization")
+    func zzPreservesNormalization() {
+        var state = QuantumState(qubits: 2)
+        state.setAmplitude(0, to: Complex(0.5, 0.0))
+        state.setAmplitude(1, to: Complex(0.0, 0.5))
+        state.setAmplitude(2, to: Complex(0.5, 0.0))
+        state.setAmplitude(3, to: Complex(0.0, 0.5))
+
+        let result = GateApplication.apply(.zz(0.789), to: [0, 1], state: state)
+
+        #expect(result.isNormalized(), "ZZ gate should preserve quantum state normalization for any input state")
+    }
+
+    @Test("ZZ preserves computational basis probabilities (diagonal gate)")
+    func zzPreservesBasisProbabilities() {
+        var state = QuantumState(qubits: 2)
+        state.setAmplitude(0, to: Complex(0.5, 0.0))
+        state.setAmplitude(1, to: Complex(0.0, 0.5))
+        state.setAmplitude(2, to: Complex(0.5, 0.0))
+        state.setAmplitude(3, to: Complex(0.0, 0.5))
+
+        let originalProbs = (0 ..< 4).map { state.probability(of: $0) }
+
+        let result = GateApplication.apply(.zz(1.234), to: [0, 1], state: state)
+
+        for i in 0 ..< 4 {
+            let resultProb = result.probability(of: i)
+            #expect(abs(resultProb - originalProbs[i]) < 1e-10, "ZZ diagonal gate should preserve probability of basis state \(i) since it only applies phases")
+        }
+    }
+
+    @Test("ZZ(theta) followed by ZZ(-theta) returns to original state")
+    func zzForwardThenInverseRecoversState() {
+        var state = QuantumState(qubits: 2)
+        state.setAmplitude(0, to: Complex(0.5, 0.0))
+        state.setAmplitude(1, to: Complex(0.5, 0.0))
+        state.setAmplitude(2, to: Complex(0.5, 0.0))
+        state.setAmplitude(3, to: Complex(0.5, 0.0))
+
+        let theta = 0.567
+        let afterForward = GateApplication.apply(.zz(theta), to: [0, 1], state: state)
+        let afterInverse = GateApplication.apply(.zz(-theta), to: [0, 1], state: afterForward)
+
+        for i in 0 ..< 4 {
+            let original = state.amplitude(of: i)
+            let recovered = afterInverse.amplitude(of: i)
+            #expect(abs(original.real - recovered.real) < 1e-10, "ZZ(-theta) should invert ZZ(theta) for amplitude \(i) real part")
+            #expect(abs(original.imaginary - recovered.imaginary) < 1e-10, "ZZ(-theta) should invert ZZ(theta) for amplitude \(i) imaginary part")
+        }
+    }
+
+    @Test("ZZ(pi) applies specific known phases")
+    func zzPiAppliesKnownPhases() {
+        var state = QuantumState(qubits: 2)
+        state.setAmplitude(0, to: .one)
+        let result00 = GateApplication.apply(.zz(.pi), to: [0, 1], state: state)
+        let amp00 = result00.amplitude(of: 0)
+        #expect(abs(amp00.real - cos(-Double.pi)) < 1e-10, "ZZ(pi) on |00⟩ should apply e^(-i*pi) phase: real part should be -1")
+        #expect(abs(amp00.imaginary - sin(-Double.pi)) < 1e-10, "ZZ(pi) on |00⟩ should apply e^(-i*pi) phase: imaginary part should be ~0")
+
+        var state01 = QuantumState(qubits: 2)
+        state01.setAmplitude(0, to: .zero)
+        state01.setAmplitude(1, to: .one)
+        let result01 = GateApplication.apply(.zz(.pi), to: [0, 1], state: state01)
+        let amp01 = result01.amplitude(of: 1)
+        #expect(abs(amp01.real - cos(Double.pi)) < 1e-10, "ZZ(pi) on |01⟩ should apply e^(i*pi) phase: real part should be -1")
+        #expect(abs(amp01.imaginary - sin(Double.pi)) < 1e-10, "ZZ(pi) on |01⟩ should apply e^(i*pi) phase: imaginary part should be ~0")
+
+        var state11 = QuantumState(qubits: 2)
+        state11.setAmplitude(0, to: .zero)
+        state11.setAmplitude(3, to: .one)
+        let result11 = GateApplication.apply(.zz(.pi), to: [0, 1], state: state11)
+        let amp11 = result11.amplitude(of: 3)
+        #expect(abs(amp11.real - cos(-Double.pi)) < 1e-10, "ZZ(pi) on |11⟩ should apply e^(-i*pi) phase: real part should be -1")
+        #expect(abs(amp11.imaginary - sin(-Double.pi)) < 1e-10, "ZZ(pi) on |11⟩ should apply e^(-i*pi) phase: imaginary part should be ~0")
+    }
+}

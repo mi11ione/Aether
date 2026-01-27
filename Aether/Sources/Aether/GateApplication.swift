@@ -62,6 +62,10 @@ public enum GateApplication {
         ValidationUtilities.validateOperationQubits(qubits, numQubits: state.qubits)
 
         switch gate {
+        case let .globalPhase(phi):
+            ValidationUtilities.validateConcrete(phi, name: "global phase angle")
+            return applyGlobalPhase(phi: phi.evaluate(using: [:]), state: state)
+
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
              .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
              .u1, .u2, .u3, .sx, .sy, .customSingleQubit:
@@ -77,7 +81,11 @@ public enum GateApplication {
         case .cy, .ch, .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ, .customTwoQubit:
             return applyTwoQubitGate(gate: gate, control: qubits[0], target: qubits[1], state: state)
 
-        case .swap, .sqrtSwap, .sqrtISwap, .givens, .xx:
+        case let .zz(theta):
+            ValidationUtilities.validateConcrete(theta, name: "ZZ angle")
+            return applyRZZ(theta: theta.evaluate(using: [:]), qubit1: qubits[0], qubit2: qubits[1], state: state)
+
+        case .swap, .sqrtSwap, .sqrtISwap, .givens, .xx, .yy:
             return applyTwoQubitGate(gate: gate, control: qubits[0], target: qubits[1], state: state)
 
         case .iswap:
@@ -91,6 +99,9 @@ public enum GateApplication {
 
         case .fredkin:
             return applyFredkin(control: qubits[0], target1: qubits[1], target2: qubits[2], state: state)
+
+        case .ccz:
+            return applyCCZ(qubit1: qubits[0], qubit2: qubits[1], qubit3: qubits[2], state: state)
 
         case let .controlled(innerGate, controls):
             return applyControlledGate(gate: innerGate, controls: controls, targetQubits: qubits, state: state)
@@ -126,6 +137,34 @@ public enum GateApplication {
     @_eagerMove
     public static func apply(_ gate: QuantumGate, to qubit: Int, state: QuantumState) -> QuantumState {
         apply(gate, to: [qubit], state: state)
+    }
+
+    /// Applies a circuit operation to a quantum state.
+    ///
+    /// Routes unitary gates through the gate application pipeline and non-unitary operations
+    /// through dedicated handlers.
+    ///
+    /// - Parameters:
+    ///   - operation: The circuit operation to apply.
+    ///   - state: The quantum state to transform.
+    /// - Returns: The transformed quantum state.
+    /// - Complexity: O(2^n) where n is the number of qubits.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let state = QuantumState(qubits: 2)
+    /// let op = CircuitOperation.gate(.hadamard, qubits: [0])
+    /// let result = GateApplication.apply(op, state: state)
+    /// ```
+    @_optimize(speed)
+    @_eagerMove
+    public static func apply(_ operation: CircuitOperation, state: QuantumState) -> QuantumState {
+        switch operation {
+        case let .gate(gate, qubits, _):
+            apply(gate, to: qubits, state: state)
+        case let .reset(qubit, _):
+            applyReset(qubit: qubit, state: state)
+        }
     }
 
     // MARK: - Single-Qubit Gate Application
@@ -164,6 +203,48 @@ public enum GateApplication {
 
                 buffer[i] = g00 * ci + g01 * cj
                 buffer[j] = g10 * ci + g11 * cj
+            }
+            count = stateSize
+        }
+
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+    }
+
+    // MARK: - Global Phase Gate Application
+
+    /// Apply global phase gate by multiplying every amplitude by e^(i*phi)
+    ///
+    /// GlobalPhase is the simplest gate application: a single scalar multiplication across the
+    /// entire statevector. Every amplitude is multiplied by the same phase factor e^(i*phi),
+    /// requiring one complex multiply per amplitude. While physically unobservable for unconditional
+    /// application, it becomes a relative phase under controlled operations.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let state = QuantumState(qubits: 2)
+    ///     .applying(.hadamard, to: 0)
+    /// let phased = GateApplication.applyGlobalPhase(phi: .pi / 4, state: state)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - phi: Phase angle in radians
+    ///   - state: Input quantum state
+    /// - Returns: Transformed state with all amplitudes multiplied by e^(i*phi)
+    /// - Complexity: O(2^n) - single pass, one complex multiply per amplitude
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    public static func applyGlobalPhase(
+        phi: Double,
+        state: QuantumState,
+    ) -> QuantumState {
+        let stateSize = state.stateSpaceSize
+        let phaseFactor = Complex<Double>(phase: phi)
+
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                buffer[i] = state.amplitudes[i] * phaseFactor
             }
             count = stateSize
         }
@@ -377,6 +458,58 @@ public enum GateApplication {
         return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 
+    // MARK: - CCZ Gate Application
+
+    /// Apply CCZ (Controlled-Controlled-Z) via conditional phase flip
+    ///
+    /// Negates amplitude when all three qubits are |1> (the |111> state), leaves all other
+    /// computational basis states unchanged. As a diagonal gate, CCZ requires no matrix
+    /// multiplication -- just a single-pass conditional negation. This is the three-qubit
+    /// generalization of CZ, applying a Z phase only when both controls are active.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let state = QuantumState(qubits: 3)
+    ///     .applying(.pauliX, to: 0)
+    ///     .applying(.pauliX, to: 1)
+    ///     .applying(.pauliX, to: 2)
+    /// let result = GateApplication.apply(.ccz, to: [0, 1, 2], state: state)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - qubit1: First qubit index
+    ///   - qubit2: Second qubit index
+    ///   - qubit3: Third qubit index
+    ///   - state: Input quantum state
+    /// - Returns: Transformed state with CCZ applied
+    /// - Complexity: O(2^n) - one pass through state
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applyCCZ(
+        qubit1: Int,
+        qubit2: Int,
+        qubit3: Int,
+        state: QuantumState,
+    ) -> QuantumState {
+        let stateSize = state.stateSpaceSize
+        let allMask = BitUtilities.bitMask(qubit: qubit1) | BitUtilities.bitMask(qubit: qubit2) | BitUtilities.bitMask(qubit: qubit3)
+
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                if (i & allMask) == allMask {
+                    buffer[i] = -state.amplitudes[i]
+                } else {
+                    buffer[i] = state.amplitudes[i]
+                }
+            }
+            count = stateSize
+        }
+
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+    }
+
     // MARK: - iSWAP Gate Application
 
     /// Apply iSWAP via conditional swap with i phase
@@ -464,6 +597,45 @@ public enum GateApplication {
         return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 
+    // MARK: - RZZ Gate Application
+
+    /// Apply RZZ (Ising ZZ interaction) via diagonal phase multiplication
+    ///
+    /// Multiplies each amplitude by a phase determined by the parity of the two qubit bits.
+    /// When both qubits have the same value (00 or 11), multiplies by e^(-iθ). When different
+    /// (01 or 10), multiplies by e^(iθ). Diagonal structure eliminates matrix multiplication,
+    /// requiring only a single complex multiplication per amplitude.
+    ///
+    /// - Complexity: O(2^n) - one pass through state
+    @_optimize(speed)
+    @_effects(readonly)
+    @inlinable
+    @_eagerMove
+    static func applyRZZ(
+        theta: Double,
+        qubit1: Int,
+        qubit2: Int,
+        state: QuantumState,
+    ) -> QuantumState {
+        let stateSize = state.stateSpaceSize
+        let mask1 = BitUtilities.bitMask(qubit: qubit1)
+        let mask2 = BitUtilities.bitMask(qubit: qubit2)
+        let negPhase = Complex<Double>(phase: -theta)
+        let posPhase = Complex<Double>(phase: theta)
+
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                let bit1 = (i & mask1) != 0
+                let bit2 = (i & mask2) != 0
+                let phaseFactor = (bit1 == bit2) ? negPhase : posPhase
+                buffer[i] = state.amplitudes[i] * phaseFactor
+            }
+            count = stateSize
+        }
+
+        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+    }
+
     // MARK: - Diagonal Gate Application
 
     /// Apply diagonal gate via phase multiplication
@@ -495,6 +667,93 @@ public enum GateApplication {
         }
 
         return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+    }
+
+    // MARK: - Reset Operation
+
+    /// Apply mid-circuit reset projecting target qubit to |0⟩ via deterministic projection.
+    ///
+    /// Reset is the first non-unitary operation in the simulator. Unlike unitary gates that
+    /// apply reversible transformations, reset irreversibly projects the target qubit to |0⟩
+    /// regardless of its current state. The algorithm:
+    ///
+    /// 1. Compute p0 = probability of target qubit being |0⟩ by summing |amplitude[i]|² for
+    ///    all basis states i where the target qubit bit is 0.
+    /// 2. If p0 >= (1 - p0): project to the |0⟩ subspace by zeroing all amplitudes where the
+    ///    target qubit is |1⟩, then renormalize by 1/sqrt(p0).
+    /// 3. If p0 < (1 - p0): project to the |1⟩ subspace and flip to |0⟩ by copying amplitudes
+    ///    from |1⟩ positions to corresponding |0⟩ positions (differing only in the target qubit
+    ///    bit), zeroing |1⟩ positions, then renormalize by 1/sqrt(1 - p0).
+    ///
+    /// This implements the quantum mechanical description of "measure then conditionally flip":
+    /// the qubit collapses to |0⟩ or |1⟩ with respective probabilities, and if |1⟩ is observed,
+    /// an X gate is applied. The deterministic variant always selects the dominant subspace to
+    /// avoid numerical instability from dividing by near-zero probabilities.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let state = QuantumState(qubits: 2)
+    ///     .applying(.hadamard, to: 0)
+    ///     .applying(.cnot, to: [0, 1])
+    /// let afterReset = GateApplication.applyReset(qubit: 0, state: state)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - qubit: Target qubit index to reset to |0⟩
+    ///   - state: Input quantum state
+    /// - Returns: Quantum state with target qubit projected to |0⟩ and remaining qubits
+    ///   renormalized within the projected subspace
+    /// - Complexity: O(2^n) time, O(2^n) space
+    @_optimize(speed)
+    @_effects(readonly)
+    @_eagerMove
+    @inlinable
+    public static func applyReset(
+        qubit: Int,
+        state: QuantumState,
+    ) -> QuantumState {
+        let stateSize = state.stateSpaceSize
+        let qubitMask = BitUtilities.bitMask(qubit: qubit)
+
+        var prob0 = 0.0
+        for i in 0 ..< stateSize where (i & qubitMask) == 0 {
+            let amp = state.amplitudes[i]
+            prob0 += amp.real * amp.real + amp.imaginary * amp.imaginary
+        }
+
+        if prob0 >= 1.0 - prob0 {
+            let scale = 1.0 / max(prob0, 1e-300).squareRoot()
+
+            let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+                for i in 0 ..< stateSize {
+                    if (i & qubitMask) == 0 {
+                        buffer[i] = state.amplitudes[i] * scale
+                    } else {
+                        buffer[i] = .zero
+                    }
+                }
+                count = stateSize
+            }
+
+            return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        } else {
+            let prob1 = 1.0 - prob0
+            let scale = 1.0 / max(prob1, 1e-300).squareRoot()
+
+            let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+                for i in 0 ..< stateSize {
+                    if (i & qubitMask) == 0 {
+                        let partner = i | qubitMask
+                        buffer[i] = state.amplitudes[partner] * scale
+                    } else {
+                        buffer[i] = .zero
+                    }
+                }
+                count = stateSize
+            }
+
+            return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        }
     }
 
     // MARK: - Controlled Gate Application

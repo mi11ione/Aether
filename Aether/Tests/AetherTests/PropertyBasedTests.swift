@@ -398,8 +398,8 @@ struct NormalizationPropertyTests {
         var state = QuantumState(qubits: qubits)
 
         for i in 0 ..< circuit.count {
-            let gateOp = circuit.gates[i]
-            state = GateApplication.apply(gateOp.gate, to: gateOp.qubits, state: state)
+            let operation = circuit.operations[i]
+            state = GateApplication.apply(operation, state: state)
 
             #expect(
                 state.isNormalized(),

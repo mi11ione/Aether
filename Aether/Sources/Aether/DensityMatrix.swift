@@ -645,6 +645,32 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         applying(gate, to: [qubit])
     }
 
+    /// Applies a circuit operation to this density matrix.
+    ///
+    /// Routes unitary gates through the gate application pipeline and non-unitary operations
+    /// through dedicated quantum channel handlers.
+    ///
+    /// - Parameter operation: The circuit operation to apply.
+    /// - Returns: The transformed density matrix.
+    /// - Complexity: O(4^n) where n is the number of qubits.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var rho = DensityMatrix(pureState: QuantumState(qubits: 1))
+    /// let op = CircuitOperation.gate(.hadamard, qubits: [0])
+    /// rho = rho.applying(op)
+    /// ```
+    @_optimize(speed)
+    @_effects(readonly)
+    public func applying(_ operation: CircuitOperation) -> DensityMatrix {
+        switch operation {
+        case let .gate(gate, qubits, _):
+            applying(gate, to: qubits)
+        case let .reset(qubit, _):
+            applyReset(qubit: qubit)
+        }
+    }
+
     /// Apply single-qubit gate ρ -> UρU† via 2*2 block processing.
     @_optimize(speed)
     @_eagerMove
@@ -691,6 +717,55 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
                     uRow1 * rho11 * uCol1d
 
                 newElements[row * dim + col] = newVal
+            }
+        }
+
+        return DensityMatrix(qubits: qubits, elements: newElements)
+    }
+
+    /// Apply reset operation via Kraus operators: rho' = K0 * rho * K0_dag + K1 * rho * K1_dag.
+    ///
+    /// Uses Kraus representation of the reset channel with operators K0 = |0><0| and K1 = |0><1|.
+    /// K0 projects the |0> component and K1 maps the |1> component to |0>, implementing
+    /// deterministic reset to |0> in the density matrix formalism. This is the non-unitary
+    /// analog of ``GateApplication/applyReset(qubit:state:)`` for mixed states.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var dm = DensityMatrix(qubits: 1)
+    /// dm = dm.applying(.pauliX, to: 0)
+    /// dm = dm.applyReset(qubit: 0)
+    /// dm.probability(of: 0)  // 1.0
+    /// ```
+    ///
+    /// - Parameter qubit: Target qubit index to reset
+    /// - Returns: Density matrix with target qubit reset to |0>
+    /// - Complexity: O(4^n)
+    @_optimize(speed)
+    @_effects(readonly)
+    @_eagerMove
+    private func applyReset(qubit: Int) -> DensityMatrix {
+        let dim = dimension
+        let size = dim * dim
+        let mask = 1 << qubit
+
+        var newElements = [Complex<Double>](unsafeUninitializedCapacity: size) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = size
+        }
+
+        for row in 0 ..< dim {
+            let row0 = row & ~mask
+            if (row & mask) != 0 { continue }
+
+            for col in 0 ..< dim {
+                let col0 = col & ~mask
+                if (col & mask) != 0 { continue }
+
+                let rho00 = elements[row0 * dim + col0]
+                let rho11 = elements[(row0 | mask) * dim + (col0 | mask)]
+
+                newElements[row0 * dim + col0] = rho00 + rho11
             }
         }
 

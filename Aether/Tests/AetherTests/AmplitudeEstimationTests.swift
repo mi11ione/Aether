@@ -281,7 +281,7 @@ struct CountingOracleStatePreparationTests {
 
         oracle.applyStatePreparation(to: &circuit)
 
-        #expect(circuit.gates.count >= 3, "State preparation should add at least 3 Hadamard gates for 3 qubits")
+        #expect(circuit.operations.count >= 3, "State preparation should add at least 3 Hadamard gates for 3 qubits")
     }
 
     @Test("State preparation inverse adds gates to circuit")
@@ -291,7 +291,7 @@ struct CountingOracleStatePreparationTests {
 
         oracle.applyStatePreparationInverse(to: &circuit)
 
-        #expect(circuit.gates.count >= 2, "State preparation inverse should add at least 2 Hadamard gates")
+        #expect(circuit.operations.count >= 2, "State preparation inverse should add at least 2 Hadamard gates")
     }
 
     @Test("Marking oracle adds gates to circuit")
@@ -301,7 +301,7 @@ struct CountingOracleStatePreparationTests {
 
         oracle.applyMarkingOracle(to: &circuit)
 
-        #expect(circuit.gates.count > 0, "Marking oracle should add gates to circuit")
+        #expect(circuit.operations.count > 0, "Marking oracle should add gates to circuit")
     }
 
     @Test("State preparation for different qubit counts")
@@ -315,7 +315,7 @@ struct CountingOracleStatePreparationTests {
         oracle2.applyStatePreparation(to: &circuit2)
         oracle4.applyStatePreparation(to: &circuit4)
 
-        #expect(circuit4.gates.count >= circuit2.gates.count, "More qubits should result in at least as many gates")
+        #expect(circuit4.operations.count >= circuit2.operations.count, "More qubits should result in at least as many gates")
     }
 }
 

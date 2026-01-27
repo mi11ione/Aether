@@ -56,6 +56,7 @@ import Accelerate
     case sx
     case sy
     case customSingleQubit(matrix: [[Complex<Double>]])
+    case globalPhase(ParameterValue)
 
     // MARK: - Two-Qubit Gates
 
@@ -74,12 +75,15 @@ import Accelerate
     case fswap
     case givens(ParameterValue)
     case xx(ParameterValue)
+    case yy(ParameterValue)
+    case zz(ParameterValue)
     case customTwoQubit(matrix: [[Complex<Double>]])
 
     // MARK: - Multi-Qubit Gates
 
     case toffoli
     case fredkin
+    case ccz
     indirect case controlled(gate: QuantumGate, controls: [Int])
     case diagonal(phases: [Double])
     case multiplexor(unitaries: [[[Complex<Double>]]])
@@ -294,6 +298,76 @@ import Accelerate
         .xx(.value(theta))
     }
 
+    /// Create YY (Ising YY interaction) gate with concrete angle value
+    ///
+    /// Convenience method for creating YY interaction gates with concrete (non-symbolic) angles.
+    /// The YY gate implements exp(-i * theta * Y tensor Y), used in Ising-type Hamiltonians
+    /// and variational quantum eigensolvers for spin-spin interaction simulation.
+    /// For symbolic parameters, pass a ``Parameter`` directly.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let gate = QuantumGate.yy(.pi / 4)
+    /// ```
+    ///
+    /// - Parameter theta: Interaction angle in radians
+    /// - Returns: YY gate with concrete angle
+    /// - Complexity: O(1)
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
+    @inlinable
+    public static func yy(_ theta: Double) -> QuantumGate {
+        .yy(.value(theta))
+    }
+
+    /// Create ZZ (Ising ZZ interaction) gate with concrete angle value
+    ///
+    /// Convenience method for creating ZZ interaction gates with concrete (non-symbolic) angles.
+    /// The ZZ gate implements exp(-i * theta * Z tensor Z), used in Ising-type Hamiltonians
+    /// and variational quantum eigensolvers for longitudinal spin-spin interaction simulation.
+    /// As a diagonal gate, ZZ preserves computational basis states and only modifies phases.
+    /// For symbolic parameters, pass a ``Parameter`` directly.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let gate = QuantumGate.zz(.pi / 4)
+    /// ```
+    ///
+    /// - Parameter theta: Interaction angle in radians
+    /// - Returns: ZZ gate with concrete angle
+    /// - Complexity: O(1)
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
+    @inlinable
+    public static func zz(_ theta: Double) -> QuantumGate {
+        .zz(.value(theta))
+    }
+
+    /// Create global phase gate with concrete angle value
+    ///
+    /// Convenience method for creating global phase gates with concrete (non-symbolic) angles.
+    /// GlobalPhase(phi) multiplies the entire statevector by e^(i*phi), applying a uniform phase
+    /// rotation to all amplitudes. While global phase is physically unobservable for unconditional
+    /// application (measurement probabilities are unchanged), it becomes a relative phase when used
+    /// as part of a controlled operation, making it physically meaningful in that context.
+    /// For symbolic parameters, pass a ``Parameter`` directly.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let gate = QuantumGate.globalPhase(.pi / 4)
+    /// let controlled = QuantumGate.controlled(gate: .globalPhase(.pi), controls: [0])
+    /// ```
+    ///
+    /// - Parameter phi: Phase angle in radians
+    /// - Returns: Global phase gate with concrete angle
+    /// - Complexity: O(1)
+    /// - SeeAlso: ``ParameterValue``
+    /// - SeeAlso: ``Parameter``
+    @inlinable
+    public static func globalPhase(_ phi: Double) -> QuantumGate {
+        .globalPhase(.value(phi))
+    }
+
     /// Create U1 gate with concrete lambda parameter
     ///
     /// Convenience method for creating U1 (phase) gates with concrete angle.
@@ -382,14 +456,14 @@ import Accelerate
         switch self {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
              .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
-             .u1, .u2, .u3, .sx, .sy, .customSingleQubit:
+             .u1, .u2, .u3, .sx, .sy, .customSingleQubit, .globalPhase:
             return 1
         case .cnot, .cz, .cy, .ch, .controlledPhase,
              .controlledRotationX, .controlledRotationY, .controlledRotationZ,
              .swap, .sqrtSwap, .iswap, .sqrtISwap, .fswap,
-             .givens, .xx, .customTwoQubit:
+             .givens, .xx, .yy, .zz, .customTwoQubit:
             return 2
-        case .toffoli, .fredkin:
+        case .toffoli, .fredkin, .ccz:
             return 3
         case let .diagonal(phases):
             var qubits = 0
@@ -475,7 +549,10 @@ import Accelerate
              let .controlledRotationY(angle),
              let .controlledRotationZ(angle),
              let .givens(angle),
-             let .xx(angle):
+             let .xx(angle),
+             let .yy(angle),
+             let .zz(angle),
+             let .globalPhase(angle):
             if let p = angle.parameter { return [p] }
             return []
 
@@ -556,6 +633,12 @@ import Accelerate
             .givens(.value(theta.evaluate(using: bindings)))
         case let .xx(theta):
             .xx(.value(theta.evaluate(using: bindings)))
+        case let .yy(theta):
+            .yy(.value(theta.evaluate(using: bindings)))
+        case let .zz(theta):
+            .zz(.value(theta.evaluate(using: bindings)))
+        case let .globalPhase(phi):
+            .globalPhase(.value(phi.evaluate(using: bindings)))
         case let .controlled(gate, controls):
             .controlled(gate: gate.bound(with: bindings), controls: controls)
         default: self
@@ -576,7 +659,7 @@ import Accelerate
     @inlinable
     public var isHermitian: Bool {
         switch self {
-        case .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .identity, .cnot, .cz, .toffoli, .fswap, .fredkin: true
+        case .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .identity, .cnot, .cz, .toffoli, .fswap, .fredkin, .ccz: true
         default: false
         }
     }
@@ -604,7 +687,7 @@ import Accelerate
     @inlinable
     public var inverse: QuantumGate {
         switch self {
-        case .identity, .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .cnot, .cz, .toffoli, .fswap, .fredkin:
+        case .identity, .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .cnot, .cz, .toffoli, .fswap, .fredkin, .ccz:
             return self
         case let .phase(angle):
             return .phase(angle.negated)
@@ -612,6 +695,8 @@ import Accelerate
             return .phase(.value(-.pi / 2.0))
         case .tGate:
             return .phase(.value(-.pi / 4.0))
+        case let .globalPhase(phi):
+            return .globalPhase(phi.negated)
         case let .rotationX(theta):
             return .rotationX(theta.negated)
         case let .rotationY(theta):
@@ -674,6 +759,10 @@ import Accelerate
             return .givens(theta.negated)
         case let .xx(theta):
             return .xx(theta.negated)
+        case let .yy(theta):
+            return .yy(theta.negated)
+        case let .zz(theta):
+            return .zz(theta.negated)
         case let .diagonal(phases):
             return .diagonal(phases: phases.map { -$0 })
         case let .multiplexor(unitaries):
@@ -739,6 +828,9 @@ import Accelerate
         case .swap: return swapMatrix()
         case .sqrtSwap: return sqrtSwapMatrix()
         case .toffoli: return toffoliMatrix()
+        case let .globalPhase(phi):
+            ValidationUtilities.validateConcrete(phi, name: "global phase angle")
+            return globalPhaseMatrix(phi: phi.evaluate(using: [:]))
         case let .phase(angle):
             ValidationUtilities.validateConcrete(angle, name: "phase angle")
             return phaseMatrix(theta: angle.evaluate(using: [:]))
@@ -784,7 +876,14 @@ import Accelerate
         case let .xx(theta):
             ValidationUtilities.validateConcrete(theta, name: "XX angle")
             return xxMatrix(theta: theta.evaluate(using: [:]))
+        case let .yy(theta):
+            ValidationUtilities.validateConcrete(theta, name: "YY angle")
+            return yyMatrix(theta: theta.evaluate(using: [:]))
+        case let .zz(theta):
+            ValidationUtilities.validateConcrete(theta, name: "ZZ angle")
+            return zzMatrix(theta: theta.evaluate(using: [:]))
         case .fredkin: return fredkinMatrix()
+        case .ccz: return cczMatrix()
         case let .diagonal(phases):
             return diagonalMatrix(phases: phases)
         case let .multiplexor(unitaries):
@@ -925,6 +1024,16 @@ import Accelerate
         ]
     }
 
+    @_optimize(speed)
+    @_effects(readonly)
+    private func globalPhaseMatrix(phi: Double) -> [[Complex<Double>]] {
+        let phaseFactor = Complex<Double>(phase: phi)
+        return [
+            [phaseFactor, .zero],
+            [.zero, phaseFactor],
+        ]
+    }
+
     // MARK: - Two-Qubit Matrix Implementations
 
     private func cnotMatrix() -> [[Complex<Double>]] {
@@ -1048,6 +1157,33 @@ import Accelerate
         ]
     }
 
+    @_optimize(speed)
+    @_effects(readonly)
+    private func yyMatrix(theta: Double) -> [[Complex<Double>]] {
+        let c: Complex<Double> = Complex(cos(theta), 0.0)
+        let iSin: Complex<Double> = Complex(0.0, sin(theta))
+        let negISin: Complex<Double> = Complex(0.0, -sin(theta))
+        return [
+            [c, .zero, .zero, iSin],
+            [.zero, c, negISin, .zero],
+            [.zero, negISin, c, .zero],
+            [iSin, .zero, .zero, c],
+        ]
+    }
+
+    @_optimize(speed)
+    @_effects(readonly)
+    private func zzMatrix(theta: Double) -> [[Complex<Double>]] {
+        let negPhase = Complex<Double>(phase: -theta)
+        let posPhase = Complex<Double>(phase: theta)
+        return [
+            [negPhase, .zero, .zero, .zero],
+            [.zero, posPhase, .zero, .zero],
+            [.zero, .zero, posPhase, .zero],
+            [.zero, .zero, .zero, negPhase],
+        ]
+    }
+
     private func controlledRotationXMatrix(theta: Double) -> [[Complex<Double>]] {
         let halfTheta: Double = theta / 2.0
         let c: Complex<Double> = Complex(cos(halfTheta), 0.0)
@@ -1110,6 +1246,32 @@ import Accelerate
             [.zero, .zero, .zero, .zero, .zero, .zero, .one, .zero],
             [.zero, .zero, .zero, .zero, .zero, .one, .zero, .zero],
             [.zero, .zero, .zero, .zero, .zero, .zero, .zero, .one],
+        ]
+    }
+
+    /// Controlled-Controlled-Z (CCZ) gate matrix
+    ///
+    /// 8x8 diagonal matrix: identity on all computational basis states except
+    /// |111> which acquires a -1 phase. CCZ is the natural three-qubit generalization
+    /// of CZ, applying a Z gate to the target only when both controls are |1>.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let matrix = QuantumGate.ccz.matrix()
+    /// // matrix[7][7] == Complex(-1, 0), all other diagonals == Complex(1, 0)
+    /// ```
+    @_optimize(speed)
+    @_effects(readonly)
+    private func cczMatrix() -> [[Complex<Double>]] {
+        [
+            [.one, .zero, .zero, .zero, .zero, .zero, .zero, .zero],
+            [.zero, .one, .zero, .zero, .zero, .zero, .zero, .zero],
+            [.zero, .zero, .one, .zero, .zero, .zero, .zero, .zero],
+            [.zero, .zero, .zero, .one, .zero, .zero, .zero, .zero],
+            [.zero, .zero, .zero, .zero, .one, .zero, .zero, .zero],
+            [.zero, .zero, .zero, .zero, .zero, .one, .zero, .zero],
+            [.zero, .zero, .zero, .zero, .zero, .zero, .one, .zero],
+            [.zero, .zero, .zero, .zero, .zero, .zero, .zero, Complex(-1.0, 0.0)],
         ]
     }
 
@@ -1214,6 +1376,7 @@ import Accelerate
         case .sx: "SX"
         case .sy: "SY"
         case .customSingleQubit: "CustomU(2x2)"
+        case let .globalPhase(phi): "GlobalPhase(\(phi))"
         case .cnot: "CNOT"
         case .cz: "CZ"
         case .cy: "CY"
@@ -1225,8 +1388,11 @@ import Accelerate
         case .fswap: "FSWAP"
         case let .givens(theta): "Givens(\(theta))"
         case let .xx(theta): "XX(\(theta))"
+        case let .yy(theta): "YY(\(theta))"
+        case let .zz(theta): "ZZ(\(theta))"
         case .toffoli: "Toffoli"
         case .fredkin: "Fredkin"
+        case .ccz: "CCZ"
         case let .controlledPhase(theta): "CP(\(theta))"
         case let .controlledRotationX(theta): "CRx(\(theta))"
         case let .controlledRotationY(theta): "CRy(\(theta))"

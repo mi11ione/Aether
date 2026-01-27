@@ -429,9 +429,11 @@ public actor AmplitudeEstimation {
 
         var stateCircuit = QuantumCircuit(qubits: stateQubits)
         oracle.applyStatePreparation(to: &stateCircuit)
-        for gate in stateCircuit.gates {
-            let shiftedQubits = gate.qubits.map { $0 + n }
-            circuit.append(gate.gate, to: shiftedQubits)
+        for op in stateCircuit.operations {
+            if case let .gate(g, qubits, _) = op {
+                let shiftedQubits = qubits.map { $0 + n }
+                circuit.append(g, to: shiftedQubits)
+            }
         }
 
         for controlQubit in 0 ..< n {
@@ -498,9 +500,11 @@ public actor AmplitudeEstimation {
 
             var stateCircuit = QuantumCircuit(qubits: stateQubits)
             oracle.applyStatePreparation(to: &stateCircuit)
-            for gate in stateCircuit.gates {
-                let shiftedQubits = gate.qubits.map { $0 + 1 }
-                circuit.append(gate.gate, to: shiftedQubits)
+            for op in stateCircuit.operations {
+                if case let .gate(g, qubits, _) = op {
+                    let shiftedQubits = qubits.map { $0 + 1 }
+                    circuit.append(g, to: shiftedQubits)
+                }
             }
 
             applyControlledGroverPower(
@@ -569,11 +573,13 @@ public actor AmplitudeEstimation {
         var oracleCircuit = QuantumCircuit(qubits: oracle.qubits)
         oracle.applyMarkingOracle(to: &oracleCircuit)
 
-        for gate in oracleCircuit.gates {
-            let shiftedQubits = gate.qubits.map { $0 + stateQubitOffset }
-            let controlledGate = makeControlled(gate: gate.gate, control: controlQubit, targets: shiftedQubits)
-            for (g, q) in controlledGate {
-                circuit.append(g, to: q)
+        for op in oracleCircuit.operations {
+            if case let .gate(g, qubits, _) = op {
+                let shiftedQubits = qubits.map { $0 + stateQubitOffset }
+                let controlledGate = makeControlled(gate: g, control: controlQubit, targets: shiftedQubits)
+                for (cg, cq) in controlledGate {
+                    circuit.append(cg, to: cq)
+                }
             }
         }
     }
@@ -589,11 +595,13 @@ public actor AmplitudeEstimation {
 
         var invCircuit = QuantumCircuit(qubits: stateQubits)
         oracle.applyStatePreparationInverse(to: &invCircuit)
-        for gate in invCircuit.gates {
-            let shiftedQubits = gate.qubits.map { $0 + stateQubitOffset }
-            let controlledGate = makeControlled(gate: gate.gate, control: controlQubit, targets: shiftedQubits)
-            for (g, q) in controlledGate {
-                circuit.append(g, to: q)
+        for op in invCircuit.operations {
+            if case let .gate(g, qubits, _) = op {
+                let shiftedQubits = qubits.map { $0 + stateQubitOffset }
+                let controlledGate = makeControlled(gate: g, control: controlQubit, targets: shiftedQubits)
+                for (cg, cq) in controlledGate {
+                    circuit.append(cg, to: cq)
+                }
             }
         }
 
@@ -606,11 +614,13 @@ public actor AmplitudeEstimation {
 
         var prepCircuit = QuantumCircuit(qubits: stateQubits)
         oracle.applyStatePreparation(to: &prepCircuit)
-        for gate in prepCircuit.gates {
-            let shiftedQubits = gate.qubits.map { $0 + stateQubitOffset }
-            let controlledGate = makeControlled(gate: gate.gate, control: controlQubit, targets: shiftedQubits)
-            for (g, q) in controlledGate {
-                circuit.append(g, to: q)
+        for op in prepCircuit.operations {
+            if case let .gate(g, qubits, _) = op {
+                let shiftedQubits = qubits.map { $0 + stateQubitOffset }
+                let controlledGate = makeControlled(gate: g, control: controlQubit, targets: shiftedQubits)
+                for (cg, cq) in controlledGate {
+                    circuit.append(cg, to: cq)
+                }
             }
         }
     }

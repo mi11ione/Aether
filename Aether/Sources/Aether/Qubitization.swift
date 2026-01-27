@@ -450,8 +450,8 @@ public enum QuantumSignalProcessing {
         circuit.append(.rotationZ(2.0 * phases[0]), to: signalQubit)
 
         for i in 1 ..< numPhases {
-            for gate in walkCircuit.gates {
-                circuit.append(gate.gate, to: gate.qubits)
+            for op in walkCircuit.operations {
+                circuit.addOperation(op)
             }
 
             circuit.append(.rotationZ(2.0 * phases[i]), to: signalQubit)
@@ -507,8 +507,8 @@ public enum QuantumSignalProcessing {
         circuit.append(.controlledRotationZ(2.0 * phases[0]), to: [controlQubit, signalQubit])
 
         for i in 1 ..< numPhases {
-            for gate in controlledWalk.gates {
-                circuit.append(gate.gate, to: gate.qubits)
+            for op in controlledWalk.operations {
+                circuit.addOperation(op)
             }
 
             circuit.append(.controlledRotationZ(2.0 * phases[i]), to: [controlQubit, signalQubit])
@@ -816,13 +816,13 @@ public struct QubitizedWalkOperator: Sendable {
 
         let prepareCircuit = blockEncoding.prepareCircuit()
         let prepareInverse = prepareCircuit.inverse()
-        for gate in prepareInverse.gates {
-            circuit.append(gate.gate, to: gate.qubits)
+        for op in prepareInverse.operations {
+            circuit.addOperation(op)
         }
 
         let selectCircuit = blockEncoding.selectCircuit()
-        for gate in selectCircuit.gates {
-            circuit.append(gate.gate, to: gate.qubits)
+        for op in selectCircuit.operations {
+            circuit.addOperation(op)
         }
 
         appendReflection(to: &circuit)
@@ -854,13 +854,17 @@ public struct QubitizedWalkOperator: Sendable {
 
         let prepareCircuit = blockEncoding.prepareCircuit()
         let prepareInverse = prepareCircuit.inverse()
-        for gate in prepareInverse.gates {
-            appendControlledGate(to: &circuit, gate: gate.gate, qubits: gate.qubits, control: controlQubit)
+        for op in prepareInverse.operations {
+            if case let .gate(g, qubits, _) = op {
+                appendControlledGate(to: &circuit, gate: g, qubits: qubits, control: controlQubit)
+            }
         }
 
         let selectCircuit = blockEncoding.selectCircuit()
-        for gate in selectCircuit.gates {
-            appendControlledGate(to: &circuit, gate: gate.gate, qubits: gate.qubits, control: controlQubit)
+        for op in selectCircuit.operations {
+            if case let .gate(g, qubits, _) = op {
+                appendControlledGate(to: &circuit, gate: g, qubits: qubits, control: controlQubit)
+            }
         }
 
         appendControlledReflection(to: &circuit, controlQubit: controlQubit)
@@ -1322,29 +1326,31 @@ public actor Qubitization {
             let power = 1 << k
 
             for _ in 0 ..< power {
-                for gate in basicWalkCircuit.gates {
-                    let shiftedQubits = gate.qubits.map { $0 + precisionBits }
+                for op in basicWalkCircuit.operations {
+                    if case let .gate(g, qubits, _) = op {
+                        let shiftedQubits = qubits.map { $0 + precisionBits }
 
-                    if shiftedQubits.count == 1 {
-                        let decomposition = ControlledGateDecomposer.decompose(
-                            gate: gate.gate,
-                            controls: [controlQubit],
-                            target: shiftedQubits[0],
-                        )
-                        for (g, q) in decomposition {
-                            circuit.append(g, to: q)
-                        }
-                    } else if shiftedQubits.count == 2 {
-                        switch gate.gate {
-                        case .cnot:
-                            circuit.append(.toffoli, to: [controlQubit, shiftedQubits[0], shiftedQubits[1]])
-                        case .cz:
-                            circuit.append(.hadamard, to: shiftedQubits[1])
-                            circuit.append(.toffoli, to: [controlQubit, shiftedQubits[0], shiftedQubits[1]])
-                            circuit.append(.hadamard, to: shiftedQubits[1])
-                        default:
-                            for q in shiftedQubits {
-                                circuit.append(.cnot, to: [controlQubit, q])
+                        if shiftedQubits.count == 1 {
+                            let decomposition = ControlledGateDecomposer.decompose(
+                                gate: g,
+                                controls: [controlQubit],
+                                target: shiftedQubits[0],
+                            )
+                            for (dg, dq) in decomposition {
+                                circuit.append(dg, to: dq)
+                            }
+                        } else if shiftedQubits.count == 2 {
+                            switch g {
+                            case .cnot:
+                                circuit.append(.toffoli, to: [controlQubit, shiftedQubits[0], shiftedQubits[1]])
+                            case .cz:
+                                circuit.append(.hadamard, to: shiftedQubits[1])
+                                circuit.append(.toffoli, to: [controlQubit, shiftedQubits[0], shiftedQubits[1]])
+                                circuit.append(.hadamard, to: shiftedQubits[1])
+                            default:
+                                for q in shiftedQubits {
+                                    circuit.append(.cnot, to: [controlQubit, q])
+                                }
                             }
                         }
                     }
@@ -1353,8 +1359,8 @@ public actor Qubitization {
         }
 
         let inverseQFT = QuantumCircuit.inverseQFT(qubits: precisionBits)
-        for gate in inverseQFT.gates {
-            circuit.append(gate.gate, to: gate.qubits)
+        for op in inverseQFT.operations {
+            circuit.addOperation(op)
         }
 
         var fullInitial = QuantumState(qubits: totalQubits)
@@ -1655,8 +1661,8 @@ public enum QubitizationCircuits {
             signalQubit: signalQubit,
         )
 
-        for gate in qspCircuit.gates {
-            circuit.append(gate.gate, to: gate.qubits)
+        for op in qspCircuit.operations {
+            circuit.addOperation(op)
         }
 
         return circuit

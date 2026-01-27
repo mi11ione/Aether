@@ -76,7 +76,7 @@ struct QAOAAnsatzTests {
         )
 
         let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.5])
-        #expect(circuit.gates.count > 2)
+        #expect(circuit.operations.count > 2)
     }
 }
 
@@ -99,8 +99,8 @@ struct PauliStringExponentiationTests {
 
         let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
-        let hasCNOT = circuit.gates.contains { op in
-            if case .cnot = op.gate { return true }
+        let hasCNOT = circuit.operations.contains { op in
+            if op.gate == .cnot { return true }
             return false
         }
 
@@ -122,8 +122,8 @@ struct PauliStringExponentiationTests {
 
         let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
-        let cnotCount = circuit.gates.count(where: { op in
-            if case .cnot = op.gate { return true }
+        let cnotCount = circuit.operations.count(where: { op in
+            if op.gate == .cnot { return true }
             return false
         })
 
@@ -144,7 +144,7 @@ struct PauliStringExponentiationTests {
 
         let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
-        let rxGates = circuit.gates.filter { op in
+        let rxGates = circuit.operations.filter { op in
             if case .rotationX = op.gate { return true }
             return false
         }
@@ -167,12 +167,12 @@ struct PauliStringExponentiationTests {
 
         let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
-        let hadamardGates = circuit.gates.filter { op in
-            if case .hadamard = op.gate { return true }
+        let hadamardGates = circuit.operations.filter { op in
+            if op.gate == .hadamard { return true }
             return false
         }
 
-        let rxGates = circuit.gates.filter { op in
+        let rxGates = circuit.operations.filter { op in
             if case .rotationX = op.gate { return true }
             return false
         }
@@ -228,7 +228,7 @@ struct CoefficientScalingTests {
         )
 
         let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
-        #expect(!circuit.gates.isEmpty)
+        #expect(!circuit.operations.isEmpty)
     }
 }
 
@@ -287,7 +287,7 @@ struct CompleteQAOAWorkflowsTests {
 
         let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
 
-        #expect(!circuit.gates.isEmpty)
+        #expect(!circuit.operations.isEmpty)
         #expect(circuit.qubits == 2)
     }
 }

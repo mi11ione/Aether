@@ -753,8 +753,8 @@ struct MathematicalValidationTests {
         testCircuit.append(.hadamard, to: 1)
 
         var circuit1 = QuantumCircuit(qubits: 3)
-        for op in testCircuit.gates {
-            circuit1.append(op.gate, to: op.qubits)
+        for op in testCircuit.operations {
+            circuit1.addOperation(op)
         }
         for (gate, qubits) in result {
             circuit1.append(gate, to: qubits)
@@ -762,8 +762,8 @@ struct MathematicalValidationTests {
         let decomposedState = circuit1.execute()
 
         var circuit2 = QuantumCircuit(qubits: 3)
-        for op in testCircuit.gates {
-            circuit2.append(op.gate, to: op.qubits)
+        for op in testCircuit.operations {
+            circuit2.addOperation(op)
         }
         circuit2.append(.toffoli, to: [0, 1, 2])
         let directState = circuit2.execute()
@@ -787,8 +787,8 @@ struct MathematicalValidationTests {
         prepCircuit.append(.hadamard, to: 1)
 
         var decomposedCircuit = QuantumCircuit(qubits: 2)
-        for op in prepCircuit.gates {
-            decomposedCircuit.append(op.gate, to: op.qubits)
+        for op in prepCircuit.operations {
+            decomposedCircuit.addOperation(op)
         }
         for (gate, qubits) in result {
             decomposedCircuit.append(gate, to: qubits)
@@ -796,8 +796,8 @@ struct MathematicalValidationTests {
         let decomposedState = decomposedCircuit.execute()
 
         var directCircuit = QuantumCircuit(qubits: 2)
-        for op in prepCircuit.gates {
-            directCircuit.append(op.gate, to: op.qubits)
+        for op in prepCircuit.operations {
+            directCircuit.addOperation(op)
         }
         directCircuit.append(.cz, to: [0, 1])
         let directState = directCircuit.execute()
@@ -891,11 +891,11 @@ struct MathematicalValidationTests {
         let inverse = circuit.inverse()
 
         var combined = QuantumCircuit(qubits: 2)
-        for op in circuit.gates {
-            combined.append(op.gate, to: op.qubits)
+        for op in circuit.operations {
+            combined.addOperation(op)
         }
-        for op in inverse.gates {
-            combined.append(op.gate, to: op.qubits)
+        for op in inverse.operations {
+            combined.addOperation(op)
         }
 
         let state = combined.execute()
@@ -929,11 +929,11 @@ struct UnitarityPreservationTests {
             let inverse = circuit.inverse()
 
             var combined = QuantumCircuit(qubits: 2)
-            for op in circuit.gates {
-                combined.append(op.gate, to: op.qubits)
+            for op in circuit.operations {
+                combined.addOperation(op)
             }
-            for op in inverse.gates {
-                combined.append(op.gate, to: op.qubits)
+            for op in inverse.operations {
+                combined.addOperation(op)
             }
 
             let state = combined.execute()
@@ -959,11 +959,11 @@ struct UnitarityPreservationTests {
         let inverse = circuit.inverse()
 
         var combined = QuantumCircuit(qubits: 3)
-        for op in circuit.gates {
-            combined.append(op.gate, to: op.qubits)
+        for op in circuit.operations {
+            combined.addOperation(op)
         }
-        for op in inverse.gates {
-            combined.append(op.gate, to: op.qubits)
+        for op in inverse.operations {
+            combined.addOperation(op)
         }
 
         let state = combined.execute()
@@ -988,11 +988,11 @@ struct UnitarityPreservationTests {
         let inverse = circuit.inverse()
 
         var combined = QuantumCircuit(qubits: 5)
-        for op in circuit.gates {
-            combined.append(op.gate, to: op.qubits)
+        for op in circuit.operations {
+            combined.addOperation(op)
         }
-        for op in inverse.gates {
-            combined.append(op.gate, to: op.qubits)
+        for op in inverse.operations {
+            combined.addOperation(op)
         }
 
         let state = combined.execute()
@@ -1018,11 +1018,11 @@ struct UnitarityPreservationTests {
         let inverse = circuit.inverse()
 
         var combined = QuantumCircuit(qubits: 2)
-        for op in circuit.gates {
-            combined.append(op.gate, to: op.qubits)
+        for op in circuit.operations {
+            combined.addOperation(op)
         }
-        for op in inverse.gates {
-            combined.append(op.gate, to: op.qubits)
+        for op in inverse.operations {
+            combined.addOperation(op)
         }
 
         let state = combined.execute()
@@ -1203,11 +1203,11 @@ struct ControlledU3DecompositionTests {
         let inverse = circuit.inverse()
 
         var combined = QuantumCircuit(qubits: 2)
-        for op in circuit.gates {
-            combined.append(op.gate, to: op.qubits)
+        for op in circuit.operations {
+            combined.addOperation(op)
         }
-        for op in inverse.gates {
-            combined.append(op.gate, to: op.qubits)
+        for op in inverse.operations {
+            combined.addOperation(op)
         }
 
         let state = combined.execute()

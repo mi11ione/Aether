@@ -540,4 +540,123 @@ struct CircuitUnitaryTests {
         #expect(abs(unitary[0][0].real - invSqrt2) < 1e-10, "customUnitary expansion [0][0] should match")
         #expect(abs(unitary[0][1].real - invSqrt2) < 1e-10, "customUnitary expansion [0][1] should match")
     }
+
+    @Test("CCZ gate produces correct 8x8 diagonal unitary with -1 at [7][7]")
+    func cczGateUnitary() {
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.append(.ccz, to: [0, 1, 2])
+        let unitary = CircuitUnitary.unitary(for: circuit)
+
+        #expect(unitary.count == 8, "CCZ unitary should be 8x8 for 3 qubits")
+        #expect(unitary[0].count == 8, "CCZ unitary row should have 8 columns")
+
+        for i in 0 ..< 8 {
+            for j in 0 ..< 8 {
+                if i == j, i != 7 {
+                    #expect(
+                        abs(unitary[i][j].real - 1.0) < 1e-10,
+                        "CCZ unitary diagonal element [\(i)][\(i)] should be 1.0",
+                    )
+                    #expect(
+                        abs(unitary[i][j].imaginary) < 1e-10,
+                        "CCZ unitary diagonal element [\(i)][\(i)] imaginary part should be zero",
+                    )
+                } else if i == 7, j == 7 {
+                    #expect(
+                        abs(unitary[7][7].real + 1.0) < 1e-10,
+                        "CCZ element [7][7] should be -1 (phase flip on |111>)",
+                    )
+                    #expect(
+                        abs(unitary[7][7].imaginary) < 1e-10,
+                        "CCZ element [7][7] imaginary should be 0",
+                    )
+                } else {
+                    #expect(
+                        abs(unitary[i][j].magnitude) < 1e-10,
+                        "CCZ unitary off-diagonal element [\(i)][\(j)] should be zero",
+                    )
+                }
+            }
+        }
+    }
+
+    @Test("CCZ gate is unitary (U†U = I)")
+    func cczGateUnitarity() {
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.append(.ccz, to: [0, 1, 2])
+        let unitary = CircuitUnitary.unitary(for: circuit)
+
+        let conjugateTranspose = MatrixUtilities.hermitianConjugate(unitary)
+        let product = MatrixUtilities.matrixMultiply(conjugateTranspose, unitary)
+
+        for i in 0 ..< 8 {
+            for j in 0 ..< 8 {
+                if i == j {
+                    #expect(
+                        abs(product[i][j].real - 1.0) < 1e-10,
+                        "CCZ U†U diagonal [\(i)][\(j)] should be 1",
+                    )
+                    #expect(
+                        abs(product[i][j].imaginary) < 1e-10,
+                        "CCZ U†U diagonal [\(i)][\(j)] imaginary should be 0",
+                    )
+                } else {
+                    #expect(
+                        abs(product[i][j].magnitude) < 1e-10,
+                        "CCZ U†U off-diagonal [\(i)][\(j)] should be 0",
+                    )
+                }
+            }
+        }
+    }
+
+    @Test("CCZ gate combined with other gates in multi-qubit circuit")
+    func cczGateComposition() {
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.hadamard, to: 1)
+        circuit.append(.hadamard, to: 2)
+        circuit.append(.ccz, to: [0, 1, 2])
+        let unitary = CircuitUnitary.unitary(for: circuit)
+
+        #expect(unitary.count == 8, "CCZ composition unitary should be 8x8")
+
+        let conjugateTranspose = MatrixUtilities.hermitianConjugate(unitary)
+        let product = MatrixUtilities.matrixMultiply(conjugateTranspose, unitary)
+
+        for i in 0 ..< 8 {
+            #expect(
+                abs(product[i][i].real - 1.0) < 1e-10,
+                "CCZ composition U†U diagonal [\(i)][\(i)] should be 1",
+            )
+        }
+    }
+
+    @Test("CCZ gate in 4-qubit system expands correctly to 16x16")
+    func cczGateInFourQubitSystem() {
+        var circuit = QuantumCircuit(qubits: 4)
+        circuit.append(.ccz, to: [0, 1, 2])
+        let unitary = CircuitUnitary.unitary(for: circuit)
+
+        #expect(unitary.count == 16, "CCZ in 4-qubit system should produce 16x16 unitary")
+        #expect(unitary[0].count == 16, "CCZ in 4-qubit system row should have 16 columns")
+
+        #expect(
+            abs(unitary[7][7].real + 1.0) < 1e-10,
+            "CCZ should flip phase of |0111> in 4-qubit system",
+        )
+        #expect(
+            abs(unitary[15][15].real + 1.0) < 1e-10,
+            "CCZ should flip phase of |1111> in 4-qubit system",
+        )
+
+        #expect(
+            abs(unitary[0][0].real - 1.0) < 1e-10,
+            "CCZ should leave |0000> unchanged in 4-qubit system",
+        )
+        #expect(
+            abs(unitary[8][8].real - 1.0) < 1e-10,
+            "CCZ should leave |1000> unchanged in 4-qubit system",
+        )
+    }
 }

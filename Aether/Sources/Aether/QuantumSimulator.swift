@@ -38,7 +38,7 @@ import Foundation
 /// - SeeAlso: ``PrecisionPolicy``
 public actor QuantumSimulator {
     /// Execution progress information
-    public struct Progress: Sendable {
+    @frozen public struct Progress: Sendable {
         /// Number of gates executed so far
         public let executed: Int
 
@@ -144,7 +144,7 @@ public actor QuantumSimulator {
         let useGPU: Bool = useMetalAcceleration && metalApplication != nil && PrecisionPolicy.shouldUseGPU(qubits: state.qubits, policy: precisionPolicy)
         let progressMultiplier: Double = operationCount > 0 ? 1.0 / Double(operationCount) : 0.0
         let lastIndex: Int = operationCount - 1
-        let operations = circuit.gates
+        let operations = circuit.operations
 
         let progressUpdateBatchSize = 5
         var progressCounter = 0
@@ -152,10 +152,9 @@ public actor QuantumSimulator {
         for index in 0 ..< operationCount {
             let operation = operations[index]
             if useGPU {
-                // Safety: useGPU is true only when metalApplication != nil (line 130)
-                state = await metalApplication!.apply(operation.gate, to: operation.qubits, state: state)
+                state = await metalApplication!.apply(operation, state: state)
             } else {
-                state = GateApplication.apply(operation.gate, to: operation.qubits, state: state)
+                state = GateApplication.apply(operation, state: state)
             }
 
             if let progressHandler {

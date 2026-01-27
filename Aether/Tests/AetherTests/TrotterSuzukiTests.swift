@@ -597,8 +597,8 @@ struct TrotterPauliExponentialTests {
         var fullCircuit = QuantumCircuit(qubits: 2)
         fullCircuit.append(.hadamard, to: 0)
         fullCircuit.append(.hadamard, to: 1)
-        for gate in circuit.gates {
-            fullCircuit.append(gate.gate, to: gate.qubits)
+        for op in circuit.operations {
+            fullCircuit.addOperation(op)
         }
 
         let state = fullCircuit.execute()

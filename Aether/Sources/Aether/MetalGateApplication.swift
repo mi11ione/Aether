@@ -245,25 +245,32 @@ public actor MetalGateApplication {
     @_eagerMove
     public func apply(_ gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {
         switch gate {
+        case let .globalPhase(phi):
+            ValidationUtilities.validateConcrete(phi, name: "global phase angle")
+            return GateApplication.applyGlobalPhase(phi: phi.evaluate(using: [:]), state: state)
+
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
              .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
              .u1, .u2, .u3, .sx, .sy, .customSingleQubit:
-            applySingleQubitGate(gate: gate, qubit: qubits[0], state: state)
+            return applySingleQubitGate(gate: gate, qubit: qubits[0], state: state)
 
         case .cnot:
-            applyCNOT(control: qubits[0], target: qubits[1], state: state)
+            return applyCNOT(control: qubits[0], target: qubits[1], state: state)
 
-        case .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ, .swap, .sqrtSwap, .iswap, .sqrtISwap, .fswap, .givens, .xx, .cz, .cy, .ch, .customTwoQubit:
-            applyTwoQubitGate(gate: gate, control: qubits[0], target: qubits[1], state: state)
+        case .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ, .swap, .sqrtSwap, .iswap, .sqrtISwap, .fswap, .givens, .xx, .yy, .zz, .cz, .cy, .ch, .customTwoQubit:
+            return applyTwoQubitGate(gate: gate, control: qubits[0], target: qubits[1], state: state)
 
         case .toffoli, .fredkin:
-            applyToffoli(control1: qubits[0], control2: qubits[1], target: qubits[2], state: state)
+            return applyToffoli(control1: qubits[0], control2: qubits[1], target: qubits[2], state: state)
+
+        case .ccz:
+            return GateApplication.applyCCZ(qubit1: qubits[0], qubit2: qubits[1], qubit3: qubits[2], state: state)
 
         case let .controlled(innerGate, controls):
-            applyControlledGate(gate: innerGate, controls: controls, targetQubits: qubits, state: state)
+            return applyControlledGate(gate: innerGate, controls: controls, targetQubits: qubits, state: state)
 
         case .customUnitary, .diagonal, .multiplexor:
-            GateApplication.applyMultiQubitGate(gate: gate, qubits: qubits, state: state)
+            return GateApplication.applyMultiQubitGate(gate: gate, qubits: qubits, state: state)
         }
     }
 
@@ -288,6 +295,33 @@ public actor MetalGateApplication {
     @_eagerMove
     public func apply(_ gate: QuantumGate, to qubit: Int, state: QuantumState) -> QuantumState {
         apply(gate, to: [qubit], state: state)
+    }
+
+    /// Applies a circuit operation to a quantum state using GPU acceleration where available.
+    ///
+    /// Routes unitary gates through the Metal-accelerated pipeline and non-unitary operations
+    /// through dedicated CPU handlers.
+    ///
+    /// - Parameters:
+    ///   - operation: The circuit operation to apply.
+    ///   - state: The quantum state to transform.
+    /// - Returns: The transformed quantum state.
+    /// - Complexity: O(2^n) where n is the number of qubits.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let gpu = MetalGateApplication()
+    /// let state = QuantumState(qubits: 2)
+    /// let op = CircuitOperation.gate(.hadamard, qubits: [0])
+    /// let result = gpu.apply(op, state: state)
+    /// ```
+    public func apply(_ operation: CircuitOperation, state: QuantumState) -> QuantumState {
+        switch operation {
+        case let .gate(gate, qubits, _):
+            apply(gate, to: qubits, state: state)
+        case let .reset(qubit, _):
+            GateApplication.applyReset(qubit: qubit, state: state)
+        }
     }
 
     // MARK: - Private Metal Implementations

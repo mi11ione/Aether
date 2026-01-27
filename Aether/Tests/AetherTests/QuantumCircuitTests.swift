@@ -44,7 +44,11 @@ struct CircuitBuildingTests {
         circuit.insert(.pauliZ, to: 0, at: 1)
 
         #expect(circuit.count == 3)
-        #expect(circuit.gates[1].gate == .pauliZ)
+        if let gate = circuit.operations[1].gate {
+            #expect(gate == .pauliZ)
+        } else {
+            Issue.record("Expected gate operation at index 1")
+        }
     }
 
     @Test("Remove gate")
@@ -56,7 +60,11 @@ struct CircuitBuildingTests {
         circuit.remove(at: 0)
 
         #expect(circuit.count == 1)
-        #expect(circuit.gates[0].gate == .pauliX)
+        if let gate = circuit.operations[0].gate {
+            #expect(gate == .pauliX)
+        } else {
+            Issue.record("Expected gate operation at index 0")
+        }
     }
 
     @Test("Clear circuit")
@@ -350,7 +358,7 @@ struct CircuitDescriptionTests {
 
         let desc = circuit.description
         #expect(desc.contains("2 qubits"))
-        #expect(desc.contains("1 gates"))
+        #expect(desc.contains("1 ops"))
     }
 }
 
@@ -609,9 +617,9 @@ struct GroverCircuitTests {
         #expect(circuit.qubits == 3)
         #expect(circuit.count > 0)
 
-        let firstOps = circuit.gates.prefix(3)
+        let firstOps = circuit.operations.prefix(3)
         #expect(firstOps.allSatisfy { op in
-            if case .hadamard = op.gate { return true }
+            if op.gate == .hadamard { return true }
             return false
         })
     }
@@ -853,17 +861,21 @@ struct GroverCircuitTests {
 struct CircuitCoverageTests {
     @Test("Initialize circuit with predefined operations")
     func initWithOperations() {
-        let gates = [
-            Gate(.hadamard, to: 0),
-            Gate(.pauliX, to: 1),
-            Gate(.cnot, to: [0, 1]),
+        let ops: [CircuitOperation] = [
+            .gate(.hadamard, qubits: [0]),
+            .gate(.pauliX, qubits: [1]),
+            .gate(.cnot, qubits: [0, 1]),
         ]
 
-        let circuit = QuantumCircuit(qubits: 2, gates: gates)
+        let circuit = QuantumCircuit(qubits: 2, operations: ops)
 
         #expect(circuit.qubits == 2)
         #expect(circuit.count == 3)
-        #expect(circuit.gates[0].gate == .hadamard)
+        if let gate = circuit.operations[0].gate {
+            #expect(gate == .hadamard)
+        } else {
+            Issue.record("Expected gate operation at index 0")
+        }
     }
 
     @Test("Append gate with timestamp")
@@ -873,23 +885,22 @@ struct CircuitCoverageTests {
         circuit.append(.pauliX, to: 1, timestamp: 3.0)
 
         #expect(circuit.count == 2)
-        #expect(circuit.gates[0].timestamp == 1.5)
-        #expect(circuit.gates[1].timestamp == 3.0)
+        #expect(circuit.operations[0].timestamp == 1.5)
+        #expect(circuit.operations[1].timestamp == 3.0)
     }
 
     @Test("Gate description with timestamp")
     func GateDescriptionWithTimestamp() {
-        let op1 = Gate(.hadamard, to: 0, timestamp: 2.5)
-        let op2 = Gate(.cnot, to: [0, 1], timestamp: 1.25)
+        let op1 = CircuitOperation.gate(.hadamard, qubits: [0], timestamp: 2.5)
+        let op2 = CircuitOperation.gate(.cnot, qubits: [0, 1], timestamp: 1.25)
 
-        #expect(op1.description.contains("2.5s"))
-        #expect(op1.description.contains("s"))
+        #expect(op1.description.contains("2.5"))
         #expect(op2.description.contains("1.25"))
     }
 
     @Test("Gate description without timestamp")
     func GateDescriptionNoTimestamp() {
-        let op = Gate(.hadamard, to: 0)
+        let op = CircuitOperation.gate(.hadamard, qubits: [0])
         #expect(!op.description.contains("@"))
         #expect(op.description.contains("H"))
     }
@@ -957,36 +968,36 @@ struct CircuitCoverageTests {
 
         let desc = circuit.description
         #expect(desc.contains("..."), "Description should contain '...' for circuits with >5 gates")
-        #expect(desc.contains("7 gates"))
+        #expect(desc.contains("7 ops"))
     }
 
     @Test("maxQubitUsed with single-qubit gate having empty qubits array")
     func maxQubitUsedEmptyQubitArray() {
         var circuit = QuantumCircuit(qubits: 3)
-        let ops = [Gate(.hadamard, to: [])]
-        circuit = QuantumCircuit(qubits: 3, gates: ops)
+        let ops: [CircuitOperation] = [.gate(.hadamard, qubits: [])]
+        circuit = QuantumCircuit(qubits: 3, operations: ops)
 
         #expect(circuit.highestQubitIndex == 2)
     }
 
     @Test("Gate description with empty qubits array omits qubit info")
     func gateDescriptionEmptyQubits() {
-        let gate = Gate(.hadamard, to: [])
-        let desc = gate.description
+        let op = CircuitOperation.gate(.hadamard, qubits: [])
+        let desc = op.description
 
-        #expect(!desc.contains("on qubits"), "Empty qubits should not show 'on qubits' text")
+        #expect(desc.contains("[]"), "Empty qubits should show empty array")
         #expect(desc.contains("H"), "Description should still contain gate name")
     }
 
     @Test("Init with gates exceeding initial qubit count updates maxQubitUsed")
     func initWithHighQubitGates() {
-        let gates = [
-            Gate(.hadamard, to: 0),
-            Gate(.pauliX, to: 5),
-            Gate(.pauliZ, to: 3),
+        let ops: [CircuitOperation] = [
+            .gate(.hadamard, qubits: [0]),
+            .gate(.pauliX, qubits: [5]),
+            .gate(.pauliZ, qubits: [3]),
         ]
 
-        let circuit = QuantumCircuit(qubits: 2, gates: gates)
+        let circuit = QuantumCircuit(qubits: 2, operations: ops)
 
         #expect(circuit.highestQubitIndex == 5, "Max qubit should be 5 from gate on qubit 5")
     }
@@ -997,7 +1008,7 @@ struct CircuitCoverageTests {
         circuit.append(.hadamard, to: [])
 
         #expect(circuit.count == 1, "Gate should be appended")
-        #expect(circuit.gates[0].qubits.isEmpty, "Gate should have empty qubits")
+        #expect(circuit.operations[0].qubits.isEmpty, "Gate should have empty qubits")
         #expect(circuit.highestQubitIndex == 2, "Max qubit should remain qubits-1")
     }
 
@@ -1008,17 +1019,17 @@ struct CircuitCoverageTests {
         circuit.insert(.hadamard, to: [], at: 0)
 
         #expect(circuit.count == 2, "Both gates should be present")
-        #expect(circuit.gates[0].qubits.isEmpty, "Inserted gate should have empty qubits")
+        #expect(circuit.operations[0].qubits.isEmpty, "Inserted gate should have empty qubits")
         #expect(circuit.highestQubitIndex == 2, "Max qubit should be qubits-1=2 (baseline)")
     }
 
     @Test("Remove gate with empty qubits triggers recompute correctly")
     func removeEmptyQubitsGateThenRecompute() {
-        let gates = [
-            Gate(.hadamard, to: []),
-            Gate(.pauliX, to: 1),
+        let ops: [CircuitOperation] = [
+            .gate(.hadamard, qubits: []),
+            .gate(.pauliX, qubits: [1]),
         ]
-        var circuit = QuantumCircuit(qubits: 3, gates: gates)
+        var circuit = QuantumCircuit(qubits: 3, operations: ops)
         #expect(circuit.highestQubitIndex == 2, "Max should be qubits-1=2 (baseline)")
 
         circuit.remove(at: 0)
@@ -1027,11 +1038,11 @@ struct CircuitCoverageTests {
 
     @Test("Remove highest qubit gate triggers recompute with empty qubits gate remaining")
     func removeHighestQubitRecomputeWithEmptyQubits() {
-        let gates = [
-            Gate(.hadamard, to: []),
-            Gate(.pauliX, to: 2),
+        let ops: [CircuitOperation] = [
+            .gate(.hadamard, qubits: []),
+            .gate(.pauliX, qubits: [2]),
         ]
-        var circuit = QuantumCircuit(qubits: 2, gates: gates)
+        var circuit = QuantumCircuit(qubits: 2, operations: ops)
 
         #expect(circuit.highestQubitIndex == 2, "Max should be 2 from X gate")
 
@@ -1042,11 +1053,11 @@ struct CircuitCoverageTests {
 
     @Test("Recompute finds remaining gate at high qubit index")
     func recomputeFindsRemainingHighQubitGate() {
-        let gates = [
-            Gate(.hadamard, to: 5),
-            Gate(.pauliX, to: 5),
+        let ops: [CircuitOperation] = [
+            .gate(.hadamard, qubits: [5]),
+            .gate(.pauliX, qubits: [5]),
         ]
-        var circuit = QuantumCircuit(qubits: 2, gates: gates)
+        var circuit = QuantumCircuit(qubits: 2, operations: ops)
 
         #expect(circuit.highestQubitIndex == 5, "Max should be 5")
 
@@ -1067,7 +1078,7 @@ struct CircuitCoverageTests {
 
         #expect(description.contains("2 params"), "Description should show parameter count")
         #expect(description.contains("2 qubits"), "Description should show qubit count")
-        #expect(description.contains("2 gates"), "Description should show gate count")
+        #expect(description.contains("2 ops"), "Description should show gate count")
     }
 
     @Test("Multi-controlled U with zero controls applies gate directly")
@@ -1139,11 +1150,11 @@ struct CircuitCoverageTests {
 
     @Test("Ancilla expansion when circuit references higher qubit indices")
     func ancillaExpansionOnExecute() {
-        let gates = [
-            Gate(.hadamard, to: 0),
-            Gate(.pauliX, to: 3),
+        let ops: [CircuitOperation] = [
+            .gate(.hadamard, qubits: [0]),
+            .gate(.pauliX, qubits: [3]),
         ]
-        let circuit = QuantumCircuit(qubits: 2, gates: gates)
+        let circuit = QuantumCircuit(qubits: 2, operations: ops)
 
         #expect(circuit.qubits == 2, "Circuit qubits should be 2")
         #expect(circuit.highestQubitIndex == 3, "Highest qubit should be 3")
@@ -1532,10 +1543,11 @@ struct PhaseEstimationCircuitTests {
 
         var hadamardCount = 0
         for i in 0 ..< precisionQubits {
-            let gate = circuit.gates[i]
-            if case .hadamard = gate.gate {
+            let op = circuit.operations[i]
+            if op.gate == .hadamard {
                 hadamardCount += 1
-                #expect(gate.qubits == [i], "Hadamard \(i) should be on qubit \(i)")
+                let qubits = op.qubits
+                #expect(qubits == [i], "Hadamard \(i) should be on qubit \(i)")
             }
         }
 
@@ -1546,12 +1558,13 @@ struct PhaseEstimationCircuitTests {
     func containsControlledOperations() {
         let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: 2)
 
-        let hasControlledOps = circuit.gates.contains { gate in
-            switch gate.gate {
+        let hasControlledOps = circuit.operations.contains { op in
+            guard let gate = op.gate else { return false }
+            switch gate {
             case .cnot, .cz, .cy, .ch, .controlledPhase, .controlledRotationZ, .controlledRotationY:
-                true
+                return true
             default:
-                false
+                return false
             }
         }
 
@@ -1563,11 +1576,10 @@ struct PhaseEstimationCircuitTests {
         let precisionQubits = 3
         let circuit = QuantumCircuit.phaseEstimation(unitary: .pauliZ, precisionQubits: precisionQubits)
 
-        let lastGates = circuit.gates.suffix(precisionQubits)
-        let lastGateTypes = lastGates.map(\.gate)
+        let lastOps = circuit.operations.suffix(precisionQubits)
 
-        let hasHadamards = lastGateTypes.contains { gate in
-            if case .hadamard = gate { return true }
+        let hasHadamards = lastOps.contains { op in
+            if op.gate == .hadamard { return true }
             return false
         }
 
@@ -1788,5 +1800,114 @@ struct PhaseEstimationCircuitTests {
 
         #expect(eigenstateQubitValue == 1, "Eigenstate qubit should remain |1⟩, got \(eigenstateQubitValue)")
         #expect(probability > 0.5, "S gate phase (1/4) should be detected with high probability, got \(probability)")
+    }
+}
+
+/// Test suite for non-unitary reset operation paths in QuantumCircuit.
+/// Validates append, insert, addOperation, execute, and step-through execution
+/// for mid-circuit reset operations that project qubits to the |0> state.
+@Suite("Reset Operation Paths")
+struct ResetOperationPathsTests {
+    @Test("Append reset increases operation count and places reset at end")
+    func appendReset() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        let countBefore = circuit.count
+
+        circuit.append(.reset, to: 0)
+
+        #expect(circuit.count == countBefore + 1, "Appending reset should increase operation count by 1")
+
+        let lastOp = circuit.operations[circuit.count - 1]
+        #expect(lastOp.gate == nil, "Last operation should be non-unitary (reset), not a gate")
+        #expect(!lastOp.isUnitary, "Last operation should not be unitary")
+        #expect(lastOp.qubits == [0], "Reset should target qubit 0")
+    }
+
+    @Test("Insert reset places operation at correct index")
+    func insertReset() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliX, to: 1)
+
+        circuit.insert(.reset, to: 0, at: 1)
+
+        #expect(circuit.count == 3, "Circuit should have 3 operations after inserting reset")
+
+        let insertedOp = circuit.operations[1]
+        #expect(insertedOp.gate == nil, "Inserted operation at index 1 should be non-unitary (reset)")
+        #expect(!insertedOp.isUnitary, "Inserted operation at index 1 should not be unitary")
+        #expect(insertedOp.qubits == [0], "Inserted reset should target qubit 0")
+
+        let lastOp = circuit.operations[2]
+        #expect(lastOp.gate == .pauliX, "Original second operation should shift to index 2")
+    }
+
+    @Test("addOperation with reset case adds reset to circuit")
+    func addOperationWithReset() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+
+        let resetOp = CircuitOperation.reset(qubit: 0)
+        circuit.addOperation(resetOp)
+
+        #expect(circuit.count == 2, "Circuit should have 2 operations after addOperation with reset")
+
+        let addedOp = circuit.operations[1]
+        #expect(addedOp.gate == nil, "Added operation should be non-unitary (reset)")
+        #expect(!addedOp.isUnitary, "Added operation should not be unitary")
+        #expect(addedOp.qubits == [0], "Added reset should target qubit 0")
+    }
+
+    @Test("Execute with reset projects qubit to zero state")
+    func executeWithReset() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.reset, to: 0)
+
+        let finalState = circuit.execute()
+
+        #expect(abs(finalState.amplitude(of: 0).magnitude - 1.0) < 1e-10, "After reset, qubit should be in |0> with amplitude magnitude 1.0")
+        #expect(abs(finalState.amplitude(of: 1).magnitude) < 1e-10, "After reset, |1> amplitude should be zero")
+        #expect(finalState.isNormalized(), "State after reset should be normalized")
+    }
+
+    @Test("Execute upToIndex including reset projects qubit to zero state")
+    func executeUpToIndexWithReset() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.reset, to: 0)
+        circuit.append(.hadamard, to: 0)
+
+        let initialState = QuantumState(qubit: 0)
+
+        let stateAfterX = circuit.execute(on: initialState, upToIndex: 1)
+        #expect(abs(stateAfterX.amplitude(of: 1).magnitude - 1.0) < 1e-10, "After X gate, qubit should be in |1> state")
+
+        let stateAfterReset = circuit.execute(on: initialState, upToIndex: 2)
+        #expect(abs(stateAfterReset.amplitude(of: 0).magnitude - 1.0) < 1e-10, "After reset, qubit should be in |0> state")
+        #expect(abs(stateAfterReset.amplitude(of: 1).magnitude) < 1e-10, "After reset, |1> amplitude should be zero")
+
+        let stateAfterHadamard = circuit.execute(on: initialState, upToIndex: 3)
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        #expect(abs(stateAfterHadamard.amplitude(of: 0).real - invSqrt2) < 1e-10, "After reset then Hadamard, |0> amplitude should be 1/sqrt(2)")
+        #expect(abs(stateAfterHadamard.amplitude(of: 1).real - invSqrt2) < 1e-10, "After reset then Hadamard, |1> amplitude should be 1/sqrt(2)")
+    }
+
+    @Test("Appending reset to qubit beyond circuit size auto-expands qubit count")
+    func appendResetExpandsQubitCount() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.reset, to: 3)
+        #expect(circuit.qubits >= 4, "Circuit should auto-expand to accommodate qubit 3")
+        #expect(circuit.operations.count == 1, "Circuit should contain the appended reset operation")
+        #expect(circuit.operations[0].qubits == [3], "Reset should target qubit 3")
+    }
+
+    @Test("Appending reset updates highest qubit index cache")
+    func appendResetUpdatesMaxQubitCache() {
+        var circuit = QuantumCircuit(qubits: 4)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.reset, to: 2)
+        #expect(circuit.highestQubitIndex == 3, "Highest qubit index should reflect reset target qubit")
     }
 }

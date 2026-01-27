@@ -222,7 +222,7 @@ struct IPEIterationCircuitTests {
     @Test("Circuit contains Hadamard gates")
     func circuitContainsHadamards() {
         let circuit = QuantumCircuit.ipeIteration(unitary: .pauliZ, power: 0, phaseCorrection: 0.0, eigenstateQubits: 1)
-        let hadamardCount = circuit.gates.count(where: { $0.gate == .hadamard })
+        let hadamardCount = circuit.operations.count(where: { if $0.gate == .hadamard { return true }; return false })
         #expect(hadamardCount >= 2, "Circuit should contain at least 2 Hadamard gates")
     }
 
@@ -235,8 +235,8 @@ struct IPEIterationCircuitTests {
     @Test("Circuit with phase correction includes Rz gate")
     func circuitWithPhaseCorrectionHasRz() {
         let circuit = QuantumCircuit.ipeIteration(unitary: .pauliZ, power: 0, phaseCorrection: Double.pi / 4, eigenstateQubits: 1)
-        let hasRotationZ = circuit.gates.contains { gate in
-            if case .rotationZ = gate.gate { return true }
+        let hasRotationZ = circuit.operations.contains { op in
+            if case .rotationZ = op.gate { return true }
             return false
         }
         #expect(hasRotationZ, "Circuit with nonzero phase correction should contain Rz gate")
@@ -245,8 +245,8 @@ struct IPEIterationCircuitTests {
     @Test("Circuit without phase correction omits Rz gate")
     func circuitWithoutPhaseCorrectionOmitsRz() {
         let circuit = QuantumCircuit.ipeIteration(unitary: .pauliZ, power: 0, phaseCorrection: 0.0, eigenstateQubits: 1)
-        let rotationZCount = circuit.gates.count(where: { gate in
-            if case .rotationZ = gate.gate { return true }
+        let rotationZCount = circuit.operations.count(where: { op in
+            if case .rotationZ = op.gate { return true }
             return false
         })
         #expect(rotationZCount == 0, "Circuit with zero phase correction should not contain Rz gate")

@@ -238,7 +238,7 @@ struct QuantumCountingCircuitStructureTests {
         let config = QuantumCountingConfig(searchQubits: 2, precisionQubits: 3)
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
 
-        #expect(circuit.gates.count > 0, "Circuit should contain gates")
+        #expect(circuit.operations.count > 0, "Circuit should contain gates")
     }
 
     @Test("Circuit with multiple target oracle")
@@ -541,7 +541,7 @@ struct QuantumCountingPrecisionScalingTests {
         let circuit4 = QuantumCircuit.quantumCounting(oracle: oracle, config: config4)
         let circuit6 = QuantumCircuit.quantumCounting(oracle: oracle, config: config6)
 
-        #expect(circuit6.gates.count > circuit4.gates.count, "More precision qubits should yield more gates")
+        #expect(circuit6.operations.count > circuit4.operations.count, "More precision qubits should yield more gates")
     }
 
     @Test("Minimum precision of 1 produces valid result")

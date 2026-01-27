@@ -266,13 +266,17 @@ public struct ZeroNoiseExtrapolation: Sendable {
         var result = QuantumCircuit(qubits: circuit.qubits)
         var foldedCount = 0
 
-        for (index, gateOp) in circuit.gates.enumerated() {
-            result.append(gateOp.gate, to: gateOp.qubits)
-
-            if foldedCount < gatesToFold, index % foldInterval == 0 {
-                result.append(gateOp.gate.inverse, to: gateOp.qubits)
-                result.append(gateOp.gate, to: gateOp.qubits)
-                foldedCount += 1
+        for (index, operation) in circuit.operations.enumerated() {
+            switch operation {
+            case let .gate(gate, qubits, _):
+                result.append(gate, to: qubits)
+                if foldedCount < gatesToFold, index % foldInterval == 0 {
+                    result.append(gate.inverse, to: qubits)
+                    result.append(gate, to: qubits)
+                    foldedCount += 1
+                }
+            case .reset:
+                result.addOperation(operation)
             }
         }
 
@@ -286,19 +290,29 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
         var result = QuantumCircuit(qubits: circuit.qubits)
 
-        for gateOp in circuit.gates {
-            result.append(gateOp.gate, to: gateOp.qubits)
+        for operation in circuit.operations {
+            result.addOperation(operation)
         }
 
         let startIndex = max(0, circuit.count - gatesToFold)
-        let reversedGates = circuit.gates[startIndex...].reversed()
+        let reversedOps = circuit.operations[startIndex...].reversed()
 
-        for gateOp in reversedGates {
-            result.append(gateOp.gate.inverse, to: gateOp.qubits)
+        for operation in reversedOps {
+            switch operation {
+            case let .gate(gate, qubits, _):
+                result.append(gate.inverse, to: qubits)
+            case .reset:
+                result.addOperation(operation)
+            }
         }
 
-        for gateOp in circuit.gates[startIndex...] {
-            result.append(gateOp.gate, to: gateOp.qubits)
+        for operation in circuit.operations[startIndex...] {
+            switch operation {
+            case let .gate(gate, qubits, _):
+                result.append(gate, to: qubits)
+            case .reset:
+                result.addOperation(operation)
+            }
         }
 
         return result
@@ -307,8 +321,8 @@ public struct ZeroNoiseExtrapolation: Sendable {
     /// Helper to append one circuit to another.
     private func appendCircuit(_ source: QuantumCircuit, to target: QuantumCircuit) -> QuantumCircuit {
         var result = target
-        for gateOp in source.gates {
-            result.append(gateOp.gate, to: gateOp.qubits)
+        for operation in source.operations {
+            result.addOperation(operation)
         }
         return result
     }
@@ -316,8 +330,8 @@ public struct ZeroNoiseExtrapolation: Sendable {
     /// Helper to get first n gates of circuit.
     private func partialCircuit(_ circuit: QuantumCircuit, gateCount: Int) -> QuantumCircuit {
         var result = QuantumCircuit(qubits: circuit.qubits)
-        for gateOp in circuit.gates.prefix(gateCount) {
-            result.append(gateOp.gate, to: gateOp.qubits)
+        for operation in circuit.operations.prefix(gateCount) {
+            result.addOperation(operation)
         }
         return result
     }
@@ -725,17 +739,20 @@ public struct ProbabilisticErrorCancellation: Sendable {
         var result = QuantumCircuit(qubits: circuit.qubits)
         var totalSign = 1
 
-        for gateOp in circuit.gates {
-            result.append(gateOp.gate, to: gateOp.qubits)
-
-            if gateOp.gate.qubitsRequired == 1 {
-                let (pauliIndex, sign) = samplePauli(generator: &generator)
-                totalSign *= sign
-
-                if pauliIndex > 0 {
-                    let pauliGate = pauliGateForIndex(pauliIndex)
-                    result.append(pauliGate, to: gateOp.qubits)
+        for operation in circuit.operations {
+            switch operation {
+            case let .gate(gate, qubits, _):
+                result.append(gate, to: qubits)
+                if gate.qubitsRequired == 1 {
+                    let (pauliIndex, sign) = samplePauli(generator: &generator)
+                    totalSign *= sign
+                    if pauliIndex > 0 {
+                        let pauliGate = pauliGateForIndex(pauliIndex)
+                        result.append(pauliGate, to: qubits)
+                    }
                 }
+            case .reset:
+                result.addOperation(operation)
             }
         }
 

@@ -31,6 +31,7 @@ import Accelerate
 ///
 /// - SeeAlso: ``QuantumCircuit``
 /// - SeeAlso: ``QuantumGate``
+/// - SeeAlso: ``CircuitOperation``
 public enum CircuitOptimizer {
     // MARK: - Angle Tolerance
 
@@ -55,7 +56,7 @@ public enum CircuitOptimizer {
     ///
     /// - Parameter circuit: Circuit to optimize (must have concrete parameters)
     /// - Returns: Optimized circuit with minimal gate count
-    /// - Complexity: O(n²) where n = gate count (dominated by commutation pass)
+    /// - Complexity: O(n^2) where n = gate count (dominated by commutation pass)
     /// - Precondition: Circuit must contain only concrete parameters
     @_optimize(speed)
     @_eagerMove
@@ -76,9 +77,10 @@ public enum CircuitOptimizer {
 
     /// Remove adjacent gate pairs that multiply to identity
     ///
-    /// Scans circuit for consecutive gates on the same qubits where G₁G₂ = I, removing both.
-    /// Handles Hermitian gates (H-H, X-X, Y-Y, Z-Z, SWAP-SWAP), rotation inverses (Rz(θ)Rz(-θ)),
-    /// and phase cancellations (S-S†, T-T†). Single linear pass with in-place cancellation.
+    /// Scans circuit for consecutive gates on the same qubits where G1G2 = I, removing both.
+    /// Handles Hermitian gates (H-H, X-X, Y-Y, Z-Z, SWAP-SWAP), rotation inverses (Rz(theta)Rz(-theta)),
+    /// and phase cancellations (S-S dagger, T-T dagger). Single linear pass with in-place cancellation.
+    /// Non-gate operations (such as reset) are passed through unchanged.
     ///
     /// **Example:**
     /// ```swift
@@ -91,27 +93,33 @@ public enum CircuitOptimizer {
     ///
     /// - Parameter circuit: Input circuit
     /// - Returns: Circuit with identity pairs removed
-    /// - Complexity: O(n) where n = gate count
+    /// - Complexity: O(n) where n = operation count
     @_optimize(speed)
     @_eagerMove
     public static func cancelIdentityPairs(_ circuit: QuantumCircuit) -> QuantumCircuit {
         guard circuit.count > 1 else { return circuit }
 
-        var gates: [Gate] = []
-        gates.reserveCapacity(circuit.count)
+        var ops: [CircuitOperation] = []
+        ops.reserveCapacity(circuit.count)
 
-        for operation in circuit.gates {
-            if let last = gates.last,
+        for operation in circuit.operations {
+            guard let gate = operation.gate else {
+                ops.append(operation)
+                continue
+            }
+
+            if let last = ops.last,
+               let lastGate = last.gate,
                last.qubits == operation.qubits,
-               gatesFormIdentity(last.gate, operation.gate)
+               gatesFormIdentity(lastGate, gate)
             {
-                gates.removeLast()
+                ops.removeLast()
             } else {
-                gates.append(operation)
+                ops.append(operation)
             }
         }
 
-        return QuantumCircuit(qubits: circuit.qubits, gates: gates)
+        return QuantumCircuit(qubits: circuit.qubits, operations: ops)
     }
 
     /// Check if two gates multiply to identity when applied sequentially
@@ -123,7 +131,7 @@ public enum CircuitOptimizer {
     static func gatesFormIdentity(_ g1: QuantumGate, _ g2: QuantumGate) -> Bool {
         if g1 == g2 {
             switch g1 {
-            case .identity, .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .cnot, .cz, .toffoli:
+            case .identity, .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .cnot, .cz, .toffoli, .ccz:
                 return true
             default:
                 break
@@ -155,6 +163,14 @@ public enum CircuitOptimizer {
             return anglesCancel(theta1, theta2)
         case let (.controlledRotationZ(theta1), .controlledRotationZ(theta2)):
             return anglesCancel(theta1, theta2)
+        case let (.xx(theta1), .xx(theta2)):
+            return anglesCancel(theta1, theta2)
+        case let (.yy(theta1), .yy(theta2)):
+            return anglesCancel(theta1, theta2)
+        case let (.zz(theta1), .zz(theta2)):
+            return anglesCancel(theta1, theta2)
+        case let (.globalPhase(p1), .globalPhase(p2)):
+            return anglesCancel(p1, p2)
         default:
             return false
         }
@@ -184,6 +200,7 @@ public enum CircuitOptimizer {
     ///
     /// Specifically handles CNOT-CNOT and SWAP-SWAP patterns on same control/target qubits.
     /// These are common in decomposed circuits and algorithmic patterns.
+    /// Non-gate operations (such as reset) are passed through unchanged.
     ///
     /// **Example:**
     /// ```swift
@@ -196,27 +213,33 @@ public enum CircuitOptimizer {
     ///
     /// - Parameter circuit: Input circuit
     /// - Returns: Circuit with two-qubit identity pairs removed
-    /// - Complexity: O(n) where n = gate count
+    /// - Complexity: O(n) where n = operation count
     @_optimize(speed)
     @_eagerMove
     public static func cancelTwoQubitPairs(_ circuit: QuantumCircuit) -> QuantumCircuit {
         guard circuit.count > 1 else { return circuit }
 
-        var gates: [Gate] = []
-        gates.reserveCapacity(circuit.count)
+        var ops: [CircuitOperation] = []
+        ops.reserveCapacity(circuit.count)
 
-        for operation in circuit.gates {
-            if let last = gates.last,
+        for operation in circuit.operations {
+            guard let gate = operation.gate else {
+                ops.append(operation)
+                continue
+            }
+
+            if let last = ops.last,
+               let lastGate = last.gate,
                last.qubits == operation.qubits,
-               twoQubitGatesCancel(last.gate, operation.gate)
+               twoQubitGatesCancel(lastGate, gate)
             {
-                gates.removeLast()
+                ops.removeLast()
             } else {
-                gates.append(operation)
+                ops.append(operation)
             }
         }
 
-        return QuantumCircuit(qubits: circuit.qubits, gates: gates)
+        return QuantumCircuit(qubits: circuit.qubits, operations: ops)
     }
 
     /// Check if two two-qubit gates cancel.
@@ -239,9 +262,10 @@ public enum CircuitOptimizer {
     /// Merge consecutive single-qubit gates on the same qubit into minimal form
     ///
     /// Combines adjacent single-qubit rotations and gates into optimally decomposed sequences.
-    /// Same-axis rotations merge by adding angles: Rz(θ₁)Rz(θ₂) = Rz(θ₁+θ₂). Different-axis
-    /// rotations fuse via matrix multiplication into U3(θ,φ,λ). Gates with near-identity
-    /// angles (|θ| < ε) are removed entirely.
+    /// Same-axis rotations merge by adding angles: Rz(theta1)Rz(theta2) = Rz(theta1+theta2). Different-axis
+    /// rotations fuse via matrix multiplication into U3(theta,phi,lambda). Gates with near-identity
+    /// angles (|theta| < epsilon) are removed entirely.
+    /// Non-gate operations (such as reset) are passed through unchanged and break merge sequences.
     ///
     /// **Example:**
     /// ```swift
@@ -249,57 +273,59 @@ public enum CircuitOptimizer {
     /// circuit.append(.rotationZ(.pi/4), to: 0)
     /// circuit.append(.rotationZ(.pi/4), to: 0)
     /// let optimized = CircuitOptimizer.mergeSingleQubitGates(circuit)
-    /// // Result: single Rz(π/2)
+    /// // Result: single Rz(pi/2)
     /// ```
     ///
     /// - Parameter circuit: Input circuit
     /// - Returns: Circuit with merged single-qubit sequences
-    /// - Complexity: O(n) where n = gate count
+    /// - Complexity: O(n) where n = operation count
     @_optimize(speed)
     @_eagerMove
     public static func mergeSingleQubitGates(_ circuit: QuantumCircuit) -> QuantumCircuit {
         guard circuit.count > 1 else { return circuit }
 
-        var gates: [Gate] = []
-        gates.reserveCapacity(circuit.count)
+        var ops: [CircuitOperation] = []
+        ops.reserveCapacity(circuit.count)
 
         var i = 0
-        while i < circuit.gates.count {
-            let operation = circuit.gates[i]
+        while i < circuit.operations.count {
+            let operation = circuit.operations[i]
 
-            guard operation.gate.qubitsRequired == 1 else {
-                gates.append(operation)
+            guard let gate = operation.gate, gate.qubitsRequired == 1 else {
+                ops.append(operation)
                 i += 1
                 continue
             }
 
             let qubit = operation.qubits[0]
-            var sequence: [QuantumGate] = [operation.gate]
+            var sequence: [QuantumGate] = [gate]
             var j = i + 1
 
-            while j < circuit.gates.count {
-                let next = circuit.gates[j]
-                if next.gate.qubitsRequired == 1, next.qubits[0] == qubit {
-                    sequence.append(next.gate)
-                    j += 1
-                } else {
+            while j < circuit.operations.count {
+                let next = circuit.operations[j]
+                guard let nextGate = next.gate,
+                      nextGate.qubitsRequired == 1,
+                      next.qubits[0] == qubit
+                else {
                     break
                 }
+                sequence.append(nextGate)
+                j += 1
             }
 
             if sequence.count > 1 {
                 let merged = mergeGateSequence(sequence)
-                for gate in merged {
-                    gates.append(Gate(gate, to: qubit))
+                for mergedGate in merged {
+                    ops.append(.gate(mergedGate, qubits: [qubit]))
                 }
             } else {
-                gates.append(operation)
+                ops.append(operation)
             }
 
             i = j
         }
 
-        return QuantumCircuit(qubits: circuit.qubits, gates: gates)
+        return QuantumCircuit(qubits: circuit.qubits, operations: ops)
     }
 
     /// Merge a sequence of single-qubit gates into minimal representation.
@@ -358,6 +384,12 @@ public enum CircuitOptimizer {
                     else { totalAngle += v2 }
                 }
 
+            case let (.globalPhase(t1), .globalPhase(t2)):
+                if case let .value(v1) = t1, case let .value(v2) = t2 {
+                    if totalAngle == 0 { totalAngle = v1 }
+                    else { totalAngle += v2 }
+                }
+
             default:
                 return nil
             }
@@ -374,11 +406,12 @@ public enum CircuitOptimizer {
         case .rotationY: return [.rotationY(totalAngle)]
         case .rotationZ: return [.rotationZ(totalAngle)]
         case .phase: return [.phase(totalAngle)]
+        case .globalPhase: return [.globalPhase(totalAngle)]
         default: return nil
         }
     }
 
-    /// Normalize angle to [-π, π] range.
+    /// Normalize angle to [-pi, pi] range.
     @_optimize(speed)
     @inlinable
     @_effects(readonly)
@@ -443,7 +476,7 @@ public enum CircuitOptimizer {
 
     /// Decompose single-qubit unitary to U3 gate (IBM standard)
     ///
-    /// Returns single U3(θ,φ,λ) gate or U1(λ) for pure Z rotations.
+    /// Returns single U3(theta,phi,lambda) gate or U1(lambda) for pure Z rotations.
     /// Optimal single-gate representation for hardware execution.
     ///
     /// **Example:**
@@ -469,6 +502,7 @@ public enum CircuitOptimizer {
     /// potential inverse pairs separated by commuting gates, moves gates to bring inverse pairs
     /// adjacent, and reorders to minimize circuit depth. Preserves circuit semantics exactly
     /// via conservative commutation rules.
+    /// Non-gate operations (such as reset) are treated as non-commuting for safety.
     ///
     /// **Example:**
     /// ```swift
@@ -480,27 +514,27 @@ public enum CircuitOptimizer {
     /// ```
     ///
     /// - Parameter circuit: Input circuit
-    /// - Returns: Circuit with gates reordered for optimization opportunities
-    /// - Complexity: O(n²) where n = gate count
+    /// - Returns: Circuit with operations reordered for optimization opportunities
+    /// - Complexity: O(n^2) where n = operation count
     @_optimize(speed)
     @_eagerMove
     public static func reorderByCommutation(_ circuit: QuantumCircuit) -> QuantumCircuit {
         guard circuit.count > 2 else { return circuit }
 
-        var gates = circuit.gates
+        var ops = circuit.operations
 
-        gates = bringInversesAdjacent(gates)
-        gates = minimizeDepthOrdering(gates, qubitCount: circuit.qubits)
+        ops = bringInversesAdjacent(ops)
+        ops = minimizeDepthOrdering(ops, qubitCount: circuit.qubits)
 
-        return QuantumCircuit(qubits: circuit.qubits, gates: gates)
+        return QuantumCircuit(qubits: circuit.qubits, operations: ops)
     }
 
-    /// Move gates to bring inverse pairs adjacent for cancellation.
+    /// Move operations to bring inverse pairs adjacent for cancellation.
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
-    private static func bringInversesAdjacent(_ gates: [Gate]) -> [Gate] {
-        var result = gates
+    private static func bringInversesAdjacent(_ ops: [CircuitOperation]) -> [CircuitOperation] {
+        var result = ops
         var changed = true
         var iterations = 0
         let maxIterations = result.count * 2
@@ -514,20 +548,22 @@ public enum CircuitOptimizer {
                     let g1 = result[i]
                     let gj = result[j]
 
-                    guard g1.qubits == gj.qubits,
-                          gatesFormIdentity(g1.gate, gj.gate) else { continue }
+                    guard let gate1 = g1.gate,
+                          let gatej = gj.gate,
+                          g1.qubits == gj.qubits,
+                          gatesFormIdentity(gate1, gatej) else { continue }
 
                     var canMove = true
                     for k in stride(from: j - 1, through: i + 1, by: -1) {
-                        if !gatesCommute(result[k], result[j]) {
+                        if !operationsCommute(result[k], result[j]) {
                             canMove = false
                             break
                         }
                     }
 
                     if canMove {
-                        let gate = result.remove(at: j)
-                        result.insert(gate, at: i + 1)
+                        let op = result.remove(at: j)
+                        result.insert(op, at: i + 1)
                         changed = true
                         break
                     }
@@ -539,30 +575,30 @@ public enum CircuitOptimizer {
         return result
     }
 
-    /// Reorder gates to minimize circuit depth using as-soon-as-possible scheduling.
+    /// Reorder operations to minimize circuit depth using as-soon-as-possible scheduling.
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
-    private static func minimizeDepthOrdering(_ gates: [Gate], qubitCount: Int) -> [Gate] {
-        var qubitLastGate = [Int](repeating: -1, count: max(qubitCount, 30))
-        var gateDepth = [Int](repeating: 0, count: gates.count)
+    private static func minimizeDepthOrdering(_ ops: [CircuitOperation], qubitCount: Int) -> [CircuitOperation] {
+        var qubitLastOp = [Int](repeating: -1, count: max(qubitCount, 30))
+        var opDepth = [Int](repeating: 0, count: ops.count)
 
-        for (i, gate) in gates.enumerated() {
+        for (i, operation) in ops.enumerated() {
             var maxPrevDepth = 0
-            for q in gate.qubits {
-                if q < qubitLastGate.count, qubitLastGate[q] >= 0 {
-                    maxPrevDepth = max(maxPrevDepth, gateDepth[qubitLastGate[q]])
+            for q in operation.qubits {
+                if q < qubitLastOp.count, qubitLastOp[q] >= 0 {
+                    maxPrevDepth = max(maxPrevDepth, opDepth[qubitLastOp[q]])
                 }
             }
-            gateDepth[i] = maxPrevDepth + 1
-            for q in gate.qubits {
-                if q < qubitLastGate.count {
-                    qubitLastGate[q] = i
+            opDepth[i] = maxPrevDepth + 1
+            for q in operation.qubits {
+                if q < qubitLastOp.count {
+                    qubitLastOp[q] = i
                 }
             }
         }
 
-        var indexed = gates.enumerated().map { ($0.offset, $0.element, gateDepth[$0.offset]) }
+        var indexed = ops.enumerated().map { ($0.offset, $0.element, opDepth[$0.offset]) }
         indexed.sort { a, b in
             if a.2 != b.2 { return a.2 < b.2 }
             return a.0 < b.0
@@ -571,29 +607,36 @@ public enum CircuitOptimizer {
         return indexed.map(\.1)
     }
 
-    /// Check if two gates commute (can be swapped without changing circuit behavior)
+    /// Check if two circuit operations commute (can be swapped without changing circuit behavior)
     ///
-    /// Two gates commute if applying them in either order produces the same result.
-    /// This happens when: (1) gates act on disjoint qubits, (2) both are diagonal in
+    /// Two operations commute if applying them in either order produces the same result.
+    /// This happens when: (1) operations act on disjoint qubits, (2) both are diagonal in
     /// the same basis, or (3) specific algebraic relationships hold.
+    /// Non-gate operations are treated as non-commuting (conservative).
     ///
     /// **Example:**
     /// ```swift
-    /// let g1 = Gate(.pauliZ, to: 0)
-    /// let g2 = Gate(.rotationZ(.pi/4), to: 0)
-    /// let commutes = CircuitOptimizer.gatesCommute(g1, g2)  // true (both diagonal)
+    /// let g1 = CircuitOperation.gate(.pauliZ, qubits: [0])
+    /// let g2 = CircuitOperation.gate(.rotationZ(.pi/4), qubits: [0])
+    /// let commutes = CircuitOptimizer.operationsCommute(g1, g2)  // true (both diagonal)
     /// ```
     ///
     /// - Complexity: O(1)
     @_optimize(speed)
     @_effects(readonly)
-    public static func gatesCommute(_ g1: Gate, _ g2: Gate) -> Bool {
-        let q1 = Set(g1.qubits)
-        let q2 = Set(g2.qubits)
+    public static func operationsCommute(_ op1: CircuitOperation, _ op2: CircuitOperation) -> Bool {
+        guard let gate1 = op1.gate,
+              let gate2 = op2.gate
+        else {
+            return false
+        }
+
+        let q1 = Set(op1.qubits)
+        let q2 = Set(op2.qubits)
 
         if q1.isDisjoint(with: q2) { return true }
 
-        return gateTypesCommute(g1.gate, g2.gate, sharedQubits: q1.intersection(q2))
+        return gateTypesCommute(gate1, gate2, sharedQubits: q1.intersection(q2))
     }
 
     /// Check if two gate types commute when sharing qubits.
@@ -622,7 +665,7 @@ public enum CircuitOptimizer {
     @_effects(readonly)
     static func isDiagonal(_ gate: QuantumGate) -> Bool {
         switch gate {
-        case .identity, .pauliZ, .sGate, .tGate, .phase, .rotationZ, .u1, .cz, .controlledPhase, .controlledRotationZ:
+        case .identity, .pauliZ, .sGate, .tGate, .phase, .rotationZ, .u1, .cz, .controlledPhase, .controlledRotationZ, .zz, .ccz, .globalPhase:
             true
         default:
             false
@@ -634,7 +677,7 @@ public enum CircuitOptimizer {
     /// Decompose arbitrary two-qubit unitary into optimal CNOT + single-qubit sequence
     ///
     /// Implements Cartan's KAK decomposition: any two-qubit unitary U can be written as
-    /// U = (A₁⊗B₁) · exp(i(αXX + βYY + γZZ)) · (A₂⊗B₂) where A, B are single-qubit gates.
+    /// U = (A1 tensor B1) exp(i(alpha XX + beta YY + gamma ZZ)) (A2 tensor B2) where A, B are single-qubit gates.
     /// The central entangling operation requires at most 3 CNOTs. Special cases (SWAP, CNOT,
     /// controlled rotations) may require fewer CNOTs (0-2).
     ///
@@ -814,7 +857,7 @@ public enum CircuitOptimizer {
         return (q, r)
     }
 
-    /// Extract KAK coordinates (c₀, c₁, c₂) from eigenvalues of U_B^T U_B.
+    /// Extract KAK coordinates (c0, c1, c2) from eigenvalues of U_B^T U_B.
     @_optimize(speed)
     @_effects(readonly)
     private static func extractKAKCoordinatesFromEigenvalues(_ eigenvalues: [Complex<Double>]) -> (Double, Double, Double) {
@@ -857,7 +900,7 @@ public enum CircuitOptimizer {
         return 3
     }
 
-    /// Compute local unitaries K1 = A₁⊗B₁ and K2 = A₂⊗B₂ from polar decomposition.
+    /// Compute local unitaries K1 = A1 tensor B1 and K2 = A2 tensor B2 from polar decomposition.
     @_optimize(speed)
     @_effects(readonly)
     private static func computeLocalUnitaries(
@@ -885,7 +928,7 @@ public enum CircuitOptimizer {
         return ((a1, b1), (a2, b2))
     }
 
-    /// Build canonical entangling gate exp(i(c₀XX + c₁YY + c₂ZZ)) in magic basis.
+    /// Build canonical entangling gate exp(i(c0 XX + c1 YY + c2 ZZ)) in magic basis.
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -904,7 +947,7 @@ public enum CircuitOptimizer {
         return result
     }
 
-    /// Extract tensor factors A, B from K ≈ A ⊗ B using (A⊗B)_{(i,j),(k,l)} = A_{i,k} · B_{j,l}.
+    /// Extract tensor factors A, B from K approximately equal to A tensor B using (A tensor B)_{(i,j),(k,l)} = A_{i,k} B_{j,l}.
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -1039,7 +1082,7 @@ public enum CircuitOptimizer {
     /// Compute circuit depth (critical path length)
     ///
     /// Depth is the minimum number of time steps required assuming unlimited parallelism.
-    /// Gates on different qubits can execute simultaneously; gates on the same qubit must
+    /// Operations on different qubits can execute simultaneously; operations on the same qubit must
     /// be sequential. This is the key metric for quantum hardware execution time.
     ///
     /// **Example:**
@@ -1053,7 +1096,7 @@ public enum CircuitOptimizer {
     ///
     /// - Parameter circuit: Circuit to analyze
     /// - Returns: Circuit depth (minimum sequential time steps)
-    /// - Complexity: O(n) where n = gate count
+    /// - Complexity: O(n) where n = operation count
     @_optimize(speed)
     @_effects(readonly)
     public static func computeDepth(_ circuit: QuantumCircuit) -> Int {
@@ -1061,7 +1104,7 @@ public enum CircuitOptimizer {
 
         var qubitDepth = [Int](repeating: 0, count: circuit.qubits)
 
-        for operation in circuit.gates {
+        for operation in circuit.operations {
             var maxDepth = 0
             for qubit in operation.qubits {
                 if qubit < qubitDepth.count {
@@ -1088,7 +1131,8 @@ public enum CircuitOptimizer {
     ///
     /// Returns dictionary mapping gate types to occurrence counts. Useful for comparing
     /// algorithms, estimating hardware costs (different gates have different error rates),
-    /// and tracking optimization effectiveness.
+    /// and tracking optimization effectiveness. Only counts gate operations; non-gate
+    /// operations (such as reset) are excluded.
     ///
     /// **Example:**
     /// ```swift
@@ -1100,20 +1144,23 @@ public enum CircuitOptimizer {
     ///
     /// - Parameter circuit: Circuit to analyze
     /// - Returns: Dictionary of gate type to count
-    /// - Complexity: O(n) where n = gate count
+    /// - Complexity: O(n) where n = operation count
     @_optimize(speed)
     @_effects(readonly)
     public static func gateCount(_ circuit: QuantumCircuit) -> [QuantumGate: Int] {
         var counts: [QuantumGate: Int] = [:]
 
-        for operation in circuit.gates {
-            counts[operation.gate, default: 0] += 1
+        for operation in circuit.operations {
+            guard let gate = operation.gate else { continue }
+            counts[gate, default: 0] += 1
         }
 
         return counts
     }
 
     /// Count gates grouped by category (single-qubit, two-qubit, three-qubit)
+    ///
+    /// Only counts gate operations; non-gate operations (such as reset) are excluded.
     ///
     /// **Example:**
     /// ```swift
@@ -1135,8 +1182,9 @@ public enum CircuitOptimizer {
         var two = 0
         var three = 0
 
-        for operation in circuit.gates {
-            switch operation.gate.qubitsRequired {
+        for operation in circuit.operations {
+            guard let gate = operation.gate else { continue }
+            switch gate.qubitsRequired {
             case 1: single += 1
             case 2: two += 1
             case 3: three += 1
@@ -1151,6 +1199,7 @@ public enum CircuitOptimizer {
     ///
     /// CNOTs are the standard metric for two-qubit gate cost. Other two-qubit gates
     /// are converted to CNOT-equivalents: CZ = 1 CNOT, SWAP = 3 CNOTs, etc.
+    /// Only counts gate operations; non-gate operations (such as reset) are excluded.
     ///
     /// **Example:**
     /// ```swift
@@ -1169,15 +1218,16 @@ public enum CircuitOptimizer {
     public static func cnotEquivalentCount(_ circuit: QuantumCircuit) -> Int {
         var count = 0
 
-        for operation in circuit.gates {
-            switch operation.gate {
+        for operation in circuit.operations {
+            guard let gate = operation.gate else { continue }
+            switch gate {
             case .cnot, .cz, .cy, .ch, .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ:
                 count += 1
             case .swap:
                 count += 3
             case .sqrtSwap:
                 count += 2
-            case .toffoli:
+            case .toffoli, .ccz:
                 count += 6
             case .customTwoQubit:
                 count += 3

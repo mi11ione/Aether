@@ -265,8 +265,8 @@ struct SingleQubitGateMergingTests {
         let optimized = CircuitOptimizer.mergeSingleQubitGates(circuit)
 
         #expect(optimized.count == 1, "Two Rz gates should merge into one")
-        if let gate = optimized.gates.first?.gate {
-            if case let .rotationZ(angle) = gate, case let .value(v) = angle {
+        if let mergedGate = optimized.operations.first?.gate {
+            if case let .rotationZ(angle) = mergedGate, case let .value(v) = angle {
                 #expect(abs(v - .pi / 2) < 1e-10, "Merged angle should be π/2")
             }
         }
@@ -416,66 +416,66 @@ struct DecomposeToU3Tests {
 struct GateCommutationTests {
     @Test("Gates on disjoint qubits commute")
     func disjointQubitsCommute() {
-        let g1 = Gate(.pauliX, to: 0)
-        let g2 = Gate(.pauliZ, to: 1)
+        let g1 = CircuitOperation.gate(.pauliX, qubits: [0])
+        let g2 = CircuitOperation.gate(.pauliZ, qubits: [1])
 
-        #expect(CircuitOptimizer.gatesCommute(g1, g2), "Gates on different qubits should commute")
+        #expect(CircuitOptimizer.operationsCommute(g1, g2), "Gates on different qubits should commute")
     }
 
     @Test("Diagonal gates on same qubit commute")
     func diagonalGatesCommute() {
-        let g1 = Gate(.pauliZ, to: 0)
-        let g2 = Gate(.rotationZ(.pi / 4), to: 0)
+        let g1 = CircuitOperation.gate(.pauliZ, qubits: [0])
+        let g2 = CircuitOperation.gate(.rotationZ(.pi / 4), qubits: [0])
 
-        #expect(CircuitOptimizer.gatesCommute(g1, g2), "Z and Rz should commute (both diagonal)")
+        #expect(CircuitOptimizer.operationsCommute(g1, g2), "Z and Rz should commute (both diagonal)")
     }
 
     @Test("Z and phase gate commute")
     func zAndPhaseCommute() {
-        let g1 = Gate(.pauliZ, to: 0)
-        let g2 = Gate(.phase(.pi / 3), to: 0)
+        let g1 = CircuitOperation.gate(.pauliZ, qubits: [0])
+        let g2 = CircuitOperation.gate(.phase(.pi / 3), qubits: [0])
 
-        #expect(CircuitOptimizer.gatesCommute(g1, g2), "Z and P should commute")
+        #expect(CircuitOptimizer.operationsCommute(g1, g2), "Z and P should commute")
     }
 
     @Test("Two Rz gates commute")
     func twoRzGatesCommute() {
-        let g1 = Gate(.rotationZ(.pi / 4), to: 0)
-        let g2 = Gate(.rotationZ(.pi / 3), to: 0)
+        let g1 = CircuitOperation.gate(.rotationZ(.pi / 4), qubits: [0])
+        let g2 = CircuitOperation.gate(.rotationZ(.pi / 3), qubits: [0])
 
-        #expect(CircuitOptimizer.gatesCommute(g1, g2), "Rz gates should commute")
+        #expect(CircuitOptimizer.operationsCommute(g1, g2), "Rz gates should commute")
     }
 
     @Test("X and Z do not commute")
     func xAndZDoNotCommute() {
-        let g1 = Gate(.pauliX, to: 0)
-        let g2 = Gate(.pauliZ, to: 0)
+        let g1 = CircuitOperation.gate(.pauliX, qubits: [0])
+        let g2 = CircuitOperation.gate(.pauliZ, qubits: [0])
 
-        #expect(!CircuitOptimizer.gatesCommute(g1, g2), "X and Z on same qubit should not commute")
+        #expect(!CircuitOptimizer.operationsCommute(g1, g2), "X and Z on same qubit should not commute")
     }
 
     @Test("H and X do not commute")
     func hAndXDoNotCommute() {
-        let g1 = Gate(.hadamard, to: 0)
-        let g2 = Gate(.pauliX, to: 0)
+        let g1 = CircuitOperation.gate(.hadamard, qubits: [0])
+        let g2 = CircuitOperation.gate(.pauliX, qubits: [0])
 
-        #expect(!CircuitOptimizer.gatesCommute(g1, g2), "H and X on same qubit should not commute")
+        #expect(!CircuitOptimizer.operationsCommute(g1, g2), "H and X on same qubit should not commute")
     }
 
     @Test("CNOT and Z on control commute")
     func cnotAndZOnControlCommute() {
-        let g1 = Gate(.cnot, to: [0, 1])
-        let g2 = Gate(.pauliZ, to: 0)
+        let g1 = CircuitOperation.gate(.cnot, qubits: [0, 1])
+        let g2 = CircuitOperation.gate(.pauliZ, qubits: [0])
 
-        #expect(CircuitOptimizer.gatesCommute(g1, g2), "CNOT and Z on control qubit should commute")
+        #expect(CircuitOptimizer.operationsCommute(g1, g2), "CNOT and Z on control qubit should commute")
     }
 
     @Test("CZ gates on same qubits commute")
     func czGatesCommute() {
-        let g1 = Gate(.cz, to: [0, 1])
-        let g2 = Gate(.cz, to: [0, 1])
+        let g1 = CircuitOperation.gate(.cz, qubits: [0, 1])
+        let g2 = CircuitOperation.gate(.cz, qubits: [0, 1])
 
-        #expect(CircuitOptimizer.gatesCommute(g1, g2), "CZ gates should commute (both diagonal)")
+        #expect(CircuitOptimizer.operationsCommute(g1, g2), "CZ gates should commute (both diagonal)")
     }
 }
 
@@ -869,7 +869,7 @@ struct InverseCircuitTests {
 
         let inverse = circuit.inverse()
 
-        #expect(inverse.gates.first?.gate == .hadamard, "H† = H")
+        #expect(inverse.operations.first == .gate(.hadamard, qubits: [0]), "H† = H")
     }
 
     @Test("Inverse reverses gate order")
@@ -881,9 +881,9 @@ struct InverseCircuitTests {
 
         let inverse = circuit.inverse()
 
-        #expect(inverse.gates[0].gate == .pauliZ, "First gate in inverse should be Z†=Z")
-        #expect(inverse.gates[1].gate == .cnot, "Second gate in inverse should be CNOT†=CNOT")
-        #expect(inverse.gates[2].gate == .hadamard, "Third gate in inverse should be H†=H")
+        #expect(inverse.operations[0] == .gate(.pauliZ, qubits: [1]), "First gate in inverse should be Z†=Z")
+        #expect(inverse.operations[1] == .gate(.cnot, qubits: [0, 1]), "Second gate in inverse should be CNOT†=CNOT")
+        #expect(inverse.operations[2] == .gate(.hadamard, qubits: [0]), "Third gate in inverse should be H†=H")
     }
 
     @Test("Rotation inverse negates angle")
@@ -893,8 +893,8 @@ struct InverseCircuitTests {
 
         let inverse = circuit.inverse()
 
-        if let gate = inverse.gates.first?.gate,
-           case let .rotationZ(angle) = gate,
+        if let invGate = inverse.operations.first?.gate,
+           case let .rotationZ(angle) = invGate,
            case let .value(v) = angle
         {
             #expect(abs(v + .pi / 4) < 1e-10, "Rz(θ)† = Rz(-θ)")
@@ -911,11 +911,11 @@ struct InverseCircuitTests {
         let inverse = circuit.inverse()
 
         var combined = QuantumCircuit(qubits: 2)
-        for op in circuit.gates {
-            combined.append(op.gate, to: op.qubits)
+        for op in circuit.operations {
+            combined.addOperation(op)
         }
-        for op in inverse.gates {
-            combined.append(op.gate, to: op.qubits)
+        for op in inverse.operations {
+            combined.addOperation(op)
         }
 
         let state = combined.execute()
@@ -930,10 +930,10 @@ struct InverseCircuitTests {
         circuit.append(.sGate, to: 0)
 
         let inverse = circuit.inverse()
-        let inverseGate = inverse.gates.first?.gate
-
-        if case let .phase(angle) = inverseGate, case let .value(v) = angle {
-            #expect(abs(v + .pi / 2) < 1e-10, "S† = P(-π/2)")
+        if let inverseGate = inverse.operations.first?.gate {
+            if case let .phase(angle) = inverseGate, case let .value(v) = angle {
+                #expect(abs(v + .pi / 2) < 1e-10, "S† = P(-π/2)")
+            }
         }
     }
 
@@ -943,10 +943,11 @@ struct InverseCircuitTests {
         circuit.append(.tGate, to: 0)
 
         let inverse = circuit.inverse()
-        let inverseGate = inverse.gates.first?.gate
 
-        if case let .phase(angle) = inverseGate, case let .value(v) = angle {
-            #expect(abs(v + .pi / 4) < 1e-10, "T† = P(-π/4)")
+        if let inverseGate = inverse.operations.first?.gate {
+            if case let .phase(angle) = inverseGate, case let .value(v) = angle {
+                #expect(abs(v + .pi / 4) < 1e-10, "T† = P(-π/4)")
+            }
         }
     }
 }
@@ -1579,55 +1580,55 @@ struct DepthOrderingEdgeCasesTests {
 struct CNOTPauliCommutationTests {
     @Test("CNOT and X on target commute")
     func cnotAndXOnTargetCommute() {
-        let g1 = Gate(.cnot, to: [0, 1])
-        let g2 = Gate(.pauliX, to: 1)
+        let g1 = CircuitOperation.gate(.cnot, qubits: [0, 1])
+        let g2 = CircuitOperation.gate(.pauliX, qubits: [1])
 
-        #expect(CircuitOptimizer.gatesCommute(g1, g2), "CNOT and X on target should commute")
+        #expect(CircuitOptimizer.operationsCommute(g1, g2), "CNOT and X on target should commute")
     }
 
     @Test("X and CNOT commute (reverse order)")
     func xAndCnotCommute() {
-        let g1 = Gate(.pauliX, to: 1)
-        let g2 = Gate(.cnot, to: [0, 1])
+        let g1 = CircuitOperation.gate(.pauliX, qubits: [1])
+        let g2 = CircuitOperation.gate(.cnot, qubits: [0, 1])
 
-        #expect(CircuitOptimizer.gatesCommute(g1, g2), "X and CNOT should commute")
+        #expect(CircuitOptimizer.operationsCommute(g1, g2), "X and CNOT should commute")
     }
 
     @Test("Z on control and CNOT commute")
     func zOnControlAndCnotCommute() {
-        let g1 = Gate(.pauliZ, to: 0)
-        let g2 = Gate(.cnot, to: [0, 1])
+        let g1 = CircuitOperation.gate(.pauliZ, qubits: [0])
+        let g2 = CircuitOperation.gate(.cnot, qubits: [0, 1])
 
-        #expect(CircuitOptimizer.gatesCommute(g1, g2), "Z on control and CNOT should commute")
+        #expect(CircuitOptimizer.operationsCommute(g1, g2), "Z on control and CNOT should commute")
     }
 
     @Test("Two phase gates commute")
     func twoPhaseGatesCommute() {
-        let g1 = Gate(.phase(.pi / 4), to: 0)
-        let g2 = Gate(.phase(.pi / 3), to: 0)
+        let g1 = CircuitOperation.gate(.phase(.pi / 4), qubits: [0])
+        let g2 = CircuitOperation.gate(.phase(.pi / 3), qubits: [0])
 
-        #expect(CircuitOptimizer.gatesCommute(g1, g2), "Phase gates should commute")
+        #expect(CircuitOptimizer.operationsCommute(g1, g2), "Phase gates should commute")
     }
 
     @Test("Rz and phase commute")
     func rzAndPhaseCommute() {
-        let g1 = Gate(.rotationZ(.pi / 4), to: 0)
-        let g2 = Gate(.phase(.pi / 3), to: 0)
+        let g1 = CircuitOperation.gate(.rotationZ(.pi / 4), qubits: [0])
+        let g2 = CircuitOperation.gate(.phase(.pi / 3), qubits: [0])
 
-        #expect(CircuitOptimizer.gatesCommute(g1, g2), "Rz and phase should commute")
+        #expect(CircuitOptimizer.operationsCommute(g1, g2), "Rz and phase should commute")
     }
 
     @Test("Same Pauli type commutes with itself")
     func samePauliCommutes() {
-        let g1 = Gate(.pauliX, to: 0)
-        let g2 = Gate(.pauliX, to: 0)
+        let g1 = CircuitOperation.gate(.pauliX, qubits: [0])
+        let g2 = CircuitOperation.gate(.pauliX, qubits: [0])
 
-        #expect(CircuitOptimizer.gatesCommute(g1, g2), "X-X should commute")
+        #expect(CircuitOptimizer.operationsCommute(g1, g2), "X-X should commute")
 
-        let g3 = Gate(.pauliY, to: 0)
-        let g4 = Gate(.pauliY, to: 0)
+        let g3 = CircuitOperation.gate(.pauliY, qubits: [0])
+        let g4 = CircuitOperation.gate(.pauliY, qubits: [0])
 
-        #expect(CircuitOptimizer.gatesCommute(g3, g4), "Y-Y should commute")
+        #expect(CircuitOptimizer.operationsCommute(g3, g4), "Y-Y should commute")
     }
 }
 
@@ -1940,5 +1941,425 @@ struct ZYZDecompositionPhiRotationTests {
         let gate = CircuitOptimizer.decomposeToU3(matrix)
 
         #expect(gate.qubitsRequired == 1, "Decomposed gate should be single-qubit")
+    }
+}
+
+/// Test suite for XX, YY, ZZ, and GlobalPhase identity pair cancellation.
+/// Validates removal of adjacent gate pairs where angles sum to zero,
+/// covering lines 158-165 of CircuitOptimizer.swift.
+@Suite("XX/YY/ZZ/GlobalPhase Identity Cancellation")
+struct XXYYZZGlobalPhaseIdentityCancellationTests {
+    @Test("XX with opposite angles cancels to identity")
+    func xxOppositeCancels() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.xx(.pi / 4), to: [0, 1])
+        circuit.append(.xx(-.pi / 4), to: [0, 1])
+
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
+
+        #expect(optimized.count == 0, "XX(pi/4)XX(-pi/4) should cancel to identity")
+    }
+
+    @Test("YY with opposite angles cancels to identity")
+    func yyOppositeCancels() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.yy(.pi / 3), to: [0, 1])
+        circuit.append(.yy(-.pi / 3), to: [0, 1])
+
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
+
+        #expect(optimized.count == 0, "YY(pi/3)YY(-pi/3) should cancel to identity")
+    }
+
+    @Test("ZZ with opposite angles cancels to identity")
+    func zzOppositeCancels() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.zz(.pi / 6), to: [0, 1])
+        circuit.append(.zz(-.pi / 6), to: [0, 1])
+
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
+
+        #expect(optimized.count == 0, "ZZ(pi/6)ZZ(-pi/6) should cancel to identity")
+    }
+
+    @Test("GlobalPhase with opposite angles cancels to identity")
+    func globalPhaseOppositeCancels() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.globalPhase(.pi / 2), to: 0)
+        circuit.append(.globalPhase(-.pi / 2), to: 0)
+
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
+
+        #expect(optimized.count == 0, "GlobalPhase(pi/2)GlobalPhase(-pi/2) should cancel to identity")
+    }
+
+    @Test("XX cancellation preserves quantum state equivalence")
+    func xxCancellationPreservesState() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.xx(.pi / 4), to: [0, 1])
+        circuit.append(.xx(-.pi / 4), to: [0, 1])
+
+        let originalState = circuit.execute()
+        let optimizedState = CircuitOptimizer.cancelIdentityPairs(circuit).execute()
+
+        for i in 0 ..< originalState.stateSpaceSize {
+            let diff = (originalState.amplitude(of: i) - optimizedState.amplitude(of: i)).magnitude
+            #expect(diff < 1e-10, "XX cancellation should preserve quantum state at index \(i)")
+        }
+    }
+
+    @Test("YY cancellation preserves quantum state equivalence")
+    func yyCancellationPreservesState() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.yy(.pi / 3), to: [0, 1])
+        circuit.append(.yy(-.pi / 3), to: [0, 1])
+
+        let originalState = circuit.execute()
+        let optimizedState = CircuitOptimizer.cancelIdentityPairs(circuit).execute()
+
+        for i in 0 ..< originalState.stateSpaceSize {
+            let diff = (originalState.amplitude(of: i) - optimizedState.amplitude(of: i)).magnitude
+            #expect(diff < 1e-10, "YY cancellation should preserve quantum state at index \(i)")
+        }
+    }
+
+    @Test("ZZ cancellation preserves quantum state equivalence")
+    func zzCancellationPreservesState() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.zz(.pi / 6), to: [0, 1])
+        circuit.append(.zz(-.pi / 6), to: [0, 1])
+
+        let originalState = circuit.execute()
+        let optimizedState = CircuitOptimizer.cancelIdentityPairs(circuit).execute()
+
+        for i in 0 ..< originalState.stateSpaceSize {
+            let diff = (originalState.amplitude(of: i) - optimizedState.amplitude(of: i)).magnitude
+            #expect(diff < 1e-10, "ZZ cancellation should preserve quantum state at index \(i)")
+        }
+    }
+
+    @Test("GlobalPhase cancellation preserves quantum state equivalence")
+    func globalPhaseCancellationPreservesState() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.globalPhase(.pi / 2), to: 0)
+        circuit.append(.globalPhase(-.pi / 2), to: 0)
+
+        let originalState = circuit.execute()
+        let optimizedState = CircuitOptimizer.cancelIdentityPairs(circuit).execute()
+
+        for i in 0 ..< originalState.stateSpaceSize {
+            let diff = (originalState.amplitude(of: i) - optimizedState.amplitude(of: i)).magnitude
+            #expect(diff < 1e-10, "GlobalPhase cancellation should preserve quantum state at index \(i)")
+        }
+    }
+
+    @Test("XX with same angles does not cancel")
+    func xxSameAngleDoesNotCancel() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.xx(.pi / 4), to: [0, 1])
+        circuit.append(.xx(.pi / 4), to: [0, 1])
+
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
+
+        #expect(optimized.count == 2, "XX(pi/4)XX(pi/4) should not cancel since angles do not sum to zero")
+    }
+
+    @Test("ZZ on different qubits does not cancel")
+    func zzDifferentQubitsDoesNotCancel() {
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.append(.zz(.pi / 6), to: [0, 1])
+        circuit.append(.zz(-.pi / 6), to: [1, 2])
+
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
+
+        #expect(optimized.count == 2, "ZZ on different qubit pairs should not cancel")
+    }
+
+    @Test("XX identity detection via gatesFormIdentity")
+    func xxGatesFormIdentityDirect() {
+        #expect(CircuitOptimizer.gatesFormIdentity(.xx(.pi / 4), .xx(-.pi / 4)),
+                "XX(pi/4) and XX(-pi/4) should form identity pair")
+    }
+
+    @Test("YY identity detection via gatesFormIdentity")
+    func yyGatesFormIdentityDirect() {
+        #expect(CircuitOptimizer.gatesFormIdentity(.yy(.pi / 3), .yy(-.pi / 3)),
+                "YY(pi/3) and YY(-pi/3) should form identity pair")
+    }
+
+    @Test("ZZ identity detection via gatesFormIdentity")
+    func zzGatesFormIdentityDirect() {
+        #expect(CircuitOptimizer.gatesFormIdentity(.zz(.pi / 6), .zz(-.pi / 6)),
+                "ZZ(pi/6) and ZZ(-pi/6) should form identity pair")
+    }
+
+    @Test("GlobalPhase identity detection via gatesFormIdentity")
+    func globalPhaseGatesFormIdentityDirect() {
+        #expect(CircuitOptimizer.gatesFormIdentity(.globalPhase(.pi / 2), .globalPhase(-.pi / 2)),
+                "GlobalPhase(pi/2) and GlobalPhase(-pi/2) should form identity pair")
+    }
+
+    @Test("Full optimization pipeline cancels XX pairs")
+    func fullPipelineCancelsXX() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.xx(.pi / 4), to: [0, 1])
+        circuit.append(.xx(-.pi / 4), to: [0, 1])
+
+        let optimized = CircuitOptimizer.optimize(circuit)
+
+        #expect(optimized.count == 0, "Full pipeline should cancel XX identity pair")
+    }
+
+    @Test("Full optimization pipeline cancels GlobalPhase pairs")
+    func fullPipelineCancelsGlobalPhase() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.globalPhase(.pi / 2), to: 0)
+        circuit.append(.globalPhase(-.pi / 2), to: 0)
+
+        let optimized = CircuitOptimizer.optimize(circuit)
+
+        #expect(optimized.count == 0, "Full pipeline should cancel GlobalPhase identity pair")
+    }
+}
+
+/// Test suite for GlobalPhase angle merging in trySameTypeRotationMerge.
+/// Validates that consecutive GlobalPhase gates merge into one with summed angle,
+/// covering lines 369-373 and 391 of CircuitOptimizer.swift.
+@Suite("GlobalPhase Angle Merging")
+struct GlobalPhaseAngleMergingTests {
+    @Test("Two GlobalPhase gates merge into one with summed angle")
+    func twoGlobalPhaseMerge() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.globalPhase(.pi / 4), to: 0)
+        circuit.append(.globalPhase(.pi / 4), to: 0)
+
+        let optimized = CircuitOptimizer.mergeSingleQubitGates(circuit)
+
+        #expect(optimized.count == 1, "Two GlobalPhase gates should merge into one")
+        if let mergedGate = optimized.operations.first?.gate {
+            if case let .globalPhase(angle) = mergedGate, case let .value(v) = angle {
+                #expect(abs(v - .pi / 2) < 1e-10, "Merged GlobalPhase angle should be pi/2")
+            }
+        }
+    }
+
+    @Test("Three consecutive GlobalPhase gates merge into one")
+    func threeGlobalPhaseMerge() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.globalPhase(.pi / 6), to: 0)
+        circuit.append(.globalPhase(.pi / 6), to: 0)
+        circuit.append(.globalPhase(.pi / 6), to: 0)
+
+        let optimized = CircuitOptimizer.mergeSingleQubitGates(circuit)
+
+        #expect(optimized.count == 1, "Three GlobalPhase gates should merge into one")
+        if let mergedGate = optimized.operations.first?.gate {
+            if case let .globalPhase(angle) = mergedGate, case let .value(v) = angle {
+                #expect(abs(v - .pi / 2) < 1e-10, "Merged GlobalPhase angle should be pi/2")
+            }
+        }
+    }
+
+    @Test("GlobalPhase merging preserves quantum state equivalence")
+    func globalPhaseMergingPreservesState() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.globalPhase(.pi / 4), to: 0)
+        circuit.append(.globalPhase(.pi / 4), to: 0)
+
+        let originalState = circuit.execute()
+        let optimizedState = CircuitOptimizer.mergeSingleQubitGates(circuit).execute()
+
+        for i in 0 ..< originalState.stateSpaceSize {
+            let diff = (originalState.amplitude(of: i) - optimizedState.amplitude(of: i)).magnitude
+            #expect(diff < 1e-10, "GlobalPhase merging should preserve quantum state at index \(i)")
+        }
+    }
+
+    @Test("GlobalPhase summing to 2pi cancels completely")
+    func globalPhaseSumTo2PiCancels() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.globalPhase(.pi), to: 0)
+        circuit.append(.globalPhase(.pi), to: 0)
+
+        let optimized = CircuitOptimizer.mergeSingleQubitGates(circuit)
+
+        #expect(optimized.count == 0, "GlobalPhase(pi) + GlobalPhase(pi) = GlobalPhase(2pi) should cancel to identity")
+    }
+
+    @Test("GlobalPhase merging via full optimization pipeline")
+    func globalPhaseMergingFullPipeline() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.globalPhase(.pi / 4), to: 0)
+        circuit.append(.globalPhase(.pi / 4), to: 0)
+
+        let optimized = CircuitOptimizer.optimize(circuit)
+
+        #expect(optimized.count < circuit.count, "Full pipeline should merge consecutive GlobalPhase gates")
+    }
+
+    @Test("GlobalPhase merging produces correct gate type")
+    func globalPhaseMergingProducesCorrectType() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.globalPhase(.pi / 8), to: 0)
+        circuit.append(.globalPhase(.pi / 8), to: 0)
+
+        let optimized = CircuitOptimizer.mergeSingleQubitGates(circuit)
+
+        #expect(optimized.count == 1, "Two GlobalPhase(pi/8) should merge into one gate")
+        if let mergedGate = optimized.operations.first?.gate {
+            var isGlobalPhase = false
+            if case .globalPhase = mergedGate { isGlobalPhase = true }
+            #expect(isGlobalPhase, "Merged gate should be of type GlobalPhase")
+        }
+    }
+
+    @Test("Four GlobalPhase gates merge into one")
+    func fourGlobalPhaseMerge() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.globalPhase(.pi / 8), to: 0)
+        circuit.append(.globalPhase(.pi / 8), to: 0)
+        circuit.append(.globalPhase(.pi / 8), to: 0)
+        circuit.append(.globalPhase(.pi / 8), to: 0)
+
+        let optimized = CircuitOptimizer.mergeSingleQubitGates(circuit)
+
+        #expect(optimized.count == 1, "Four GlobalPhase(pi/8) should merge into one gate")
+        if let mergedGate = optimized.operations.first?.gate {
+            if case let .globalPhase(angle) = mergedGate, case let .value(v) = angle {
+                #expect(abs(v - .pi / 2) < 1e-10, "Merged angle should be pi/2")
+            }
+        }
+    }
+
+    @Test("GlobalPhase on different qubits does not merge")
+    func globalPhaseDifferentQubitsNoMerge() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.globalPhase(.pi / 4), to: 0)
+        circuit.append(.globalPhase(.pi / 4), to: 1)
+
+        let optimized = CircuitOptimizer.mergeSingleQubitGates(circuit)
+
+        #expect(optimized.count == 2, "GlobalPhase on different qubits should not merge")
+    }
+
+    @Test("Three GlobalPhase merging preserves state equivalence")
+    func threeGlobalPhaseMergingPreservesState() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.globalPhase(.pi / 6), to: 0)
+        circuit.append(.globalPhase(.pi / 6), to: 0)
+        circuit.append(.globalPhase(.pi / 6), to: 0)
+
+        let originalState = circuit.execute()
+        let optimizedState = CircuitOptimizer.mergeSingleQubitGates(circuit).execute()
+
+        for i in 0 ..< originalState.stateSpaceSize {
+            let diff = (originalState.amplitude(of: i) - optimizedState.amplitude(of: i)).magnitude
+            #expect(diff < 1e-10, "Three-way GlobalPhase merging should preserve quantum state at index \(i)")
+        }
+    }
+}
+
+/// Test suite for reset operation preservation during circuit optimization.
+/// Validates that non-unitary reset operations survive identity cancellation,
+/// two-qubit pair cancellation, commutation analysis, and gate counting passes.
+@Suite("Reset Preservation in Optimizer")
+struct ResetPreservationInOptimizerTests {
+    @Test("cancelIdentityPairs preserves reset between Hadamard gates")
+    func cancelIdentityPairsPreservesResetBetweenHadamards() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.reset, to: 0)
+        circuit.append(.hadamard, to: 0)
+
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
+
+        var resetCount = 0
+        for op in optimized.operations {
+            if case .reset = op { resetCount += 1 }
+        }
+        #expect(resetCount == 1, "cancelIdentityPairs must preserve the reset operation between Hadamard gates")
+        #expect(optimized.count == 3, "H-reset-H must not be collapsed because reset breaks the identity pair pattern")
+    }
+
+    @Test("cancelTwoQubitPairs preserves reset between CNOT gates")
+    func cancelTwoQubitPairsPreservesResetBetweenCNOTs() {
+        let ops: [CircuitOperation] = [
+            .gate(.cnot, qubits: [0, 1]),
+            .reset(qubit: 0),
+            .gate(.cnot, qubits: [0, 1]),
+        ]
+        let circuit = QuantumCircuit(qubits: 2, operations: ops)
+
+        let optimized = CircuitOptimizer.cancelTwoQubitPairs(circuit)
+
+        var resetCount = 0
+        for op in optimized.operations {
+            if case .reset = op { resetCount += 1 }
+        }
+        #expect(resetCount == 1, "cancelTwoQubitPairs must preserve the reset operation between CNOT gates")
+        #expect(optimized.count == 3, "CNOT-reset-CNOT must not cancel because reset separates the pair")
+    }
+
+    @Test("operationsCommute returns false when one operand is reset")
+    func operationsCommuteReturnsFalseForReset() {
+        let resetOp = CircuitOperation.reset(qubit: 0)
+        let gateOp = CircuitOperation.gate(.pauliZ, qubits: [0])
+
+        let commutes1 = CircuitOptimizer.operationsCommute(resetOp, gateOp)
+        let commutes2 = CircuitOptimizer.operationsCommute(gateOp, resetOp)
+        let commutes3 = CircuitOptimizer.operationsCommute(resetOp, resetOp)
+
+        #expect(!commutes1, "operationsCommute must return false when the first operand is a reset operation")
+        #expect(!commutes2, "operationsCommute must return false when the second operand is a reset operation")
+        #expect(!commutes3, "operationsCommute must return false when both operands are reset operations")
+    }
+
+    @Test("gateCount excludes reset operations from the count")
+    func gateCountExcludesReset() {
+        let ops: [CircuitOperation] = [
+            .gate(.hadamard, qubits: [0]),
+            .reset(qubit: 0),
+            .gate(.pauliX, qubits: [0]),
+        ]
+        let circuit = QuantumCircuit(qubits: 1, operations: ops)
+
+        let counts = CircuitOptimizer.gateCount(circuit)
+
+        let totalGates = counts.values.reduce(0, +)
+        #expect(totalGates == 2, "gateCount must count only gate operations and exclude the reset operation")
+        #expect(counts[.hadamard] == 1, "gateCount must count exactly one Hadamard gate")
+        #expect(counts[.pauliX] == 1, "gateCount must count exactly one PauliX gate")
+    }
+
+    @Test("gateCountByArity excludes reset operations from all arity buckets")
+    func gateCountByArityExcludesReset() {
+        let ops: [CircuitOperation] = [
+            .gate(.hadamard, qubits: [0]),
+            .reset(qubit: 0),
+            .gate(.cnot, qubits: [0, 1]),
+            .reset(qubit: 1),
+            .gate(.toffoli, qubits: [0, 1, 2]),
+        ]
+        let circuit = QuantumCircuit(qubits: 3, operations: ops)
+
+        let (single, two, three) = CircuitOptimizer.gateCountByArity(circuit)
+
+        #expect(single == 1, "gateCountByArity must count exactly one single-qubit gate and exclude reset operations")
+        #expect(two == 1, "gateCountByArity must count exactly one two-qubit gate and exclude reset operations")
+        #expect(three == 1, "gateCountByArity must count exactly one three-qubit gate and exclude reset operations")
+    }
+
+    @Test("cnotEquivalentCount excludes reset operations from the count")
+    func cnotEquivalentCountExcludesReset() {
+        let ops: [CircuitOperation] = [
+            .gate(.cnot, qubits: [0, 1]),
+            .reset(qubit: 0),
+            .gate(.swap, qubits: [0, 1]),
+        ]
+        let circuit = QuantumCircuit(qubits: 2, operations: ops)
+
+        let count = CircuitOptimizer.cnotEquivalentCount(circuit)
+
+        #expect(count == 4, "cnotEquivalentCount must be 4 (CNOT=1 + SWAP=3) and must exclude the reset operation")
     }
 }

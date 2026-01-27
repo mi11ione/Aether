@@ -262,8 +262,8 @@ public extension QuantumCircuit {
         }
 
         let inverseQFTCircuit = inverseQFT(qubits: config.precisionQubits)
-        for gate in inverseQFTCircuit.gates {
-            circuit.append(gate.gate, to: gate.qubits)
+        for op in inverseQFTCircuit.operations {
+            circuit.addOperation(op)
         }
 
         return circuit

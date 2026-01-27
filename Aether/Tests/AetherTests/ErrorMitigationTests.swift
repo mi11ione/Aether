@@ -1041,3 +1041,296 @@ struct ErrorMitigationEdgeCasesTests {
                 "Improvement factor should be 0 when noisy value at scale 1.0 is zero")
     }
 }
+
+/// Test suite for reset operation preservation during circuit folding and PEC sampling.
+/// Validates that foldLocal, foldFromEnd, and sampleCircuit correctly pass through
+/// mid-circuit reset operations without folding or modifying them.
+@Suite("Reset Preservation in Error Mitigation")
+struct ResetPreservationTests {
+    @Test("foldLocal preserves reset operations between gates")
+    func foldLocalPreservesReset() {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 3],
+            foldingStrategy: .local,
+        )
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliX, to: 1)
+        circuit.append(.reset, to: 0)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliZ, to: 1)
+
+        let folded = zne.fold(circuit: circuit, scaleFactor: 3.0)
+
+        let resetCount = folded.operations.count(where: {
+            if case .reset = $0 { return true }
+            return false
+        })
+        #expect(resetCount == 1,
+                "Local folding should preserve exactly one reset operation, found \(resetCount)")
+
+        let resetIndices = folded.operations.enumerated().compactMap { index, op -> Int? in
+            if case .reset = op { return index }
+            return nil
+        }
+        #expect(resetIndices.count == 1,
+                "Reset should appear exactly once in folded circuit")
+
+        if let resetIndex = resetIndices.first {
+            let hasGateBefore = resetIndex > 0
+            let hasGateAfter = resetIndex < folded.operations.count - 1
+            #expect(hasGateBefore,
+                    "Reset should have gate operations before it in the folded circuit")
+            #expect(hasGateAfter,
+                    "Reset should have gate operations after it in the folded circuit")
+        }
+    }
+
+    @Test("foldLocal with reset at circuit start preserves reset")
+    func foldLocalResetAtStart() {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 3],
+            foldingStrategy: .local,
+        )
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.reset, to: 0)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliX, to: 0)
+
+        let folded = zne.fold(circuit: circuit, scaleFactor: 3.0)
+
+        let resetCount = folded.operations.count(where: {
+            if case .reset = $0 { return true }
+            return false
+        })
+        #expect(resetCount == 1,
+                "Local folding should preserve reset at start, found \(resetCount) resets")
+
+        let firstIsReset = if case .reset = folded.operations[0] {
+            true
+        } else {
+            false
+        }
+        #expect(firstIsReset,
+                "First operation in folded circuit should be reset, got \(folded.operations[0])")
+        #expect(folded.operations.count > 1,
+                "Folded circuit should have more than just the reset operation")
+    }
+
+    @Test("foldLocal with multiple resets preserves all resets")
+    func foldLocalMultipleResets() {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 3],
+            foldingStrategy: .local,
+        )
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.reset, to: 0)
+        circuit.append(.pauliX, to: 1)
+        circuit.append(.reset, to: 1)
+        circuit.append(.hadamard, to: 1)
+
+        let folded = zne.fold(circuit: circuit, scaleFactor: 2.0)
+
+        let resetCount = folded.operations.count(where: {
+            if case .reset = $0 { return true }
+            return false
+        })
+        #expect(resetCount == 2,
+                "Local folding should preserve both reset operations, found \(resetCount)")
+    }
+
+    @Test("foldFromEnd preserves reset in reverse section")
+    func foldFromEndPreservesResetReverse() {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 3],
+            foldingStrategy: .fromEnd,
+        )
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.reset, to: 0)
+
+        let folded = zne.fold(circuit: circuit, scaleFactor: 3.0)
+
+        let resetCount = folded.operations.count(where: {
+            if case .reset = $0 { return true }
+            return false
+        })
+        #expect(resetCount >= 2,
+                "FromEnd folding with reset at end should preserve resets in reverse and forward sections, found \(resetCount)")
+
+        let gateCount = folded.operations.count(where: {
+            if case .gate = $0 { return true }
+            return false
+        })
+        #expect(gateCount > 0,
+                "Folded circuit should still contain gate operations")
+    }
+
+    @Test("foldFromEnd preserves reset in forward section")
+    func foldFromEndPreservesResetForward() {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 3],
+            foldingStrategy: .fromEnd,
+        )
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.reset, to: 0)
+        circuit.append(.pauliX, to: 0)
+
+        let folded = zne.fold(circuit: circuit, scaleFactor: 2.0)
+
+        let resetCount = folded.operations.count(where: {
+            if case .reset = $0 { return true }
+            return false
+        })
+        #expect(resetCount >= 1,
+                "FromEnd folding should preserve at least the original reset, found \(resetCount)")
+
+        #expect(folded.operations.count > circuit.operations.count,
+                "Folded circuit at scale > 1 should have more operations than original")
+    }
+
+    @Test("foldFromEnd with reset at end produces resets in both reverse and forward passes")
+    func foldFromEndResetAtEndBothPasses() {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 3],
+            foldingStrategy: .fromEnd,
+        )
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.reset, to: 0)
+
+        let folded = zne.fold(circuit: circuit, scaleFactor: 3.0)
+
+        let resetOps = folded.operations.enumerated().compactMap { index, op -> Int? in
+            if case .reset = op { return index }
+            return nil
+        }
+        #expect(resetOps.count >= 2,
+                "FromEnd folding at scale 3 should produce resets from both reverse and forward passes, found \(resetOps.count)")
+
+        if resetOps.count >= 2 {
+            #expect(resetOps[0] < resetOps[1],
+                    "Reset operations should appear at distinct positions in folded circuit")
+        }
+    }
+
+    @Test("PEC sampleCircuit preserves reset operations")
+    func pecSampleCircuitPreservesReset() async {
+        let pec = ProbabilisticErrorCancellation(errorProbability: 0.01, samples: 50)
+        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.reset, to: 0)
+        circuit.append(.pauliX, to: 0)
+
+        let result = await pec.mitigate(
+            circuit: circuit,
+            observable: Observable.pauliZ(qubit: 0),
+            simulator: simulator,
+            seed: 42,
+        )
+
+        #expect(result.mitigatedValue.isFinite,
+                "PEC with reset in circuit should produce finite mitigated value")
+        #expect(result.samples == 50,
+                "PEC should use the configured number of samples")
+    }
+
+    @Test("PEC with reset-only circuit produces finite result")
+    func pecResetOnlyCircuit() async {
+        let pec = ProbabilisticErrorCancellation(errorProbability: 0.01, samples: 50)
+        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.reset, to: 0)
+
+        let result = await pec.mitigate(
+            circuit: circuit,
+            observable: Observable.pauliZ(qubit: 0),
+            simulator: simulator,
+            seed: 99,
+        )
+
+        #expect(result.mitigatedValue.isFinite,
+                "PEC with reset-only circuit should produce finite result")
+    }
+
+    @Test("PEC with reset between gates is reproducible with seed")
+    func pecResetReproducibleWithSeed() async {
+        let pec = ProbabilisticErrorCancellation(errorProbability: 0.05, samples: 100)
+        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.cnot, to: [0, 1])
+        circuit.append(.reset, to: 0)
+        circuit.append(.hadamard, to: 0)
+
+        let result1 = await pec.mitigate(
+            circuit: circuit,
+            observable: Observable.pauliZ(qubit: 0),
+            simulator: simulator,
+            seed: 7777,
+        )
+
+        let result2 = await pec.mitigate(
+            circuit: circuit,
+            observable: Observable.pauliZ(qubit: 0),
+            simulator: simulator,
+            seed: 7777,
+        )
+
+        #expect(abs(result1.mitigatedValue - result2.mitigatedValue) < 1e-10,
+                "PEC with reset should be reproducible with same seed")
+    }
+
+    @Test("foldLocal does not fold reset as if it were a gate")
+    func foldLocalDoesNotFoldReset() {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 5],
+            foldingStrategy: .local,
+        )
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.reset, to: 0)
+
+        let folded = zne.fold(circuit: circuit, scaleFactor: 5.0)
+
+        let resetCount = folded.operations.count(where: {
+            if case .reset = $0 { return true }
+            return false
+        })
+        #expect(resetCount == 1,
+                "Reset should not be duplicated by local folding, found \(resetCount) resets")
+
+        let gateCount = folded.operations.count(where: {
+            if case .gate = $0 { return true }
+            return false
+        })
+        #expect(gateCount == 0,
+                "No gate operations should be created from reset-only circuit, found \(gateCount) gates")
+    }
+
+    @Test("foldFromEnd preserves reset qubit index")
+    func foldFromEndPreservesResetQubitIndex() {
+        let zne = ZeroNoiseExtrapolation(
+            scaleFactors: [1, 3],
+            foldingStrategy: .fromEnd,
+        )
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.reset, to: 2)
+        circuit.append(.pauliX, to: 1)
+
+        let folded = zne.fold(circuit: circuit, scaleFactor: 3.0)
+
+        let resetQubits = folded.operations.compactMap { op -> Int? in
+            if case let .reset(qubit, _) = op { return qubit }
+            return nil
+        }
+        #expect(resetQubits.allSatisfy { $0 == 2 },
+                "All preserved resets should target qubit 2, found targets \(resetQubits)")
+        #expect(resetQubits.count >= 1,
+                "At least one reset should be preserved in the folded circuit")
+    }
+}

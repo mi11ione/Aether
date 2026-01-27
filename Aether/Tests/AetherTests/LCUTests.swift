@@ -289,7 +289,7 @@ struct PrepareCircuitTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.prepareCircuit(decomposition: decomposition, ancillaStart: 1)
 
-        #expect(circuit.gates.isEmpty, "PREPARE circuit for single term should be empty")
+        #expect(circuit.operations.isEmpty, "PREPARE circuit for single term should be empty")
     }
 
     @Test("PREPARE circuit for empty decomposition is empty")
@@ -298,7 +298,7 @@ struct PrepareCircuitTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.prepareCircuit(decomposition: decomposition, ancillaStart: 0)
 
-        #expect(circuit.gates.isEmpty, "PREPARE circuit for empty decomposition should be empty")
+        #expect(circuit.operations.isEmpty, "PREPARE circuit for empty decomposition should be empty")
     }
 
     @Test("PREPARE circuit for two equal terms produces gates")
@@ -310,7 +310,7 @@ struct PrepareCircuitTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.prepareCircuit(decomposition: decomposition, ancillaStart: 2)
 
-        #expect(circuit.gates.count > 0, "PREPARE circuit for two equal terms should have gates")
+        #expect(circuit.operations.count > 0, "PREPARE circuit for two equal terms should have gates")
     }
 
     @Test("PREPARE circuit with different ancilla start positions")
@@ -363,7 +363,7 @@ struct SelectCircuitTests {
             ancillaStart: 2,
         )
 
-        #expect(circuit.gates.isEmpty, "SELECT circuit for empty decomposition should be empty")
+        #expect(circuit.operations.isEmpty, "SELECT circuit for empty decomposition should be empty")
     }
 
     @Test("SELECT circuit produces gates for non-trivial Hamiltonian")
@@ -380,7 +380,7 @@ struct SelectCircuitTests {
             ancillaStart: 2,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should produce gates for non-trivial Hamiltonian")
+        #expect(circuit.operations.count > 0, "SELECT circuit should produce gates for non-trivial Hamiltonian")
     }
 
     @Test("SELECT circuit handles negative coefficients")
@@ -396,7 +396,7 @@ struct SelectCircuitTests {
             ancillaStart: 2,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should handle negative coefficients")
+        #expect(circuit.operations.count > 0, "SELECT circuit should handle negative coefficients")
     }
 
     @Test("SELECT circuit with single-qubit Pauli strings")
@@ -413,7 +413,7 @@ struct SelectCircuitTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should handle all Pauli types")
+        #expect(circuit.operations.count > 0, "SELECT circuit should handle all Pauli types")
     }
 }
 
@@ -451,7 +451,7 @@ struct BlockEncodingCircuitTests {
             ancillaStart: 2,
         )
 
-        #expect(circuit.gates.isEmpty, "Block encoding circuit for empty decomposition should be empty")
+        #expect(circuit.operations.isEmpty, "Block encoding circuit for empty decomposition should be empty")
     }
 
     @Test("Block encoding combines PREPARE, SELECT, PREPARE-inverse")
@@ -474,8 +474,8 @@ struct BlockEncodingCircuitTests {
             ancillaStart: 2,
         )
 
-        let expectedMinGates = prepareCircuit.gates.count + selectCircuit.gates.count
-        #expect(blockCircuit.gates.count >= expectedMinGates, "Block encoding should have at least PREPARE + SELECT gates")
+        let expectedMinGates = prepareCircuit.operations.count + selectCircuit.operations.count
+        #expect(blockCircuit.operations.count >= expectedMinGates, "Block encoding should have at least PREPARE + SELECT gates")
     }
 
     @Test("Block encoding circuit produces gates for multi-term Hamiltonian")
@@ -492,7 +492,7 @@ struct BlockEncodingCircuitTests {
             ancillaStart: 2,
         )
 
-        #expect(circuit.gates.count > 0, "Block encoding circuit should produce gates for multi-term Hamiltonian")
+        #expect(circuit.operations.count > 0, "Block encoding circuit should produce gates for multi-term Hamiltonian")
     }
 
     @Test("Block encoding with single term produces minimal circuit")
@@ -509,8 +509,8 @@ struct BlockEncodingCircuitTests {
 
         let prepCircuit = LCU.prepareCircuit(decomposition: decomposition, ancillaStart: 1)
         let selCircuit = LCU.selectCircuit(decomposition: decomposition, systemQubits: 1, ancillaStart: 1)
-        let expectedGates = prepCircuit.gates.count * 2 + selCircuit.gates.count
-        #expect(circuit.gates.count == expectedGates, "Block encoding for single term should have PREPARE + SELECT + PREPARE-inverse gates")
+        let expectedGates = prepCircuit.operations.count * 2 + selCircuit.operations.count
+        #expect(circuit.operations.count == expectedGates, "Block encoding for single term should have PREPARE + SELECT + PREPARE-inverse gates")
     }
 }
 
@@ -643,7 +643,7 @@ struct MultiQubitPauliStringTests {
             ancillaStart: 2,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should handle multi-qubit Pauli strings")
+        #expect(circuit.operations.count > 0, "SELECT circuit should handle multi-qubit Pauli strings")
     }
 
     @Test("Heisenberg model Hamiltonian decomposition")
@@ -774,7 +774,7 @@ struct AmplitudeEncodingEdgeCasesTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.prepareCircuit(decomposition: decomposition, ancillaStart: 2)
 
-        #expect(circuit.gates.count > 0, "PREPARE circuit should generate gates for skewed distribution")
+        #expect(circuit.operations.count > 0, "PREPARE circuit should generate gates for skewed distribution")
     }
 
     @Test("PREPARE circuit with four terms and varying weights")
@@ -801,7 +801,7 @@ struct AmplitudeEncodingEdgeCasesTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.prepareCircuit(decomposition: decomposition, ancillaStart: 2)
 
-        #expect(circuit.gates.count > 0, "PREPARE circuit should generate gates for 8 uniform terms")
+        #expect(circuit.operations.count > 0, "PREPARE circuit should generate gates for 8 uniform terms")
         #expect(circuit.qubits == 5, "PREPARE circuit should have 5 qubits (2 system + 3 ancilla)")
     }
 
@@ -830,7 +830,7 @@ struct AmplitudeEncodingEdgeCasesTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.prepareCircuit(decomposition: decomposition, ancillaStart: 2)
 
-        #expect(circuit.gates.count > 0, "PREPARE circuit should handle concentrated probability in first term")
+        #expect(circuit.operations.count > 0, "PREPARE circuit should handle concentrated probability in first term")
     }
 
     @Test("PREPARE circuit probability concentrated in last term")
@@ -844,7 +844,7 @@ struct AmplitudeEncodingEdgeCasesTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.prepareCircuit(decomposition: decomposition, ancillaStart: 2)
 
-        #expect(circuit.gates.count > 0, "PREPARE circuit should handle concentrated probability in last term")
+        #expect(circuit.operations.count > 0, "PREPARE circuit should handle concentrated probability in last term")
     }
 }
 
@@ -867,7 +867,7 @@ struct MultiControlledGateTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should produce gates for 5 terms with X operators")
+        #expect(circuit.operations.count > 0, "SELECT circuit should produce gates for 5 terms with X operators")
     }
 
     @Test("SELECT circuit with five terms uses multi-controlled Y")
@@ -884,7 +884,7 @@ struct MultiControlledGateTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should produce gates for 5 terms with Y operators")
+        #expect(circuit.operations.count > 0, "SELECT circuit should produce gates for 5 terms with Y operators")
     }
 
     @Test("SELECT circuit with five terms uses multi-controlled Z")
@@ -901,7 +901,7 @@ struct MultiControlledGateTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should produce gates for 5 terms with Z operators")
+        #expect(circuit.operations.count > 0, "SELECT circuit should produce gates for 5 terms with Z operators")
     }
 
     @Test("SELECT circuit with negative coefficients and multiple ancilla")
@@ -919,7 +919,7 @@ struct MultiControlledGateTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should handle negative coefficients with 3 ancilla qubits")
+        #expect(circuit.operations.count > 0, "SELECT circuit should handle negative coefficients with 3 ancilla qubits")
         #expect(decomposition.ancillaQubits == 3, "Five terms should require 3 ancilla qubits")
     }
 
@@ -937,7 +937,7 @@ struct MultiControlledGateTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should handle 9 terms requiring Toffoli ladder decomposition")
+        #expect(circuit.operations.count > 0, "SELECT circuit should handle 9 terms requiring Toffoli ladder decomposition")
         #expect(decomposition.ancillaQubits == 4, "Nine terms should require 4 ancilla qubits")
     }
 }
@@ -959,7 +959,7 @@ struct ControlledPhaseTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should handle single negative coefficient")
+        #expect(circuit.operations.count > 0, "SELECT circuit should handle single negative coefficient")
     }
 
     @Test("SELECT circuit applies phase with two ancilla qubits")
@@ -976,7 +976,7 @@ struct ControlledPhaseTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should apply controlled phase with 2 ancilla qubits")
+        #expect(circuit.operations.count > 0, "SELECT circuit should apply controlled phase with 2 ancilla qubits")
         #expect(decomposition.ancillaQubits == 2, "Three terms should require 2 ancilla qubits")
     }
 
@@ -995,7 +995,7 @@ struct ControlledPhaseTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should apply multi-controlled phase with 3 ancilla qubits")
+        #expect(circuit.operations.count > 0, "SELECT circuit should apply multi-controlled phase with 3 ancilla qubits")
     }
 
     @Test("Block encoding with negative coefficients preserves correctness")
@@ -1013,7 +1013,7 @@ struct ControlledPhaseTests {
             ancillaStart: 2,
         )
 
-        #expect(circuit.gates.count > 0, "Block encoding should handle mixed positive and negative coefficients")
+        #expect(circuit.operations.count > 0, "Block encoding should handle mixed positive and negative coefficients")
     }
 }
 
@@ -1034,7 +1034,7 @@ struct UncontrolledPauliTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should produce gates for single X term")
+        #expect(circuit.operations.count > 0, "SELECT circuit should produce gates for single X term")
     }
 
     @Test("SELECT circuit for single Y term")
@@ -1049,7 +1049,7 @@ struct UncontrolledPauliTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should produce gates for single Y term")
+        #expect(circuit.operations.count > 0, "SELECT circuit should produce gates for single Y term")
     }
 
     @Test("SELECT circuit for single Z term")
@@ -1064,7 +1064,7 @@ struct UncontrolledPauliTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should produce gates for single Z term")
+        #expect(circuit.operations.count > 0, "SELECT circuit should produce gates for single Z term")
     }
 
     @Test("SELECT circuit for single negative X term")
@@ -1079,7 +1079,7 @@ struct UncontrolledPauliTests {
             ancillaStart: 1,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should handle single negative X term")
+        #expect(circuit.operations.count > 0, "SELECT circuit should handle single negative X term")
     }
 }
 
@@ -1101,7 +1101,7 @@ struct SingleControlledPauliTests {
             ancillaStart: 2,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should use controlled-Y for two Y terms")
+        #expect(circuit.operations.count > 0, "SELECT circuit should use controlled-Y for two Y terms")
         #expect(decomposition.ancillaQubits == 1, "Two terms should require 1 ancilla qubit")
     }
 
@@ -1118,7 +1118,7 @@ struct SingleControlledPauliTests {
             ancillaStart: 2,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should use controlled-Z for two Z terms")
+        #expect(circuit.operations.count > 0, "SELECT circuit should use controlled-Z for two Z terms")
     }
 
     @Test("SELECT circuit uses CNOT for two X terms")
@@ -1134,7 +1134,7 @@ struct SingleControlledPauliTests {
             ancillaStart: 2,
         )
 
-        #expect(circuit.gates.count > 0, "SELECT circuit should use CNOT for two X terms")
+        #expect(circuit.operations.count > 0, "SELECT circuit should use CNOT for two X terms")
     }
 
     @Test("PREPARE circuit handles near-zero total probability in subtree")
@@ -1162,7 +1162,7 @@ struct SingleControlledPauliTests {
         let circuit = LCU.prepareCircuit(decomposition: decomposition, ancillaStart: 2)
 
         #expect(decomposition.termCount == 1, "Single non-zero term should remain after filtering")
-        #expect(circuit.gates.isEmpty, "Single term PREPARE circuit should be empty")
+        #expect(circuit.operations.isEmpty, "Single term PREPARE circuit should be empty")
     }
 
     @Test("PREPARE circuit triggers X gate when left probability is negligible")
@@ -1212,7 +1212,7 @@ struct SingleControlledPauliTests {
         )
 
         #expect(decomposition.ancillaQubits == 3, "Eight terms should require 3 ancilla qubits")
-        #expect(circuit.gates.count > 0, "SELECT circuit should produce gates with multi-controlled phase")
+        #expect(circuit.operations.count > 0, "SELECT circuit should produce gates with multi-controlled phase")
     }
 
     @Test("SELECT circuit with nine terms triggers deep phase recursion")
@@ -1231,7 +1231,7 @@ struct SingleControlledPauliTests {
         )
 
         #expect(decomposition.ancillaQubits == 4, "Nine terms should require 4 ancilla qubits")
-        #expect(circuit.gates.count > 0, "SELECT circuit should produce gates for 9 terms with negative coefficients")
+        #expect(circuit.operations.count > 0, "SELECT circuit should produce gates for 9 terms with negative coefficients")
     }
 
     @Test("Block encoding with sixteen terms exercises all control paths")
@@ -1250,7 +1250,7 @@ struct SingleControlledPauliTests {
         )
 
         #expect(decomposition.ancillaQubits == 4, "Sixteen terms should require 4 ancilla qubits")
-        #expect(circuit.gates.count > 0, "Block encoding should produce gates for 16 terms")
+        #expect(circuit.operations.count > 0, "Block encoding should produce gates for 16 terms")
     }
 
     @Test("PREPARE with four terms and all weight in indices 2 and 3")
@@ -1284,7 +1284,7 @@ struct SingleControlledPauliTests {
         )
 
         #expect(decomposition.ancillaQubits == 4, "Ten terms should require 4 ancilla qubits")
-        #expect(circuit.gates.count > 0, "SELECT circuit should handle 10 negative coefficient terms")
+        #expect(circuit.operations.count > 0, "SELECT circuit should handle 10 negative coefficient terms")
 
         let allNegative = decomposition.originalCoefficients.allSatisfy { $0 < 0 }
         #expect(allNegative, "All original coefficients should be negative")
@@ -1317,7 +1317,7 @@ struct SingleControlledPauliTests {
 
         #expect(decomposition.termCount == 6, "Should have 6 terms")
         #expect(decomposition.ancillaQubits == 3, "Six terms require 3 ancilla qubits (8 slots)")
-        #expect(circuit.gates.count > 0, "Circuit should have gates despite padded zero probability slots")
+        #expect(circuit.operations.count > 0, "Circuit should have gates despite padded zero probability slots")
     }
 
     @Test("PREPARE circuit with three terms has single padded zero slot triggering near-zero subtree")
@@ -1332,7 +1332,7 @@ struct SingleControlledPauliTests {
 
         #expect(decomposition.termCount == 3, "Should have 3 terms")
         #expect(decomposition.ancillaQubits == 2, "Three terms require 2 ancilla qubits (4 slots)")
-        #expect(circuit.gates.count > 0, "Circuit should have gates for 3 terms with padded slot")
+        #expect(circuit.operations.count > 0, "Circuit should have gates for 3 terms with padded slot")
     }
 
     @Test("PREPARE circuit triggers probZero near zero when left subtree is empty")
@@ -1362,7 +1362,7 @@ struct SingleControlledPauliTests {
 
         #expect(decomposition.termCount == 9, "Should have 9 terms")
         #expect(decomposition.ancillaQubits == 4, "Nine terms require 4 ancilla qubits (16 slots)")
-        #expect(circuit.gates.count > 0, "Circuit should have gates despite 7 padded zero probability slots")
+        #expect(circuit.operations.count > 0, "Circuit should have gates despite 7 padded zero probability slots")
     }
 
     @Test("PREPARE circuit with eleven terms has five padded zero slots")

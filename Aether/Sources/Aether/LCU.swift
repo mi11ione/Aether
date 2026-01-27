@@ -302,8 +302,8 @@ public enum LCU {
         }
 
         let prepareCircuit = prepareCircuit(decomposition: decomposition, ancillaStart: ancillaStart)
-        for gate in prepareCircuit.gates {
-            circuit.append(gate.gate, to: gate.qubits)
+        for op in prepareCircuit.operations {
+            circuit.addOperation(op)
         }
 
         let selectCircuit = selectCircuit(
@@ -311,13 +311,13 @@ public enum LCU {
             systemQubits: systemQubits,
             ancillaStart: ancillaStart,
         )
-        for gate in selectCircuit.gates {
-            circuit.append(gate.gate, to: gate.qubits)
+        for op in selectCircuit.operations {
+            circuit.addOperation(op)
         }
 
         let prepareInverse = prepareCircuit.inverse()
-        for gate in prepareInverse.gates {
-            circuit.append(gate.gate, to: gate.qubits)
+        for op in prepareInverse.operations {
+            circuit.addOperation(op)
         }
 
         return circuit

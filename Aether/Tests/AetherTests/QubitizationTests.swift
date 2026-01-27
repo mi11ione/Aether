@@ -423,7 +423,7 @@ struct QuantumSignalProcessingCircuitTests {
             phaseAngles: emptyPhases,
             signalQubit: 1,
         )
-        #expect(circuit.gates.count == 0, "Empty phases should produce empty circuit")
+        #expect(circuit.operations.count == 0, "Empty phases should produce empty circuit")
     }
 
     @Test("buildControlledCircuit creates valid circuit")
@@ -465,7 +465,7 @@ struct QuantumSignalProcessingCircuitTests {
             signalQubit: 2,
             controlQubit: 0,
         )
-        #expect(circuit.gates.count == 0, "Empty phases should produce empty controlled circuit")
+        #expect(circuit.operations.count == 0, "Empty phases should produce empty controlled circuit")
     }
 }
 
@@ -536,7 +536,7 @@ struct QubitizedWalkOperatorCircuitTests {
         let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
         let circuit = walkOp.buildWalkCircuit()
         #expect(circuit.qubits >= encoding.totalQubits, "Walk circuit should have enough qubits")
-        #expect(circuit.gates.count > 0, "Walk circuit should have gates")
+        #expect(circuit.operations.count > 0, "Walk circuit should have gates")
     }
 
     @Test("buildControlledWalkCircuit returns valid circuit")
@@ -549,7 +549,7 @@ struct QubitizedWalkOperatorCircuitTests {
         let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
         let circuit = walkOp.buildControlledWalkCircuit(controlQubit: 0)
         #expect(circuit.qubits >= encoding.totalQubits, "Controlled circuit should have enough qubits")
-        #expect(circuit.gates.count > 0, "Controlled circuit should have gates")
+        #expect(circuit.operations.count > 0, "Controlled circuit should have gates")
     }
 
     @Test("Controlled walk circuit includes control qubit")
@@ -700,7 +700,7 @@ struct QubitizationCircuitsTests {
             epsilon: 1e-4,
         )
         #expect(circuit.qubits >= 2, "Circuit should have at least system qubits")
-        #expect(circuit.gates.count > 0, "Circuit should have gates")
+        #expect(circuit.operations.count > 0, "Circuit should have gates")
     }
 
     @Test("buildWalkOperatorCircuit creates valid circuit")
@@ -714,7 +714,7 @@ struct QubitizationCircuitsTests {
             systemQubits: 2,
         )
         #expect(circuit.qubits >= 2, "Circuit should have at least system qubits")
-        #expect(circuit.gates.count > 0, "Circuit should have gates")
+        #expect(circuit.operations.count > 0, "Circuit should have gates")
     }
 
     @Test("buildBlockEncodingCircuit creates valid circuit")
@@ -1253,7 +1253,7 @@ struct MultiControlledZDecompositionTests {
         let encoding = BlockEncoding(hamiltonian: hamiltonian, systemQubits: 2)
         let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
         let circuit = walkOp.buildWalkCircuit()
-        #expect(circuit.gates.count > 0, "Walk circuit should have gates for multi-term Hamiltonian")
+        #expect(circuit.operations.count > 0, "Walk circuit should have gates for multi-term Hamiltonian")
         #expect(encoding.configuration.ancillaQubits >= 3, "Should have 3+ ancilla qubits for 8 terms")
     }
 
@@ -1272,7 +1272,7 @@ struct MultiControlledZDecompositionTests {
         let encoding = BlockEncoding(hamiltonian: hamiltonian, systemQubits: 2)
         let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
         let circuit = walkOp.buildControlledWalkCircuit(controlQubit: 0)
-        #expect(circuit.gates.count > 0, "Controlled walk should have gates")
+        #expect(circuit.operations.count > 0, "Controlled walk should have gates")
     }
 
     @Test("Single ancilla qubit uses Z gate directly")
@@ -1283,7 +1283,7 @@ struct MultiControlledZDecompositionTests {
         let encoding = BlockEncoding(hamiltonian: hamiltonian, systemQubits: 1)
         let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
         let circuit = walkOp.buildWalkCircuit()
-        #expect(circuit.gates.count > 0, "Walk circuit should have gates")
+        #expect(circuit.operations.count > 0, "Walk circuit should have gates")
     }
 
     @Test("Two ancilla qubits uses CZ gate")
@@ -1296,7 +1296,7 @@ struct MultiControlledZDecompositionTests {
         let encoding = BlockEncoding(hamiltonian: hamiltonian, systemQubits: 1)
         let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
         let circuit = walkOp.buildWalkCircuit()
-        #expect(circuit.gates.count > 0, "Walk circuit with 2 ancillas should have gates")
+        #expect(circuit.operations.count > 0, "Walk circuit with 2 ancillas should have gates")
     }
 }
 
@@ -1315,7 +1315,7 @@ struct ControlledGateDecompositionEdgeCaseTests {
         let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
         let circuit = walkOp.buildControlledWalkCircuit(controlQubit: 10)
         #expect(circuit.qubits >= 11, "Controlled circuit should include control qubit 10")
-        #expect(circuit.gates.count > 0, "Controlled circuit should have gates")
+        #expect(circuit.operations.count > 0, "Controlled circuit should have gates")
     }
 
     @Test("Walk operator with explicit qubit assignment builds correctly")
@@ -1328,7 +1328,7 @@ struct ControlledGateDecompositionEdgeCaseTests {
             systemQubits: [0, 1, 2],
         )
         let circuit = walkOp.buildWalkCircuit()
-        #expect(circuit.gates.count > 0, "Walk circuit with explicit qubits should have gates")
+        #expect(circuit.operations.count > 0, "Walk circuit with explicit qubits should have gates")
     }
 }
 

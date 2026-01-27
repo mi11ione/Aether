@@ -1677,3 +1677,356 @@ struct CustomUnitaryGateTests {
         #expect(QuantumGate.matricesEqual(matrix, retrieved), "customUnitary should return its provided matrix")
     }
 }
+
+/// Test suite for parameter binding of YY, ZZ, and GlobalPhase gates.
+/// Validates bound(with:) substitutes symbolic parameters into concrete values,
+/// producing gates with correct matrices for Ising interaction and global phase gates.
+@Suite("YY/ZZ/GlobalPhase Parameter Binding")
+struct YYZZGlobalPhaseBindingTests {
+    @Test("YY bound() substitutes symbolic parameter")
+    func yyBoundSubstitutes() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.yy(.parameter(theta))
+        let bound = gate.bound(with: ["theta": .pi / 4])
+
+        #expect(!bound.isParameterized, "Bound YY should not be parameterized")
+
+        let expected = QuantumGate.yy(.pi / 4).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound YY matrix should match YY(pi/4)")
+    }
+
+    @Test("ZZ bound() substitutes symbolic parameter")
+    func zzBoundSubstitutes() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.zz(.parameter(theta))
+        let bound = gate.bound(with: ["theta": .pi / 3])
+
+        #expect(!bound.isParameterized, "Bound ZZ should not be parameterized")
+
+        let expected = QuantumGate.zz(.pi / 3).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound ZZ matrix should match ZZ(pi/3)")
+    }
+
+    @Test("GlobalPhase bound() substitutes symbolic parameter")
+    func globalPhaseBoundSubstitutes() {
+        let phi = Parameter(name: "phi")
+        let gate = QuantumGate.globalPhase(.parameter(phi))
+        let bound = gate.bound(with: ["phi": .pi / 6])
+
+        #expect(!bound.isParameterized, "Bound GlobalPhase should not be parameterized")
+
+        let expected = QuantumGate.globalPhase(.pi / 6).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound GlobalPhase matrix should match GlobalPhase(pi/6)")
+    }
+
+    @Test("YY bound() with different angle produces correct matrix")
+    func yyBoundDifferentAngle() {
+        let alpha = Parameter(name: "alpha")
+        let gate = QuantumGate.yy(.parameter(alpha))
+        let bound = gate.bound(with: ["alpha": 1.234])
+
+        let expected = QuantumGate.yy(1.234).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound YY(1.234) matrix should match concrete YY(1.234)")
+    }
+
+    @Test("ZZ bound() with different angle produces correct matrix")
+    func zzBoundDifferentAngle() {
+        let beta = Parameter(name: "beta")
+        let gate = QuantumGate.zz(.parameter(beta))
+        let bound = gate.bound(with: ["beta": 2.345])
+
+        let expected = QuantumGate.zz(2.345).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound ZZ(2.345) matrix should match concrete ZZ(2.345)")
+    }
+
+    @Test("GlobalPhase bound() with different angle produces correct matrix")
+    func globalPhaseBoundDifferentAngle() {
+        let gamma = Parameter(name: "gamma")
+        let gate = QuantumGate.globalPhase(.parameter(gamma))
+        let bound = gate.bound(with: ["gamma": 0.789])
+
+        let expected = QuantumGate.globalPhase(0.789).matrix()
+        let actual = bound.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "Bound GlobalPhase(0.789) matrix should match concrete GlobalPhase(0.789)")
+    }
+}
+
+/// Test suite for GlobalPhase gate inverse property.
+/// Validates that GlobalPhase(phi).inverse equals GlobalPhase(-phi),
+/// ensuring correct adjoint computation for global phase operations.
+@Suite("GlobalPhase Inverse")
+struct GlobalPhaseInverseTests {
+    @Test("GlobalPhase inverse negates angle")
+    func globalPhaseInverseNegatesAngle() {
+        let angle = Double.pi / 5
+        let gate = QuantumGate.globalPhase(angle)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "GlobalPhase(theta) * GlobalPhase(-theta) should equal I")
+    }
+
+    @Test("GlobalPhase inverse matrix matches negated angle")
+    func globalPhaseInverseMatrixMatchesNegated() {
+        let angle = Double.pi / 3
+        let gate = QuantumGate.globalPhase(angle)
+        let inverse = gate.inverse
+
+        let expected = QuantumGate.globalPhase(-angle).matrix()
+        let actual = inverse.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "GlobalPhase inverse matrix should equal GlobalPhase(-angle)")
+    }
+
+    @Test("GlobalPhase inverse with symbolic parameter")
+    func globalPhaseInverseSymbolic() {
+        let phi = Parameter(name: "phi")
+        let gate = QuantumGate.globalPhase(.parameter(phi))
+        let inverse = gate.inverse
+
+        if case let .globalPhase(negatedAngle) = inverse {
+            #expect(negatedAngle.isSymbolic, "Inverse GlobalPhase should have symbolic parameter")
+            if case let .negatedParameter(p) = negatedAngle {
+                #expect(p == phi, "Inverse should negate the same parameter")
+            }
+        }
+    }
+
+    @Test("GlobalPhase(0) inverse is identity-like")
+    func globalPhaseZeroInverse() {
+        let gate = QuantumGate.globalPhase(0.0)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "GlobalPhase(0) * GlobalPhase(0).inverse should equal I")
+    }
+}
+
+/// Test suite for YY and ZZ gate inverse properties.
+/// Validates that YY(theta).inverse equals YY(-theta) and ZZ(theta).inverse equals ZZ(-theta),
+/// ensuring correct adjoint computation for Ising interaction gates.
+@Suite("YY/ZZ Inverse")
+struct YYZZInverseTests {
+    @Test("YY inverse negates angle")
+    func yyInverseNegatesAngle() {
+        let angle = Double.pi / 4
+        let gate = QuantumGate.yy(angle)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "YY(theta) * YY(-theta) should equal I")
+    }
+
+    @Test("YY inverse matrix matches negated angle")
+    func yyInverseMatrixMatchesNegated() {
+        let angle = Double.pi / 3
+        let gate = QuantumGate.yy(angle)
+        let inverse = gate.inverse
+
+        let expected = QuantumGate.yy(-angle).matrix()
+        let actual = inverse.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "YY inverse matrix should equal YY(-angle)")
+    }
+
+    @Test("YY inverse with symbolic parameter")
+    func yyInverseSymbolic() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.yy(.parameter(theta))
+        let inverse = gate.inverse
+
+        if case let .yy(negatedAngle) = inverse {
+            #expect(negatedAngle.isSymbolic, "Inverse YY should have symbolic parameter")
+            if case let .negatedParameter(p) = negatedAngle {
+                #expect(p == theta, "Inverse should negate the same parameter")
+            }
+        }
+    }
+
+    @Test("ZZ inverse negates angle")
+    func zzInverseNegatesAngle() {
+        let angle = Double.pi / 5
+        let gate = QuantumGate.zz(angle)
+        let inverse = gate.inverse
+
+        let product = QuantumGate.matrixMultiply(gate.matrix(), inverse.matrix())
+        #expect(QuantumGate.isIdentityMatrix(product), "ZZ(theta) * ZZ(-theta) should equal I")
+    }
+
+    @Test("ZZ inverse matrix matches negated angle")
+    func zzInverseMatrixMatchesNegated() {
+        let angle = Double.pi / 6
+        let gate = QuantumGate.zz(angle)
+        let inverse = gate.inverse
+
+        let expected = QuantumGate.zz(-angle).matrix()
+        let actual = inverse.matrix()
+        #expect(QuantumGate.matricesEqual(expected, actual), "ZZ inverse matrix should equal ZZ(-angle)")
+    }
+
+    @Test("ZZ inverse with symbolic parameter")
+    func zzInverseSymbolic() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.zz(.parameter(theta))
+        let inverse = gate.inverse
+
+        if case let .zz(negatedAngle) = inverse {
+            #expect(negatedAngle.isSymbolic, "Inverse ZZ should have symbolic parameter")
+            if case let .negatedParameter(p) = negatedAngle {
+                #expect(p == theta, "Inverse should negate the same parameter")
+            }
+        }
+    }
+
+    @Test("YY is unitary for various angles")
+    func yyIsUnitary() {
+        let angles = [0.0, .pi / 4, .pi / 3, .pi / 2, .pi]
+        for angle in angles {
+            let matrix = QuantumGate.yy(angle).matrix()
+            #expect(QuantumGate.isUnitary(matrix), "YY(\(angle)) should be unitary")
+        }
+    }
+
+    @Test("ZZ is unitary for various angles")
+    func zzIsUnitary() {
+        let angles = [0.0, .pi / 4, .pi / 3, .pi / 2, .pi]
+        for angle in angles {
+            let matrix = QuantumGate.zz(angle).matrix()
+            #expect(QuantumGate.isUnitary(matrix), "ZZ(\(angle)) should be unitary")
+        }
+    }
+}
+
+/// Test suite for description strings of new gate types.
+/// Validates CustomStringConvertible output for GlobalPhase, YY, ZZ, and CCZ gates,
+/// ensuring correct formatting for debugging and circuit visualization.
+@Suite("New Gate Descriptions")
+struct NewGateDescriptionTests {
+    @Test("GlobalPhase description contains gate name and angle")
+    func globalPhaseDescription() {
+        let gate = QuantumGate.globalPhase(1.234)
+        #expect(gate.description.contains("GlobalPhase"), "GlobalPhase description should contain 'GlobalPhase'")
+        #expect(gate.description.contains("1.234"), "GlobalPhase description should contain the angle value")
+    }
+
+    @Test("GlobalPhase description format is correct")
+    func globalPhaseDescriptionFormat() {
+        let gate = QuantumGate.globalPhase(1.234)
+        #expect(gate.description == "GlobalPhase(1.234)", "GlobalPhase description should be 'GlobalPhase(1.234)'")
+    }
+
+    @Test("YY description contains gate name and angle")
+    func yyDescription() {
+        let gate = QuantumGate.yy(2.345)
+        #expect(gate.description.contains("YY"), "YY description should contain 'YY'")
+        #expect(gate.description.contains("2.345"), "YY description should contain the angle value")
+    }
+
+    @Test("YY description format is correct")
+    func yyDescriptionFormat() {
+        let gate = QuantumGate.yy(2.345)
+        #expect(gate.description == "YY(2.345)", "YY description should be 'YY(2.345)'")
+    }
+
+    @Test("ZZ description contains gate name and angle")
+    func zzDescription() {
+        let gate = QuantumGate.zz(3.456)
+        #expect(gate.description.contains("ZZ"), "ZZ description should contain 'ZZ'")
+        #expect(gate.description.contains("3.456"), "ZZ description should contain the angle value")
+    }
+
+    @Test("ZZ description format is correct")
+    func zzDescriptionFormat() {
+        let gate = QuantumGate.zz(3.456)
+        #expect(gate.description == "ZZ(3.456)", "ZZ description should be 'ZZ(3.456)'")
+    }
+
+    @Test("CCZ description is correct")
+    func cczDescription() {
+        let gate = QuantumGate.ccz
+        #expect(gate.description == "CCZ", "CCZ description should be 'CCZ'")
+    }
+
+    @Test("GlobalPhase with symbolic parameter shows parameter name")
+    func globalPhaseSymbolicDescription() {
+        let phi = Parameter(name: "phi")
+        let gate = QuantumGate.globalPhase(.parameter(phi))
+        #expect(gate.description.contains("GlobalPhase"), "GlobalPhase description should contain 'GlobalPhase'")
+        #expect(gate.description.contains("phi"), "GlobalPhase description should contain symbolic parameter name")
+    }
+
+    @Test("YY with symbolic parameter shows parameter name")
+    func yySymbolicDescription() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.yy(.parameter(theta))
+        #expect(gate.description.contains("YY"), "YY description should contain 'YY'")
+        #expect(gate.description.contains("theta"), "YY description should contain symbolic parameter name")
+    }
+
+    @Test("ZZ with symbolic parameter shows parameter name")
+    func zzSymbolicDescription() {
+        let theta = Parameter(name: "theta")
+        let gate = QuantumGate.zz(.parameter(theta))
+        #expect(gate.description.contains("ZZ"), "ZZ description should contain 'ZZ'")
+        #expect(gate.description.contains("theta"), "ZZ description should contain symbolic parameter name")
+    }
+}
+
+/// Test suite for CCZ gate properties and matrix correctness.
+/// Validates the three-qubit controlled-controlled-Z gate including unitarity,
+/// self-inverse property, matrix structure, and qubit requirements.
+@Suite("CCZ Gate")
+struct CCZGateTests {
+    @Test("CCZ gate requires 3 qubits")
+    func cczRequiresThreeQubits() {
+        #expect(QuantumGate.ccz.qubitsRequired == 3, "CCZ should require 3 qubits")
+    }
+
+    @Test("CCZ gate is unitary")
+    func cczIsUnitary() {
+        let matrix = QuantumGate.ccz.matrix()
+        #expect(QuantumGate.isUnitary(matrix), "CCZ matrix should be unitary")
+    }
+
+    @Test("CCZ gate is self-inverse")
+    func cczIsSelfInverse() {
+        let gate = QuantumGate.ccz
+        let inverse = gate.inverse
+        #expect(gate == inverse, "CCZ should be self-inverse")
+
+        let matrix = gate.matrix()
+        let product = QuantumGate.matrixMultiply(matrix, matrix)
+        #expect(QuantumGate.isIdentityMatrix(product), "CCZ * CCZ should equal I")
+    }
+
+    @Test("CCZ gate is Hermitian")
+    func cczIsHermitian() {
+        #expect(QuantumGate.ccz.isHermitian, "CCZ should be Hermitian")
+    }
+
+    @Test("CCZ matrix only flips phase of |111> state")
+    func cczMatrixStructure() {
+        let matrix = QuantumGate.ccz.matrix()
+
+        #expect(matrix.count == 8, "CCZ matrix should be 8x8")
+
+        for i in 0 ..< 7 {
+            #expect(abs(matrix[i][i].real - 1.0) < 1e-10, "CCZ diagonal element [\(i)][\(i)] real part should be 1.0")
+            #expect(abs(matrix[i][i].imaginary) < 1e-10, "CCZ diagonal element [\(i)][\(i)] imaginary part should be zero")
+        }
+
+        #expect(abs(matrix[7][7].real - -1.0) < 1e-10, "CCZ matrix[7][7] should be -1")
+        #expect(abs(matrix[7][7].imaginary) < 1e-10, "CCZ matrix[7][7] imaginary should be 0")
+
+        for i in 0 ..< 8 {
+            for j in 0 ..< 8 {
+                if i != j {
+                    #expect(abs(matrix[i][j].magnitude) < 1e-10, "CCZ off-diagonal element [\(i)][\(j)] should be 0")
+                }
+            }
+        }
+    }
+}

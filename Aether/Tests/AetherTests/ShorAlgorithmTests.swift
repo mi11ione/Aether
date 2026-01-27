@@ -989,16 +989,16 @@ struct QuantumCircuitShorPeriodFindingTests {
     @Test("shorPeriodFinding circuit has non-empty gates")
     func circuitHasGates() {
         let circuit = QuantumCircuit.shorPeriodFinding(base: 7, modulus: 15, precisionQubits: 9)
-        #expect(circuit.gates.count > 0, "Circuit should have gates for Hadamards, controlled unitaries, and inverse QFT")
+        #expect(circuit.operations.count > 0, "Circuit should have gates for Hadamards, controlled unitaries, and inverse QFT")
     }
 
     @Test("shorPeriodFinding circuit starts with Hadamard gates on precision qubits")
     func circuitStartsWithHadamards() {
         let circuit = QuantumCircuit.shorPeriodFinding(base: 7, modulus: 15, precisionQubits: 4)
-        let firstFourGates = circuit.gates.prefix(4)
+        let firstFourOps = circuit.operations.prefix(4)
         var hadamardCount = 0
-        for gate in firstFourGates {
-            if case .hadamard = gate.gate {
+        for op in firstFourOps {
+            if op.gate == .hadamard {
                 hadamardCount += 1
             }
         }
@@ -1009,7 +1009,7 @@ struct QuantumCircuitShorPeriodFindingTests {
     func circuitBase2Modulus15() {
         let circuit = QuantumCircuit.shorPeriodFinding(base: 2, modulus: 15, precisionQubits: 8)
         #expect(circuit.qubits == 12, "Circuit should have 8 precision + 4 work = 12 qubits")
-        #expect(circuit.gates.count > 8, "Circuit should have more than 8 gates")
+        #expect(circuit.operations.count > 8, "Circuit should have more than 8 gates")
     }
 }
 
@@ -1051,7 +1051,7 @@ struct QuantumCircuitShorFactorizationTests {
             precisionQubits: config.effectivePrecisionQubits,
         )
         #expect(factorizationCircuit.qubits == periodFindingCircuit.qubits, "Both circuits should have same qubit count")
-        #expect(factorizationCircuit.gates.count == periodFindingCircuit.gates.count, "Both circuits should have same gate count")
+        #expect(factorizationCircuit.operations.count == periodFindingCircuit.operations.count, "Both circuits should have same gate count")
     }
 }
 

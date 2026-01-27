@@ -586,37 +586,18 @@ public enum ValidationUtilities {
 
     // MARK: - Circuit Validations
 
-    /// Validate circuit operations and qubit indices
+    /// Validates that a circuit contains only unitary operations.
     ///
-    /// Checks that all operations have valid qubit indices within circuit bounds and that
-    /// gates are properly formed. Central validation for quantum circuits before execution.
+    /// - Precondition: Circuit must not contain non-unitary operations such as reset.
     ///
-    /// - Parameters:
-    ///   - operations: Array of gate operations to validate
-    ///   - qubits: Number of qubits in the circuit
-    /// - Precondition: All operation qubits must be in range [0, qubits)
-    /// - Precondition: All gates must have correct qubit count and unique indices
-    /// - Complexity: O(n x m) where n = operations count, m = qubits per operation
-    @_effects(readonly)
-    @inlinable
+    /// **Example:**
+    /// ```swift
+    /// ValidationUtilities.validateUnitaryCircuit(circuit)
+    /// ```
     @inline(__always)
-    static func validateCircuitOperations(_ operations: [Gate], qubits: Int) {
-        let maxAllowedQubit = 29
-
-        for operation in operations {
-            precondition(
-                operation.qubits.allSatisfy { $0 >= 0 && $0 < qubits },
-                "Circuit operation has qubit index out of bounds [0, \(qubits))",
-            )
-            precondition(
-                operation.qubits.count == operation.gate.qubitsRequired,
-                "Gate \(operation.gate) requires \(operation.gate.qubitsRequired) qubits (got \(operation.qubits.count))",
-            )
-            precondition(
-                operation.qubits.allSatisfy { $0 >= 0 && $0 <= maxAllowedQubit },
-                "All qubit indices must be in [0, \(maxAllowedQubit)] (got \(operation.qubits))",
-            )
-            validateUniqueQubits(operation.qubits)
+    public static func validateUnitaryCircuit(_ circuit: QuantumCircuit) {
+        for operation in circuit.operations {
+            precondition(operation.isUnitary, "Circuit contains non-unitary operation (\(operation)). Cannot compute unitary matrix or inverse for circuits with reset, measurement, or other non-unitary operations.")
         }
     }
 
@@ -1419,5 +1400,59 @@ public enum ValidationUtilities {
     @inline(__always)
     static func validateMultiplexorNotEmpty(_ unitaries: [[[Complex<Double>]]]) {
         precondition(!unitaries.isEmpty, "Multiplexor unitaries array must not be empty")
+    }
+
+    // MARK: - Subsystem Validations
+
+    /// Validate that two subsystem qubit arrays have no common elements
+    ///
+    /// Ensures subsystem A and subsystem B are disjoint, which is required for
+    /// operations on independent subsystems such as partial trace or bipartite entanglement.
+    ///
+    /// - Parameters:
+    ///   - subsystemA: First subsystem qubit indices
+    ///   - subsystemB: Second subsystem qubit indices
+    /// - Precondition: subsystemA and subsystemB must have no common elements
+    /// - Complexity: O(n + m) where n = subsystemA.count, m = subsystemB.count
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateDisjointSubsystems(_ subsystemA: [Int], _ subsystemB: [Int]) {
+        let setA = Set(subsystemA)
+        let overlap = subsystemB.filter { setA.contains($0) }
+        precondition(
+            overlap.isEmpty,
+            "Subsystems must be disjoint (overlapping qubit indices: \(overlap))",
+        )
+    }
+
+    /// Validate that subsystem qubit indices form a proper subsystem
+    ///
+    /// Ensures all qubit indices are valid, the subsystem is non-empty, and at least one
+    /// qubit remains in the complement (subsystem does not cover all qubits).
+    ///
+    /// - Parameters:
+    ///   - subsystemQubits: Qubit indices defining the subsystem
+    ///   - totalQubits: Total number of qubits in the full system
+    /// - Precondition: subsystemQubits is non-empty
+    /// - Precondition: All indices must be in [0, totalQubits)
+    /// - Precondition: subsystemQubits.count < totalQubits
+    /// - Complexity: O(n) where n = subsystemQubits.count
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateProperSubsystem(_ subsystemQubits: [Int], totalQubits: Int) {
+        precondition(
+            !subsystemQubits.isEmpty,
+            "Subsystem must be non-empty",
+        )
+        precondition(
+            subsystemQubits.allSatisfy { $0 >= 0 && $0 < totalQubits },
+            "All subsystem qubit indices must be in range 0..<\(totalQubits) (got \(subsystemQubits))",
+        )
+        precondition(
+            subsystemQubits.count < totalQubits,
+            "Subsystem must not cover all qubits (got \(subsystemQubits.count) of \(totalQubits) qubits, at least one must remain in complement)",
+        )
     }
 }

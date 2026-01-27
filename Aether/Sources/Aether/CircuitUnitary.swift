@@ -70,13 +70,14 @@ public enum CircuitUnitary {
         let dimension = 1 << qubits
         var unitary: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: dimension)
 
-        for operation in circuit.gates {
+        ValidationUtilities.validateUnitaryCircuit(circuit)
+
+        for operation in circuit.operations {
             let gateMatrix: [[Complex<Double>]] = expandGateToFullSpace(
-                gate: operation.gate,
+                gate: operation.gate!,
                 qubits: operation.qubits,
                 numQubits: qubits,
             )
-
             unitary = MatrixUtilities.matrixMultiply(gateMatrix, unitary)
         }
 
@@ -98,15 +99,18 @@ public enum CircuitUnitary {
         switch gate {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
              .phase, .sGate, .tGate, .rotationX, .rotationY, .rotationZ,
-             .u1, .u2, .u3, .sx, .sy, .customSingleQubit:
+             .u1, .u2, .u3, .sx, .sy, .customSingleQubit, .globalPhase:
             let targetQubit: Int = qubits[0]
             return expandSingleQubitGate(gate: gate, targetQubit: targetQubit, dimension: dimension)
 
-        case .cnot, .cz, .cy, .ch, .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ, .swap, .sqrtSwap, .iswap, .sqrtISwap, .fswap, .givens, .xx, .customTwoQubit:
+        case .cnot, .cz, .cy, .ch, .controlledPhase, .controlledRotationX, .controlledRotationY, .controlledRotationZ, .swap, .sqrtSwap, .iswap, .sqrtISwap, .fswap, .givens, .xx, .yy, .zz, .customTwoQubit:
             return expandTwoQubitGate(gate: gate, control: qubits[0], target: qubits[1], dimension: dimension)
 
         case .toffoli, .fredkin:
             return expandToffoliGate(control1: qubits[0], control2: qubits[1], target: qubits[2], dimension: dimension)
+
+        case .ccz:
+            return expandMultiQubitGate(gate: gate, qubits: qubits, dimension: dimension)
 
         case .controlled:
             return expandControlledGate(gate: gate, qubits: qubits, dimension: dimension)

@@ -144,33 +144,33 @@ public actor DensityMatrixSimulator {
             name2: "initial state qubits",
         )
 
-        let gates = circuit.gates
-        progress = Progress(executed: 0, total: gates.count)
+        let operations = circuit.operations
+        progress = Progress(executed: 0, total: operations.count)
 
         var state = initial
         let useIdleNoise = noiseModel.hasIdleNoise
 
-        for (index, gateOp) in gates.enumerated() {
-            state = state.applying(gateOp.gate, to: gateOp.qubits)
+        for (index, operation) in operations.enumerated() {
+            state = state.applying(operation)
 
-            if noiseModel.hasNoise {
+            if noiseModel.hasNoise, let gate = operation.gate {
                 if useIdleNoise {
                     state = noiseModel.applyNoiseWithIdle(
-                        after: gateOp.gate,
-                        targetQubits: gateOp.qubits,
+                        after: gate,
+                        targetQubits: operation.qubits,
                         to: state,
                         totalQubits: circuit.qubits,
                     )
                 } else {
                     state = noiseModel.applyNoise(
-                        after: gateOp.gate,
-                        targetQubits: gateOp.qubits,
+                        after: gate,
+                        targetQubits: operation.qubits,
                         to: state,
                     )
                 }
             }
 
-            progress = Progress(executed: index + 1, total: gates.count)
+            progress = Progress(executed: index + 1, total: operations.count)
 
             if index % 10 == 0 {
                 await Task.yield()
@@ -412,8 +412,10 @@ public actor DensityMatrixSimulator {
         timings: GateTimingModel = .ibmDefault,
     ) -> Double {
         var totalTime = 0.0
-        for gateOp in circuit.gates {
-            totalTime += timings.gateTime(for: gateOp.gate.qubitsRequired)
+        for operation in circuit.operations {
+            if let gate = operation.gate {
+                totalTime += timings.gateTime(for: gate.qubitsRequired)
+            }
         }
         return totalTime
     }
@@ -552,21 +554,23 @@ public actor TimingAwareDensityMatrixSimulator {
             name2: "initial state qubits",
         )
 
-        let gates = circuit.gates
-        progress = DensityMatrixSimulator.Progress(executed: 0, total: gates.count)
+        let operations = circuit.operations
+        progress = DensityMatrixSimulator.Progress(executed: 0, total: operations.count)
 
         var state = initial
 
-        for (index, gateOp) in gates.enumerated() {
-            state = state.applying(gateOp.gate, to: gateOp.qubits)
+        for (index, operation) in operations.enumerated() {
+            state = state.applying(operation)
 
-            state = noiseModel.applyAllNoise(
-                after: gateOp.gate,
-                targetQubits: gateOp.qubits,
-                to: state,
-            )
+            if let gate = operation.gate {
+                state = noiseModel.applyAllNoise(
+                    after: gate,
+                    targetQubits: operation.qubits,
+                    to: state,
+                )
+            }
 
-            progress = DensityMatrixSimulator.Progress(executed: index + 1, total: gates.count)
+            progress = DensityMatrixSimulator.Progress(executed: index + 1, total: operations.count)
 
             if index % 10 == 0 {
                 await Task.yield()
@@ -720,8 +724,10 @@ public actor TimingAwareDensityMatrixSimulator {
     @_effects(readonly)
     public nonisolated func circuitTime(_ circuit: QuantumCircuit) -> Double {
         var totalTime = 0.0
-        for gateOp in circuit.gates {
-            totalTime += profile.gateTimings.gateTime(for: gateOp.gate.qubitsRequired)
+        for operation in circuit.operations {
+            if let gate = operation.gate {
+                totalTime += profile.gateTimings.gateTime(for: gate.qubitsRequired)
+            }
         }
         return totalTime
     }
