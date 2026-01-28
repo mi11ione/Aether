@@ -80,6 +80,16 @@ public enum CircuitJSONEncoder {
                 controls: nil,
                 matrix: nil,
             )
+        case let .measure(qubit, classicalBit, _):
+            OperationSchema(
+                type: "measurement",
+                gate: nil,
+                qubits: [qubit],
+                classicalBits: [classicalBit ?? qubit],
+                parameters: nil,
+                controls: nil,
+                matrix: nil,
+            )
         }
     }
 

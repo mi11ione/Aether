@@ -275,7 +275,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
                     result.append(gate, to: qubits)
                     foldedCount += 1
                 }
-            case .reset:
+            case .reset, .measure:
                 result.addOperation(operation)
             }
         }
@@ -301,7 +301,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
             switch operation {
             case let .gate(gate, qubits, _):
                 result.append(gate.inverse, to: qubits)
-            case .reset:
+            case .reset, .measure:
                 result.addOperation(operation)
             }
         }
@@ -310,7 +310,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
             switch operation {
             case let .gate(gate, qubits, _):
                 result.append(gate, to: qubits)
-            case .reset:
+            case .reset, .measure:
                 result.addOperation(operation)
             }
         }
@@ -751,7 +751,7 @@ public struct ProbabilisticErrorCancellation: Sendable {
                         result.append(pauliGate, to: qubits)
                     }
                 }
-            case .reset:
+            case .reset, .measure:
                 result.addOperation(operation)
             }
         }

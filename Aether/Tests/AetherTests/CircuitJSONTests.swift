@@ -260,15 +260,14 @@ struct CircuitJSONEncoderCoverageTests {
 /// and negated parameters, version checks, and error diagnostics.
 @Suite("CircuitJSON Decoder Coverage")
 struct CircuitJSONDecoderCoverageTests {
-    @Test("Decode measurement type produces warning diagnostic")
+    @Test("Decode measurement type produces measurement operation")
     func decodeMeasurementType() {
         let json = """
         {"version":1,"qubitCount":1,"classicalBitCount":0,"operations":[{"type":"measurement","qubits":[0]}]}
         """
         let result = CircuitJSONDecoder.decode(from: Data(json.utf8))
-        let hasWarning = result.diagnostics.contains { $0.severity == .warning && $0.message.contains("measurement") }
-        #expect(hasWarning, "Decoding measurement type should produce a warning mentioning measurement")
-        #expect(result.circuit.count == 0, "Measurement operation should be skipped and not added to circuit")
+        #expect(result.diagnostics.isEmpty, "Decoding measurement type should not produce diagnostics")
+        #expect(result.circuit.count == 1, "Measurement operation should be added to circuit")
     }
 
     @Test("Decode barrier type produces warning diagnostic")

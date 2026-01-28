@@ -668,6 +668,8 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
             applying(gate, to: qubits)
         case let .reset(qubit, _):
             applyReset(qubit: qubit)
+        case let .measure(qubit, _, _):
+            applyReset(qubit: qubit)
         }
     }
 

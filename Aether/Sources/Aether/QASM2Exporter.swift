@@ -61,6 +61,9 @@ public enum QASM2Exporter: Sendable {
                 operationLines.append(line)
             case let .reset(qubit, _):
                 operationLines.append("reset q[\(qubit)];")
+            case let .measure(qubit, classicalBit, _):
+                let cbit = classicalBit ?? qubit
+                operationLines.append("measure q[\(qubit)] -> c[\(cbit)];")
             }
         }
 

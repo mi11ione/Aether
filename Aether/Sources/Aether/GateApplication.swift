@@ -164,6 +164,8 @@ public enum GateApplication {
             apply(gate, to: qubits, state: state)
         case let .reset(qubit, _):
             applyReset(qubit: qubit, state: state)
+        case let .measure(qubit, _, _):
+            applyReset(qubit: qubit, state: state)
         }
     }
 

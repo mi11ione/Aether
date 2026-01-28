@@ -153,6 +153,60 @@ public enum MatrixUtilities {
         }
     }
 
+    /// Raise square matrix to non-negative integer power via repeated squaring
+    ///
+    /// Computes M^n using binary exponentiation with O(log n) matrix multiplications instead of
+    /// naive O(n) sequential products. Returns the identity matrix for exponent zero and the
+    /// original matrix for exponent one as base cases. Used by ``QuantumCircuit/power(_:)`` to
+    /// raise circuit unitaries to integer powers for repeated gate application.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let x = QuantumGate.pauliX.matrix()
+    /// let x2 = MatrixUtilities.matrixPower(x, exponent: 2)  // X² = I
+    /// let x3 = MatrixUtilities.matrixPower(x, exponent: 3)  // X³ = X
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - matrix: Square complex matrix (nxn)
+    ///   - exponent: Non-negative integer power
+    /// - Returns: Matrix raised to the given power M^exponent (nxn)
+    /// - Complexity: O(n³ log(exponent)) with BLAS-accelerated matrix multiplication
+    /// - Precondition: Matrix must be square
+    /// - Precondition: Exponent must be non-negative
+    @_optimize(speed)
+    @_eagerMove
+    public static func matrixPower(_ matrix: [[Complex<Double>]], exponent: Int) -> [[Complex<Double>]] {
+        ValidationUtilities.validateSquareMatrix(matrix, name: "Matrix")
+        ValidationUtilities.validateNonNegativeInt(exponent, name: "Exponent")
+
+        let n = matrix.count
+
+        if exponent == 0 {
+            return identityMatrix(dimension: n)
+        }
+
+        if exponent == 1 {
+            return matrix
+        }
+
+        var result = identityMatrix(dimension: n)
+        var base = matrix
+        var exp = exponent
+
+        while exp > 0 {
+            if exp & 1 == 1 {
+                result = matrixMultiply(result, base)
+            }
+            exp >>= 1
+            if exp > 0 {
+                base = matrixMultiply(base, base)
+            }
+        }
+
+        return result
+    }
+
     /// Create identity matrix with 1s on diagonal, 0s elsewhere
     ///
     /// Constructs nxn identity matrix for unitarity validation reference (U†U should equal I),

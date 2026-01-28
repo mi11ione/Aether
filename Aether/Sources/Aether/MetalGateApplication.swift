@@ -321,6 +321,8 @@ public actor MetalGateApplication {
             apply(gate, to: qubits, state: state)
         case let .reset(qubit, _):
             GateApplication.applyReset(qubit: qubit, state: state)
+        case let .measure(qubit, _, _):
+            GateApplication.applyReset(qubit: qubit, state: state)
         }
     }
 

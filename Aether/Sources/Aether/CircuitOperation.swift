@@ -31,6 +31,19 @@ public enum NonUnitaryOperation: Equatable, Hashable, Sendable {
     /// print(op)  // reset
     /// ```
     case reset
+
+    /// Mid-circuit measurement projecting target qubit onto the computational basis.
+    ///
+    /// Measurement collapses the target qubit's quantum state to either |0> or |1>,
+    /// storing the classical result. Unlike unitary gates, measurement is irreversible
+    /// and introduces decoherence into the quantum state.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let op = NonUnitaryOperation.measure
+    /// print(op == .measure)  // true
+    /// ```
+    case measure
 }
 
 /// Circuit-level operation wrapping unitary gates and non-unitary operations with qubit targets and optional timestamps.
@@ -88,6 +101,19 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
     /// ```
     case reset(qubit: Int, timestamp: Double? = nil)
 
+    /// Mid-circuit measurement projecting specified qubit onto the computational basis with optional classical bit and scheduling timestamp.
+    ///
+    /// Represents an irreversible measurement operation on a single qubit. The classical bit
+    /// defaults to the same index as the qubit if not specified. Unlike gate operations,
+    /// measurement has no matrix representation and collapses the quantum state.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let op = CircuitOperation.measure(qubit: 0)
+    /// let timedMeasure = CircuitOperation.measure(qubit: 1, classicalBit: 1, timestamp: 3.0)
+    /// ```
+    case measure(qubit: Int, classicalBit: Int? = nil, timestamp: Double? = nil)
+
     // MARK: - Qubit Access
 
     /// Qubit indices targeted by this operation.
@@ -112,6 +138,8 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
         case let .gate(_, qubits, _):
             qubits
         case let .reset(qubit, _):
+            [qubit]
+        case let .measure(qubit, _, _):
             [qubit]
         }
     }
@@ -141,6 +169,8 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
             gate
         case .reset:
             nil
+        case .measure:
+            nil
         }
     }
 
@@ -169,6 +199,8 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
             timestamp
         case let .reset(_, timestamp):
             timestamp
+        case let .measure(_, _, timestamp):
+            timestamp
         }
     }
 
@@ -195,6 +227,7 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
         switch self {
         case .gate: true
         case .reset: false
+        case .measure: false
         }
     }
 
@@ -226,6 +259,8 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
         case let .gate(gate, _, _):
             gate.isParameterized
         case .reset:
+            false
+        case .measure:
             false
         }
     }
@@ -262,6 +297,8 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
             gate.parameters()
         case .reset:
             []
+        case .measure:
+            []
         }
     }
 
@@ -295,6 +332,8 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
         case let .gate(gate, qubits, timestamp):
             .gate(gate.bound(with: bindings), qubits: qubits, timestamp: timestamp)
         case .reset:
+            self
+        case .measure:
             self
         }
     }
@@ -331,6 +370,12 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
                 return "reset(qubit: \(qubit), t: \(String(format: "%.3f", t)))"
             }
             return "reset(qubit: \(qubit))"
+        case let .measure(qubit, classicalBit, timestamp):
+            let cbit = classicalBit ?? qubit
+            if let t = timestamp {
+                return "measure(qubit: \(qubit), cbit: \(cbit), t: \(String(format: "%.3f", t)))"
+            }
+            return "measure(qubit: \(qubit), cbit: \(cbit))"
         }
     }
 }

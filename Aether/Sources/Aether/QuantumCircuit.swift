@@ -35,6 +35,22 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     public private(set) var qubits: Int
     @usableFromInline var cachedMaxQubitUsed: Int
 
+    /// Human-readable names assigned to qubit indices for debugging and diagram annotation.
+    ///
+    /// Maps qubit indices to descriptive labels used by visualization and logging utilities.
+    /// Labels carry zero runtime cost during circuit execution as they are metadata only.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var circuit = QuantumCircuit(qubits: 3)
+    /// circuit.label(qubit: 0, "ancilla")
+    /// circuit.label(qubit: 1, "data")
+    /// print(circuit.qubitLabels[0]!)  // "ancilla"
+    /// ```
+    ///
+    /// - SeeAlso: ``label(qubit:_:)``
+    public internal(set) var qubitLabels: [Int: String]
+
     /// When true, append automatically cancels adjacent identity pairs (H-H, X-X, CNOT-CNOT, etc.)
     ///
     /// Enabling this provides O(1) per-append optimization that immediately removes gates forming
@@ -95,6 +111,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
         cachedMaxQubitUsed = qubits - 1
         operations = []
         self.autoOptimize = autoOptimize
+        qubitLabels = [:]
     }
 
     /// Creates a circuit with predefined circuit operations
@@ -122,6 +139,7 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
         self.qubits = qubits
         self.operations = operations
         self.autoOptimize = autoOptimize
+        qubitLabels = [:]
         var maxQubit: Int = qubits - 1
         for operation in operations {
             let opMax: Int = operation.qubits.max() ?? -1
@@ -240,6 +258,9 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
         case .reset:
             let circuitOp = CircuitOperation.reset(qubit: qubit, timestamp: timestamp)
             operations.append(circuitOp)
+        case .measure:
+            let circuitOp = CircuitOperation.measure(qubit: qubit, timestamp: timestamp)
+            operations.append(circuitOp)
         }
 
         if qubit > cachedMaxQubitUsed { cachedMaxQubitUsed = qubit }
@@ -330,6 +351,9 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
         case .reset:
             let circuitOp = CircuitOperation.reset(qubit: qubit, timestamp: timestamp)
             operations.insert(circuitOp, at: index)
+        case .measure:
+            let circuitOp = CircuitOperation.measure(qubit: qubit, timestamp: timestamp)
+            operations.insert(circuitOp, at: index)
         }
     }
 
@@ -354,6 +378,8 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
             append(gate, to: qubits, timestamp: timestamp)
         case let .reset(qubit, timestamp):
             append(.reset, to: qubit, timestamp: timestamp)
+        case let .measure(qubit, _, timestamp):
+            append(.measure, to: qubit, timestamp: timestamp)
         }
     }
 
@@ -400,6 +426,32 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
     public mutating func removeAll() {
         operations.removeAll()
         cachedMaxQubitUsed = qubits - 1
+    }
+
+    /// Assigns a human-readable name to a qubit index for debugging and diagram annotation.
+    ///
+    /// Labels are metadata only and carry zero runtime cost during circuit execution. Repeated
+    /// calls on the same index overwrite the previous label. Use ``qubitLabels`` to read back
+    /// all assigned labels.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var circuit = QuantumCircuit(qubits: 2)
+    /// circuit.label(qubit: 0, "control")
+    /// circuit.label(qubit: 1, "target")
+    /// print(circuit.qubitLabels[0]!)  // "control"
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - index: Qubit index to label (must be within circuit bounds)
+    ///   - name: Descriptive name for the qubit
+    /// - Precondition: 0 <= index < qubits
+    /// - Complexity: O(1) amortized (dictionary insertion)
+    ///
+    /// - SeeAlso: ``qubitLabels``
+    public mutating func label(qubit index: Int, _ name: String) {
+        ValidationUtilities.validateQubitIndex(index, qubits: qubits)
+        qubitLabels[index] = name
     }
 
     /// Recomputes cached maximum qubit index by scanning all operations.
@@ -747,6 +799,8 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
                 )
             case let .reset(qubit, _):
                 currentState = GateApplication.applyReset(qubit: qubit, state: currentState)
+            case let .measure(qubit, _, _):
+                currentState = GateApplication.applyReset(qubit: qubit, state: currentState)
             }
         }
 
@@ -823,6 +877,8 @@ public struct QuantumCircuit: Equatable, Hashable, CustomStringConvertible, Send
                     state: currentState,
                 )
             case let .reset(qubit, _):
+                currentState = GateApplication.applyReset(qubit: qubit, state: currentState)
+            case let .measure(qubit, _, _):
                 currentState = GateApplication.applyReset(qubit: qubit, state: currentState)
             }
         }

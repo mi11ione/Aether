@@ -116,12 +116,7 @@ public enum CircuitJSONDecoder {
         case "gate":
             convertGateOperation(operation, index: index, circuit: &circuit, diagnostics: &diagnostics)
         case "measurement":
-            diagnostics.append(ParseDiagnostic(
-                line: 1,
-                column: 1,
-                message: "Operation \(index): measurement operations are not represented in the circuit model; skipping",
-                severity: .warning,
-            ))
+            convertMeasurementOperation(operation, index: index, circuit: &circuit, diagnostics: &diagnostics)
         case "barrier":
             diagnostics.append(ParseDiagnostic(
                 line: 1,
@@ -236,6 +231,26 @@ public enum CircuitJSONDecoder {
         }
 
         circuit.append(.reset, to: qubit)
+    }
+
+    /// Convert a measurement-type operation schema into a circuit measurement operation.
+    private static func convertMeasurementOperation(
+        _ operation: OperationSchema,
+        index: Int,
+        circuit: inout QuantumCircuit,
+        diagnostics: inout [ParseDiagnostic],
+    ) {
+        guard let qubit = operation.qubits.first else {
+            diagnostics.append(ParseDiagnostic(
+                line: 1,
+                column: 1,
+                message: "Operation \(index): measurement operation missing qubit index",
+                severity: .error,
+            ))
+            return
+        }
+
+        circuit.append(.measure, to: qubit)
     }
 
     /// Apply decoded parameters to a placeholder gate from GateNameMapping.

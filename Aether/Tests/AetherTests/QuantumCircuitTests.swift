@@ -1911,3 +1911,58 @@ struct ResetOperationPathsTests {
         #expect(circuit.highestQubitIndex == 3, "Highest qubit index should reflect reset target qubit")
     }
 }
+
+/// Validates qubit labeling metadata for debugging and diagram annotation.
+/// Ensures labels are stored, retrieved, and overwritten correctly
+/// without affecting circuit execution or structure.
+@Suite("Qubit Labels")
+struct QubitLabelsTests {
+    @Test("Initial qubitLabels is empty")
+    func initialQubitLabelsIsEmpty() {
+        let circuit = QuantumCircuit(qubits: 3)
+        #expect(circuit.qubitLabels.isEmpty, "New circuit should have no qubit labels")
+    }
+
+    @Test("label(qubit:_:) sets label correctly")
+    func labelSetsCorrectly() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.label(qubit: 0, "ancilla")
+        #expect(circuit.qubitLabels[0] == "ancilla", "Label for qubit 0 should be 'ancilla'")
+    }
+
+    @Test("Multiple labels on different qubits")
+    func multipleLabelsOnDifferentQubits() {
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.label(qubit: 0, "control")
+        circuit.label(qubit: 1, "target")
+        circuit.label(qubit: 2, "ancilla")
+
+        #expect(circuit.qubitLabels.count == 3, "Should have exactly 3 labels after labeling 3 qubits")
+        #expect(circuit.qubitLabels[0] == "control", "Qubit 0 label should be 'control'")
+        #expect(circuit.qubitLabels[1] == "target", "Qubit 1 label should be 'target'")
+        #expect(circuit.qubitLabels[2] == "ancilla", "Qubit 2 label should be 'ancilla'")
+    }
+
+    @Test("Overwriting existing label replaces value")
+    func overwriteExistingLabel() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.label(qubit: 0, "old_name")
+        circuit.label(qubit: 0, "new_name")
+
+        #expect(circuit.qubitLabels[0] == "new_name", "Overwritten label should be 'new_name'")
+        #expect(circuit.qubitLabels.count == 1, "Overwriting should not create a second entry")
+    }
+
+    @Test("Labels accessible via qubitLabels dictionary")
+    func labelsAccessibleViaDictionary() {
+        var circuit = QuantumCircuit(qubits: 4)
+        circuit.label(qubit: 1, "data")
+        circuit.label(qubit: 3, "syndrome")
+
+        let labels = circuit.qubitLabels
+        #expect(labels[1] == "data", "qubitLabels dictionary should return 'data' for key 1")
+        #expect(labels[3] == "syndrome", "qubitLabels dictionary should return 'syndrome' for key 3")
+        #expect(labels[0] == nil, "Unlabeled qubit 0 should return nil")
+        #expect(labels[2] == nil, "Unlabeled qubit 2 should return nil")
+    }
+}
