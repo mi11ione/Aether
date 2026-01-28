@@ -160,6 +160,8 @@ public enum CircuitJSONEncoder {
             ParameterSchema(type: "symbolic", value: nil, name: p.name)
         case let .negatedParameter(p):
             ParameterSchema(type: "negated", value: nil, name: p.name)
+        case let .expression(expr):
+            ParameterSchema(type: "expression", value: nil, name: expr.parameters.first?.name)
         }
     }
 

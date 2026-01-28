@@ -45,7 +45,10 @@ public actor QuantumSimulator {
         /// Total number of gates in circuit
         public let total: Int
 
-        /// Execution progress as percentage in [0.0, 1.0]
+        /// Execution progress as percentage in [0.0, 1.0].
+        ///
+        /// - Returns: Progress value between 0.0 (not started) and 1.0 (complete)
+        /// - Complexity: O(1)
         public var percentage: Double {
             total > 0 ? Double(executed) / Double(total) : 0.0
         }

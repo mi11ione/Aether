@@ -78,6 +78,7 @@ public struct MeasurementErrorModel: Sendable, Equatable {
     /// - Parameter confusionMatrix: 2*2 stochastic matrix with rows summing to 1
     /// - Precondition: Matrix must be 2*2 with elements in [0,1] and rows summing to 1
     /// - Precondition: Matrix must be invertible (non-singular)
+    /// - Complexity: O(1)
     public init(confusionMatrix: [[Double]]) {
         ValidationUtilities.validateConfusionMatrix(confusionMatrix)
 
@@ -224,6 +225,8 @@ public struct MeasurementErrorModel: Sendable, Equatable {
 ///
 /// - SeeAlso: ``DensityMatrixSimulator`` for noisy circuit execution
 /// - SeeAlso: ``NoiseChannel`` for available noise channels
+/// - SeeAlso: ``DepolarizingChannel``
+/// - SeeAlso: ``AmplitudeDampingChannel``
 /// - SeeAlso: ``IdleNoiseConfig`` for idle qubit decoherence configuration
 @frozen
 public struct NoiseModel: Sendable {

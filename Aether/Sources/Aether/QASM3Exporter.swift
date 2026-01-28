@@ -205,6 +205,40 @@ public enum QASM3Exporter: Sendable {
             p.name
         case let .negatedParameter(p):
             "-\(p.name)"
+        case let .expression(expr):
+            formatExpression(expr.node)
+        }
+    }
+
+    @_effects(readonly)
+    private static func formatExpression(_ node: ExpressionNode) -> String {
+        switch node {
+        case let .constant(v):
+            formatDouble(v)
+        case let .parameter(p):
+            p.name
+        case let .add(lhs, rhs):
+            "(\(formatExpression(lhs)) + \(formatExpression(rhs)))"
+        case let .subtract(lhs, rhs):
+            "(\(formatExpression(lhs)) - \(formatExpression(rhs)))"
+        case let .multiply(lhs, rhs):
+            "(\(formatExpression(lhs)) * \(formatExpression(rhs)))"
+        case let .divide(lhs, rhs):
+            "(\(formatExpression(lhs)) / \(formatExpression(rhs)))"
+        case let .negate(inner):
+            "(-\(formatExpression(inner)))"
+        case let .sin(inner):
+            "sin(\(formatExpression(inner)))"
+        case let .cos(inner):
+            "cos(\(formatExpression(inner)))"
+        case let .tan(inner):
+            "tan(\(formatExpression(inner)))"
+        case let .exp(inner):
+            "exp(\(formatExpression(inner)))"
+        case let .log(inner):
+            "ln(\(formatExpression(inner)))"
+        case let .arctan(inner):
+            "arctan(\(formatExpression(inner)))"
         }
     }
 

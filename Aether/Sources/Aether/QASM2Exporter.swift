@@ -176,11 +176,14 @@ public enum QASM2Exporter: Sendable {
     private static func serializeParameterValue(_ value: ParameterValue) -> String {
         switch value {
         case let .value(v):
-            formatDouble(v)
+            return formatDouble(v)
         case let .parameter(p):
-            p.name
+            return p.name
         case let .negatedParameter(p):
-            "-\(p.name)"
+            return "-\(p.name)"
+        case let .expression(expr):
+            precondition(!expr.isSymbolic, "QASM2 export requires concrete parameter values")
+            return formatDouble(expr.evaluate(using: [:]))
         }
     }
 

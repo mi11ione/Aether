@@ -41,32 +41,39 @@ public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible 
     /// Parameter name used for identification and binding
     public let name: String
 
-    /// Create symbolic parameter with name
+    /// Optional constraint for the parameter
+    public let constraint: ParameterConstraint?
+
+    /// Create symbolic parameter with name and optional constraint
     ///
     /// **Example:**
     /// ```swift
     /// let theta = Parameter(name: "theta")
     /// let gamma_0 = Parameter(name: "gamma_0")
+    /// let bounded = Parameter(name: "phase", constraint: .bounded(min: 0.0, max: 2 * .pi))
     /// ```
     ///
-    /// - Parameter name: Parameter name (must be non-empty)
+    /// - Parameters:
+    ///   - name: Parameter name (must be non-empty)
+    ///   - constraint: Optional constraint for the parameter
     /// - Complexity: O(1)
     /// - Precondition: Name must be non-empty
-    public init(name: String) {
+    public init(name: String, constraint: ParameterConstraint? = nil) {
         ValidationUtilities.validateNonEmptyString(name, name: "Parameter name")
         self.name = name
+        self.constraint = constraint
     }
 
     @inlinable
     public var description: String { name }
 }
 
-/// Parameter value: symbolic parameter or concrete numerical value
+/// Parameter value: symbolic parameter, concrete numerical value, or expression
 ///
-/// Represents either a symbolic parameter (to be bound later) or a concrete
-/// numerical value. This enables mixing symbolic and concrete parameters in the
-/// same quantum circuit, useful for hybrid optimization where some parameters
-/// are fixed while others vary.
+/// Represents either a symbolic parameter (to be bound later), a concrete
+/// numerical value, or a complex expression over parameters. This enables mixing
+/// symbolic and concrete parameters in the same quantum circuit, useful for hybrid
+/// optimization where some parameters are fixed while others vary.
 ///
 /// Symbolic values require a binding dictionary at evaluation time, while concrete values
 /// evaluate to themselves. This type-safe distinction prevents accidentally evaluating
@@ -102,6 +109,20 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     /// Negated symbolic parameter (-θ) for gate inverse computation
     case negatedParameter(Parameter)
 
+    /// Complex expression over parameters for algebraic relationships
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let theta = Parameter(name: "theta")
+    /// let phi = Parameter(name: "phi")
+    /// let sum = ParameterExpression(theta) + ParameterExpression(phi)
+    /// let expr = ParameterValue.expression(sum)
+    ///
+    /// let bindings = ["theta": 1.0, "phi": 0.5]
+    /// let result = expr.evaluate(using: bindings)  // 1.5
+    /// ```
+    case expression(ParameterExpression)
+
     /// Whether expression contains symbolic parameter
     ///
     /// **Example:**
@@ -113,12 +134,13 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     /// print(concrete.isSymbolic)  // false
     /// ```
     ///
-    /// - Complexity: O(1)
+    /// - Complexity: O(1) for parameter/value/negatedParameter, O(n) for expression
     @inlinable
     public var isSymbolic: Bool {
         switch self {
         case .parameter, .negatedParameter: true
         case .value: false
+        case let .expression(expr): expr.isSymbolic
         }
     }
 
@@ -137,13 +159,13 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     /// print(concrete.parameter)        // nil
     /// ```
     ///
-    /// - Returns: Parameter if symbolic, `nil` if concrete
+    /// - Returns: Parameter if symbolic, `nil` if concrete or expression
     /// - Complexity: O(1)
     @inlinable
     public var parameter: Parameter? {
         switch self {
         case let .parameter(p), let .negatedParameter(p): p
-        case .value: nil
+        case .value, .expression: nil
         }
     }
 
@@ -152,7 +174,8 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     /// Substitutes symbolic parameters with concrete values from bindings dictionary.
     /// Concrete values evaluate to their stored number regardless of bindings. For
     /// symbolic values, looks up the parameter name in bindings and returns the bound
-    /// value; for concrete values, returns the stored number immediately.
+    /// value; for concrete values, returns the stored number immediately. Expression
+    /// values delegate to ``ParameterExpression/evaluate(using:)``.
     ///
     /// **Example:**
     /// ```swift
@@ -168,7 +191,7 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     ///
     /// - Parameter bindings: Dictionary mapping parameter names to numerical values
     /// - Returns: Evaluated numerical value
-    /// - Complexity: O(1) dictionary lookup
+    /// - Complexity: O(1) dictionary lookup for simple cases, O(n) for expressions
     /// - Precondition: Symbolic parameters must have binding in dictionary
     @_optimize(speed)
     @inlinable
@@ -178,12 +201,12 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
             return v
         case let .parameter(p):
             ValidationUtilities.validateParameterBinding(p.name, in: bindings)
-            // Safety: validateParameterBinding guarantees key exists
             return bindings[p.name]!
         case let .negatedParameter(p):
             ValidationUtilities.validateParameterBinding(p.name, in: bindings)
-            // Safety: validateParameterBinding guarantees key exists
             return -bindings[p.name]!
+        case let .expression(expr):
+            return expr.evaluate(using: bindings)
         }
     }
 
@@ -193,6 +216,7 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
         case let .parameter(p): p.name
         case let .value(v): String(format: "%.3f", v)
         case let .negatedParameter(p): "-\(p.name)"
+        case let .expression(expr): "expr(\(expr.node))"
         }
     }
 
@@ -201,6 +225,7 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     /// Returns a new parameter value with negated sign. For concrete values, directly
     /// negates the number. For symbolic parameters, creates a negated expression that
     /// evaluates to the negative of the bound value. Negating twice returns the original.
+    /// For expressions, wraps in negation.
     ///
     /// **Example:**
     /// ```swift
@@ -226,6 +251,8 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
             .negatedParameter(p)
         case let .negatedParameter(p):
             .parameter(p)
+        case let .expression(expr):
+            .expression(-expr)
         }
     }
 }

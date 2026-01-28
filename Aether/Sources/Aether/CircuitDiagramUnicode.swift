@@ -280,6 +280,8 @@ public enum CircuitDiagramUnicode: Sendable {
             return p.name
         case let .negatedParameter(p):
             return "-\(p.name)"
+        case .expression:
+            return "expr"
         }
     }
 

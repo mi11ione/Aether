@@ -1455,4 +1455,60 @@ public enum ValidationUtilities {
             "Subsystem must not cover all qubits (got \(subsystemQubits.count) of \(totalQubits) qubits, at least one must remain in complement)",
         )
     }
+
+    // MARK: - Constraint Validations
+
+    /// Validate bounded constraint parameters
+    ///
+    /// Ensures minimum bound is strictly less than maximum bound for valid interval constraints.
+    ///
+    /// - Parameters:
+    ///   - min: Minimum bound value
+    ///   - max: Maximum bound value
+    ///   - name: Optional constraint name for error message
+    /// - Precondition: min < max
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    public static func validateBoundedConstraint(min: Double, max: Double, name: String? = nil) {
+        let namePrefix = name.map { "\($0): " } ?? ""
+        precondition(min < max, "\(namePrefix)Bounded constraint requires min < max (got min=\(min), max=\(max))")
+    }
+
+    /// Validate periodic constraint parameter
+    ///
+    /// Ensures period is strictly positive for valid periodic constraints.
+    ///
+    /// - Parameters:
+    ///   - period: Period value to validate
+    ///   - name: Optional constraint name for error message
+    /// - Precondition: period > 0
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    public static func validatePeriodicConstraint(period: Double, name: String? = nil) {
+        let namePrefix = name.map { "\($0): " } ?? ""
+        precondition(period > 0, "\(namePrefix)Periodic constraint requires period > 0 (got \(period))")
+    }
+
+    /// Validate parameter binding completeness for expression
+    ///
+    /// Ensures all parameters in the set have corresponding bindings in the dictionary.
+    ///
+    /// - Parameters:
+    ///   - bindings: Dictionary of parameter name to value bindings
+    ///   - parameters: Set of parameters that require bindings
+    ///   - name: Optional expression name for error message
+    /// - Precondition: All parameters in set have bindings
+    /// - Complexity: O(n) where n = parameters.count
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    public static func validateExpressionBinding(_ bindings: [String: Double], for parameters: Set<Parameter>, name: String? = nil) {
+        let namePrefix = name.map { "\($0): " } ?? ""
+        let missingParams = parameters.filter { bindings[$0.name] == nil }.map(\.name)
+        precondition(missingParams.isEmpty, "\(namePrefix)Missing bindings for parameters: \(missingParams.joined(separator: ", "))")
+    }
 }

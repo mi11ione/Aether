@@ -182,9 +182,12 @@ public struct QuantumCountingConfig: Sendable {
 func extractConcreteValue(_ paramValue: ParameterValue) -> Double {
     switch paramValue {
     case let .value(v):
-        v
+        return v
     case .parameter, .negatedParameter:
-        0.0
+        return 0.0
+    case let .expression(expr):
+        precondition(!expr.isSymbolic, "Expression contains unbound parameters")
+        return expr.evaluate(using: [:])
     }
 }
 

@@ -499,11 +499,15 @@ public enum ControlledGateDecomposer {
     private static func extractHalfAngle(_ value: ParameterValue) -> ParameterValue {
         switch value {
         case let .value(v):
-            .value(v / 2.0)
+            return .value(v / 2.0)
         case let .parameter(p):
-            .parameter(Parameter(name: "\(p.name)_half"))
+            return .parameter(Parameter(name: "\(p.name)_half"))
         case let .negatedParameter(p):
-            .negatedParameter(Parameter(name: "\(p.name)_half"))
+            return .negatedParameter(Parameter(name: "\(p.name)_half"))
+        case let .expression(expr):
+            let evaluated = expr.evaluate(using: [:])
+            precondition(!evaluated.isNaN, "Cannot decompose symbolic expression without bindings")
+            return .value(evaluated / 2.0)
         }
     }
 
@@ -513,21 +517,29 @@ public enum ControlledGateDecomposer {
     private static func addParameterValues(_ a: ParameterValue, _ b: ParameterValue) -> ParameterValue {
         switch (a, b) {
         case let (.value(v1), .value(v2)):
-            .value(v1 + v2)
+            return .value(v1 + v2)
         case let (.parameter(p1), .parameter(p2)):
-            .parameter(Parameter(name: "\(p1.name)_plus_\(p2.name)"))
+            return .parameter(Parameter(name: "\(p1.name)_plus_\(p2.name)"))
         case let (.value(v), .parameter(p)), let (.parameter(p), .value(v)):
-            .parameter(Parameter(name: "\(p.name)_plus_\(v)"))
+            return .parameter(Parameter(name: "\(p.name)_plus_\(v)"))
         case let (.negatedParameter(p1), .negatedParameter(p2)):
-            .parameter(Parameter(name: "-\(p1.name)_plus_-\(p2.name)"))
+            return .parameter(Parameter(name: "-\(p1.name)_plus_-\(p2.name)"))
         case let (.negatedParameter(p), .value(v)):
-            .parameter(Parameter(name: "-\(p.name)_plus_\(v)"))
+            return .parameter(Parameter(name: "-\(p.name)_plus_\(v)"))
         case let (.value(v), .negatedParameter(p)):
-            .parameter(Parameter(name: "\(v)_plus_-\(p.name)"))
+            return .parameter(Parameter(name: "\(v)_plus_-\(p.name)"))
         case let (.parameter(p1), .negatedParameter(p2)):
-            .parameter(Parameter(name: "\(p1.name)_plus_-\(p2.name)"))
+            return .parameter(Parameter(name: "\(p1.name)_plus_-\(p2.name)"))
         case let (.negatedParameter(p1), .parameter(p2)):
-            .parameter(Parameter(name: "-\(p1.name)_plus_\(p2.name)"))
+            return .parameter(Parameter(name: "-\(p1.name)_plus_\(p2.name)"))
+        case let (.expression(expr), other):
+            let evaluated = expr.evaluate(using: [:])
+            precondition(!evaluated.isNaN, "Cannot decompose symbolic expression without bindings")
+            return addParameterValues(.value(evaluated), other)
+        case let (other, .expression(expr)):
+            let evaluated = expr.evaluate(using: [:])
+            precondition(!evaluated.isNaN, "Cannot decompose symbolic expression without bindings")
+            return addParameterValues(other, .value(evaluated))
         }
     }
 
@@ -537,23 +549,31 @@ public enum ControlledGateDecomposer {
     private static func subtractParameterValues(_ a: ParameterValue, _ b: ParameterValue) -> ParameterValue {
         switch (a, b) {
         case let (.value(v1), .value(v2)):
-            .value(v1 - v2)
+            return .value(v1 - v2)
         case let (.parameter(p1), .parameter(p2)):
-            .parameter(Parameter(name: "\(p1.name)_minus_\(p2.name)"))
+            return .parameter(Parameter(name: "\(p1.name)_minus_\(p2.name)"))
         case let (.parameter(p), .value(v)):
-            .parameter(Parameter(name: "\(p.name)_minus_\(v)"))
+            return .parameter(Parameter(name: "\(p.name)_minus_\(v)"))
         case let (.value(v), .parameter(p)):
-            .parameter(Parameter(name: "\(v)_minus_\(p.name)"))
+            return .parameter(Parameter(name: "\(v)_minus_\(p.name)"))
         case let (.negatedParameter(p1), .negatedParameter(p2)):
-            .parameter(Parameter(name: "-\(p1.name)_minus_-\(p2.name)"))
+            return .parameter(Parameter(name: "-\(p1.name)_minus_-\(p2.name)"))
         case let (.negatedParameter(p), .value(v)):
-            .parameter(Parameter(name: "-\(p.name)_minus_\(v)"))
+            return .parameter(Parameter(name: "-\(p.name)_minus_\(v)"))
         case let (.value(v), .negatedParameter(p)):
-            .parameter(Parameter(name: "\(v)_minus_-\(p.name)"))
+            return .parameter(Parameter(name: "\(v)_minus_-\(p.name)"))
         case let (.parameter(p1), .negatedParameter(p2)):
-            .parameter(Parameter(name: "\(p1.name)_minus_-\(p2.name)"))
+            return .parameter(Parameter(name: "\(p1.name)_minus_-\(p2.name)"))
         case let (.negatedParameter(p1), .parameter(p2)):
-            .parameter(Parameter(name: "-\(p1.name)_minus_\(p2.name)"))
+            return .parameter(Parameter(name: "-\(p1.name)_minus_\(p2.name)"))
+        case let (.expression(expr), other):
+            let evaluated = expr.evaluate(using: [:])
+            precondition(!evaluated.isNaN, "Cannot decompose symbolic expression without bindings")
+            return subtractParameterValues(.value(evaluated), other)
+        case let (other, .expression(expr)):
+            let evaluated = expr.evaluate(using: [:])
+            precondition(!evaluated.isNaN, "Cannot decompose symbolic expression without bindings")
+            return subtractParameterValues(other, .value(evaluated))
         }
     }
 }

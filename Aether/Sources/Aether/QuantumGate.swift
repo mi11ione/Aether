@@ -778,6 +778,68 @@ import Accelerate
         }
     }
 
+    // MARK: - Full Name
+
+    /// Full descriptive name of the gate for benchmark and logging purposes.
+    ///
+    /// Returns a lowercase, human-readable name for each gate type.
+    /// Parameterized gates include their parameter values.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// QuantumGate.hadamard.fullName  // "hadamard"
+    /// QuantumGate.pauliX.fullName    // "pauliX"
+    /// QuantumGate.cnot.fullName      // "cnot"
+    /// QuantumGate.rotationY(.pi/4).fullName  // "rotationY(0.785)"
+    /// ```
+    public var fullName: String {
+        switch self {
+        case .identity: "identity"
+        case .pauliX: "pauliX"
+        case .pauliY: "pauliY"
+        case .pauliZ: "pauliZ"
+        case .hadamard: "hadamard"
+        case let .phase(angle): "phase(\(angle))"
+        case .sGate: "sGate"
+        case .tGate: "tGate"
+        case let .rotationX(theta): "rotationX(\(theta))"
+        case let .rotationY(theta): "rotationY(\(theta))"
+        case let .rotationZ(theta): "rotationZ(\(theta))"
+        case let .u1(lambda): "u1(\(lambda))"
+        case let .u2(phi, lambda): "u2(\(phi), \(lambda))"
+        case let .u3(theta, phi, lambda): "u3(\(theta), \(phi), \(lambda))"
+        case .sx: "sx"
+        case .sy: "sy"
+        case .customSingleQubit: "customSingleQubit"
+        case let .globalPhase(phi): "globalPhase(\(phi))"
+        case .cnot: "cnot"
+        case .cz: "cz"
+        case .cy: "cy"
+        case .ch: "ch"
+        case .swap: "swap"
+        case .sqrtSwap: "sqrtSwap"
+        case .iswap: "iswap"
+        case .sqrtISwap: "sqrtISwap"
+        case .fswap: "fswap"
+        case let .givens(theta): "givens(\(theta))"
+        case let .xx(theta): "xx(\(theta))"
+        case let .yy(theta): "yy(\(theta))"
+        case let .zz(theta): "zz(\(theta))"
+        case .toffoli: "toffoli"
+        case .fredkin: "fredkin"
+        case .ccz: "ccz"
+        case let .controlledPhase(theta): "controlledPhase(\(theta))"
+        case let .controlledRotationX(theta): "controlledRotationX(\(theta))"
+        case let .controlledRotationY(theta): "controlledRotationY(\(theta))"
+        case let .controlledRotationZ(theta): "controlledRotationZ(\(theta))"
+        case .customTwoQubit: "customTwoQubit"
+        case let .diagonal(phases): "diagonal(\(phases.count))"
+        case let .multiplexor(unitaries): "multiplexor(\(unitaries.count)x\(String(describing: unitaries.first?.count)))"
+        case let .controlled(gate, controls): "controlled(\(gate.fullName), \(controls.count))"
+        case let .customUnitary(matrix): "customUnitary(\(matrix.count)x\(matrix.count))"
+        }
+    }
+
     // MARK: - Matrix Generation
 
     /// Generate unitary matrix representation of gate

@@ -41,6 +41,7 @@ public struct GateStep: Sendable, Equatable {
 
     /// The unitary gate for this step, or `nil` for non-unitary steps.
     ///
+    /// - Returns: The ``QuantumGate`` for gate payloads, or ``QuantumGate/identity`` for non-unitary payloads.
     /// - Complexity: O(1)
     @inlinable
     public var gate: QuantumGate {
@@ -52,6 +53,7 @@ public struct GateStep: Sendable, Equatable {
 
     /// Qubit indices targeted by this step.
     ///
+    /// - Returns: Array of qubit indices this step operates on.
     /// - Complexity: O(1)
     @inlinable
     public var qubits: [Int] {

@@ -892,6 +892,26 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         return fullMatrix
     }
 
+    // MARK: - State Conversion
+
+    /// Extract pure state from density matrix via eigendecomposition.
+    ///
+    /// Returns the eigenvector corresponding to eigenvalue 1 (the pure state).
+    /// For mixed states, returns the dominant eigenvector.
+    ///
+    /// - Returns: QuantumState representing the pure state
+    /// - Complexity: O(d^3) where d = 2^n for eigendecomposition
+    public func toQuantumState() -> QuantumState {
+        let dim = dimension
+        let matrix: [[Complex<Double>]] = (0 ..< dim).map { i in
+            (0 ..< dim).map { j in elements[i * dim + j] }
+        }
+        let eigen = HermitianEigenDecomposition.decompose(matrix: matrix)
+        let maxIdx = eigen.eigenvalues.enumerated().max(by: { $0.element < $1.element })!.offset
+        let amplitudes = eigen.eigenvectors.map { $0[maxIdx] }
+        return QuantumState(qubits: qubits, amplitudes: amplitudes)
+    }
+
     // MARK: - CustomStringConvertible
 
     /// String representation showing significant diagonal probabilities.
