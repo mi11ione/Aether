@@ -238,4 +238,53 @@ public enum MatrixUtilities {
             }
         }
     }
+
+    /// Compute Kronecker product (tensor product) A ⊗ B
+    ///
+    /// Forms the tensor product of two matrices, fundamental for constructing multi-qubit operators
+    /// from single-qubit gates. Given (am x an) and (bm x bn) matrices, produces (am*bm x an*bn)
+    /// result where each element A[i][j] is replaced by A[i][j] * B. Used for channel representations,
+    /// multi-qubit gate synthesis, and composite system Hamiltonians.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let x = QuantumGate.pauliX.matrix()
+    /// let z = QuantumGate.pauliZ.matrix()
+    /// let xz = MatrixUtilities.kroneckerProduct(x, z)  // X ⊗ Z for 2-qubit operator
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - a: Left matrix (am x an)
+    ///   - b: Right matrix (bm x bn)
+    /// - Returns: Kronecker product A ⊗ B with dimensions (am*bm x an*bn)
+    /// - Complexity: O(am * an * bm * bn)
+    /// - Precondition: Both matrices must be non-empty with consistent row lengths
+    @_optimize(speed)
+    @inlinable
+    @_eagerMove
+    public static func kroneckerProduct(_ a: [[Complex<Double>]], _ b: [[Complex<Double>]]) -> [[Complex<Double>]] {
+        ValidationUtilities.validateNonEmptyMatrix(a, name: "Matrix A")
+        ValidationUtilities.validateNonEmptyMatrix(b, name: "Matrix B")
+
+        let am = a.count
+        let an = a[0].count
+        let bm = b.count
+        let bn = b[0].count
+
+        let resultRows = am * bm
+        let resultCols = an * bn
+
+        return (0 ..< resultRows).map { row in
+            let i = row / bm
+            let k = row % bm
+            return [Complex<Double>](unsafeUninitializedCapacity: resultCols) { buffer, count in
+                for col in 0 ..< resultCols {
+                    let j = col / bn
+                    let l = col % bn
+                    buffer[col] = a[i][j] * b[k][l]
+                }
+                count = resultCols
+            }
+        }
+    }
 }

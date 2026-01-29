@@ -365,6 +365,14 @@ public enum ValidationUtilities {
 
     // MARK: - Matrix Validations
 
+    /// Validates that matrix has non-zero row and column dimensions.
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateNonEmptyMatrix(_ matrix: [[some Any]], name: String) {
+        precondition(!matrix.isEmpty && !matrix[0].isEmpty, "\(name) must have non-zero dimensions")
+    }
+
     /// Validate that matrix is square
     ///
     /// - Parameters:

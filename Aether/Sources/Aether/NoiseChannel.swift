@@ -562,7 +562,7 @@ public struct CustomKrausChannel: NoiseChannel {
 /// let noisyState = channel.apply(to: dm, qubits: [0, 1])
 /// ```
 @frozen
-public struct TwoQubitDepolarizingChannel: Sendable {
+public struct TwoQubitDepolarizingChannel: NoiseChannel, Sendable {
     /// Error probability p ∈ [0, 1].
     public let errorProbability: Double
 
