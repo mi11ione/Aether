@@ -120,7 +120,7 @@ struct AmplitudeDisplayFormatterPhaseTests {
     @Test("Phase format degrees shows degree symbol")
     func phaseDegreesFormat() {
         let state = QuantumState(qubits: 1)
-        let output = AmplitudeDisplayFormatter.render(state, phaseFormat: .degrees)
+        let output = AmplitudeDisplayFormatter.render(state, phaseUnit: .degrees)
 
         #expect(output.contains("°"), "Degrees format should show degree symbol")
         #expect(!output.contains("rad"), "Degrees format should not show 'rad' suffix")
@@ -137,7 +137,7 @@ struct AmplitudeDisplayFormatterPhaseTests {
     @Test("Pure real positive amplitude has 0.00 degrees phase")
     func zeroPhaseDegrees() {
         let state = QuantumState(qubits: 1)
-        let output = AmplitudeDisplayFormatter.render(state, phaseFormat: .degrees)
+        let output = AmplitudeDisplayFormatter.render(state, phaseUnit: .degrees)
 
         #expect(output.contains("phase=0.00°"), "Real positive amplitude should have phase 0.00 degrees")
     }
@@ -157,7 +157,7 @@ struct AmplitudeDisplayFormatterPhaseTests {
         let state = QuantumState(qubits: 1, amplitudes: [
             Complex(0.0, 1.0), Complex(0.0, 0.0),
         ])
-        let output = AmplitudeDisplayFormatter.render(state, phaseFormat: .degrees)
+        let output = AmplitudeDisplayFormatter.render(state, phaseUnit: .degrees)
 
         #expect(output.contains("phase=90.00°"), "Pure imaginary amplitude should have phase 90.00 degrees")
     }
@@ -221,8 +221,8 @@ struct AmplitudeDisplayFormatterSortingAndEnumTests {
         let degrees = AmplitudeDisplayFormatter.PhaseUnit.degrees
 
         let state = QuantumState(qubits: 1)
-        let radOutput = AmplitudeDisplayFormatter.render(state, phaseFormat: radians)
-        let degOutput = AmplitudeDisplayFormatter.render(state, phaseFormat: degrees)
+        let radOutput = AmplitudeDisplayFormatter.render(state, phaseUnit: radians)
+        let degOutput = AmplitudeDisplayFormatter.render(state, phaseUnit: degrees)
 
         #expect(radOutput.contains("rad"), "Radians output should contain 'rad'")
         #expect(degOutput.contains("°"), "Degrees output should contain degree symbol")

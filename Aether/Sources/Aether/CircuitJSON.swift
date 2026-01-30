@@ -16,10 +16,18 @@
 ///
 /// - SeeAlso: ``CircuitJSONEncoder``
 /// - SeeAlso: ``CircuitJSONDecoder``
-@frozen
 public enum CircuitJSON: Sendable {
-    @inlinable
-    public static var schemaVersion: Int { 1 }
+    /// Current schema version for circuit JSON serialization.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let version = CircuitJSON.schemaVersion
+    /// print(version) // 1
+    /// ```
+    ///
+    /// - SeeAlso: ``CircuitJSONEncoder``
+    /// - SeeAlso: ``CircuitJSONDecoder``
+    public static let schemaVersion = 1
 }
 
 /// Top-level JSON schema for a serialized quantum circuit.
@@ -33,6 +41,12 @@ struct CircuitJSONSchema: Codable, Sendable {
 
 /// JSON schema for a single circuit operation.
 struct OperationSchema: Codable, Sendable {
+    static let gateType = "gate"
+    static let measurementType = "measurement"
+    static let barrierType = "barrier"
+    static let resetType = "reset"
+    static let customUnitaryName = "custom_unitary"
+
     let type: String
     let gate: String?
     let qubits: [Int]
@@ -44,6 +58,11 @@ struct OperationSchema: Codable, Sendable {
 
 /// JSON schema for a gate parameter value.
 struct ParameterSchema: Codable, Sendable {
+    static let valueType = "value"
+    static let symbolicType = "symbolic"
+    static let negatedType = "negated"
+    static let expressionType = "expression"
+
     let type: String
     let value: Double?
     let name: String?

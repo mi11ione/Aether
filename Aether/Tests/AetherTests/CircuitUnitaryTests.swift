@@ -15,13 +15,13 @@ struct CircuitUnitaryTests {
         let circuit = QuantumCircuit(qubits: 2)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary.count == 4)
-        #expect(unitary[0][0] == Complex(1, 0))
-        #expect(unitary[1][1] == Complex(1, 0))
-        #expect(unitary[2][2] == Complex(1, 0))
-        #expect(unitary[3][3] == Complex(1, 0))
-        #expect(unitary[0][1].magnitude < 1e-10)
-        #expect(unitary[1][0].magnitude < 1e-10)
+        #expect(unitary.count == 4, "2-qubit identity unitary should have 4 rows")
+        #expect(unitary[0][0] == Complex(1, 0), "Identity matrix diagonal [0][0] should be 1")
+        #expect(unitary[1][1] == Complex(1, 0), "Identity matrix diagonal [1][1] should be 1")
+        #expect(unitary[2][2] == Complex(1, 0), "Identity matrix diagonal [2][2] should be 1")
+        #expect(unitary[3][3] == Complex(1, 0), "Identity matrix diagonal [3][3] should be 1")
+        #expect(unitary[0][1].magnitude < 1e-10, "Off-diagonal element [0][1] should be zero")
+        #expect(unitary[1][0].magnitude < 1e-10, "Off-diagonal element [1][0] should be zero")
     }
 
     @Test("Single Hadamard gate produces correct unitary")
@@ -31,10 +31,10 @@ struct CircuitUnitaryTests {
         let unitary = CircuitUnitary.unitary(for: circuit)
 
         let expected = 1.0 / sqrt(2.0)
-        #expect(abs(unitary[0][0].real - expected) < 1e-10)
-        #expect(abs(unitary[0][1].real - expected) < 1e-10)
-        #expect(abs(unitary[1][0].real - expected) < 1e-10)
-        #expect(abs(unitary[1][1].real + expected) < 1e-10)
+        #expect(abs(unitary[0][0].real - expected) < 1e-10, "Hadamard [0][0] should be 1/sqrt(2)")
+        #expect(abs(unitary[0][1].real - expected) < 1e-10, "Hadamard [0][1] should be 1/sqrt(2)")
+        #expect(abs(unitary[1][0].real - expected) < 1e-10, "Hadamard [1][0] should be 1/sqrt(2)")
+        #expect(abs(unitary[1][1].real + expected) < 1e-10, "Hadamard [1][1] should be -1/sqrt(2)")
     }
 
     @Test("Pauli-X gate on single qubit")
@@ -43,10 +43,10 @@ struct CircuitUnitaryTests {
         circuit.append(.pauliX, to: 0)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary[0][0] == Complex(0, 0))
-        #expect(unitary[0][1] == Complex(1, 0))
-        #expect(unitary[1][0] == Complex(1, 0))
-        #expect(unitary[1][1] == Complex(0, 0))
+        #expect(unitary[0][0] == Complex(0, 0), "Pauli-X [0][0] should be 0")
+        #expect(unitary[0][1] == Complex(1, 0), "Pauli-X [0][1] should be 1")
+        #expect(unitary[1][0] == Complex(1, 0), "Pauli-X [1][0] should be 1")
+        #expect(unitary[1][1] == Complex(0, 0), "Pauli-X [1][1] should be 0")
     }
 
     @Test("Pauli-Y gate on single qubit")
@@ -55,10 +55,10 @@ struct CircuitUnitaryTests {
         circuit.append(.pauliY, to: 0)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(abs(unitary[0][0].real) < 1e-10)
-        #expect(abs(unitary[0][1].imaginary + 1.0) < 1e-10)
-        #expect(abs(unitary[1][0].imaginary - 1.0) < 1e-10)
-        #expect(abs(unitary[1][1].real) < 1e-10)
+        #expect(abs(unitary[0][0].real) < 1e-10, "Pauli-Y [0][0] real part should be zero")
+        #expect(abs(unitary[0][1].imaginary + 1.0) < 1e-10, "Pauli-Y [0][1] should be -i")
+        #expect(abs(unitary[1][0].imaginary - 1.0) < 1e-10, "Pauli-Y [1][0] should be i")
+        #expect(abs(unitary[1][1].real) < 1e-10, "Pauli-Y [1][1] real part should be zero")
     }
 
     @Test("Pauli-Z gate on single qubit")
@@ -67,10 +67,10 @@ struct CircuitUnitaryTests {
         circuit.append(.pauliZ, to: 0)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary[0][0] == Complex(1, 0))
-        #expect(unitary[1][1] == Complex(-1, 0))
-        #expect(unitary[0][1].magnitude < 1e-10)
-        #expect(unitary[1][0].magnitude < 1e-10)
+        #expect(unitary[0][0] == Complex(1, 0), "Pauli-Z [0][0] should be 1")
+        #expect(unitary[1][1] == Complex(-1, 0), "Pauli-Z [1][1] should be -1")
+        #expect(unitary[0][1].magnitude < 1e-10, "Pauli-Z off-diagonal [0][1] should be zero")
+        #expect(unitary[1][0].magnitude < 1e-10, "Pauli-Z off-diagonal [1][0] should be zero")
     }
 
     @Test("Rotation gate produces correct unitary")
@@ -80,10 +80,10 @@ struct CircuitUnitaryTests {
         let unitary = CircuitUnitary.unitary(for: circuit)
 
         let expected = 1.0 / sqrt(2.0)
-        #expect(abs(unitary[0][0].real - expected) < 1e-10)
-        #expect(abs(unitary[0][1].imaginary + expected) < 1e-10)
-        #expect(abs(unitary[1][0].imaginary + expected) < 1e-10)
-        #expect(abs(unitary[1][1].real - expected) < 1e-10)
+        #expect(abs(unitary[0][0].real - expected) < 1e-10, "Rx(pi/2) [0][0] should be cos(pi/4)")
+        #expect(abs(unitary[0][1].imaginary + expected) < 1e-10, "Rx(pi/2) [0][1] should be -i*sin(pi/4)")
+        #expect(abs(unitary[1][0].imaginary + expected) < 1e-10, "Rx(pi/2) [1][0] should be -i*sin(pi/4)")
+        #expect(abs(unitary[1][1].real - expected) < 1e-10, "Rx(pi/2) [1][1] should be cos(pi/4)")
     }
 
     @Test("CNOT gate on two qubits")
@@ -92,13 +92,13 @@ struct CircuitUnitaryTests {
         circuit.append(.cnot, to: [0, 1])
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary.count == 4)
-        #expect(unitary[0][0] == Complex(1, 0))
-        #expect(unitary[1][3] == Complex(1, 0))
-        #expect(unitary[2][2] == Complex(1, 0))
-        #expect(unitary[3][1] == Complex(1, 0))
-        #expect(unitary[0][1].magnitude < 1e-10)
-        #expect(unitary[1][1].magnitude < 1e-10)
+        #expect(unitary.count == 4, "CNOT unitary should have 4 rows for 2 qubits")
+        #expect(unitary[0][0] == Complex(1, 0), "CNOT [0][0] should be 1")
+        #expect(unitary[1][3] == Complex(1, 0), "CNOT [1][3] should be 1")
+        #expect(unitary[2][2] == Complex(1, 0), "CNOT [2][2] should be 1")
+        #expect(unitary[3][1] == Complex(1, 0), "CNOT [3][1] should be 1")
+        #expect(unitary[0][1].magnitude < 1e-10, "CNOT off-diagonal [0][1] should be zero")
+        #expect(unitary[1][1].magnitude < 1e-10, "CNOT element [1][1] should be zero")
     }
 
     @Test("CZ gate produces correct unitary")
@@ -107,10 +107,10 @@ struct CircuitUnitaryTests {
         circuit.append(.cz, to: [0, 1])
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary[0][0] == Complex(1, 0))
-        #expect(unitary[1][1] == Complex(1, 0))
-        #expect(unitary[2][2] == Complex(1, 0))
-        #expect(unitary[3][3] == Complex(-1, 0))
+        #expect(unitary[0][0] == Complex(1, 0), "CZ [0][0] should be 1")
+        #expect(unitary[1][1] == Complex(1, 0), "CZ [1][1] should be 1")
+        #expect(unitary[2][2] == Complex(1, 0), "CZ [2][2] should be 1")
+        #expect(unitary[3][3] == Complex(-1, 0), "CZ [3][3] should be -1 for phase flip on |11>")
     }
 
     @Test("SWAP gate swaps qubit amplitudes")
@@ -119,10 +119,10 @@ struct CircuitUnitaryTests {
         circuit.append(.swap, to: [0, 1])
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary[0][0] == Complex(1, 0))
-        #expect(unitary[1][2] == Complex(1, 0))
-        #expect(unitary[2][1] == Complex(1, 0))
-        #expect(unitary[3][3] == Complex(1, 0))
+        #expect(unitary[0][0] == Complex(1, 0), "SWAP [0][0] should be 1")
+        #expect(unitary[1][2] == Complex(1, 0), "SWAP [1][2] should be 1 for |01> to |10>")
+        #expect(unitary[2][1] == Complex(1, 0), "SWAP [2][1] should be 1 for |10> to |01>")
+        #expect(unitary[3][3] == Complex(1, 0), "SWAP [3][3] should be 1")
     }
 
     @Test("Controlled rotation gate")
@@ -131,11 +131,11 @@ struct CircuitUnitaryTests {
         circuit.append(.controlledRotationZ(.pi), to: [0, 1])
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary.count == 4)
-        #expect(abs(unitary[0][0].real - 1.0) < 1e-10)
-        #expect(abs(unitary[2][2].real - 1.0) < 1e-10)
-        #expect(abs(unitary[1][1].imaginary + 1.0) < 1e-10)
-        #expect(abs(unitary[3][3].imaginary - 1.0) < 1e-10)
+        #expect(unitary.count == 4, "Controlled-Rz unitary should have 4 rows for 2 qubits")
+        #expect(abs(unitary[0][0].real - 1.0) < 1e-10, "Controlled-Rz [0][0] should be 1 when control is 0")
+        #expect(abs(unitary[2][2].real - 1.0) < 1e-10, "Controlled-Rz [2][2] should be 1 when control is 0")
+        #expect(abs(unitary[1][1].imaginary + 1.0) < 1e-10, "Controlled-Rz [1][1] should be -i for pi rotation")
+        #expect(abs(unitary[3][3].imaginary - 1.0) < 1e-10, "Controlled-Rz [3][3] should be i for pi rotation")
     }
 
     @Test("Toffoli gate on three qubits")
@@ -144,10 +144,10 @@ struct CircuitUnitaryTests {
         circuit.append(.toffoli, to: [0, 1, 2])
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary.count == 8)
-        #expect(unitary[0][0] == Complex(1, 0))
-        #expect(unitary[3][7] == Complex(1, 0))
-        #expect(unitary[7][3] == Complex(1, 0))
+        #expect(unitary.count == 8, "Toffoli unitary should have 8 rows for 3 qubits")
+        #expect(unitary[0][0] == Complex(1, 0), "Toffoli [0][0] should be 1")
+        #expect(unitary[3][7] == Complex(1, 0), "Toffoli [3][7] should be 1 for controlled flip")
+        #expect(unitary[7][3] == Complex(1, 0), "Toffoli [7][3] should be 1 for controlled flip")
     }
 
     @Test("Multiple gates compose correctly")
@@ -157,10 +157,10 @@ struct CircuitUnitaryTests {
         circuit.append(.cnot, to: [0, 1])
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary.count == 4)
+        #expect(unitary.count == 4, "H+CNOT unitary should have 4 rows for 2 qubits")
         let inv_sqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(unitary[0][0].real - inv_sqrt2) < 1e-10)
-        #expect(abs(unitary[3][0].real - inv_sqrt2) < 1e-10)
+        #expect(abs(unitary[0][0].real - inv_sqrt2) < 1e-10, "Bell circuit [0][0] should be 1/sqrt(2)")
+        #expect(abs(unitary[3][0].real - inv_sqrt2) < 1e-10, "Bell circuit [3][0] should be 1/sqrt(2)")
     }
 
     @Test("Hadamard on second qubit of two-qubit system")
@@ -170,10 +170,10 @@ struct CircuitUnitaryTests {
         let unitary = CircuitUnitary.unitary(for: circuit)
 
         let inv_sqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(unitary[0][0].real - inv_sqrt2) < 1e-10)
-        #expect(abs(unitary[0][2].real - inv_sqrt2) < 1e-10)
-        #expect(abs(unitary[2][0].real - inv_sqrt2) < 1e-10)
-        #expect(abs(unitary[2][2].real + inv_sqrt2) < 1e-10)
+        #expect(abs(unitary[0][0].real - inv_sqrt2) < 1e-10, "Hadamard on qubit 1 [0][0] should be 1/sqrt(2)")
+        #expect(abs(unitary[0][2].real - inv_sqrt2) < 1e-10, "Hadamard on qubit 1 [0][2] should be 1/sqrt(2)")
+        #expect(abs(unitary[2][0].real - inv_sqrt2) < 1e-10, "Hadamard on qubit 1 [2][0] should be 1/sqrt(2)")
+        #expect(abs(unitary[2][2].real + inv_sqrt2) < 1e-10, "Hadamard on qubit 1 [2][2] should be -1/sqrt(2)")
     }
 
     @Test("Three-qubit circuit with mixed gates")
@@ -184,7 +184,7 @@ struct CircuitUnitaryTests {
         circuit.append(.pauliZ, to: 2)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary.count == 8)
+        #expect(unitary.count == 8, "3-qubit mixed gate unitary should have 8 rows")
     }
 
     @Test("Custom single-qubit gate")
@@ -197,30 +197,30 @@ struct CircuitUnitaryTests {
         circuit.append(.customSingleQubit(matrix: customMatrix), to: 0)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(abs(unitary[0][0].real - 0.707) < 1e-3)
-        #expect(abs(unitary[0][1].real - 0.707) < 1e-3)
+        #expect(abs(unitary[0][0].real - 0.707) < 1e-3, "Custom gate [0][0] should match input matrix")
+        #expect(abs(unitary[0][1].real - 0.707) < 1e-3, "Custom gate [0][1] should match input matrix")
     }
 
     @Test("Memory estimation for different qubit counts")
     func memoryEstimation() {
-        let mem8 = CircuitUnitary.memoryUsage(for: 8)
-        let mem10 = CircuitUnitary.memoryUsage(for: 10)
-        let mem12 = CircuitUnitary.memoryUsage(for: 12)
+        let mem8 = CircuitUnitary.estimateMemoryUsage(forQubits: 8)
+        let mem10 = CircuitUnitary.estimateMemoryUsage(forQubits: 10)
+        let mem12 = CircuitUnitary.estimateMemoryUsage(forQubits: 12)
 
-        #expect(mem8 > 0)
-        #expect(mem10 > mem8)
-        #expect(mem12 > mem10)
-        #expect(mem8 < 2 * 1024 * 1024)
-        #expect(mem10 > 15 * 1024 * 1024)
-        #expect(mem12 > 200 * 1024 * 1024)
+        #expect(mem8 > 0, "Memory for 8 qubits should be positive")
+        #expect(mem10 > mem8, "Memory for 10 qubits should exceed 8 qubits")
+        #expect(mem12 > mem10, "Memory for 12 qubits should exceed 10 qubits")
+        #expect(mem8 < 2 * 1024 * 1024, "Memory for 8 qubits should be under 2 MB")
+        #expect(mem10 > 15 * 1024 * 1024, "Memory for 10 qubits should exceed 15 MB")
+        #expect(mem12 > 200 * 1024 * 1024, "Memory for 12 qubits should exceed 200 MB")
     }
 
     @Test("Feasibility check for reasonable qubit counts")
     func feasibilityReasonableQubits() {
-        #expect(CircuitUnitary.canConvert(qubits: 8))
-        #expect(CircuitUnitary.canConvert(qubits: 10))
-        #expect(CircuitUnitary.canConvert(qubits: 12))
-        #expect(CircuitUnitary.canConvert(qubits: 14))
+        #expect(CircuitUnitary.canConvert(qubits: 8), "8-qubit conversion should be feasible")
+        #expect(CircuitUnitary.canConvert(qubits: 10), "10-qubit conversion should be feasible")
+        #expect(CircuitUnitary.canConvert(qubits: 12), "12-qubit conversion should be feasible")
+        #expect(CircuitUnitary.canConvert(qubits: 14), "14-qubit conversion should be feasible")
     }
 
     @Test("Unitarity preserved after gate composition")
@@ -237,10 +237,10 @@ struct CircuitUnitaryTests {
         for i in 0 ..< 4 {
             for j in 0 ..< 4 {
                 if i == j {
-                    #expect(abs(product[i][j].real - 1.0) < 1e-10)
-                    #expect(abs(product[i][j].imaginary) < 1e-10)
+                    #expect(abs(product[i][j].real - 1.0) < 1e-10, "U†U diagonal real part should be 1")
+                    #expect(abs(product[i][j].imaginary) < 1e-10, "U†U diagonal imaginary part should be zero")
                 } else {
-                    #expect(abs(product[i][j].magnitude) < 1e-10)
+                    #expect(abs(product[i][j].magnitude) < 1e-10, "U†U off-diagonal element should be zero")
                 }
             }
         }
@@ -252,9 +252,9 @@ struct CircuitUnitaryTests {
         circuit.append(.sGate, to: 0)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary[0][0] == Complex(1, 0))
-        #expect(abs(unitary[1][1].real) < 1e-10)
-        #expect(abs(unitary[1][1].imaginary - 1.0) < 1e-10)
+        #expect(unitary[0][0] == Complex(1, 0), "S gate [0][0] should be 1")
+        #expect(abs(unitary[1][1].real) < 1e-10, "S gate [1][1] real part should be zero")
+        #expect(abs(unitary[1][1].imaginary - 1.0) < 1e-10, "S gate [1][1] should be i")
     }
 
     @Test("T gate produces correct phase")
@@ -264,9 +264,9 @@ struct CircuitUnitaryTests {
         let unitary = CircuitUnitary.unitary(for: circuit)
 
         let expected = 1.0 / sqrt(2.0)
-        #expect(unitary[0][0] == Complex(1, 0))
-        #expect(abs(unitary[1][1].real - expected) < 1e-10)
-        #expect(abs(unitary[1][1].imaginary - expected) < 1e-10)
+        #expect(unitary[0][0] == Complex(1, 0), "T gate [0][0] should be 1")
+        #expect(abs(unitary[1][1].real - expected) < 1e-10, "T gate [1][1] real part should be 1/sqrt(2)")
+        #expect(abs(unitary[1][1].imaginary - expected) < 1e-10, "T gate [1][1] imaginary part should be 1/sqrt(2)")
     }
 
     @Test("Sequential composition matches direct multiplication")
@@ -282,8 +282,8 @@ struct CircuitUnitaryTests {
 
         for i in 0 ..< 2 {
             for j in 0 ..< 2 {
-                #expect(abs(unitary[i][j].real - manual[i][j].real) < 1e-10)
-                #expect(abs(unitary[i][j].imaginary - manual[i][j].imaginary) < 1e-10)
+                #expect(abs(unitary[i][j].real - manual[i][j].real) < 1e-10, "Circuit composition real part should match manual multiplication")
+                #expect(abs(unitary[i][j].imaginary - manual[i][j].imaginary) < 1e-10, "Circuit composition imaginary part should match manual multiplication")
             }
         }
     }
@@ -294,8 +294,8 @@ struct CircuitUnitaryTests {
         circuit.append(.hadamard, to: 0)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary.count == 16)
-        #expect(unitary[0].count == 16)
+        #expect(unitary.count == 16, "4-qubit unitary should have 16 rows")
+        #expect(unitary[0].count == 16, "4-qubit unitary should have 16 columns")
     }
 
     @Test("CH gate on two qubits")
@@ -304,11 +304,11 @@ struct CircuitUnitaryTests {
         circuit.append(.ch, to: [0, 1])
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary[0][0] == Complex(1, 0))
-        #expect(unitary[2][2] == Complex(1, 0))
+        #expect(unitary[0][0] == Complex(1, 0), "CH [0][0] should be 1 when control is 0")
+        #expect(unitary[2][2] == Complex(1, 0), "CH [2][2] should be 1 when control is 0")
         let inv_sqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(unitary[1][1].real - inv_sqrt2) < 1e-10)
-        #expect(abs(unitary[3][1].real - inv_sqrt2) < 1e-10)
+        #expect(abs(unitary[1][1].real - inv_sqrt2) < 1e-10, "CH [1][1] should be 1/sqrt(2) when control is 1")
+        #expect(abs(unitary[3][1].real - inv_sqrt2) < 1e-10, "CH [3][1] should be 1/sqrt(2) when control is 1")
     }
 
     @Test("CY gate on two qubits")
@@ -317,10 +317,10 @@ struct CircuitUnitaryTests {
         circuit.append(.cy, to: [0, 1])
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary[0][0] == Complex(1, 0))
-        #expect(unitary[2][2] == Complex(1, 0))
-        #expect(abs(unitary[3][1].imaginary - 1.0) < 1e-10)
-        #expect(abs(unitary[1][3].imaginary + 1.0) < 1e-10)
+        #expect(unitary[0][0] == Complex(1, 0), "CY [0][0] should be 1 when control is 0")
+        #expect(unitary[2][2] == Complex(1, 0), "CY [2][2] should be 1 when control is 0")
+        #expect(abs(unitary[3][1].imaginary - 1.0) < 1e-10, "CY [3][1] should be i when control is 1")
+        #expect(abs(unitary[1][3].imaginary + 1.0) < 1e-10, "CY [1][3] should be -i when control is 1")
     }
 
     @Test("Controlled phase gate")
@@ -329,7 +329,7 @@ struct CircuitUnitaryTests {
         circuit.append(.controlledPhase(.pi), to: [0, 1])
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(abs(unitary[3][3].real + 1.0) < 1e-10)
+        #expect(abs(unitary[3][3].real + 1.0) < 1e-10, "Controlled-phase(pi) [3][3] should be -1")
     }
 
     @Test("sqrt-SWAP gate")
@@ -338,7 +338,7 @@ struct CircuitUnitaryTests {
         circuit.append(.sqrtSwap, to: [0, 1])
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary.count == 4)
+        #expect(unitary.count == 4, "sqrt-SWAP unitary should have 4 rows for 2 qubits")
     }
 
     @Test("U1 gate produces correct phase")
@@ -347,8 +347,8 @@ struct CircuitUnitaryTests {
         circuit.append(.u1(lambda: .pi / 2), to: 0)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary[0][0] == Complex(1, 0))
-        #expect(abs(unitary[1][1].imaginary - 1.0) < 1e-10)
+        #expect(unitary[0][0] == Complex(1, 0), "U1 gate [0][0] should be 1")
+        #expect(abs(unitary[1][1].imaginary - 1.0) < 1e-10, "U1(pi/2) gate [1][1] should be i")
     }
 
     @Test("U2 gate with phases")
@@ -357,7 +357,7 @@ struct CircuitUnitaryTests {
         circuit.append(.u2(phi: 0, lambda: .pi), to: 0)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary.count == 2)
+        #expect(unitary.count == 2, "U2 gate unitary should have 2 rows for 1 qubit")
     }
 
     @Test("U3 gate with all parameters")
@@ -366,7 +366,7 @@ struct CircuitUnitaryTests {
         circuit.append(.u3(theta: .pi / 2, phi: 0, lambda: .pi), to: 0)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary.count == 2)
+        #expect(unitary.count == 2, "U3 gate unitary should have 2 rows for 1 qubit")
     }
 
     @Test("SX gate square root of X")
@@ -375,8 +375,8 @@ struct CircuitUnitaryTests {
         circuit.append(.sx, to: 0)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(abs(unitary[0][0].real - 0.5) < 1e-10)
-        #expect(abs(unitary[0][1].real - 0.5) < 1e-10)
+        #expect(abs(unitary[0][0].real - 0.5) < 1e-10, "SX gate [0][0] real part should be 0.5")
+        #expect(abs(unitary[0][1].real - 0.5) < 1e-10, "SX gate [0][1] real part should be 0.5")
     }
 
     @Test("SY gate square root of Y")
@@ -385,7 +385,7 @@ struct CircuitUnitaryTests {
         circuit.append(.sy, to: 0)
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(abs(unitary[0][0].real - 0.5) < 1e-10)
+        #expect(abs(unitary[0][0].real - 0.5) < 1e-10, "SY gate [0][0] real part should be 0.5")
     }
 
     @Test("Two-qubit gate with control > target (reverse qubit ordering)")
@@ -394,11 +394,11 @@ struct CircuitUnitaryTests {
         circuit.append(.cnot, to: [1, 0])
         let unitary = CircuitUnitary.unitary(for: circuit)
 
-        #expect(unitary.count == 4)
-        #expect(unitary[0][0] == Complex(1, 0))
-        #expect(unitary[1][1] == Complex(1, 0))
-        #expect(unitary[2][3] == Complex(1, 0))
-        #expect(unitary[3][2] == Complex(1, 0))
+        #expect(unitary.count == 4, "Reverse CNOT unitary should have 4 rows for 2 qubits")
+        #expect(unitary[0][0] == Complex(1, 0), "Reverse CNOT [0][0] should be 1")
+        #expect(unitary[1][1] == Complex(1, 0), "Reverse CNOT [1][1] should be 1")
+        #expect(unitary[2][3] == Complex(1, 0), "Reverse CNOT [2][3] should be 1 for target flip")
+        #expect(unitary[3][2] == Complex(1, 0), "Reverse CNOT [3][2] should be 1 for target flip")
     }
 
     @Test("Controlled gate via .controlled case produces correct unitary")

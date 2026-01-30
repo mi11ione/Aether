@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under Apache 2.0
 
+import Accelerate
 import Foundation
 
 /// Protocol for state preparation oracle A where A|0> = sqrt(1-a)|bad> + sqrt(a)|good>.
@@ -63,7 +64,7 @@ public protocol AmplitudeOracle: Sendable {
 /// **Example:**
 /// ```swift
 /// let oracle = CountingOracle(qubits: 4, markedStates: [3, 5, 9])
-/// let config = AEConfiguration(precisionQubits: 6)
+/// let config = AmplitudeEstimationConfiguration(precisionQubits: 6)
 /// let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 /// let result = await ae.run()
 /// print(result.estimatedAmplitude)   // sqrt(a)
@@ -72,7 +73,7 @@ public protocol AmplitudeOracle: Sendable {
 /// ```
 ///
 /// - SeeAlso: ``AmplitudeEstimation``
-/// - SeeAlso: ``AEConfiguration``
+/// - SeeAlso: ``AmplitudeEstimationConfiguration``
 @frozen
 public struct AmplitudeEstimationResult: Sendable, CustomStringConvertible {
     /// Estimated amplitude sqrt(a) where a is the probability of measuring a good state.
@@ -122,6 +123,8 @@ public struct AmplitudeEstimationResult: Sendable, CustomStringConvertible {
     ///   - confidenceInterval: Lower and upper bounds for probability
     ///   - oracleCalls: Number of oracle invocations
     ///   - classicalEquivalentSamples: Classical samples for equivalent precision
+    /// - Complexity: O(1)
+    @inlinable
     public init(
         estimatedAmplitude: Double,
         estimatedProbability: Double,
@@ -136,7 +139,19 @@ public struct AmplitudeEstimationResult: Sendable, CustomStringConvertible {
         self.classicalEquivalentSamples = classicalEquivalentSamples
     }
 
-    /// Multi-line formatted summary of amplitude estimation results.
+    /// A formatted string representation of the amplitude estimation result.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let result = AmplitudeEstimationResult(
+    ///     estimatedAmplitude: 0.5,
+    ///     estimatedProbability: 0.25,
+    ///     confidenceInterval: (lower: 0.2, upper: 0.3),
+    ///     oracleCalls: 100,
+    ///     classicalEquivalentSamples: 10000
+    /// )
+    /// print(result.description)
+    /// ```
     @inlinable
     public var description: String {
         let ampStr = String(format: "%.8f", estimatedAmplitude)
@@ -164,14 +179,14 @@ public struct AmplitudeEstimationResult: Sendable, CustomStringConvertible {
 ///
 /// **Example:**
 /// ```swift
-/// let standardConfig = AEConfiguration(precisionQubits: 8)
-/// let iterativeConfig = AEConfiguration(precisionQubits: 10, useIterative: true)
+/// let standardConfig = AmplitudeEstimationConfiguration(precisionQubits: 8)
+/// let iterativeConfig = AmplitudeEstimationConfiguration(precisionQubits: 10, useIterative: true)
 /// ```
 ///
 /// - SeeAlso: ``AmplitudeEstimation``
 /// - SeeAlso: ``IPEConfiguration``
 @frozen
-public struct AEConfiguration: Sendable {
+public struct AmplitudeEstimationConfiguration: Sendable {
     /// Number of qubits in the precision register.
     ///
     /// Determines estimation accuracy as epsilon = pi/2^n.
@@ -188,7 +203,7 @@ public struct AEConfiguration: Sendable {
     ///
     /// **Example:**
     /// ```swift
-    /// let config = AEConfiguration(precisionQubits: 6, useIterative: false)
+    /// let config = AmplitudeEstimationConfiguration(precisionQubits: 6, useIterative: false)
     /// ```
     ///
     /// - Parameters:
@@ -197,6 +212,7 @@ public struct AEConfiguration: Sendable {
     /// - Precondition: precisionQubits > 0
     /// - Precondition: precisionQubits <= 15
     /// - Complexity: O(1)
+    @inlinable
     public init(precisionQubits: Int, useIterative: Bool = false) {
         ValidationUtilities.validatePositiveInt(precisionQubits, name: "precisionQubits")
         ValidationUtilities.validateUpperBound(precisionQubits, max: 15, name: "precisionQubits")
@@ -217,7 +233,7 @@ public struct AEConfiguration: Sendable {
 /// **Example:**
 /// ```swift
 /// let oracle = CountingOracle(qubits: 4, markedStates: [3, 7, 11])
-/// let ae = AmplitudeEstimation(oracle: oracle, configuration: AEConfiguration(precisionQubits: 6))
+/// let ae = AmplitudeEstimation(oracle: oracle, configuration: AmplitudeEstimationConfiguration(precisionQubits: 6))
 /// let result = await ae.run()
 /// let estimatedCount = result.estimatedProbability * 16  // Approximately 3
 /// ```
@@ -246,6 +262,7 @@ public struct CountingOracle: AmplitudeOracle, Sendable {
     /// - Precondition: qubits <= 10
     /// - Precondition: All markedStates < 2^qubits
     /// - Complexity: O(markedStates.count)
+    @inlinable
     public init(qubits: Int, markedStates: [Int]) {
         ValidationUtilities.validatePositiveQubits(qubits)
         ValidationUtilities.validateAlgorithmQubitLimit(qubits, max: 10, algorithmName: "CountingOracle")
@@ -260,6 +277,16 @@ public struct CountingOracle: AmplitudeOracle, Sendable {
     }
 
     /// Applies Hadamard to all qubits creating uniform superposition.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var circuit = QuantumCircuit(qubitCount: 3)
+    /// let oracle = CountingOracle(qubits: 3, markedStates: [5])
+    /// oracle.applyStatePreparation(to: &circuit)
+    /// ```
+    ///
+    /// - Complexity: O(qubits)
+    @inlinable
     @_optimize(speed)
     public func applyStatePreparation(to circuit: inout QuantumCircuit) {
         for qubit in 0 ..< qubits {
@@ -268,6 +295,16 @@ public struct CountingOracle: AmplitudeOracle, Sendable {
     }
 
     /// Applies Hadamard to all qubits (inverse = forward for Hadamard).
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var circuit = QuantumCircuit(qubitCount: 3)
+    /// let oracle = CountingOracle(qubits: 3, markedStates: [5])
+    /// oracle.applyStatePreparationInverse(to: &circuit)
+    /// ```
+    ///
+    /// - Complexity: O(qubits)
+    @inlinable
     @_optimize(speed)
     public func applyStatePreparationInverse(to circuit: inout QuantumCircuit) {
         for qubit in (0 ..< qubits).reversed() {
@@ -276,6 +313,16 @@ public struct CountingOracle: AmplitudeOracle, Sendable {
     }
 
     /// Applies phase flip to marked states using Grover oracle construction.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var circuit = QuantumCircuit(qubitCount: 3)
+    /// let oracle = CountingOracle(qubits: 3, markedStates: [5])
+    /// oracle.applyMarkingOracle(to: &circuit)
+    /// ```
+    ///
+    /// - Complexity: O(markedStates.count * qubits)
+    @inlinable
     @_optimize(speed)
     public func applyMarkingOracle(to circuit: inout QuantumCircuit) {
         let oracleGates = QuantumCircuit.groverOracle(
@@ -306,7 +353,7 @@ public struct CountingOracle: AmplitudeOracle, Sendable {
 /// **Example:**
 /// ```swift
 /// let oracle = CountingOracle(qubits: 4, markedStates: [3, 7, 11, 15])
-/// let config = AEConfiguration(precisionQubits: 8)
+/// let config = AmplitudeEstimationConfiguration(precisionQubits: 8)
 /// let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 ///
 /// let result = await ae.run(progress: { message in
@@ -317,15 +364,18 @@ public struct CountingOracle: AmplitudeOracle, Sendable {
 ///
 /// - Complexity: O(2^n) oracle calls for n precision qubits
 /// - SeeAlso: ``AmplitudeOracle``
-/// - SeeAlso: ``AEConfiguration``
+/// - SeeAlso: ``AmplitudeEstimationConfiguration``
 /// - SeeAlso: ``AmplitudeEstimationResult``
 /// - SeeAlso: ``GroverDiffusion``
 public actor AmplitudeEstimation {
+    /// Numerical tolerance for floating-point comparisons in phase corrections.
+    private static let epsilonTolerance: Double = 1e-12
+
     /// Oracle defining state preparation and marking.
     private let oracle: any AmplitudeOracle
 
     /// Algorithm configuration.
-    private let configuration: AEConfiguration
+    private let configuration: AmplitudeEstimationConfiguration
 
     /// Quantum simulator for circuit execution.
     private let simulator: QuantumSimulator
@@ -335,7 +385,7 @@ public actor AmplitudeEstimation {
     /// **Example:**
     /// ```swift
     /// let oracle = CountingOracle(qubits: 4, markedStates: [5, 10])
-    /// let config = AEConfiguration(precisionQubits: 6)
+    /// let config = AmplitudeEstimationConfiguration(precisionQubits: 6)
     /// let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
     /// ```
     ///
@@ -343,7 +393,7 @@ public actor AmplitudeEstimation {
     ///   - oracle: Amplitude oracle defining state preparation and marking
     ///   - configuration: Algorithm configuration
     /// - Complexity: O(1)
-    public init(oracle: any AmplitudeOracle, configuration: AEConfiguration) {
+    public init(oracle: any AmplitudeOracle, configuration: AmplitudeEstimationConfiguration) {
         self.oracle = oracle
         self.configuration = configuration
         simulator = QuantumSimulator()
@@ -374,7 +424,6 @@ public actor AmplitudeEstimation {
         await progress?("Building Grover operator Q = A * S_0 * A^dagger * S_chi")
 
         let n = configuration.precisionQubits
-        let stateQubits = oracle.qubits
 
         let estimatedPhase: Double = if configuration.useIterative {
             await runIterativePhaseEstimation(progress: progress)
@@ -384,8 +433,9 @@ public actor AmplitudeEstimation {
 
         let theta = estimatedPhase * .pi
 
-        let amplitude = abs(Foundation.sin(theta))
-        let probability = amplitude * amplitude
+        let sinTheta = Foundation.sin(theta)
+        let amplitude = abs(sinTheta)
+        let probability = sinTheta * sinTheta
 
         let epsilon = .pi / Double(1 << n)
         let thetaLower = max(0.0, theta - epsilon)
@@ -395,7 +445,7 @@ public actor AmplitudeEstimation {
 
         let confidenceInterval = (lower: min(probLower, probUpper), upper: max(probLower, probUpper))
 
-        let oracleCalls = computeOracleCalls(precisionQubits: n, stateQubits: stateQubits)
+        let oracleCalls = computeOracleCalls(precisionQubits: n)
         let classicalSamples = computeClassicalEquivalent(precisionQubits: n)
 
         await progress?("Amplitude estimation complete: amplitude = \(String(format: "%.6f", amplitude))")
@@ -429,12 +479,7 @@ public actor AmplitudeEstimation {
 
         var stateCircuit = QuantumCircuit(qubits: stateQubits)
         oracle.applyStatePreparation(to: &stateCircuit)
-        for op in stateCircuit.operations {
-            if case let .gate(g, qubits, _) = op {
-                let shiftedQubits = qubits.map { $0 + n }
-                circuit.append(g, to: shiftedQubits)
-            }
-        }
+        appendShiftedOperations(from: stateCircuit, to: &circuit, offset: n)
 
         for controlQubit in 0 ..< n {
             let power = 1 << (n - 1 - controlQubit)
@@ -453,22 +498,30 @@ public actor AmplitudeEstimation {
         let state = await simulator.execute(circuit)
 
         let precisionStateSize = 1 << n
-        var precisionProbabilities = [Double](repeating: 0.0, count: precisionStateSize)
-
-        for basisIndex in 0 ..< state.stateSpaceSize {
-            let precisionIndex = basisIndex % precisionStateSize
-            let probability = state.amplitudes[basisIndex].magnitudeSquared
-            precisionProbabilities[precisionIndex] += probability
+        var precisionProbabilities = [Double](unsafeUninitializedCapacity: precisionStateSize) { buffer, count in
+            buffer.initialize(repeating: 0.0)
+            count = precisionStateSize
         }
 
-        var maxIndex = 0
-        var maxProb = precisionProbabilities[0]
-        for i in 1 ..< precisionStateSize {
-            if precisionProbabilities[i] > maxProb {
-                maxProb = precisionProbabilities[i]
-                maxIndex = i
+        if state.stateSpaceSize >= 64 {
+            for precisionIndex in 0 ..< precisionStateSize {
+                var sum = 0.0
+                for basisIndex in stride(from: precisionIndex, to: state.stateSpaceSize, by: precisionStateSize) {
+                    sum += state.amplitudes[basisIndex].magnitudeSquared
+                }
+                precisionProbabilities[precisionIndex] = sum
+            }
+        } else {
+            for basisIndex in 0 ..< state.stateSpaceSize {
+                let precisionIndex = basisIndex % precisionStateSize
+                precisionProbabilities[precisionIndex] += state.amplitudes[basisIndex].magnitudeSquared
             }
         }
+
+        var maxValue = 0.0
+        var maxIdx: vDSP_Length = 0
+        vDSP_maxviD(precisionProbabilities, 1, &maxValue, &maxIdx, vDSP_Length(precisionStateSize))
+        let maxIndex = Int(maxIdx)
 
         let rawPhase = Double(maxIndex) / Double(precisionStateSize)
 
@@ -500,12 +553,7 @@ public actor AmplitudeEstimation {
 
             var stateCircuit = QuantumCircuit(qubits: stateQubits)
             oracle.applyStatePreparation(to: &stateCircuit)
-            for op in stateCircuit.operations {
-                if case let .gate(g, qubits, _) = op {
-                    let shiftedQubits = qubits.map { $0 + 1 }
-                    circuit.append(g, to: shiftedQubits)
-                }
-            }
+            appendShiftedOperations(from: stateCircuit, to: &circuit, offset: 1)
 
             applyControlledGroverPower(
                 to: &circuit,
@@ -515,14 +563,13 @@ public actor AmplitudeEstimation {
             )
 
             var correction = 0.0
-            for (j, bit) in measuredBits.enumerated() {
-                if bit == 1 {
-                    let exponent = k - j
-                    correction += .pi / Double(1 << exponent)
-                }
+            for j in 0 ..< measuredBits.count {
+                let bit = measuredBits[j]
+                let exponent = k - j
+                correction += Double(bit) * .pi / Double(1 << exponent)
             }
 
-            if abs(correction) > 1e-12 {
+            if abs(correction) > Self.epsilonTolerance {
                 circuit.append(.rotationZ(-correction), to: 0)
             }
 
@@ -540,10 +587,10 @@ public actor AmplitudeEstimation {
         }
 
         var phase = 0.0
-        for (k, bit) in measuredBits.enumerated() {
-            if bit == 1 {
-                phase += 1.0 / Double(1 << (k + 1))
-            }
+        var reciprocal = 0.5
+        for k in 0 ..< measuredBits.count {
+            phase += Double(measuredBits[k]) * reciprocal
+            reciprocal *= 0.5
         }
 
         return phase
@@ -563,7 +610,7 @@ public actor AmplitudeEstimation {
         }
     }
 
-    /// Applies controlled marking oracle (controlled S_chi).
+    /// Applies controlled marking oracle.
     @_optimize(speed)
     private func applyControlledMarkingOracle(
         to circuit: inout QuantumCircuit,
@@ -575,7 +622,12 @@ public actor AmplitudeEstimation {
 
         for op in oracleCircuit.operations {
             if case let .gate(g, qubits, _) = op {
-                let shiftedQubits = qubits.map { $0 + stateQubitOffset }
+                let shiftedQubits = [Int](unsafeUninitializedCapacity: qubits.count) { buffer, count in
+                    for i in 0 ..< qubits.count {
+                        buffer[i] = qubits[i] + stateQubitOffset
+                    }
+                    count = qubits.count
+                }
                 let controlledGate = makeControlled(gate: g, control: controlQubit, targets: shiftedQubits)
                 for (cg, cq) in controlledGate {
                     circuit.append(cg, to: cq)
@@ -584,7 +636,7 @@ public actor AmplitudeEstimation {
         }
     }
 
-    /// Applies controlled diffusion operator (controlled A * S_0 * A^dagger).
+    /// Applies controlled diffusion operator.
     @_optimize(speed)
     private func applyControlledDiffusion(
         to circuit: inout QuantumCircuit,
@@ -595,15 +647,12 @@ public actor AmplitudeEstimation {
 
         var invCircuit = QuantumCircuit(qubits: stateQubits)
         oracle.applyStatePreparationInverse(to: &invCircuit)
-        for op in invCircuit.operations {
-            if case let .gate(g, qubits, _) = op {
-                let shiftedQubits = qubits.map { $0 + stateQubitOffset }
-                let controlledGate = makeControlled(gate: g, control: controlQubit, targets: shiftedQubits)
-                for (cg, cq) in controlledGate {
-                    circuit.append(cg, to: cq)
-                }
-            }
-        }
+        appendControlledShiftedOperations(
+            from: invCircuit,
+            to: &circuit,
+            controlQubit: controlQubit,
+            offset: stateQubitOffset,
+        )
 
         applyControlledReflectionAboutZero(
             to: &circuit,
@@ -614,18 +663,15 @@ public actor AmplitudeEstimation {
 
         var prepCircuit = QuantumCircuit(qubits: stateQubits)
         oracle.applyStatePreparation(to: &prepCircuit)
-        for op in prepCircuit.operations {
-            if case let .gate(g, qubits, _) = op {
-                let shiftedQubits = qubits.map { $0 + stateQubitOffset }
-                let controlledGate = makeControlled(gate: g, control: controlQubit, targets: shiftedQubits)
-                for (cg, cq) in controlledGate {
-                    circuit.append(cg, to: cq)
-                }
-            }
-        }
+        appendControlledShiftedOperations(
+            from: prepCircuit,
+            to: &circuit,
+            controlQubit: controlQubit,
+            offset: stateQubitOffset,
+        )
     }
 
-    /// Applies controlled reflection about |0> state.
+    /// Applies controlled reflection about zero state.
     @_optimize(speed)
     private func applyControlledReflectionAboutZero(
         to circuit: inout QuantumCircuit,
@@ -642,9 +688,12 @@ public actor AmplitudeEstimation {
         } else {
             circuit.append(.hadamard, to: stateQubitOffset + stateQubits - 1)
 
-            var controls = [controlQubit]
-            for q in 0 ..< stateQubits - 1 {
-                controls.append(stateQubitOffset + q)
+            let controls = [Int](unsafeUninitializedCapacity: stateQubits) { buffer, count in
+                buffer[0] = controlQubit
+                for q in 0 ..< stateQubits - 1 {
+                    buffer[q + 1] = stateQubitOffset + q
+                }
+                count = stateQubits
             }
             let target = stateQubitOffset + stateQubits - 1
 
@@ -675,7 +724,8 @@ public actor AmplitudeEstimation {
         }
     }
 
-    /// Makes a controlled version of a gate.
+    /// Creates controlled version of a gate.
+    @inline(__always)
     @_optimize(speed)
     @_effects(readonly)
     private func makeControlled(
@@ -794,6 +844,7 @@ public actor AmplitudeEstimation {
     }
 
     /// Applies controlled Toffoli using ancilla decomposition.
+    @inline(__always)
     @_optimize(speed)
     @_effects(readonly)
     private func applyControlledToffoli(
@@ -828,38 +879,79 @@ public actor AmplitudeEstimation {
         ]
     }
 
-    /// Applies inverse QFT to the first n qubits.
+    /// Appends circuit operations with shifted qubit indices.
+    @_optimize(speed)
+    private func appendShiftedOperations(
+        from sourceCircuit: QuantumCircuit,
+        to targetCircuit: inout QuantumCircuit,
+        offset: Int,
+    ) {
+        for op in sourceCircuit.operations {
+            if case let .gate(g, qubits, _) = op {
+                let shiftedQubits = [Int](unsafeUninitializedCapacity: qubits.count) { buffer, count in
+                    for i in 0 ..< qubits.count {
+                        buffer[i] = qubits[i] + offset
+                    }
+                    count = qubits.count
+                }
+                targetCircuit.append(g, to: shiftedQubits)
+            }
+        }
+    }
+
+    /// Appends controlled operations with shifted qubit indices.
+    @_optimize(speed)
+    private func appendControlledShiftedOperations(
+        from sourceCircuit: QuantumCircuit,
+        to targetCircuit: inout QuantumCircuit,
+        controlQubit: Int,
+        offset: Int,
+    ) {
+        for op in sourceCircuit.operations {
+            if case let .gate(g, qubits, _) = op {
+                let shiftedQubits = [Int](unsafeUninitializedCapacity: qubits.count) { buffer, count in
+                    for i in 0 ..< qubits.count {
+                        buffer[i] = qubits[i] + offset
+                    }
+                    count = qubits.count
+                }
+                let controlledGate = makeControlled(gate: g, control: controlQubit, targets: shiftedQubits)
+                for (cg, cq) in controlledGate {
+                    targetCircuit.append(cg, to: cq)
+                }
+            }
+        }
+    }
+
+    /// Applies inverse QFT to precision qubits.
     @_optimize(speed)
     private func applyInverseQFT(to circuit: inout QuantumCircuit, qubits n: Int) {
         for i in 0 ..< n / 2 {
             circuit.append(.swap, to: [i, n - 1 - i])
         }
 
+        let angleTable = [Double](unsafeUninitializedCapacity: n) { buffer, count in
+            for i in 0 ..< n {
+                buffer[i] = -.pi / Double(1 << i)
+            }
+            count = n
+        }
+
         for j in 0 ..< n {
             for k in 0 ..< j {
-                let angle = -.pi / Double(1 << (j - k))
-                circuit.append(.controlledPhase(.value(angle)), to: [k, j])
+                circuit.append(.controlledPhase(.value(angleTable[j - k])), to: [k, j])
             }
             circuit.append(.hadamard, to: j)
         }
     }
 
-    /// Computes total oracle calls for amplitude estimation.
+    /// Computes total oracle calls for given precision.
     @_effects(readonly)
-    private func computeOracleCalls(precisionQubits: Int, stateQubits _: Int) -> Int {
-        var total = 0
-        for k in 0 ..< precisionQubits {
-            let power = 1 << (precisionQubits - 1 - k)
-            total += 2 * power
-        }
-        return total
+    private func computeOracleCalls(precisionQubits: Int) -> Int {
+        2 * ((1 << precisionQubits) - 1)
     }
 
     /// Computes classical Monte Carlo samples for equivalent precision.
-    ///
-    /// Classical Monte Carlo requires O(1/ε²) samples for precision ε.
-    /// Quantum amplitude estimation achieves precision ε = 1/2^n with O(2^n) oracle calls.
-    /// For fair comparison, use ε = 1/2^n (not π/2^n), giving classical = 2^(2n).
     @_effects(readonly)
     private func computeClassicalEquivalent(precisionQubits: Int) -> Int {
         let samples = 1 << (2 * precisionQubits)

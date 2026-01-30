@@ -94,7 +94,7 @@ struct PowerTests {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
-        let powered = circuit.power(0)
+        let powered = circuit.powered(by: 0)
         #expect(powered.count == 0, "power(0) should produce circuit with no operations")
         #expect(powered.qubits == 2, "power(0) should preserve qubit count")
     }
@@ -103,7 +103,7 @@ struct PowerTests {
     func powerZeroExecutesToGroundState() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
-        let state = circuit.power(0).execute()
+        let state = circuit.powered(by: 0).execute()
         #expect(abs(state.probability(of: 0) - 1.0) < 1e-10, "power(0) should leave state as |00> with probability 1")
     }
 
@@ -112,7 +112,7 @@ struct PowerTests {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
-        let powered = circuit.power(1)
+        let powered = circuit.powered(by: 1)
         #expect(powered.count == circuit.count, "power(1) should have same operation count as original")
     }
 
@@ -122,7 +122,7 @@ struct PowerTests {
         circuit.append(.hadamard, to: 0)
         circuit.append(.pauliX, to: 1)
         let originalState = circuit.execute()
-        let poweredState = circuit.power(1).execute()
+        let poweredState = circuit.powered(by: 1).execute()
         for i in 0 ..< originalState.stateSpaceSize {
             #expect(
                 abs(originalState.amplitudes[i].real - poweredState.amplitudes[i].real) < 1e-10,
@@ -139,7 +139,7 @@ struct PowerTests {
     func powerTwoXGateIsIdentity() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.pauliX, to: 0)
-        let powered = circuit.power(2)
+        let powered = circuit.powered(by: 2)
         let state = powered.execute()
         #expect(abs(state.probability(of: 0) - 1.0) < 1e-10, "X^2 should be identity, leaving |0> with probability 1")
     }
@@ -148,7 +148,7 @@ struct PowerTests {
     func powerTwoHadamardIsIdentity() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
-        let powered = circuit.power(2)
+        let powered = circuit.powered(by: 2)
         let state = powered.execute()
         #expect(abs(state.probability(of: 0) - 1.0) < 1e-10, "H^2 should be identity, leaving |0> with probability 1")
     }
@@ -157,7 +157,7 @@ struct PowerTests {
     func powerFourSGateIsIdentity() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.sGate, to: 0)
-        let powered = circuit.power(4)
+        let powered = circuit.powered(by: 4)
         let state = powered.execute()
         #expect(abs(state.probability(of: 0) - 1.0) < 1e-10, "S^4 should be identity, leaving |0> with probability 1")
     }
@@ -167,7 +167,7 @@ struct PowerTests {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.label(qubit: 0, "data")
         circuit.append(.hadamard, to: 0)
-        let powered = circuit.power(0)
+        let powered = circuit.powered(by: 0)
         #expect(powered.qubitLabels[0] == "data", "power(0) should preserve label for qubit 0")
     }
 
@@ -175,7 +175,7 @@ struct PowerTests {
     func powerTwoTwoQubitCircuit() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.cnot, to: [0, 1])
-        let powered = circuit.power(2)
+        let powered = circuit.powered(by: 2)
         let state = powered.execute()
         #expect(abs(state.probability(of: 0) - 1.0) < 1e-10, "CNOT^2 should be identity on |00>")
     }
@@ -475,14 +475,14 @@ struct EdgeCaseTests {
     @Test("power(0) on empty circuit stays empty")
     func powerZeroEmptyCircuit() {
         let circuit = QuantumCircuit(qubits: 1)
-        let powered = circuit.power(0)
+        let powered = circuit.powered(by: 0)
         #expect(powered.count == 0, "power(0) on empty circuit should remain empty")
     }
 
     @Test("power(1) on empty circuit stays empty")
     func powerOneEmptyCircuit() {
         let circuit = QuantumCircuit(qubits: 2)
-        let powered = circuit.power(1)
+        let powered = circuit.powered(by: 1)
         #expect(powered.count == 0, "power(1) on empty circuit should remain empty")
     }
 
@@ -540,12 +540,15 @@ struct EdgeCaseTests {
         var x = QuantumCircuit(qubits: 1)
         x.append(.pauliX, to: 0)
 
-        let combined = h.power(2) + x
+        let combined = h.powered(by: 2) + x
         let state = combined.execute()
         #expect(abs(state.probability(of: 1) - 1.0) < 1e-10, "H^2 is identity, so result should be X|0> = |1>")
     }
 }
 
+/// Validates edge cases and boundary conditions in circuit composition.
+/// Tests uncovered branches including trivial repetition, zero exponent power,
+/// and multi-control gate decomposition paths.
 @Suite("CircuitComposition: uncovered branches")
 struct UncoveredBranchTests {
     @Test("power(2) on 3-qubit circuit uses customUnitary matrix path")
@@ -553,7 +556,7 @@ struct UncoveredBranchTests {
         var circuit = QuantumCircuit(qubits: 3)
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
-        let powered = circuit.power(2)
+        let powered = circuit.powered(by: 2)
         #expect(powered.qubits == 3, "power(2) on 3-qubit circuit should preserve qubit count")
         #expect(powered.count == 1, "power(2) via matrix path should produce single customUnitary operation")
         let poweredState = powered.execute()
@@ -576,7 +579,7 @@ struct UncoveredBranchTests {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.rotationY(.parameter(theta)), to: 0)
         circuit.append(.cnot, to: [0, 1])
-        let powered = circuit.power(2)
+        let powered = circuit.powered(by: 2)
         #expect(powered.qubits == 2, "Fallback power(2) should preserve qubit count")
         #expect(powered.count == 4, "Fallback power(2) should repeat 2 operations twice yielding 4 operations")
         #expect(powered.parameterCount == 1, "Fallback power(2) should preserve the symbolic parameter")

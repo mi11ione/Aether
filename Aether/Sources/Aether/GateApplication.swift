@@ -660,7 +660,7 @@ public enum GateApplication {
 
         let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
             for i in 0 ..< stateSize {
-                let phaseIndex = BitUtilities.getBits(i, qubits: qubits)
+                let phaseIndex = BitUtilities.bits(i, qubits: qubits)
                 let phase = phases[phaseIndex]
                 let phaseFactor = Complex<Double>(Foundation.cos(phase), Foundation.sin(phase))
                 buffer[i] = state.amplitudes[i] * phaseFactor

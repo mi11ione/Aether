@@ -1,10 +1,11 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-/// Tensor product operator for composing quantum circuits in parallel across disjoint qubit registers.
-///
-/// - SeeAlso: ``QuantumCircuit``
+/// Tensor product operator for composing quantum circuits in parallel.
 infix operator ⊗: MultiplicationPrecedence
+
+/// Maximum qubit count for which the matrix exponentiation path is used in ``powered(by:)``.
+private let matrixPathQubitThreshold = 10
 
 // MARK: - Circuit Composition Extension
 
@@ -12,9 +13,11 @@ public extension QuantumCircuit {
     /// Repeats the circuit a given number of times by concatenating its operations sequentially.
     ///
     /// Constructs a new circuit whose operation list is the original operations appended
-    /// ``count`` times. Qubit count and labels are preserved from the source circuit.
-    /// Useful for Trotterization steps and iterative amplitude amplification where the
-    /// same unitary block is applied multiple times in succession.
+    /// ``count`` times. Equivalent to applying the circuit's unitary U a total of ``count``
+    /// times in sequence, producing the composite unitary U^count. Qubit count and labels
+    /// are preserved from the source circuit. Useful for Trotterization steps and iterative
+    /// amplitude amplification where the same unitary block is applied multiple times in
+    /// succession.
     ///
     /// **Example:**
     /// ```swift
@@ -28,11 +31,13 @@ public extension QuantumCircuit {
     /// - Precondition: count >= 1
     /// - Complexity: O(n * count) where n is the number of operations in the original circuit
     ///
-    /// - SeeAlso: ``power(_:)``
+    /// - SeeAlso: ``powered(by:)``
     @_optimize(speed)
     @_eagerMove
     func repeated(_ count: Int) -> QuantumCircuit {
         ValidationUtilities.validatePositiveInt(count, name: "count")
+
+        if count == 1 { return self }
 
         let totalOps = operations.count * count
         var newOps = [CircuitOperation]()
@@ -60,7 +65,7 @@ public extension QuantumCircuit {
     /// ```swift
     /// var circuit = QuantumCircuit(qubits: 2)
     /// circuit.append(.hadamard, to: 0)
-    /// let squared = circuit.power(2)
+    /// let squared = circuit.powered(by: 2)
     /// ```
     ///
     /// - Parameter exponent: Non-negative integer power to raise the circuit to
@@ -72,7 +77,7 @@ public extension QuantumCircuit {
     /// - SeeAlso: ``MatrixUtilities/matrixPower(_:exponent:)``
     @_optimize(speed)
     @_eagerMove
-    func power(_ exponent: Int) -> QuantumCircuit {
+    func powered(by exponent: Int) -> QuantumCircuit {
         ValidationUtilities.validateNonNegativeInt(exponent, name: "exponent")
 
         if exponent == 0 {
@@ -86,9 +91,9 @@ public extension QuantumCircuit {
         }
 
         let isUnitary = operations.allSatisfy(\.isUnitary)
-        let useMatrixPath = isUnitary && qubits <= 10 && parameterCount == 0
+        let canUseMatrixPath = isUnitary && qubits <= matrixPathQubitThreshold && parameterCount == 0
 
-        if useMatrixPath {
+        if canUseMatrixPath {
             let unitaryMatrix = CircuitUnitary.unitary(for: self)
             let powered = MatrixUtilities.matrixPower(unitaryMatrix, exponent: exponent)
             let allQubits = Array(0 ..< qubits)
@@ -111,11 +116,12 @@ public extension QuantumCircuit {
 
     /// Wraps every gate in the circuit with additional control qubits using decomposition.
     ///
-    /// Produces a new circuit where each gate operation is conditioned on the specified control
-    /// qubits all being in state |1>. The original circuit's qubit indices are shifted upward by
-    /// the number of control qubits so that control qubits occupy the lowest indices and the
-    /// original target qubits follow. Decomposition into native gates is handled by
-    /// ``ControlledGateDecomposer``.
+    /// Constructs the controlled-U gate C^k(U) where k control qubits determine whether U is
+    /// applied to the target qubits. Produces a new circuit where each gate operation is
+    /// conditioned on the specified control qubits all being in state |1>. The original
+    /// circuit's qubit indices are shifted upward by the number of control qubits so that
+    /// control qubits occupy the lowest indices and the original target qubits follow.
+    /// Decomposition into native gates is handled by ``ControlledGateDecomposer``.
     ///
     /// **Example:**
     /// ```swift
@@ -134,7 +140,6 @@ public extension QuantumCircuit {
     /// - SeeAlso: ``ControlledGateDecomposer/decompose(gate:controls:target:)``
     @_optimize(speed)
     @_eagerMove
-    @_effects(readonly)
     func controlled(by controlQubits: [Int]) -> QuantumCircuit {
         ValidationUtilities.validateNonEmpty(controlQubits, name: "controlQubits")
         ValidationUtilities.validateUnitaryCircuit(self)
@@ -192,16 +197,16 @@ public extension QuantumCircuit {
                 }
 
                 if numControls == 1 {
-                    var allQubits = [controlIndices[0]]
+                    var allQubits = [0]
                     allQubits.append(contentsOf: shiftedTargets)
                     result.append(.customUnitary(matrix: controlledMatrix), to: allQubits)
                 } else {
                     var innerCircuit = QuantumCircuit(qubits: newQubitCount)
-                    var innerQubits = [controlIndices[numControls - 1]]
+                    var innerQubits = [numControls - 1]
                     innerQubits.append(contentsOf: shiftedTargets)
                     innerCircuit.append(.customUnitary(matrix: controlledMatrix), to: innerQubits)
 
-                    let remainingControls = Array(controlIndices[0 ..< numControls - 1])
+                    let remainingControls = Array(0 ..< numControls - 1)
                     let innerControlled = innerCircuit.controlled(by: remainingControls)
 
                     for innerOp in innerControlled.operations {
@@ -223,10 +228,11 @@ public extension QuantumCircuit {
 
 /// Composes two quantum circuits in series by concatenating their operations sequentially.
 ///
-/// The resulting circuit has qubit count equal to the maximum of the two input circuits.
-/// All operations from the left-hand circuit execute first, followed by all operations from
-/// the right-hand circuit. Qubit labels are merged with right-hand labels taking precedence
-/// on index collision.
+/// Composes two circuits in series, equivalent to applying the unitary of ``lhs`` followed
+/// by ``rhs``. The resulting circuit has qubit count equal to the maximum of the two input
+/// circuits. All operations from the left-hand circuit execute first, followed by all
+/// operations from the right-hand circuit. Qubit labels are merged with right-hand labels
+/// taking precedence on index collision.
 ///
 /// **Example:**
 /// ```swift
@@ -242,6 +248,7 @@ public extension QuantumCircuit {
 ///   - lhs: First circuit to execute
 ///   - rhs: Second circuit to execute after the first
 /// - Returns: Combined circuit with operations from both inputs
+/// - Precondition: No constraints on qubit counts; the result uses the maximum of the two
 /// - Complexity: O(m + n) where m and n are operation counts of the two circuits
 ///
 /// - SeeAlso: ``QuantumCircuit``
@@ -271,11 +278,12 @@ public func + (lhs: QuantumCircuit, rhs: QuantumCircuit) -> QuantumCircuit {
 
 /// Composes two quantum circuits in parallel via tensor product across disjoint qubit registers.
 ///
-/// The resulting circuit has qubit count equal to the sum of the two input circuits. Operations
-/// from the left-hand circuit retain their original qubit indices. Operations from the right-hand
-/// circuit have all qubit indices shifted upward by the left-hand circuit's qubit count so the
-/// two circuits occupy non-overlapping registers. Qubit labels from the right-hand circuit are
-/// similarly shifted.
+/// Constructs the tensor product U_A ⊗ U_B, applying ``lhs`` and ``rhs`` independently on
+/// disjoint qubit registers. The resulting circuit has qubit count equal to the sum of the two
+/// input circuits. Operations from the left-hand circuit retain their original qubit indices.
+/// Operations from the right-hand circuit have all qubit indices shifted upward by the
+/// left-hand circuit's qubit count so the two circuits occupy non-overlapping registers.
+/// Qubit labels from the right-hand circuit are similarly shifted.
 ///
 /// **Example:**
 /// ```swift
@@ -292,6 +300,7 @@ public func + (lhs: QuantumCircuit, rhs: QuantumCircuit) -> QuantumCircuit {
 ///   - lhs: Circuit occupying qubits 0 ..< lhs.qubits
 ///   - rhs: Circuit occupying qubits lhs.qubits ..< lhs.qubits + rhs.qubits
 /// - Returns: Combined circuit with disjoint qubit registers
+/// - Precondition: No constraints on input circuits; qubit registers are automatically disjoint
 /// - Complexity: O(m + n) where m and n are operation counts of the two circuits
 ///
 /// - SeeAlso: ``QuantumCircuit``
@@ -306,7 +315,7 @@ public func ⊗ (lhs: QuantumCircuit, rhs: QuantumCircuit) -> QuantumCircuit {
     newOps.append(contentsOf: lhs.operations)
 
     for operation in rhs.operations {
-        newOps.append(shiftOperation(operation, by: shift))
+        newOps.append(operation.shifted(by: shift))
     }
 
     var result = QuantumCircuit(qubits: totalQubits, operations: newOps)
@@ -321,22 +330,35 @@ public func ⊗ (lhs: QuantumCircuit, rhs: QuantumCircuit) -> QuantumCircuit {
     return result
 }
 
-/// Shifts all qubit indices in a circuit operation by the given offset.
-///
-/// - Parameters:
-///   - operation: Circuit operation whose qubit indices to shift
-///   - offset: Non-negative offset to add to each qubit index
-/// - Returns: New operation with shifted qubit indices
-/// - Complexity: O(k) where k is the number of qubits in the operation
-@inline(__always)
-private func shiftOperation(_ operation: CircuitOperation, by offset: Int) -> CircuitOperation {
-    switch operation {
-    case let .gate(gate, qubits, timestamp):
-        let shifted = qubits.map { $0 + offset }
-        return .gate(gate, qubits: shifted, timestamp: timestamp)
-    case let .reset(qubit, timestamp):
-        return .reset(qubit: qubit + offset, timestamp: timestamp)
-    case let .measure(qubit, classicalBit, timestamp):
-        return .measure(qubit: qubit + offset, classicalBit: classicalBit.map { $0 + offset }, timestamp: timestamp)
+// MARK: - CircuitOperation Shift Extension
+
+extension CircuitOperation {
+    /// Returns a new operation with all qubit indices shifted by the given offset.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let shifted = operation.shifted(by: 3)
+    /// ```
+    ///
+    /// - Parameter offset: Non-negative offset to add to each qubit index
+    /// - Returns: New operation with shifted qubit indices
+    /// - Precondition: offset >= 0
+    /// - Complexity: O(k) where k is the number of qubits in the operation
+    @inline(__always)
+    func shifted(by offset: Int) -> CircuitOperation {
+        switch self {
+        case let .gate(gate, qubits, timestamp):
+            let shifted = [Int](unsafeUninitializedCapacity: qubits.count) { buffer, count in
+                for i in 0 ..< qubits.count {
+                    buffer[i] = qubits[i] + offset
+                }
+                count = qubits.count
+            }
+            return .gate(gate, qubits: shifted, timestamp: timestamp)
+        case let .reset(qubit, timestamp):
+            return .reset(qubit: qubit + offset, timestamp: timestamp)
+        case let .measure(qubit, classicalBit, timestamp):
+            return .measure(qubit: qubit + offset, classicalBit: classicalBit.map { $0 + offset }, timestamp: timestamp)
+        }
     }
 }

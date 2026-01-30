@@ -56,7 +56,7 @@ public enum CircuitDiagramASCII: Sendable {
             return "Empty circuit"
         }
 
-        let layerAssignments = assignLayers(operations: operations, qubitCount: qubitCount)
+        let layerAssignments = CircuitDiagramUtilities.assignLayers(operations: operations, qubitCount: qubitCount)
         let layerCount = computeLayerCount(layerAssignments)
         let symbolGrid = buildSymbolGrid(
             operations: operations,
@@ -81,45 +81,17 @@ public enum CircuitDiagramASCII: Sendable {
         )
     }
 
-    /// Assign each operation to a time layer using greedy scheduling.
-    @_optimize(speed)
-    @usableFromInline
-    static func assignLayers(operations: [CircuitOperation], qubitCount: Int) -> [Int] {
-        var nextAvailable = [Int](repeating: 0, count: qubitCount)
-        var assignments = [Int]()
-        assignments.reserveCapacity(operations.count)
-
-        for operation in operations {
-            let qubits = operation.qubits
-            var layer = 0
-            for q in qubits {
-                if q < qubitCount, nextAvailable[q] > layer {
-                    layer = nextAvailable[q]
-                }
-            }
-            assignments.append(layer)
-            for q in qubits {
-                if q < qubitCount {
-                    nextAvailable[q] = layer + 1
-                }
-            }
-        }
-
-        return assignments
-    }
-
     /// Compute total number of layers from assignments.
+    @inline(__always)
     @_effects(readonly)
     @usableFromInline
     static func computeLayerCount(_ layerAssignments: [Int]) -> Int {
-        var maxLayer = -1
-        for layer in layerAssignments {
-            if layer > maxLayer { maxLayer = layer }
-        }
-        return maxLayer + 1
+        guard let m = layerAssignments.max() else { return 0 }
+        return m + 1
     }
 
     /// Build 2D grid of gate symbol strings indexed by [qubit][layer].
+    @_effects(readonly)
     @_optimize(speed)
     @usableFromInline
     static func buildSymbolGrid(
@@ -128,16 +100,18 @@ public enum CircuitDiagramASCII: Sendable {
         layerCount: Int,
         qubitCount: Int,
     ) -> [[String]] {
-        var grid = [[String]](repeating: [String](repeating: "", count: layerCount), count: qubitCount)
+        var grid = (0 ..< qubitCount).map { _ in [String](repeating: "", count: layerCount) }
 
-        for (opIndex, operation) in operations.enumerated() {
+        for opIndex in operations.indices {
+            let operation = operations[opIndex]
             let layer = layerAssignments[opIndex]
             let qubits = operation.qubits
 
             switch operation {
             case let .gate(gate, opQubits, _):
                 let symbols = gateSymbols(gate: gate, qubits: opQubits)
-                for (symbolIndex, q) in qubits.enumerated() {
+                for symbolIndex in qubits.indices {
+                    let q = qubits[symbolIndex]
                     if q < qubitCount, symbolIndex < symbols.count {
                         grid[q][layer] = symbols[symbolIndex]
                     }
@@ -206,15 +180,9 @@ public enum CircuitDiagramASCII: Sendable {
         case .ccz:
             return ["\u{25CF}", "\u{25CF}", "Z"]
         case let .controlled(innerGate, controls):
-            var symbols = [String]()
-            symbols.reserveCapacity(controls.count + innerGate.qubitsRequired)
-            for _ in 0 ..< controls.count {
-                symbols.append("\u{25CF}")
-            }
+            var symbols = [String](repeating: "\u{25CF}", count: controls.count)
             let innerSymbols = innerGateSymbols(innerGate)
-            for s in innerSymbols {
-                symbols.append(s)
-            }
+            symbols.append(contentsOf: innerSymbols)
             return symbols
         default:
             let label = singleGateLabel(gate)
@@ -254,20 +222,14 @@ public enum CircuitDiagramASCII: Sendable {
         }
     }
 
-    /// Map a gate to its display label string.
+    /// Map a gate to its ASCII-specific display label string.
     @_effects(readonly)
     @usableFromInline
     static func singleGateLabel(_ gate: QuantumGate) -> String {
-        switch gate {
-        case .identity: "I"
-        case .pauliX: "X"
-        case .pauliY: "Y"
-        case .pauliZ: "Z"
-        case .hadamard: "H"
-        case .sGate: "S"
-        case .tGate: "T"
-        case .sx: "SX"
-        case .sy: "SY"
+        if let shared = CircuitDiagramUtilities.gateLabel(gate) {
+            return shared
+        }
+        return switch gate {
         case let .phase(angle): "P(\(angle))"
         case let .rotationX(theta): "Rx(\(theta))"
         case let .rotationY(theta): "Ry(\(theta))"
@@ -280,9 +242,7 @@ public enum CircuitDiagramASCII: Sendable {
         case let .xx(theta): "XX(\(theta))"
         case let .yy(theta): "YY(\(theta))"
         case let .zz(theta): "ZZ(\(theta))"
-        case .customSingleQubit: "U"
         case .customTwoQubit: "U2"
-        case .customUnitary: "U"
         case let .diagonal(phases): "Diag(\(phases.count))"
         case let .multiplexor(unitaries): "Mux(\(unitaries.count))"
         default: gate.description
@@ -293,15 +253,16 @@ public enum CircuitDiagramASCII: Sendable {
     @_effects(readonly)
     @usableFromInline
     static func computeColumnWidths(symbolGrid: [[String]], layerCount: Int, qubitCount: Int) -> [Int] {
-        var widths = [Int](repeating: 3, count: layerCount)
+        var widths = [Int](unsafeUninitializedCapacity: layerCount) { buffer, count in
+            buffer.initialize(repeating: 3)
+            count = layerCount
+        }
         for layer in 0 ..< layerCount {
             for qubit in 0 ..< qubitCount {
                 let symbol = symbolGrid[qubit][layer]
                 if !symbol.isEmpty {
                     let len = symbol.count + 2
-                    if len > widths[layer] {
-                        widths[layer] = len
-                    }
+                    widths[layer] = max(widths[layer], len)
                 }
             }
         }
@@ -309,6 +270,7 @@ public enum CircuitDiagramASCII: Sendable {
     }
 
     /// Build 2D grid tracking vertical connector requirements indexed by [qubit][layer].
+    @_effects(readonly)
     @_optimize(speed)
     @usableFromInline
     static func buildConnectorGrid(
@@ -317,9 +279,10 @@ public enum CircuitDiagramASCII: Sendable {
         layerCount: Int,
         qubitCount: Int,
     ) -> [[Bool]] {
-        var grid = [[Bool]](repeating: [Bool](repeating: false, count: layerCount), count: qubitCount)
+        var grid = (0 ..< qubitCount).map { _ in [Bool](repeating: false, count: layerCount) }
 
-        for (opIndex, operation) in operations.enumerated() {
+        for opIndex in operations.indices {
+            let operation = operations[opIndex]
             let layer = layerAssignments[opIndex]
             let qubits = operation.qubits
             if qubits.count > 1 {
@@ -336,6 +299,7 @@ public enum CircuitDiagramASCII: Sendable {
     }
 
     /// Render the final ASCII output string from the computed grids.
+    @_effects(readonly)
     @_optimize(speed)
     @usableFromInline
     static func renderOutput(
@@ -345,12 +309,8 @@ public enum CircuitDiagramASCII: Sendable {
         columnWidths: [Int],
         connectorGrid: [[Bool]],
     ) -> String {
-        let labelWidth = qubitLabelWidth(qubitCount)
-        var totalWidth = labelWidth + 2
-        for w in columnWidths {
-            totalWidth += w
-        }
-        totalWidth += 4
+        let labelWidth = CircuitDiagramUtilities.qubitLabelWidth(qubitCount)
+        let totalWidth = labelWidth + 2 + columnWidths.reduce(0, +) + 4
 
         let totalLines = qubitCount * 2 - 1
         var result = String()
@@ -368,9 +328,7 @@ public enum CircuitDiagramASCII: Sendable {
                 let label = "q\(qubit)"
                 result += label
                 let padding = labelWidth - label.count
-                for _ in 0 ..< padding {
-                    result += " "
-                }
+                result += String(repeating: " ", count: padding)
                 result += ": "
 
                 for layer in 0 ..< layerCount {
@@ -381,25 +339,17 @@ public enum CircuitDiagramASCII: Sendable {
                         let symLen = symbol.count
                         let leftDashes = (width - symLen) / 2
                         let rightDashes = width - symLen - leftDashes
-                        for _ in 0 ..< leftDashes {
-                            result += "\u{2500}"
-                        }
+                        result += String(repeating: "\u{2500}", count: leftDashes)
                         result += symbol
-                        for _ in 0 ..< rightDashes {
-                            result += "\u{2500}"
-                        }
+                        result += String(repeating: "\u{2500}", count: rightDashes)
                     } else {
-                        for _ in 0 ..< width {
-                            result += "\u{2500}"
-                        }
+                        result += String(repeating: "\u{2500}", count: width)
                     }
                 }
 
                 result += "\u{2500}"
             } else {
-                for _ in 0 ..< labelWidth {
-                    result += " "
-                }
+                result += String(repeating: " ", count: labelWidth)
                 result += "  "
 
                 for layer in 0 ..< layerCount {
@@ -414,17 +364,11 @@ public enum CircuitDiagramASCII: Sendable {
 
                     if hasConnector {
                         let mid = width / 2
-                        for i in 0 ..< width {
-                            if i == mid {
-                                result += "\u{2502}"
-                            } else {
-                                result += " "
-                            }
-                        }
+                        result += String(repeating: " ", count: mid)
+                        result += "\u{2502}"
+                        result += String(repeating: " ", count: width - mid - 1)
                     } else {
-                        for _ in 0 ..< width {
-                            result += " "
-                        }
+                        result += String(repeating: " ", count: width)
                     }
                 }
 
@@ -437,28 +381,15 @@ public enum CircuitDiagramASCII: Sendable {
 
     /// Compute the minimum and maximum qubit indices from a qubit array.
     @_effects(readonly)
-    @inlinable
+    @usableFromInline
     static func qubitRange(_ qubits: [Int]) -> (min: Int, max: Int) {
+        guard !qubits.isEmpty else { return (0, 0) }
         var minQ = qubits[0]
         var maxQ = qubits[0]
         for q in qubits {
-            if q < minQ { minQ = q }
-            if q > maxQ { maxQ = q }
+            minQ = min(minQ, q)
+            maxQ = max(maxQ, q)
         }
         return (minQ, maxQ)
-    }
-
-    /// Compute the character width needed for qubit labels.
-    @_effects(readonly)
-    @usableFromInline
-    static func qubitLabelWidth(_ qubitCount: Int) -> Int {
-        if qubitCount <= 1 { return 2 }
-        var maxIndex = qubitCount - 1
-        var digits = 1
-        while maxIndex >= 10 {
-            digits += 1
-            maxIndex /= 10
-        }
-        return digits + 1
     }
 }

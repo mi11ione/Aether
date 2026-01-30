@@ -16,7 +16,7 @@ struct BackendDispatchSelectionTests {
         circuit.append(.cnot, to: [0, 1])
         circuit.append(.cnot, to: [1, 2])
 
-        let backend = BackendDispatch.selectBackend(for: circuit, qubits: 3)
+        let backend = BackendDispatch.selectBackend(for: circuit)
 
         #expect(backend == .tableau, "Pure Clifford circuit should select tableau backend for efficient simulation")
     }
@@ -30,7 +30,7 @@ struct BackendDispatchSelectionTests {
         circuit.append(.sGate, to: 3)
         circuit.append(.cz, to: [0, 4])
 
-        let backend = BackendDispatch.selectBackend(for: circuit, qubits: 5)
+        let backend = BackendDispatch.selectBackend(for: circuit)
 
         #expect(backend == .tableau, "Circuit with only Clifford gates should use tableau backend")
     }
@@ -42,7 +42,7 @@ struct BackendDispatchSelectionTests {
         circuit.append(.tGate, to: 0)
         circuit.append(.cnot, to: [0, 1])
 
-        let backend = BackendDispatch.selectBackend(for: circuit, qubits: 10)
+        let backend = BackendDispatch.selectBackend(for: circuit)
 
         guard case .extendedStabilizer = backend else {
             #expect(backend == .extendedStabilizer(maxRank: 1), "Expected extendedStabilizer backend for circuit with few T gates")
@@ -57,7 +57,7 @@ struct BackendDispatchSelectionTests {
             circuit.append(.tGate, to: i % 8)
         }
 
-        let backend = BackendDispatch.selectBackend(for: circuit, qubits: 8)
+        let backend = BackendDispatch.selectBackend(for: circuit)
 
         guard case .extendedStabilizer = backend else {
             #expect(backend == .extendedStabilizer(maxRank: 1), "Expected extendedStabilizer for circuit with 5 T gates")
@@ -72,7 +72,7 @@ struct BackendDispatchSelectionTests {
             circuit.append(.tGate, to: i % 10)
         }
 
-        let backend = BackendDispatch.selectBackend(for: circuit, qubits: 10)
+        let backend = BackendDispatch.selectBackend(for: circuit)
 
         #expect(backend == .statevector, "Small circuit with many T gates should use statevector backend")
     }
@@ -86,7 +86,7 @@ struct BackendDispatchSelectionTests {
             circuit.append(.rotationX(.pi / 13), to: 2)
         }
 
-        let backend = BackendDispatch.selectBackend(for: circuit, qubits: 5)
+        let backend = BackendDispatch.selectBackend(for: circuit)
 
         #expect(backend == .statevector, "Small circuit with arbitrary rotations exceeding T threshold should use statevector")
     }
@@ -169,6 +169,9 @@ struct SimulatorBackendEnumTests {
     }
 }
 
+/// Tests for the BackendDispatch.execute method with
+/// explicit backend selection, verifying that each backend
+/// type correctly executes quantum circuits.
 @Suite("BackendDispatch Execute")
 struct BackendDispatchExecuteTests {
     @Test("Execute with explicit tableau backend")
@@ -263,5 +266,69 @@ struct BackendDispatchExecuteTests {
         let result = await BackendDispatch.execute(circuit, backend: .mps(bondDimension: 64))
 
         #expect(result.qubits == 3, "MPS should handle Toffoli gate correctly")
+    }
+
+    @Test("Large circuit with many T gates returns MPS backend")
+    func largeCircuitWithManyTGatesReturnsMPS() {
+        var circuit = QuantumCircuit(qubits: 26)
+        for i in 0 ..< 51 {
+            circuit.append(.tGate, to: i % 26)
+        }
+
+        let backend = BackendDispatch.selectBackend(for: circuit)
+
+        guard case let .mps(bondDimension) = backend else {
+            Issue.record("Expected MPS backend for large circuit with 51 T gates, got \(backend)")
+            return
+        }
+        #expect(bondDimension > 0, "MPS backend should have positive bond dimension")
+    }
+
+    @Test("MPS backend handles reset operation")
+    func mpsHandlesResetOperation() async {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.addOperation(.reset(qubit: 0))
+        circuit.append(.pauliX, to: 1)
+
+        let result = await BackendDispatch.execute(circuit, backend: .mps(bondDimension: 32))
+
+        #expect(result.qubits == 2, "MPS should handle reset operation and return valid state")
+    }
+
+    @Test("MPS backend handles measure operation")
+    func mpsHandlesMeasureOperation() async {
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.cnot, to: [0, 1])
+        circuit.addOperation(.measure(qubit: 0))
+        circuit.addOperation(.measure(qubit: 1))
+
+        let result = await BackendDispatch.execute(circuit, backend: .mps(bondDimension: 32))
+
+        #expect(result.qubits == 3, "MPS should handle measure operation and return valid state")
+    }
+
+    @Test("Gate with more than 3 qubits has correct qubitsRequired")
+    func gateWithMoreThan3QubitsHasCorrectQubitsRequired() {
+        let fourQubitGate = QuantumGate.controlled(gate: .pauliX, controls: [0, 1, 2])
+        #expect(fourQubitGate.qubitsRequired == 4, "Controlled X with 3 controls should require 4 qubits")
+
+        let identity16x16: [[Complex<Double>]] = (0 ..< 16).map { row in
+            (0 ..< 16).map { col in row == col ? .one : .zero }
+        }
+        let fourQubitCustom = QuantumGate.customUnitary(matrix: identity16x16)
+        #expect(fourQubitCustom.qubitsRequired == 4, "16x16 custom unitary should require 4 qubits")
+    }
+
+    @Test("Execute with nil backend triggers auto-selection")
+    func executeWithNilBackendTriggersAutoSelection() async {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.cnot, to: [0, 1])
+
+        let result = await BackendDispatch.execute(circuit, backend: nil)
+
+        #expect(result.qubits == 2, "Nil backend should auto-select appropriate backend and return valid state")
     }
 }

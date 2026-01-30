@@ -554,7 +554,7 @@ public enum Measurement {
         }
 
         for i in 0 ..< state.stateSpaceSize {
-            let outcomeIndex = BitUtilities.getBits(i, qubits: qubits)
+            let outcomeIndex = BitUtilities.bits(i, qubits: qubits)
             probabilities[outcomeIndex] += state.probability(of: i)
         }
 

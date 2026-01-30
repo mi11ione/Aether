@@ -6,7 +6,7 @@ import Testing
 
 /// Tests for BenchmarkComparison functionality.
 /// Validates speedup, gate reduction, depth reduction metrics,
-/// and isImprovement flag across baseline/optimized combinations.
+/// and isImproved flag across baseline/optimized combinations.
 @Suite("BenchmarkComparison")
 struct BenchmarkComparisonTests {
     let tolerance: Double = 1e-10
@@ -85,49 +85,49 @@ struct BenchmarkComparisonTests {
         #expect(abs(comparison.depthReduction - 0.0) < tolerance, "Depth reduction should be 0.0 when baseline depth is zero")
     }
 
-    @Test("isImprovement returns true when speedup exceeds one")
-    func isImprovementTrueForSpeedupGreaterThanOne() {
+    @Test("isImproved returns true when speedup exceeds one")
+    func isImprovedTrueForSpeedupGreaterThanOne() {
         let baseline = CircuitCost(gateCount: [:], depth: 10, cnotEquivalent: 5, tCount: 2, totalGates: 100)
         let optimized = CircuitCost(gateCount: [:], depth: 10, cnotEquivalent: 5, tCount: 2, totalGates: 50)
         let comparison = BenchmarkComparison(baseline: baseline, optimized: optimized)
 
-        #expect(comparison.isImprovement, "isImprovement should be true when speedup > 1.0")
+        #expect(comparison.isImproved, "isImproved should be true when speedup > 1.0")
     }
 
-    @Test("isImprovement returns true when gate reduction is positive")
-    func isImprovementTrueForPositiveGateReduction() {
+    @Test("isImproved returns true when gate reduction is positive")
+    func isImprovedTrueForPositiveGateReduction() {
         let baseline = CircuitCost(gateCount: [:], depth: 10, cnotEquivalent: 5, tCount: 2, totalGates: 100)
         let optimized = CircuitCost(gateCount: [:], depth: 10, cnotEquivalent: 5, tCount: 2, totalGates: 90)
         let comparison = BenchmarkComparison(baseline: baseline, optimized: optimized)
 
-        #expect(comparison.isImprovement, "isImprovement should be true when gateReduction > 0")
+        #expect(comparison.isImproved, "isImproved should be true when gateReduction > 0")
     }
 
-    @Test("isImprovement returns true when depth reduction is positive")
-    func isImprovementTrueForPositiveDepthReduction() {
+    @Test("isImproved returns true when depth reduction is positive")
+    func isImprovedTrueForPositiveDepthReduction() {
         let baseline = CircuitCost(gateCount: [:], depth: 10, cnotEquivalent: 5, tCount: 2, totalGates: 100)
         let optimized = CircuitCost(gateCount: [:], depth: 8, cnotEquivalent: 5, tCount: 2, totalGates: 100)
         let comparison = BenchmarkComparison(baseline: baseline, optimized: optimized)
 
-        #expect(comparison.isImprovement, "isImprovement should be true when depthReduction > 0")
+        #expect(comparison.isImproved, "isImproved should be true when depthReduction > 0")
     }
 
-    @Test("isImprovement returns false when no improvement exists")
-    func isImprovementFalseForNoImprovement() {
+    @Test("isImproved returns false when no improvement exists")
+    func isImprovedFalseForNoImprovement() {
         let baseline = CircuitCost(gateCount: [:], depth: 10, cnotEquivalent: 5, tCount: 2, totalGates: 100)
         let optimized = CircuitCost(gateCount: [:], depth: 10, cnotEquivalent: 5, tCount: 2, totalGates: 100)
         let comparison = BenchmarkComparison(baseline: baseline, optimized: optimized)
 
-        #expect(!comparison.isImprovement, "isImprovement should be false when baseline equals optimized")
+        #expect(!comparison.isImproved, "isImproved should be false when baseline equals optimized")
     }
 
-    @Test("isImprovement returns false when optimized is worse")
-    func isImprovementFalseForRegression() {
+    @Test("isImproved returns false when optimized is worse")
+    func isImprovedFalseForRegression() {
         let baseline = CircuitCost(gateCount: [:], depth: 10, cnotEquivalent: 5, tCount: 2, totalGates: 100)
         let optimized = CircuitCost(gateCount: [:], depth: 15, cnotEquivalent: 8, tCount: 3, totalGates: 150)
         let comparison = BenchmarkComparison(baseline: baseline, optimized: optimized)
 
-        #expect(!comparison.isImprovement, "isImprovement should be false when optimized is worse than baseline")
+        #expect(!comparison.isImproved, "isImproved should be false when optimized is worse than baseline")
     }
 
     @Test("Description contains speedup gate reduction and depth reduction")
@@ -183,8 +183,8 @@ struct BenchmarkComparisonTests {
         for _ in 0 ..< 2 {
             optimizedCircuit.append(.hadamard, to: 0)
         }
-        let baseline = CircuitCostEstimator.estimate(baselineCircuit)
-        let optimized = CircuitCostEstimator.estimate(optimizedCircuit)
+        let baseline = CircuitCostEstimator.cost(of: baselineCircuit)
+        let optimized = CircuitCostEstimator.cost(of: optimizedCircuit)
         let comparison = BenchmarkComparison(baseline: baseline, optimized: optimized)
 
         #expect(abs(comparison.speedup - 2.0) < tolerance, "Speedup should be 2.0 when baseline has twice the gates of optimized")
@@ -200,8 +200,8 @@ struct BenchmarkComparisonTests {
         for _ in 0 ..< 3 {
             optimizedCircuit.append(.pauliX, to: 0)
         }
-        let baseline = CircuitCostEstimator.estimate(baselineCircuit)
-        let optimized = CircuitCostEstimator.estimate(optimizedCircuit)
+        let baseline = CircuitCostEstimator.cost(of: baselineCircuit)
+        let optimized = CircuitCostEstimator.cost(of: optimizedCircuit)
         let comparison = BenchmarkComparison(baseline: baseline, optimized: optimized)
 
         #expect(abs(comparison.gateReduction - 0.25) < tolerance, "Gate reduction should be 0.25 when reducing from 4 to 3 gates")
@@ -217,15 +217,15 @@ struct BenchmarkComparisonTests {
         for _ in 0 ..< 4 {
             optimizedCircuit.append(.hadamard, to: 0)
         }
-        let baseline = CircuitCostEstimator.estimate(baselineCircuit)
-        let optimized = CircuitCostEstimator.estimate(optimizedCircuit)
+        let baseline = CircuitCostEstimator.cost(of: baselineCircuit)
+        let optimized = CircuitCostEstimator.cost(of: optimizedCircuit)
         let comparison = BenchmarkComparison(baseline: baseline, optimized: optimized)
 
         #expect(abs(comparison.depthReduction - 0.2) < tolerance, "Depth reduction should be 0.2 when reducing depth from 5 to 4")
     }
 
-    @Test("isImprovement true when any metric improves with CircuitCostEstimator")
-    func isImprovementWithEstimator() {
+    @Test("isImproved true when any metric improves with CircuitCostEstimator")
+    func isImprovedWithEstimator() {
         var baselineCircuit = QuantumCircuit(qubits: 2)
         baselineCircuit.append(.hadamard, to: 0)
         baselineCircuit.append(.hadamard, to: 1)
@@ -233,11 +233,11 @@ struct BenchmarkComparisonTests {
         var optimizedCircuit = QuantumCircuit(qubits: 2)
         optimizedCircuit.append(.hadamard, to: 0)
         optimizedCircuit.append(.cnot, to: [0, 1])
-        let baseline = CircuitCostEstimator.estimate(baselineCircuit)
-        let optimized = CircuitCostEstimator.estimate(optimizedCircuit)
+        let baseline = CircuitCostEstimator.cost(of: baselineCircuit)
+        let optimized = CircuitCostEstimator.cost(of: optimizedCircuit)
         let comparison = BenchmarkComparison(baseline: baseline, optimized: optimized)
 
-        #expect(comparison.isImprovement, "isImprovement should be true when optimized circuit has fewer gates")
+        #expect(comparison.isImproved, "isImproved should be true when optimized circuit has fewer gates")
     }
 
     @Test("Description contains formatted values with CircuitCostEstimator")
@@ -247,8 +247,8 @@ struct BenchmarkComparisonTests {
         baselineCircuit.append(.cnot, to: [0, 1])
         var optimizedCircuit = QuantumCircuit(qubits: 2)
         optimizedCircuit.append(.hadamard, to: 0)
-        let baseline = CircuitCostEstimator.estimate(baselineCircuit)
-        let optimized = CircuitCostEstimator.estimate(optimizedCircuit)
+        let baseline = CircuitCostEstimator.cost(of: baselineCircuit)
+        let optimized = CircuitCostEstimator.cost(of: optimizedCircuit)
         let comparison = BenchmarkComparison(baseline: baseline, optimized: optimized)
 
         let desc = comparison.description

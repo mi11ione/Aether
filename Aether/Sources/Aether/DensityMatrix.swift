@@ -559,7 +559,7 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
             for oldCol in 0 ..< oldDim {
                 var tracedBitsMatch = true
                 for q in qubitsToTrace {
-                    if BitUtilities.getBit(oldRow, qubit: q) != BitUtilities.getBit(oldCol, qubit: q) {
+                    if BitUtilities.bit(oldRow, qubit: q) != BitUtilities.bit(oldCol, qubit: q) {
                         tracedBitsMatch = false
                         break
                     }
@@ -569,10 +569,10 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
                     var newRow = 0
                     var newCol = 0
                     for (newIdx, oldIdx) in keptQubits.enumerated() {
-                        if BitUtilities.getBit(oldRow, qubit: oldIdx) == 1 {
+                        if BitUtilities.bit(oldRow, qubit: oldIdx) == 1 {
                             newRow |= (1 << newIdx)
                         }
-                        if BitUtilities.getBit(oldCol, qubit: oldIdx) == 1 {
+                        if BitUtilities.bit(oldCol, qubit: oldIdx) == 1 {
                             newCol |= (1 << newIdx)
                         }
                     }
@@ -865,7 +865,7 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
             for j in 0 ..< fullDim {
                 var nonTargetMatch = true
                 for q in 0 ..< qubits where !targetQubits.contains(q) {
-                    if BitUtilities.getBit(i, qubit: q) != BitUtilities.getBit(j, qubit: q) {
+                    if BitUtilities.bit(i, qubit: q) != BitUtilities.bit(j, qubit: q) {
                         nonTargetMatch = false
                         break
                     }
@@ -875,10 +875,10 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
                     var gateRow = 0
                     var gateCol = 0
                     for (idx, q) in targetQubits.enumerated() {
-                        if BitUtilities.getBit(i, qubit: q) == 1 {
+                        if BitUtilities.bit(i, qubit: q) == 1 {
                             gateRow |= (1 << idx)
                         }
-                        if BitUtilities.getBit(j, qubit: q) == 1 {
+                        if BitUtilities.bit(j, qubit: q) == 1 {
                             gateCol |= (1 << idx)
                         }
                     }

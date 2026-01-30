@@ -748,7 +748,6 @@ struct MultiQubitPauliBasisTests {
 struct TracePreservationDetectionTests {
     @Test("Superoperator confirms CustomKrausChannel is trace-preserving")
     func superoperatorCustomChannelTP() {
-        // Valid Kraus operators satisfying completeness relation (K†K = I)
         let identity: [[Complex<Double>]] = [
             [Complex(1.0, 0), .zero],
             [.zero, Complex(1.0, 0)],
@@ -761,7 +760,6 @@ struct TracePreservationDetectionTests {
 
     @Test("Choi matrix confirms CustomKrausChannel is trace-preserving")
     func choiCustomChannelTP() {
-        // Valid Kraus operators satisfying completeness relation (K†K = I)
         let identity: [[Complex<Double>]] = [
             [Complex(1.0, 0), .zero],
             [.zero, Complex(1.0, 0)],
@@ -774,7 +772,6 @@ struct TracePreservationDetectionTests {
 
     @Test("PTM confirms CustomKrausChannel identity is unital")
     func ptmCustomChannelUnital() {
-        // Valid identity channel - both trace-preserving and unital
         let identity: [[Complex<Double>]] = [
             [Complex(1.0, 0), .zero],
             [.zero, Complex(1.0, 0)],
@@ -786,6 +783,9 @@ struct TracePreservationDetectionTests {
     }
 }
 
+/// Validates complete positivity verification for Choi matrix representation.
+/// Tests eigenvalue-based positivity checks with various quantum channels
+/// including depolarizing, amplitude damping, and identity channels.
 @Suite("Choi Matrix Complete Positivity")
 struct ChoiMatrixCompletPositivityTests {
     @Test("Valid CPTP channel is completely positive")
@@ -813,6 +813,9 @@ struct ChoiMatrixCompletPositivityTests {
     }
 }
 
+/// Validates Kraus operator extraction from Choi matrix representation.
+/// Tests eigendecomposition-based extraction for standard quantum channels
+/// and verifies the extracted operators reconstruct the original channel.
 @Suite("Choi Matrix Kraus Extraction")
 struct ChoiMatrixKrausExtractionTests {
     @Test("Extracted Kraus operators reconstruct channel")
@@ -919,5 +922,20 @@ struct ChoiMatrixKrausExtractionTests {
                 #expect(diff < tolerance * tolerance, "Sum of K†K should be identity at [\(i),\(j)]")
             }
         }
+    }
+}
+
+/// Test suite for uncovered code paths in channel representations.
+/// Covers SuperoperatorRepresentation.element method for direct element access.
+@Suite("Channel Representation Uncovered Paths")
+struct ChannelRepresentationUncoveredPathsTests {
+    @Test("SuperoperatorRepresentation element method returns correct value")
+    func superoperatorElementMethod() {
+        let channel = DepolarizingChannel(errorProbability: 0.1)
+        let superop = SuperoperatorRepresentation(channel: channel, qubits: 1)
+
+        let elementValue = superop.element(row: 0, col: 0)
+
+        #expect(elementValue == superop.matrix[0][0], "element(row:col:) should return the same value as direct matrix access")
     }
 }

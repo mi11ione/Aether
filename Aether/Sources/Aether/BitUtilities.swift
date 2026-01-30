@@ -8,32 +8,33 @@
 /// basis state indices in little-endian qubit ordering (qubit 0 is LSB). Essential for gate
 /// application logic, measurement outcome extraction, and control qubit evaluation.
 ///
-/// Uses little-endian qubit ordering where qubit 0 is the least significant bit.
-/// Basis state |q₂q₁q₀⟩ maps to integer q₂x4 + q₁x2 + q₀x1. Example: |101⟩ = 5 (binary 0b101).
+/// Basis state |q2q1q0> maps to integer q2x4 + q1x2 + q0x1. Example: |101> = 5 (binary 0b101).
 /// All operations are O(1) bitwise operations compiled to single CPU instructions
 /// (shift, AND, OR, XOR) for zero-cost abstractions.
 ///
 /// **Example:**
 /// ```swift
-/// let state = 5  // |101⟩ in binary
-/// let bit0 = BitUtilities.getBit(state, qubit: 0)  // 1
-/// let flipped = BitUtilities.flipBit(state, qubit: 1)  // 7 (|111⟩)
+/// let state = 5  // |101> in binary
+/// let bit0 = BitUtilities.bit(state, qubit: 0)  // 1
+/// let flipped = BitUtilities.flipBit(state, qubit: 1)  // 7 (|111>)
 /// let mask = BitUtilities.bitMask(qubit: 2)  // 4 (0b100)
 /// ```
+///
+/// - SeeAlso: ``GateApplication``
+/// - SeeAlso: ``Measurement``
 public enum BitUtilities {
     /// Extract bit value at specific qubit position
     ///
     /// Retrieves the value (0 or 1) of a single qubit from a basis state index using right shift
-    /// and mask operations. Algorithm: `(index >> qubit) & 1` moves target bit to LSB position
-    /// and isolates it. Used for measurement outcome extraction, marginal probability computation,
+    /// and mask operations. Used for measurement outcome extraction, marginal probability computation,
     /// and control qubit evaluation in gate application.
     ///
     /// **Example:**
     /// ```swift
-    /// let state = 5  // |101⟩ in binary
-    /// BitUtilities.getBit(state, qubit: 0)  // 1 (LSB)
-    /// BitUtilities.getBit(state, qubit: 1)  // 0
-    /// BitUtilities.getBit(state, qubit: 2)  // 1 (MSB)
+    /// let state = 5  // |101> in binary
+    /// BitUtilities.bit(state, qubit: 0)  // 1 (LSB)
+    /// BitUtilities.bit(state, qubit: 1)  // 0
+    /// BitUtilities.bit(state, qubit: 2)  // 1 (MSB)
     /// ```
     ///
     /// - Parameters:
@@ -41,25 +42,30 @@ public enum BitUtilities {
     ///   - qubit: Qubit position (0 = LSB, n-1 = MSB)
     /// - Returns: Bit value (0 or 1)
     /// - Complexity: O(1) - single CPU instruction (shift + AND)
+    /// - Precondition: qubit >= 0
+    /// - Precondition: index >= 0
+    /// - SeeAlso: ``bits(_:qubits:)``
+    /// - SeeAlso: ``bitMask(qubit:)``
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func getBit(_ index: Int, qubit: Int) -> Int {
+    @_optimize(speed)
+    public static func bit(_ index: Int, qubit: Int) -> Int {
         (index >> qubit) & 1
     }
 
     /// Flip bit at specific qubit position
     ///
     /// Toggles the specified qubit: 0->1 or 1->0 using XOR operation. Essential for implementing
-    /// X gates and CNOT operations which flip target qubits. Algorithm: `index ^ (1 << qubit)`
-    /// creates mask with 1 at target position and XOR flips the bit (0⊕1=1, 1⊕1=0).
+    /// X gates and CNOT operations which flip target qubits. Uses XOR to toggle the target bit.
+    /// Core operation for X, CNOT, and Toffoli gate implementations.
     ///
     /// **Example:**
     /// ```swift
-    /// let state = 5  // |101⟩
-    /// BitUtilities.flipBit(state, qubit: 1)  // 7 (|111⟩)
-    /// BitUtilities.flipBit(state, qubit: 0)  // 4 (|100⟩)
-    /// BitUtilities.flipBit(state, qubit: 2)  // 1 (|001⟩)
+    /// let state = 5  // |101>
+    /// BitUtilities.flipBit(state, qubit: 1)  // 7 (|111>)
+    /// BitUtilities.flipBit(state, qubit: 0)  // 4 (|100>)
+    /// BitUtilities.flipBit(state, qubit: 2)  // 1 (|001>)
     /// ```
     ///
     /// - Parameters:
@@ -67,24 +73,31 @@ public enum BitUtilities {
     ///   - qubit: Qubit position to flip
     /// - Returns: Modified basis state index with flipped bit
     /// - Complexity: O(1) - single CPU instruction (XOR)
-    /// - Note: Core operation for X, CNOT, and Toffoli gate implementations
+    /// - Precondition: qubit >= 0
+    /// - Precondition: index >= 0
+    /// - SeeAlso: ``clearBit(_:qubit:)``
+    /// - SeeAlso: ``bit(_:qubit:)``
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func flipBit(_ index: Int, qubit: Int) -> Int {
+    @_optimize(speed)
+    public static func flipBit(_ index: Int, qubit: Int) -> Int {
         index ^ (1 << qubit)
     }
 
     /// Clear bit at specific qubit position (set to 0)
     ///
-    /// Convenience method equivalent to `setBit(_:qubit:value:)` with value 0, provided for clarity when
-    /// intent is specifically to clear a bit. Algorithm: `index & ~(1 << qubit)` creates mask with
-    /// 0 at target position and 1s elsewhere, then AND operation clears the bit.
+    /// Convenience method provided for clarity when
+    /// intent is specifically to clear a bit. Uses AND with an inverted mask to force
+    /// the target bit to zero while preserving all other bits.
     ///
     /// **Example:**
     /// ```swift
-    /// let state = 7  // |111⟩
-    /// BitUtilities.clearBit(state, qubit: 1)  // 5 (|101⟩)
+    /// let state = 7  // |111>
+    /// let cleared = BitUtilities.clearBit(state, qubit: 1)  // 5 (|101>)
+    /// assert(cleared == 5)
+    /// let state2 = 6  // |110>
+    /// BitUtilities.clearBit(state2, qubit: 2)  // 2 (|010>)
     /// ```
     ///
     /// - Parameters:
@@ -92,18 +105,21 @@ public enum BitUtilities {
     ///   - qubit: Qubit position to clear
     /// - Returns: Modified basis state index with bit cleared
     /// - Complexity: O(1) - constant bitwise operations
+    /// - Precondition: qubit >= 0
+    /// - Precondition: index >= 0
+    /// - SeeAlso: ``flipBit(_:qubit:)``
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func clearBit(_ index: Int, qubit: Int) -> Int {
+    @_optimize(speed)
+    public static func clearBit(_ index: Int, qubit: Int) -> Int {
         index & ~(1 << qubit)
     }
 
     /// Create bit mask for specific qubit position
     ///
-    /// Generates integer with single bit set at qubit position, all others zero. Algorithm: `1 << qubit`
-    /// shifts 1 left by qubit positions to create mask value 2^qubit. Useful for precomputing masks in
-    /// gate application, batch operations, and bit field manipulation.
+    /// Generates integer with single bit set at qubit position, all others zero. Useful for
+    /// precomputing masks in gate application, batch operations, and bit field manipulation.
     ///
     /// **Example:**
     /// ```swift
@@ -115,10 +131,13 @@ public enum BitUtilities {
     /// - Parameter qubit: Qubit position (0 = LSB)
     /// - Returns: Integer with single bit set (2^qubit)
     /// - Complexity: O(1) - single shift operation
+    /// - Precondition: qubit >= 0
+    /// - SeeAlso: ``bit(_:qubit:)``
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func bitMask(qubit: Int) -> Int {
+    @_optimize(speed)
+    public static func bitMask(qubit: Int) -> Int {
         1 << qubit
     }
 
@@ -130,9 +149,9 @@ public enum BitUtilities {
     ///
     /// **Example:**
     /// ```swift
-    /// let state = 7  // |111⟩
-    /// BitUtilities.getBits(state, qubits: [0, 1])  // 3 (both bits are 1)
-    /// BitUtilities.getBits(state, qubits: [1, 2])  // 3
+    /// let state = 7  // |111>
+    /// BitUtilities.bits(state, qubits: [0, 1])  // 3 (both bits are 1)
+    /// BitUtilities.bits(state, qubits: [1, 2])  // 3
     /// ```
     ///
     /// - Parameters:
@@ -140,10 +159,14 @@ public enum BitUtilities {
     ///   - qubits: Array of qubit positions to extract
     /// - Returns: Integer formed from extracted bits (qubits[0] = LSB)
     /// - Complexity: O(k) where k = qubits.count
+    /// - Precondition: All qubit indices >= 0
+    /// - Precondition: index >= 0
+    /// - SeeAlso: ``bit(_:qubit:)``
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func getBits(_ index: Int, qubits: [Int]) -> Int {
+    @_optimize(speed)
+    public static func bits(_ index: Int, qubits: [Int]) -> Int {
         var result = 0
         for position in 0 ..< qubits.count {
             let bit = (index >> qubits[position]) & 1
@@ -161,7 +184,9 @@ public enum BitUtilities {
     ///
     /// **Example:**
     /// ```swift
-    /// BitUtilities.insertZeroBit(0b11, at: 1)  // 0b101 (5)
+    /// let value = 0b11  // 3
+    /// let result = BitUtilities.insertZeroBit(value, at: 1)  // 0b101 (5)
+    /// assert(result == 5)
     /// BitUtilities.insertZeroBit(0b11, at: 0)  // 0b110 (6)
     /// ```
     ///
@@ -170,10 +195,13 @@ public enum BitUtilities {
     ///   - position: Bit position to insert zero
     /// - Returns: Transformed index with zero at position
     /// - Complexity: O(1) - constant bitwise operations
+    /// - Precondition: position >= 0
+    /// - SeeAlso: ``insertTwoZeroBits(_:low:high:)``
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func insertZeroBit(_ value: Int, at position: Int) -> Int {
+    @_optimize(speed)
+    public static func insertZeroBit(_ value: Int, at position: Int) -> Int {
         let lowMask = (1 << position) - 1
         let low = value & lowMask
         let high = (value & ~lowMask) << 1
@@ -188,7 +216,11 @@ public enum BitUtilities {
     ///
     /// **Example:**
     /// ```swift
-    /// BitUtilities.insertTwoZeroBits(0b1, low: 0, high: 2)  // 0b0100 (4)
+    /// let value = 0b1  // 1
+    /// let result = BitUtilities.insertTwoZeroBits(value, low: 0, high: 2)  // 0b0100 (4)
+    /// assert(result == 4)
+    /// let value2 = 0b11  // 3
+    /// BitUtilities.insertTwoZeroBits(value2, low: 1, high: 3)  // 0b10100 (20)
     /// ```
     ///
     /// - Parameters:
@@ -197,10 +229,14 @@ public enum BitUtilities {
     ///   - high: Higher bit position (must be > low)
     /// - Returns: Transformed index with zeros at both positions
     /// - Complexity: O(1) - constant bitwise operations
+    /// - Precondition: low < high
+    /// - Precondition: low >= 0
+    /// - SeeAlso: ``insertZeroBit(_:at:)``
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    static func insertTwoZeroBits(_ value: Int, low: Int, high: Int) -> Int {
+    @_optimize(speed)
+    public static func insertTwoZeroBits(_ value: Int, low: Int, high: Int) -> Int {
         let afterLow = insertZeroBit(value, at: low)
         return insertZeroBit(afterLow, at: high)
     }

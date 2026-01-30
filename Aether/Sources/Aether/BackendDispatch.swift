@@ -52,11 +52,12 @@
 /// Automatic backend selection and circuit execution dispatch.
 ///
 /// Analyzes circuit composition to select the optimal simulation backend
-/// without user intervention. Selection priorities:
-/// 1. Pure Clifford (tCount = 0) uses tableau for polynomial time
-/// 2. Few non-Clifford (tCount <= 50) uses extended stabilizer
-/// 3. Small qubit count (<= 25) uses statevector for exactness
-/// 4. Large entangled states use MPS tensor networks
+/// without user intervention. Pure Clifford circuits with zero T-count use
+/// tableau simulation for polynomial time performance, while circuits with
+/// few non-Clifford gates (T-count up to 50) use extended stabilizer
+/// decomposition. Small circuits with 25 or fewer qubits use statevector
+/// for exact computation, and large entangled states fall back to MPS
+/// tensor networks.
 ///
 /// **Example:**
 /// ```swift
@@ -64,7 +65,7 @@
 /// circuit.append(.hadamard, to: 0)
 /// circuit.append(.cnot, to: [0, 1])
 ///
-/// let backend = BackendDispatch.selectBackend(for: circuit, qubits: 100)
+/// let backend = BackendDispatch.selectBackend(for: circuit)
 /// // Returns .tableau since circuit is pure Clifford
 ///
 /// let state = await BackendDispatch.execute(circuit, backend: nil)
@@ -77,39 +78,37 @@
 public enum BackendDispatch {
     /// Selects optimal simulation backend based on circuit analysis.
     ///
-    /// Examines circuit structure to determine the most efficient backend:
-    /// - Pure Clifford circuits (tCount = 0) use tableau simulation
-    /// - Near-Clifford circuits (tCount <= 50) use extended stabilizer
-    /// - Small circuits (<= 25 qubits) use exact statevector
-    /// - Large circuits default to MPS tensor network
+    /// Examines circuit structure to determine the most efficient backend.
+    /// Pure Clifford circuits with zero T-count use tableau simulation,
+    /// near-Clifford circuits with T-count up to 50 use extended stabilizer,
+    /// small circuits with 25 or fewer qubits use exact statevector, and
+    /// large circuits default to MPS tensor network.
     ///
     /// **Example:**
     /// ```swift
     /// var cliffordCircuit = QuantumCircuit(qubits: 1000)
     /// cliffordCircuit.append(.hadamard, to: 0)
     /// cliffordCircuit.append(.cnot, to: [0, 1])
-    /// let backend1 = BackendDispatch.selectBackend(for: cliffordCircuit, qubits: 1000)
+    /// let backend1 = BackendDispatch.selectBackend(for: cliffordCircuit)
     /// // .tableau
     ///
     /// var tCircuit = QuantumCircuit(qubits: 50)
     /// tCircuit.append(.tGate, to: 0)
-    /// let backend2 = BackendDispatch.selectBackend(for: tCircuit, qubits: 50)
+    /// let backend2 = BackendDispatch.selectBackend(for: tCircuit)
     /// // .extendedStabilizer(maxRank: 64)
     ///
     /// var smallCircuit = QuantumCircuit(qubits: 10)
     /// smallCircuit.append(.rotationY(.pi / 7), to: 0)
-    /// let backend3 = BackendDispatch.selectBackend(for: smallCircuit, qubits: 10)
+    /// let backend3 = BackendDispatch.selectBackend(for: smallCircuit)
     /// // .statevector
     /// ```
     ///
-    /// - Parameters:
-    ///   - circuit: Quantum circuit to analyze
-    ///   - qubits: Number of qubits in the system
+    /// - Parameter circuit: Quantum circuit to analyze
     /// - Returns: Optimal backend for the circuit characteristics
     /// - Complexity: O(n) where n is the number of operations in the circuit
     @inlinable
     @_effects(readonly)
-    public static func selectBackend(for circuit: QuantumCircuit, qubits: Int) -> SimulatorBackend {
+    public static func selectBackend(for circuit: QuantumCircuit) -> SimulatorBackend {
         let analysis = CliffordGateClassifier.analyze(circuit)
 
         if analysis.isClifford {
@@ -121,11 +120,11 @@ public enum BackendDispatch {
             return .extendedStabilizer(maxRank: maxRank)
         }
 
-        if qubits <= 25 {
+        if circuit.qubits <= 25 {
             return .statevector
         }
 
-        let bondDimension = min(256, 1 << min(qubits / 2, 8))
+        let bondDimension = min(256, 1 << min(circuit.qubits / 2, 8))
         return .mps(bondDimension: bondDimension)
     }
 
@@ -133,7 +132,7 @@ public enum BackendDispatch {
     ///
     /// Dispatches circuit execution to the appropriate simulator based on
     /// backend type. When backend is nil, automatically selects optimal
-    /// backend using ``selectBackend(for:qubits:)``.
+    /// backend using ``selectBackend(for:)``.
     ///
     /// **Example:**
     /// ```swift
@@ -154,19 +153,14 @@ public enum BackendDispatch {
     ///   - backend: Explicit backend selection, or nil for automatic
     /// - Returns: Final quantum state after circuit execution
     /// - Complexity: Depends on backend; O(n^2 g) for tableau, O(2^n g) for statevector
+    /// - SeeAlso: ``selectBackend(for:)``
     @inlinable
     public static func execute(_ circuit: QuantumCircuit, backend: SimulatorBackend?) async -> QuantumState {
-        let selectedBackend = backend ?? selectBackend(for: circuit, qubits: circuit.qubits)
+        let selectedBackend = backend ?? selectBackend(for: circuit)
 
         switch selectedBackend {
-        case .tableau:
-            return executeTableau(circuit)
-
-        case .extendedStabilizer:
-            return executeExtendedStabilizer(circuit)
-
-        case .statevector:
-            return executeStatevector(circuit)
+        case .tableau, .extendedStabilizer, .statevector:
+            return circuit.execute()
 
         case .densityMatrix:
             return await executeDensityMatrix(circuit)
@@ -176,21 +170,7 @@ public enum BackendDispatch {
         }
     }
 
-    @usableFromInline
-    static func executeTableau(_ circuit: QuantumCircuit) -> QuantumState {
-        circuit.execute()
-    }
-
-    @usableFromInline
-    static func executeExtendedStabilizer(_ circuit: QuantumCircuit) -> QuantumState {
-        circuit.execute()
-    }
-
-    @usableFromInline
-    static func executeStatevector(_ circuit: QuantumCircuit) -> QuantumState {
-        circuit.execute()
-    }
-
+    /// Executes the circuit using density matrix simulation.
     @usableFromInline
     static func executeDensityMatrix(_ circuit: QuantumCircuit) async -> QuantumState {
         let simulator = DensityMatrixSimulator()
@@ -198,7 +178,9 @@ public enum BackendDispatch {
         return densityMatrix.toQuantumState()
     }
 
+    /// Executes the circuit using matrix product state simulation.
     @usableFromInline
+    @_optimize(speed)
     static func executeMPS(_ circuit: QuantumCircuit, bondDimension: Int) -> QuantumState {
         var mps = MatrixProductState(qubits: circuit.qubits, maxBondDimension: bondDimension)
 
@@ -216,7 +198,9 @@ public enum BackendDispatch {
         return mps.toQuantumState()
     }
 
+    /// Applies a quantum gate to the matrix product state.
     @usableFromInline
+    @inline(__always)
     static func applyGateToMPS(_ gate: QuantumGate, qubits: [Int], mps: inout MatrixProductState) {
         switch gate.qubitsRequired {
         case 1:
@@ -226,7 +210,7 @@ public enum BackendDispatch {
         case 3:
             MPSGateApplication.applyToffoli(control1: qubits[0], control2: qubits[1], target: qubits[2], mps: &mps)
         default:
-            preconditionFailure("Unsupported gate qubit count")
+            ValidationUtilities.validateUpperBound(gate.qubitsRequired, max: 3, name: "MPS gate qubit count")
         }
     }
 }

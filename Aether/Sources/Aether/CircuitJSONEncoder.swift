@@ -5,9 +5,8 @@ import Foundation
 
 /// Deterministic JSON encoder for ``QuantumCircuit`` using sorted keys for reproducible output.
 ///
-/// Converts a ``QuantumCircuit`` into internal ``CircuitJSONSchema`` types then encodes to
-/// `Data` via Foundation `JSONEncoder` with sorted keys. The deterministic output is suitable
-/// for hashing and content-addressable storage.
+/// Produces a stable JSON representation of a ``QuantumCircuit`` as UTF-8 `Data`.
+/// The deterministic output is suitable for hashing and content-addressable storage.
 ///
 /// **Example:**
 /// ```swift
@@ -20,11 +19,17 @@ import Foundation
 /// - SeeAlso: ``CircuitJSONDecoder``
 /// - SeeAlso: ``CircuitJSON``
 public enum CircuitJSONEncoder {
+    /// Shared JSON encoder instance.
+    private static let jsonEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        return encoder
+    }()
+
     /// Encode a ``QuantumCircuit`` to deterministic JSON `Data`.
     ///
-    /// Maps all circuit operations to ``OperationSchema`` values, wraps them in a
-    /// ``CircuitJSONSchema`` envelope with the current ``CircuitJSON/schemaVersion``,
-    /// and serializes with sorted keys and pretty printing for reproducibility.
+    /// Converts all circuit operations into a versioned JSON envelope and serializes
+    /// with sorted keys and pretty printing for reproducibility.
     ///
     /// **Example:**
     /// ```swift
@@ -37,23 +42,17 @@ public enum CircuitJSONEncoder {
     /// - Parameter circuit: Quantum circuit to serialize
     /// - Returns: UTF-8 encoded JSON data with sorted keys
     /// - Complexity: O(n) where n is the number of circuit operations
-    @_optimize(speed)
+    /// - SeeAlso: ``CircuitJSONDecoder``
     public static func encode(_ circuit: QuantumCircuit) -> Data {
         let schema = buildSchema(from: circuit)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-        return try! encoder.encode(schema)
+        // Safety: all schema types synthesize Codable; encoding cannot fail
+        return try! jsonEncoder.encode(schema)
     }
 
     /// Build CircuitJSONSchema from QuantumCircuit.
     @_effects(readonly)
     private static func buildSchema(from circuit: QuantumCircuit) -> CircuitJSONSchema {
-        var operationSchemas: [OperationSchema] = []
-        operationSchemas.reserveCapacity(circuit.operations.count)
-
-        for operation in circuit.operations {
-            operationSchemas.append(mapOperation(operation))
-        }
+        let operationSchemas = circuit.operations.map(mapOperation)
 
         return CircuitJSONSchema(
             version: CircuitJSON.schemaVersion,
@@ -72,7 +71,7 @@ public enum CircuitJSONEncoder {
             mapGateOperation(gate: gate, qubits: qubits)
         case let .reset(qubit, _):
             OperationSchema(
-                type: "reset",
+                type: OperationSchema.resetType,
                 gate: nil,
                 qubits: [qubit],
                 classicalBits: nil,
@@ -82,7 +81,7 @@ public enum CircuitJSONEncoder {
             )
         case let .measure(qubit, classicalBit, _):
             OperationSchema(
-                type: "measurement",
+                type: OperationSchema.measurementType,
                 gate: nil,
                 qubits: [qubit],
                 classicalBits: [classicalBit ?? qubit],
@@ -103,7 +102,7 @@ public enum CircuitJSONEncoder {
         let controlIndices: [Int]? = controls.isEmpty ? nil : controls
 
         return OperationSchema(
-            type: "gate",
+            type: OperationSchema.gateType,
             gate: gateName,
             qubits: qubits,
             classicalBits: nil,
@@ -155,13 +154,13 @@ public enum CircuitJSONEncoder {
     private static func mapParameterValue(_ value: ParameterValue) -> ParameterSchema {
         switch value {
         case let .value(v):
-            ParameterSchema(type: "value", value: v, name: nil)
+            ParameterSchema(type: ParameterSchema.valueType, value: v, name: nil)
         case let .parameter(p):
-            ParameterSchema(type: "symbolic", value: nil, name: p.name)
+            ParameterSchema(type: ParameterSchema.symbolicType, value: nil, name: p.name)
         case let .negatedParameter(p):
-            ParameterSchema(type: "negated", value: nil, name: p.name)
+            ParameterSchema(type: ParameterSchema.negatedType, value: nil, name: p.name)
         case let .expression(expr):
-            ParameterSchema(type: "expression", value: nil, name: expr.parameters.first?.name)
+            ParameterSchema(type: ParameterSchema.expressionType, value: nil, name: expr.parameters.first?.name)
         }
     }
 

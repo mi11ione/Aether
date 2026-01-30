@@ -4,6 +4,7 @@
 import Accelerate
 
 /// Generates the n-qubit Pauli basis as tensor products of single-qubit Paulis.
+@_optimize(speed)
 @_effects(readonly)
 private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
     let singlePaulis: [[[Complex<Double>]]] = [
@@ -20,6 +21,7 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
     var result: [[[Complex<Double>]]] = singlePaulis
     for _ in 1 ..< qubits {
         var newResult: [[[Complex<Double>]]] = []
+        newResult.reserveCapacity(result.count * singlePaulis.count)
         for existing in result {
             for pauli in singlePaulis {
                 newResult.append(MatrixUtilities.kroneckerProduct(existing, pauli))
@@ -145,6 +147,13 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
 
     /// Accesses superoperator matrix element at specified row and column.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let channel = DepolarizingChannel(errorProbability: 0.1)
+    /// let superop = SuperoperatorRepresentation(channel: channel, qubits: 1)
+    /// let value = superop.element(row: 0, col: 0)
+    /// ```
+    ///
     /// - Parameters:
     ///   - row: Row index (0 to dimension-1)
     ///   - col: Column index (0 to dimension-1)
@@ -152,7 +161,9 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
     /// - Complexity: O(1)
     /// - Precondition: 0 <= row < dimension
     /// - Precondition: 0 <= col < dimension
-    public subscript(row row: Int, col col: Int) -> Complex<Double> {
+    @inlinable
+    @_effects(readonly)
+    public func element(row: Int, col: Int) -> Complex<Double> {
         let dim = dimension
         ValidationUtilities.validateIndexInBounds(row, bound: dim, name: "Row")
         ValidationUtilities.validateIndexInBounds(col, bound: dim, name: "Column")
@@ -171,14 +182,14 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
     /// let result = superop.apply(to: rho)
     /// ```
     ///
-    /// - Parameter matrix: Input density matrix
+    /// - Parameter densityMatrix: Input density matrix
     /// - Returns: Transformed density matrix
     /// - Complexity: O(d^4) where d = 2^qubits
-    /// - Precondition: matrix.qubits == qubits
+    /// - Precondition: densityMatrix.qubits == qubits
     @_optimize(speed)
     @_effects(readonly)
-    public func apply(to matrix: DensityMatrix) -> DensityMatrix {
-        ValidationUtilities.validateQubitCountsEqual(matrix.qubits, qubits, name1: "Input density matrix qubits", name2: "channel qubits")
+    public func apply(to densityMatrix: DensityMatrix) -> DensityMatrix {
+        ValidationUtilities.validateQubitCountsEqual(densityMatrix.qubits, qubits, name1: "Input density matrix qubits", name2: "channel qubits")
 
         let d = 1 << qubits
         let d2 = d * d
@@ -186,7 +197,7 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
         var vec = [Complex<Double>](repeating: .zero, count: d2)
         for i in 0 ..< d {
             for j in 0 ..< d {
-                vec[i * d + j] = matrix.element(row: i, col: j)
+                vec[i * d + j] = densityMatrix.element(row: i, col: j)
             }
         }
 
@@ -194,19 +205,12 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
         for i in 0 ..< d2 {
             var sum = Complex<Double>.zero
             for j in 0 ..< d2 {
-                sum = sum + self.matrix[i][j] * vec[j]
+                sum = sum + matrix[i][j] * vec[j]
             }
             resultVec[i] = sum
         }
 
-        var elements = [Complex<Double>](repeating: .zero, count: d2)
-        for i in 0 ..< d {
-            for j in 0 ..< d {
-                elements[i * d + j] = resultVec[i * d + j]
-            }
-        }
-
-        return DensityMatrix(qubits: qubits, elements: elements)
+        return DensityMatrix(qubits: qubits, elements: resultVec)
     }
 
     /// Checks if the channel is trace-preserving.
@@ -269,14 +273,29 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
         return SuperoperatorRepresentation(matrix: product, qubits: qubits)
     }
 
-    init(matrix: [[Complex<Double>]], qubits: Int) {
+    /// Creates a superoperator from a precomputed matrix.
+    private init(matrix: [[Complex<Double>]], qubits: Int) {
         self.matrix = matrix
         self.qubits = qubits
     }
 
+    /// Returns the element-wise complex conjugate of a matrix.
+    @inline(__always)
+    @_optimize(speed)
     @_effects(readonly)
     private static func conjugateMatrix(_ m: [[Complex<Double>]]) -> [[Complex<Double>]] {
         m.map { row in row.map(\.conjugate) }
+    }
+
+    /// Accesses the superoperator matrix element at the given row and column.
+    ///
+    /// - Parameters:
+    ///   - row: Row index in the superoperator matrix.
+    ///   - col: Column index in the superoperator matrix.
+    /// - Returns: The complex matrix element at the specified position.
+    /// - Complexity: O(1)
+    @inlinable public subscript(row row: Int, col col: Int) -> Complex<Double> {
+        matrix[row][col]
     }
 }
 
@@ -340,10 +359,10 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
             for a in 0 ..< d {
                 for c in 0 ..< d {
                     let rowIdx = a * d + c
+                    let kAC = kraus[a][c]
                     for b in 0 ..< d {
                         for dd in 0 ..< d {
                             let colIdx = b * d + dd
-                            let kAC = kraus[a][c]
                             let kBD = kraus[b][dd].conjugate
                             result[rowIdx][colIdx] = result[rowIdx][colIdx] + kAC * kBD
                         }
@@ -387,7 +406,7 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
                         let choiCol = b * d + dd
                         let superRow = a * d + b
                         let superCol = c * d + dd
-                        result[choiRow][choiCol] = superoperator[row: superRow, col: superCol]
+                        result[choiRow][choiCol] = superoperator.matrix[superRow][superCol]
                     }
                 }
             }
@@ -398,6 +417,13 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
 
     /// Accesses Choi matrix element at specified row and column.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let channel = AmplitudeDampingChannel(gamma: 0.1)
+    /// let choi = ChoiMatrix(channel: channel, qubits: 1)
+    /// let value = choi.element(row: 0, col: 0)
+    /// ```
+    ///
     /// - Parameters:
     ///   - row: Row index (0 to dimension-1)
     ///   - col: Column index (0 to dimension-1)
@@ -405,6 +431,7 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
     /// - Complexity: O(1)
     /// - Precondition: 0 <= row < dimension
     /// - Precondition: 0 <= col < dimension
+    @inlinable
     @_effects(readonly)
     public func element(row: Int, col: Int) -> Complex<Double> {
         let dim = dimension
@@ -489,6 +516,7 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
         let eigen = HermitianEigenDecomposition.decompose(matrix: matrix)
 
         var kraus: [[[Complex<Double>]]] = []
+        kraus.reserveCapacity(eigen.eigenvalues.count)
         let tolerance = 1e-12
 
         for (idx, eigenvalue) in eigen.eigenvalues.enumerated() {
@@ -601,6 +629,13 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
 
     /// Accesses Chi matrix element at specified row and column.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let channel = DepolarizingChannel(errorProbability: 0.1)
+    /// let chi = ChiMatrix(channel: channel, qubits: 1)
+    /// let value = chi.element(row: 0, col: 0)
+    /// ```
+    ///
     /// - Parameters:
     ///   - row: Row index (0 to d^2-1)
     ///   - col: Column index (0 to d^2-1)
@@ -608,6 +643,7 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
     /// - Complexity: O(1)
     /// - Precondition: 0 <= row < d^2
     /// - Precondition: 0 <= col < d^2
+    @inlinable
     @_effects(readonly)
     public func element(row: Int, col: Int) -> Complex<Double> {
         let d2 = 1 << (2 * qubits)
@@ -671,15 +707,22 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
             count: d2,
         )
 
-        for j in 0 ..< d2 {
-            var transformed = [[Complex<Double>]](
-                repeating: [Complex<Double>](repeating: .zero, count: d),
-                count: d,
-            )
+        let krausOps = channel.krausOperators
+        let krausDags = krausOps.map { MatrixUtilities.hermitianConjugate($0) }
 
-            for kraus in channel.krausOperators {
+        var transformed = [[Complex<Double>]](
+            repeating: [Complex<Double>](repeating: .zero, count: d),
+            count: d,
+        )
+        for j in 0 ..< d2 {
+            for a in 0 ..< d {
+                for b in 0 ..< d {
+                    transformed[a][b] = .zero
+                }
+            }
+
+            for (kraus, kDag) in zip(krausOps, krausDags) {
                 let kPj = MatrixUtilities.matrixMultiply(kraus, paulis[j])
-                let kDag = MatrixUtilities.hermitianConjugate(kraus)
                 let kPjKdag = MatrixUtilities.matrixMultiply(kPj, kDag)
                 for a in 0 ..< d {
                     for b in 0 ..< d {
@@ -729,11 +772,16 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
             count: d2,
         )
 
+        var transformed = [[Complex<Double>]](
+            repeating: [Complex<Double>](repeating: .zero, count: d),
+            count: d,
+        )
         for j in 0 ..< d2 {
-            var transformed = [[Complex<Double>]](
-                repeating: [Complex<Double>](repeating: .zero, count: d),
-                count: d,
-            )
+            for a in 0 ..< d {
+                for b in 0 ..< d {
+                    transformed[a][b] = .zero
+                }
+            }
 
             for a in 0 ..< d {
                 for b in 0 ..< d {
@@ -742,7 +790,7 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
                         for dd in 0 ..< d {
                             let choiRow = a * d + c
                             let choiCol = b * d + dd
-                            sum = sum + choi.element(row: choiRow, col: choiCol) * paulis[j][c][dd]
+                            sum = sum + choi.matrix[choiRow][choiCol] * paulis[j][c][dd]
                         }
                     }
                     transformed[a][b] = sum
@@ -765,6 +813,13 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
 
     /// Accesses Pauli transfer matrix element at specified row and column.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let channel = PhaseDampingChannel(gamma: 0.1)
+    /// let ptm = PauliTransferMatrix(channel: channel, qubits: 1)
+    /// let value = ptm.element(row: 0, col: 0)
+    /// ```
+    ///
     /// - Parameters:
     ///   - row: Row index (0 to d^2-1)
     ///   - col: Column index (0 to d^2-1)
@@ -772,6 +827,7 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
     /// - Complexity: O(1)
     /// - Precondition: 0 <= row < d^2
     /// - Precondition: 0 <= col < d^2
+    @inlinable
     @_effects(readonly)
     public func element(row: Int, col: Int) -> Double {
         let d2 = 1 << (2 * qubits)

@@ -440,7 +440,7 @@ public struct UnitaryPartitioner: Sendable {
         var cnot: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: dimension)
 
         for basis in 0 ..< dimension {
-            let controlBit: Int = BitUtilities.getBit(basis, qubit: control)
+            let controlBit: Int = BitUtilities.bit(basis, qubit: control)
             if controlBit == 1 {
                 let flippedBasis: Int = BitUtilities.flipBit(basis, qubit: target)
                 if flippedBasis != basis {
@@ -465,8 +465,8 @@ public struct UnitaryPartitioner: Sendable {
 
         for row in 0 ..< dimension {
             for col in 0 ..< dimension {
-                let rowBit: Int = BitUtilities.getBit(row, qubit: qubit)
-                let colBit: Int = BitUtilities.getBit(col, qubit: qubit)
+                let rowBit: Int = BitUtilities.bit(row, qubit: qubit)
+                let colBit: Int = BitUtilities.bit(col, qubit: qubit)
 
                 let rowRest: Int = BitUtilities.clearBit(row, qubit: qubit)
                 let colRest: Int = BitUtilities.clearBit(col, qubit: qubit)

@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Testing
 
 /// Test suite for empty circuit rendering.
@@ -238,14 +238,14 @@ struct NonAdjacentControlledGateTests {
 
 /// Test suite for color mode enabled output.
 /// Validates that ANSI escape codes are present in rendered
-/// output when colorEnabled parameter is set to true.
+/// output when isColorEnabled parameter is set to true.
 @Suite("Color Mode Enabled")
 struct ColorModeEnabledTests {
     @Test("Color mode adds ANSI escape codes for gate")
     func colorModeHasEscapeCodes() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         #expect(diagram.contains("\u{1b}["), "Color-enabled output should contain ANSI escape sequences")
     }
 
@@ -253,7 +253,7 @@ struct ColorModeEnabledTests {
     func colorModeCyanGate() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         #expect(diagram.contains("\u{1b}[36m"), "Gate label should use cyan ANSI code \\e[36m")
     }
 
@@ -261,7 +261,7 @@ struct ColorModeEnabledTests {
     func colorModeYellowControl() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.cnot, to: [0, 1])
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         #expect(diagram.contains("\u{1b}[33m"), "Control dot should use yellow ANSI code \\e[33m")
     }
 
@@ -269,7 +269,7 @@ struct ColorModeEnabledTests {
     func colorModeResetCode() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         #expect(diagram.contains("\u{1b}[0m"), "Color output should contain ANSI reset code \\e[0m")
     }
 
@@ -277,7 +277,7 @@ struct ColorModeEnabledTests {
     func colorModeMagentaMeasure() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.measure, to: 0)
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         #expect(diagram.contains("\u{1b}[35m"), "Measurement should use magenta ANSI code \\e[35m")
     }
 
@@ -285,14 +285,14 @@ struct ColorModeEnabledTests {
     func colorModeGreenReset() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.reset, to: 0)
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         #expect(diagram.contains("\u{1b}[32m"), "Reset gate should use green ANSI code \\e[32m")
     }
 }
 
 /// Test suite for color mode disabled output.
 /// Validates that no ANSI escape codes appear in rendered
-/// output when colorEnabled is false (the default).
+/// output when isColorEnabled is false (the default).
 @Suite("Color Mode Disabled")
 struct ColorModeDisabledTests {
     @Test("Default mode produces no ANSI escape codes")
@@ -304,12 +304,12 @@ struct ColorModeDisabledTests {
         #expect(!diagram.contains("\u{1b}["), "Default rendering should not contain ANSI escape sequences")
     }
 
-    @Test("Explicit colorEnabled false produces no ANSI escape codes")
+    @Test("Explicit isColorEnabled false produces no ANSI escape codes")
     func noEscapeCodesExplicit() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: false)
-        #expect(!diagram.contains("\u{1b}["), "Explicit colorEnabled=false should not contain ANSI escape sequences")
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: false)
+        #expect(!diagram.contains("\u{1b}["), "Explicit isColorEnabled=false should not contain ANSI escape sequences")
     }
 }
 
@@ -416,6 +416,9 @@ struct MultiWireDiagramStructureTests {
     }
 }
 
+/// Validates qubit label padding alignment in Unicode diagrams
+/// to ensure wire labels are correctly spaced for
+/// varying qubit counts and index widths.
 @Suite("Qubit Label Padding")
 struct QubitLabelPaddingTests {
     @Test("Labels pad to width of largest qubit index")
@@ -435,21 +438,30 @@ struct QubitLabelPaddingTests {
     }
 }
 
+/// Validates double-line classical wire rendering after
+/// measurement operations to ensure measured qubits display
+/// the correct idle wire style in subsequent layers.
 @Suite("Classical Idle Rendering")
 struct ClassicalIdleRenderingTests {
-    @Test("Measured qubit shows classical idle wire when another qubit has a gate")
+    @Test("Measured qubit shows classical idle wire segment in a later layer")
     func classicalIdleAfterMeasure() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.measure, to: 0)
         circuit.append(.hadamard, to: 1)
+        circuit.append(.pauliX, to: 1)
         let diagram = CircuitDiagramUnicode.render(circuit)
         let lines = diagram.split(separator: "\n").map(String.init)
         let measuredWire = lines[0]
-        let measuredSegments = measuredWire.split(separator: "├").last ?? ""
-        #expect(measuredSegments.contains("═"), "Measured qubit wire should use double-line ═ for classical idle in subsequent layers")
+        let segments = measuredWire.components(separatedBy: "├")
+        let afterMeasure = segments.dropFirst().joined(separator: "├")
+        let trailingRemoved = String(afterMeasure.dropLast())
+        #expect(trailingRemoved.contains("═"), "Measured qubit idle in layer 1 should render classical double-line ═ segment")
     }
 }
 
+/// Validates label rendering for controlled gate variants
+/// including controlled-H, controlled-phase, and other
+/// two-qubit controlled operations in Unicode diagrams.
 @Suite("Controlled Gate Label Rendering")
 struct ControlledGateLabelRenderingTests {
     @Test("Controlled Hadamard renders control dot and gate label")
@@ -463,6 +475,9 @@ struct ControlledGateLabelRenderingTests {
     }
 }
 
+/// Validates angle formatting for negative pi fraction
+/// parameters to ensure correct symbolic display
+/// of rotation gate angles in Unicode diagrams.
 @Suite("Negative Pi/4 Parameter Formatting")
 struct NegativePiFourthParameterTests {
     @Test("Gate with -pi/4 angle renders as -π/4")
@@ -474,6 +489,9 @@ struct NegativePiFourthParameterTests {
     }
 }
 
+/// Validates rendering of gates with named symbolic
+/// parameters to ensure parameter names display
+/// correctly in Unicode diagram gate labels.
 @Suite("Named Parameter Rendering")
 struct NamedParameterRenderingTests {
     @Test("Symbolic parameter renders with parameter name")
@@ -486,6 +504,9 @@ struct NamedParameterRenderingTests {
     }
 }
 
+/// Validates rendering of gates with negated parameter
+/// values to ensure the negation prefix displays
+/// correctly in Unicode diagram gate labels.
 @Suite("Negated Parameter Rendering")
 struct NegatedParameterRenderingTests {
     @Test("Negated symbolic parameter renders with minus prefix")
@@ -498,6 +519,9 @@ struct NegatedParameterRenderingTests {
     }
 }
 
+/// Validates Unicode rendering of the Fredkin controlled-swap
+/// gate to ensure correct symbol placement for control
+/// dots and swap crosses on target qubits.
 @Suite("Fredkin Gate Rendering")
 struct FredkinGateRenderingTests {
     @Test("Fredkin gate renders control dot and swap crosses")
@@ -512,6 +536,26 @@ struct FredkinGateRenderingTests {
     }
 }
 
+/// Validates Unicode rendering of swap gates wrapped in
+/// the generic controlled gate constructor to ensure
+/// correct cross symbol placement on target qubits.
+@Suite("Controlled Swap Gate Rendering")
+struct ControlledSwapGateRenderingTests {
+    @Test("Controlled swap via generic wrapper renders control dot and swap crosses")
+    func controlledSwapWrapper() {
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.append(.controlled(gate: .swap, controls: [0]), to: [0, 1, 2])
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        let lines = diagram.split(separator: "\n").map(String.init)
+        #expect(lines[0].contains("●"), "Controlled swap control qubit should show ●")
+        #expect(lines[2].contains("×"), "Controlled swap first target should show × swap cross")
+        #expect(lines[4].contains("×"), "Controlled swap second target should show × swap cross")
+    }
+}
+
+/// Validates Unicode rendering of the CCZ three-qubit
+/// gate to ensure correct control dot placement
+/// across all three qubit wires.
 @Suite("CCZ Gate Rendering")
 struct CCZGateRenderingTests {
     @Test("CCZ gate renders two control dots and Z label")
@@ -526,6 +570,9 @@ struct CCZGateRenderingTests {
     }
 }
 
+/// Validates qubit role classification for various
+/// controlled gate configurations to ensure correct
+/// assignment of control, target, and connector roles.
 @Suite("Controlled Gate Role Classification")
 struct ControlledGateRoleClassificationTests {
     @Test("Controlled PauliX with single control renders as CNOT-style target")
@@ -560,6 +607,9 @@ struct ControlledGateRoleClassificationTests {
     }
 }
 
+/// Validates Unicode rendering of diagonal, multiplexor,
+/// and custom unitary multi-qubit gates to ensure
+/// correct double-line box segment rendering.
 @Suite("Diagonal Multiplexor CustomUnitary Multi-Qubit Rendering")
 struct DiagonalMultiplexorCustomUnitaryTests {
     @Test("Diagonal gate on 2 qubits renders as multi-gate segment")
@@ -596,6 +646,9 @@ struct DiagonalMultiplexorCustomUnitaryTests {
     }
 }
 
+/// Validates rendering of middle qubit segments within
+/// multi-qubit gate boxes to ensure correct double-line
+/// border continuation between top and bottom boundaries.
 @Suite("Multi-Gate Segment Middle Qubit Rendering")
 struct MultiGateSegmentMiddleQubitTests {
     @Test("3-qubit gate renders middle qubit with double-line side borders")
@@ -629,6 +682,9 @@ struct MultiGateSegmentMiddleQubitTests {
     }
 }
 
+/// Validates qubit label width computation and padding
+/// for circuits with ten or more qubits to ensure
+/// correct alignment with multi-digit qubit indices.
 @Suite("Qubit Label Padding Multiple Qubits")
 struct QubitLabelPaddingMultipleTests {
     @Test("Qubit labels are padded correctly for small circuits")
@@ -648,18 +704,24 @@ struct QubitLabelPaddingMultipleTests {
     }
 }
 
+/// Validates classical idle wire rendering across multiple
+/// circuit layers to ensure double-line style persists
+/// through all subsequent layers after measurement.
 @Suite("Classical Idle Wire in Multi-Step Circuit")
 struct ClassicalIdleMultiStepTests {
     @Test("Measured qubit renders classical idle in layer where another qubit has a gate")
     func classicalIdleMultiStep() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.measure, to: 0)
+        circuit.append(.hadamard, to: 1)
         circuit.append(.pauliX, to: 1)
         let diagram = CircuitDiagramUnicode.render(circuit)
         let lines = diagram.split(separator: "\n").map(String.init)
         let measuredWire = lines[0]
-        let afterMeasure = measuredWire.split(separator: "├").last.map(String.init) ?? ""
-        #expect(afterMeasure.contains("═"), "Measured qubit q0 should show classical idle ═ in layer after measurement")
+        let segments = measuredWire.components(separatedBy: "├")
+        let afterMeasure = segments.dropFirst().joined(separator: "├")
+        let trailingRemoved = String(afterMeasure.dropLast())
+        #expect(trailingRemoved.contains("═"), "Measured qubit q0 should show classical idle ═ in layer 1 after measurement")
     }
 
     @Test("Measured qubit trailing wire uses double-line")
@@ -675,6 +737,9 @@ struct ClassicalIdleMultiStepTests {
     }
 }
 
+/// Validates gate label generation for all gate types
+/// requiring Unicode-specific formatting to ensure
+/// complete branch coverage of the label switch.
 @Suite("Gate Label Branch Coverage")
 struct GateLabelBranchCoverageTests {
     @Test("CY gate renders Y label on target wire")
@@ -799,13 +864,16 @@ struct GateLabelBranchCoverageTests {
     }
 }
 
+/// Validates ANSI color escape code insertion for all
+/// gate rendering roles to ensure correct colorization
+/// of control dots, gate labels, and special symbols.
 @Suite("ANSI Color Branch Coverage")
 struct ANSIColorBranchCoverageTests {
     @Test("Measurement gate with color uses magenta escape code")
     func measureColorMagenta() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.measure, to: 0)
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         #expect(diagram.contains("\u{1b}[35m"), "Measurement with color should contain magenta ANSI code \\e[35m")
         #expect(diagram.contains("\u{1b}[0m"), "Measurement with color should contain reset ANSI code \\e[0m")
     }
@@ -814,7 +882,7 @@ struct ANSIColorBranchCoverageTests {
     func controlDotColorYellow() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.cnot, to: [0, 1])
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         #expect(diagram.contains("\u{1b}[33m"), "Control dot with color should contain yellow ANSI code \\e[33m")
     }
 
@@ -822,7 +890,7 @@ struct ANSIColorBranchCoverageTests {
     func cnotTargetColorCyan() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.cnot, to: [0, 1])
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         let lines = diagram.split(separator: "\n").map(String.init)
         let targetLine = lines[2]
         #expect(targetLine.contains("\u{1b}[36m"), "CNOT target with color should contain cyan ANSI code \\e[36m on target wire")
@@ -832,7 +900,7 @@ struct ANSIColorBranchCoverageTests {
     func swapCrossColorCyan() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.swap, to: [0, 1])
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         #expect(diagram.contains("\u{1b}[36m"), "SWAP crosses with color should contain cyan ANSI code \\e[36m")
     }
 
@@ -840,7 +908,7 @@ struct ANSIColorBranchCoverageTests {
     func multiQubitTopColorCyan() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.iswap, to: [0, 1])
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         let lines = diagram.split(separator: "\n").map(String.init)
         let topLine = lines[0]
         #expect(topLine.contains("\u{1b}[36m"), "Multi-qubit gate top should contain cyan ANSI code \\e[36m for label")
@@ -851,7 +919,7 @@ struct ANSIColorBranchCoverageTests {
     func resetColorGreen() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.reset, to: 0)
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         #expect(diagram.contains("\u{1b}[32m"), "Reset gate with color should contain green ANSI code \\e[32m")
         #expect(diagram.contains("\u{1b}[0m"), "Reset gate with color should contain reset ANSI code \\e[0m")
     }
@@ -861,13 +929,20 @@ struct ANSIColorBranchCoverageTests {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.measure, to: 0)
         circuit.append(.hadamard, to: 1)
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        circuit.append(.pauliX, to: 1)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         let lines = diagram.split(separator: "\n").map(String.init)
         let measuredLine = lines[0]
-        #expect(measuredLine.contains("═"), "Classical idle segment should contain ═ even with color enabled")
+        let segments = measuredLine.components(separatedBy: "├")
+        let afterMeasure = segments.dropFirst().joined(separator: "├")
+        let trailingRemoved = String(afterMeasure.dropLast())
+        #expect(trailingRemoved.contains("═"), "Classical idle segment should contain ═ even with color enabled")
     }
 }
 
+/// Validates ANSI color rendering for multi-qubit custom
+/// gates to ensure color codes wrap the gate label
+/// correctly within double-line box segments.
 @Suite("Multi-Qubit Custom Gate Color Rendering")
 struct MultiQubitCustomGateColorTests {
     @Test("3-qubit custom gate with color renders cyan label on top segment")
@@ -879,7 +954,7 @@ struct MultiQubitCustomGateColorTests {
         )
         var circuit = QuantumCircuit(qubits: 3)
         circuit.append(.customUnitary(matrix: matrix), to: [0, 1, 2])
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         let lines = diagram.split(separator: "\n").map(String.init)
         let topLine = lines[0]
         #expect(topLine.contains("\u{1b}[36m"), "3-qubit custom gate top should contain cyan ANSI code \\e[36m")
@@ -896,7 +971,7 @@ struct MultiQubitCustomGateColorTests {
         )
         var circuit = QuantumCircuit(qubits: 3)
         circuit.append(.customUnitary(matrix: matrix), to: [0, 1, 2])
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         let lines = diagram.split(separator: "\n").map(String.init)
         let middleLine = lines[2]
         let bottomLine = lines[4]
@@ -910,10 +985,114 @@ struct MultiQubitCustomGateColorTests {
     func controlledMultiQubitGateColor() {
         var circuit = QuantumCircuit(qubits: 4)
         circuit.append(.controlled(gate: .iswap, controls: [0]), to: [0, 1, 2, 3])
-        let diagram = CircuitDiagramUnicode.render(circuit, colorEnabled: true)
+        let diagram = CircuitDiagramUnicode.render(circuit, isColorEnabled: true)
         let lines = diagram.split(separator: "\n").map(String.init)
         #expect(lines[0].contains("\u{1b}[33m"), "Control dot with color should contain yellow ANSI code \\e[33m")
         #expect(lines[2].contains("\u{1b}[36m"), "Multi-qubit gate top with color should contain cyan ANSI code \\e[36m")
         #expect(lines[2].contains("╔"), "First target qubit should contain ╔ top border")
+    }
+}
+
+/// Test suite for uncovered gate labels and angle formatting branches.
+/// Validates rendering of u1, u2, u3, globalPhase, ch, customTwoQubit,
+/// negative-pi angles, and expression parameter formatting.
+@Suite("Uncovered Gate Label and Angle Format Branches")
+struct UncoveredGateLabelAndAngleFormatTests {
+    @Test("Classical idle wire uses double-line when measured qubit is idle in later layer")
+    func classicalIdleWireAfterMeasurement() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.measure, to: 0)
+        circuit.append(.hadamard, to: 1)
+        circuit.append(.pauliX, to: 1)
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        let lines = diagram.split(separator: "\n").map(String.init)
+        let measuredWire = lines[0]
+        let segments = measuredWire.components(separatedBy: "├")
+        let afterMeasure = segments.dropFirst().joined(separator: "├")
+        let trailingRemoved = String(afterMeasure.dropLast())
+        #expect(trailingRemoved.contains("═"), "Measured qubit idle in layer 1 should render classical double-line wire ═")
+    }
+
+    @Test("U1 gate renders with U1 label and angle")
+    func u1GateLabel() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.u1(lambda: .value(0.5)), to: 0)
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        #expect(diagram.contains("U1(0.5)"), "U1 gate should render as U1(0.5) with formatted angle")
+    }
+
+    @Test("U2 gate renders with U2 label and two angles")
+    func u2GateLabel() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.u2(phi: .value(0.5), lambda: .value(1.0)), to: 0)
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        #expect(diagram.contains("U2(0.5,1.0)"), "U2 gate should render as U2(0.5,1.0) with two formatted angles")
+    }
+
+    @Test("U3 gate renders with U3 label and three angles")
+    func u3GateLabel() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.u3(theta: .value(0.5), phi: .value(1.0), lambda: .value(1.5)), to: 0)
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        #expect(diagram.contains("U3(0.5,1.0,1.5)"), "U3 gate should render as U3(0.5,1.0,1.5) with three formatted angles")
+    }
+
+    @Test("GlobalPhase gate renders with GP label")
+    func globalPhaseGateLabel() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.globalPhase(.value(.pi)), to: 0)
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        #expect(diagram.contains("GP(π)"), "GlobalPhase gate should render as GP(π)")
+    }
+
+    @Test("CH gate renders H label on target wire with control dot")
+    func chGateLabel() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.ch, to: [0, 1])
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        let lines = diagram.split(separator: "\n").map(String.init)
+        #expect(lines[0].contains("●"), "CH control qubit should show control dot ●")
+        #expect(lines[2].contains("H"), "CH target qubit should show H label")
+    }
+
+    @Test("CustomTwoQubit gate renders with U label in multi-gate segment")
+    func customTwoQubitGateLabel() {
+        let matrix: [[Complex<Double>]] = [
+            [.one, .zero, .zero, .zero],
+            [.zero, .one, .zero, .zero],
+            [.zero, .zero, .zero, .one],
+            [.zero, .zero, .one, .zero],
+        ]
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.customTwoQubit(matrix: matrix), to: [0, 1])
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        #expect(diagram.contains("U"), "CustomTwoQubit gate should render with U label")
+        #expect(diagram.contains("╔"), "CustomTwoQubit should render as multi-gate segment with ╔ border")
+    }
+
+    @Test("Phase gate with negative pi renders -π")
+    func formatAngleNegativePi() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.phase(.value(-.pi)), to: 0)
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        #expect(diagram.contains("P(-π)"), "Phase gate with -.pi should render as P(-π)")
+    }
+
+    @Test("Phase gate with negative pi/4 renders -π/4")
+    func formatAngleNegativePiFourth() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.phase(.value(-.pi / 4.0)), to: 0)
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        #expect(diagram.contains("P(-π/4)"), "Phase gate with -.pi/4 should render as P(-π/4)")
+    }
+
+    @Test("Gate with expression parameter renders expr label")
+    func formatAngleExpression() {
+        let theta = Parameter(name: "theta")
+        let expr = ParameterExpression(theta)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.phase(.expression(expr)), to: 0)
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        #expect(diagram.contains("P(expr)"), "Phase gate with expression parameter should render as P(expr)")
     }
 }

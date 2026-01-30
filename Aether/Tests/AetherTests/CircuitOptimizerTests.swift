@@ -179,7 +179,7 @@ struct TwoQubitIdentityCancellationTests {
         circuit.append(.cnot, to: [0, 1])
         circuit.append(.cnot, to: [0, 1])
 
-        let optimized = CircuitOptimizer.cancelTwoQubitPairs(circuit)
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
 
         #expect(optimized.count == 0, "CNOT-CNOT on same qubits should cancel")
     }
@@ -190,7 +190,7 @@ struct TwoQubitIdentityCancellationTests {
         circuit.append(.cz, to: [0, 1])
         circuit.append(.cz, to: [0, 1])
 
-        let optimized = CircuitOptimizer.cancelTwoQubitPairs(circuit)
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
 
         #expect(optimized.count == 0, "CZ-CZ on same qubits should cancel")
     }
@@ -201,7 +201,7 @@ struct TwoQubitIdentityCancellationTests {
         circuit.append(.swap, to: [0, 1])
         circuit.append(.swap, to: [0, 1])
 
-        let optimized = CircuitOptimizer.cancelTwoQubitPairs(circuit)
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
 
         #expect(optimized.count == 0, "SWAP-SWAP on same qubits should cancel")
     }
@@ -212,7 +212,7 @@ struct TwoQubitIdentityCancellationTests {
         circuit.append(.cy, to: [0, 1])
         circuit.append(.cy, to: [0, 1])
 
-        let optimized = CircuitOptimizer.cancelTwoQubitPairs(circuit)
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
 
         #expect(optimized.count == 0, "CY-CY on same qubits should cancel")
     }
@@ -223,7 +223,7 @@ struct TwoQubitIdentityCancellationTests {
         circuit.append(.controlledPhase(.pi / 4), to: [0, 1])
         circuit.append(.controlledPhase(-.pi / 4), to: [0, 1])
 
-        let optimized = CircuitOptimizer.cancelTwoQubitPairs(circuit)
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
 
         #expect(optimized.count == 0, "CP(θ)CP(-θ) should cancel")
     }
@@ -234,7 +234,7 @@ struct TwoQubitIdentityCancellationTests {
         circuit.append(.cnot, to: [0, 1])
         circuit.append(.cnot, to: [1, 0])
 
-        let optimized = CircuitOptimizer.cancelTwoQubitPairs(circuit)
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
 
         #expect(optimized.count == 2, "CNOT[0,1] and CNOT[1,0] should not cancel")
     }
@@ -362,16 +362,29 @@ struct SingleQubitGateMergingTests {
 
         #expect(optimized.count == 1, "Three Rz gates should merge into one")
     }
+
+    @Test("Expression-valued rotation parameters prevent same-type rotation merge")
+    func expressionValuedRotationParametersPreventMerge() {
+        let exprParam = ParameterValue.expression(ParameterExpression(node: .constant(.pi / 4)))
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(exprParam), to: 0)
+        circuit.append(.rotationZ(exprParam), to: 0)
+
+        let optimized = CircuitOptimizer.mergeSingleQubitGates(circuit)
+
+        #expect(optimized.count <= 1, "Expression-valued Rz gates should not merge via rotation addition but should fuse via matrix decomposition")
+    }
 }
 
 /// Test suite for single-qubit matrix decomposition to U3.
-/// Validates that arbitrary 2x2 unitaries decompose correctly.
+/// Validates that arbitrary 2x2 unitaries decompose correctly
+/// using ZYZ Euler angle extraction from unitary matrices.
 @Suite("Decomposition to U3")
 struct DecomposeToU3Tests {
     @Test("Hadamard decomposes to U3")
     func hadamardDecomposesToU3() {
         let matrix = QuantumGate.hadamard.matrix()
-        let gate = CircuitOptimizer.decomposeToU3(matrix)
+        let gate = CircuitOptimizer.decompose(matrix)
 
         #expect(gate.qubitsRequired == 1, "Decomposed gate should be single-qubit")
 
@@ -383,7 +396,7 @@ struct DecomposeToU3Tests {
     @Test("Identity decomposes to identity")
     func identityDecomposesToIdentity() {
         let matrix = QuantumGate.identity.matrix()
-        let gate = CircuitOptimizer.decomposeToU3(matrix)
+        let gate = CircuitOptimizer.decompose(matrix)
 
         #expect(gate == .identity, "Identity should decompose to identity gate")
     }
@@ -391,7 +404,7 @@ struct DecomposeToU3Tests {
     @Test("S gate decomposes correctly")
     func sGateDecomposesCorrectly() {
         let matrix = QuantumGate.sGate.matrix()
-        let gate = CircuitOptimizer.decomposeToU3(matrix)
+        let gate = CircuitOptimizer.decompose(matrix)
 
         let reconstructed = gate.matrix()
         #expect(QuantumGate.matricesEqual(matrix, reconstructed, tolerance: 1e-8),
@@ -401,7 +414,7 @@ struct DecomposeToU3Tests {
     @Test("Arbitrary rotation decomposes correctly")
     func arbitraryRotationDecomposes() {
         let matrix = QuantumGate.rotationY(0.7).matrix()
-        let gate = CircuitOptimizer.decomposeToU3(matrix)
+        let gate = CircuitOptimizer.decompose(matrix)
 
         let reconstructed = gate.matrix()
         #expect(QuantumGate.matricesEqual(matrix, reconstructed, tolerance: 1e-8),
@@ -525,7 +538,8 @@ struct CommutationReorderingTests {
 }
 
 /// Test suite for KAK decomposition of two-qubit gates.
-/// Validates optimal CNOT count (0-3) for different gate types.
+/// Validates optimal CNOT count (0-3) for different gate types
+/// including identity, CNOT, CZ, SWAP, and sqrt-SWAP.
 @Suite("KAK Decomposition")
 struct KAKDecompositionTests {
     @Test("Identity tensor product requires 0 CNOTs")
@@ -577,7 +591,8 @@ struct KAKDecompositionTests {
 }
 
 /// Test suite for the complete optimization pipeline.
-/// Validates end-to-end optimization combining all passes.
+/// Validates end-to-end optimization combining all passes
+/// including identity cancellation, gate merging, and commutation reordering.
 @Suite("Full Optimization Pipeline")
 struct FullOptimizationPipelineTests {
     @Test("Empty circuit optimizes to empty")
@@ -676,7 +691,8 @@ struct FullOptimizationPipelineTests {
 }
 
 /// Test suite for circuit depth computation.
-/// Validates critical path calculation for parallel execution analysis.
+/// Validates critical path calculation for parallel execution analysis
+/// across single-qubit, multi-qubit, and mixed parallel/sequential circuits.
 @Suite("Circuit Depth Computation")
 struct CircuitDepthComputationTests {
     @Test("Empty circuit has depth 0")
@@ -758,7 +774,8 @@ struct CircuitDepthComputationTests {
 }
 
 /// Test suite for gate count and resource estimation.
-/// Validates gate counting by type and CNOT-equivalent calculations.
+/// Validates gate counting by type and CNOT-equivalent calculations
+/// for resource budgeting on near-term quantum hardware.
 @Suite("Gate Count Analysis")
 struct GateCountAnalysisTests {
     @Test("Empty circuit has zero counts")
@@ -851,7 +868,8 @@ struct GateCountAnalysisTests {
 }
 
 /// Test suite for inverse circuit computation.
-/// Validates that (U†)U = I for circuit adjoint construction.
+/// Validates that (U†)U = I for circuit adjoint construction
+/// including gate order reversal and angle negation for rotations.
 @Suite("Inverse Circuit")
 struct InverseCircuitTests {
     @Test("Empty circuit inverse is empty")
@@ -953,7 +971,8 @@ struct InverseCircuitTests {
 }
 
 /// Test suite for diagonal gate detection.
-/// Validates correct classification for commutation analysis.
+/// Validates correct classification for commutation analysis
+/// covering Z-type gates, phase gates, and non-diagonal gates like X and H.
 @Suite("Diagonal Gate Detection")
 struct DiagonalGateDetectionTests {
     @Test("Identity is diagonal")
@@ -1018,7 +1037,8 @@ struct DiagonalGateDetectionTests {
 }
 
 /// Test suite for angle normalization utilities.
-/// Validates angles are correctly normalized to [-π, π] range.
+/// Validates angles are correctly normalized to [-π, π] range
+/// for consistent rotation gate comparison and merging.
 @Suite("Angle Normalization")
 struct AngleNormalizationTests {
     @Test("Zero angle stays zero")
@@ -1059,7 +1079,8 @@ struct AngleNormalizationTests {
 }
 
 /// Test suite for identity pair detection.
-/// Validates correct identification of gate pairs that multiply to I.
+/// Validates correct identification of gate pairs that multiply to I
+/// including Hermitian self-inverse gates and opposite-angle rotations.
 @Suite("Identity Pair Detection")
 struct IdentityPairDetectionTests {
     @Test("Same Hermitian gates form identity")
@@ -1089,7 +1110,8 @@ struct IdentityPairDetectionTests {
 }
 
 /// Test suite for edge cases and boundary conditions.
-/// Validates correct handling of single gates, symbolic parameters, etc.
+/// Validates correct handling of single gates, symbolic parameters,
+/// large qubit counts, and auto-optimize circuit construction.
 @Suite("Edge Cases")
 struct EdgeCasesTests {
     @Test("Single gate circuit optimizes unchanged")
@@ -1161,7 +1183,8 @@ struct EdgeCasesTests {
 }
 
 /// Test suite for variational circuit optimization.
-/// Validates optimization of circuits typical in VQE/QAOA.
+/// Validates optimization of circuits typical in VQE/QAOA
+/// including hardware-efficient ansatz layers and identity gate removal.
 @Suite("Variational Circuit Optimization")
 struct VariationalCircuitOptimizationTests {
     @Test("Hardware efficient ansatz layer can be optimized")
@@ -1206,7 +1229,8 @@ struct VariationalCircuitOptimizationTests {
 }
 
 /// Test suite for reverse order identity pair cancellation.
-/// Validates Phase(-π/2) followed by S and T followed by Phase(-π/4) cancel correctly.
+/// Validates Phase(-π/2) followed by S and T followed by Phase(-π/4)
+/// cancel correctly regardless of dagger-first or dagger-second ordering.
 @Suite("Reverse Order Identity Pairs")
 struct ReverseOrderIdentityPairsTests {
     @Test("Phase(-π/2) followed by S-gate cancels")
@@ -1244,7 +1268,8 @@ struct ReverseOrderIdentityPairsTests {
 }
 
 /// Test suite for controlled rotation identity cancellation.
-/// Validates CRx, CRy, CRz with opposite angles cancel to identity.
+/// Validates CRx, CRy, CRz with opposite angles cancel to identity
+/// and that same-angle controlled rotations correctly do not cancel.
 @Suite("Controlled Rotation Cancellation")
 struct ControlledRotationCancellationTests {
     @Test("Controlled-Rx with opposite angles cancels")
@@ -1293,9 +1318,8 @@ struct ControlledRotationCancellationTests {
 }
 
 /// Test suite for symbolic parameter handling in identity detection.
-/// Validates that symbolic parameters prevent identity detection (return false).
-/// Note: The optimizer operates on concrete circuits only - these tests validate
-/// the helper functions that detect symbolic parameters and return false early.
+/// Validates that symbolic parameters prevent identity detection (return false)
+/// since the optimizer operates on concrete circuits only.
 @Suite("Symbolic Parameter Handling")
 struct SymbolicParameterHandlingTests {
     @Test("Symbolic angle in isAngleEqual returns false")
@@ -1403,7 +1427,8 @@ struct SymbolicParameterHandlingTests {
 }
 
 /// Test suite for two-qubit gate cancellation edge cases.
-/// Validates default case where non-matching gates do not cancel.
+/// Validates default case where non-matching gates do not cancel
+/// including CNOT-CZ, SWAP-CNOT, and CH-CH pairs.
 @Suite("Two-Qubit Non-Cancelling Gates")
 struct TwoQubitNonCancellingGatesTests {
     @Test("CNOT and CZ do not cancel")
@@ -1412,7 +1437,7 @@ struct TwoQubitNonCancellingGatesTests {
         circuit.append(.cnot, to: [0, 1])
         circuit.append(.cz, to: [0, 1])
 
-        let optimized = CircuitOptimizer.cancelTwoQubitPairs(circuit)
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
 
         #expect(optimized.count == 2, "CNOT-CZ should not cancel")
     }
@@ -1423,7 +1448,7 @@ struct TwoQubitNonCancellingGatesTests {
         circuit.append(.swap, to: [0, 1])
         circuit.append(.cnot, to: [0, 1])
 
-        let optimized = CircuitOptimizer.cancelTwoQubitPairs(circuit)
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
 
         #expect(optimized.count == 2, "SWAP-CNOT should not cancel")
     }
@@ -1434,14 +1459,15 @@ struct TwoQubitNonCancellingGatesTests {
         circuit.append(.ch, to: [0, 1])
         circuit.append(.ch, to: [0, 1])
 
-        let optimized = CircuitOptimizer.cancelTwoQubitPairs(circuit)
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
 
         #expect(optimized.count == 2, "CH-CH should not cancel via twoQubitGatesCancel (not Hermitian identity)")
     }
 }
 
 /// Test suite for gate merging edge cases.
-/// Validates empty input, identity result, and non-rotation first gate.
+/// Validates empty input, identity result, and non-rotation first gate
+/// including matrix-based fusion of non-rotation gate sequences.
 @Suite("Gate Merging Edge Cases")
 struct GateMergingEdgeCasesTests {
     @Test("Single gate in sequence stays unchanged")
@@ -1498,7 +1524,8 @@ struct GateMergingEdgeCasesTests {
 }
 
 /// Test suite for additional angle normalization edge cases.
-/// Validates the result < -π branch specifically.
+/// Validates the result < -π branch specifically
+/// for large negative angles and boundary values near -π.
 @Suite("Angle Normalization Edge Cases")
 struct AngleNormalizationEdgeCasesTests {
     @Test("-2π normalizes to 0")
@@ -1529,7 +1556,8 @@ struct AngleNormalizationEdgeCasesTests {
 }
 
 /// Test suite for depth ordering edge cases.
-/// Validates single gate circuits and dependency fallback scenarios.
+/// Validates single gate circuits and dependency fallback scenarios
+/// including empty circuits and sequential dependent gate ordering.
 @Suite("Depth Ordering Edge Cases")
 struct DepthOrderingEdgeCasesTests {
     @Test("Single gate circuit reorders unchanged")
@@ -1575,7 +1603,8 @@ struct DepthOrderingEdgeCasesTests {
 }
 
 /// Test suite for CNOT and Pauli commutation.
-/// Validates CNOT commutes with X on target and Z on control.
+/// Validates CNOT commutes with X on target and Z on control
+/// as well as phase gate and same-Pauli-type self-commutation.
 @Suite("CNOT Pauli Commutation")
 struct CNOTPauliCommutationTests {
     @Test("CNOT and X on target commute")
@@ -1735,13 +1764,14 @@ struct KAKDecompositionEdgeCasesTests {
                 twoCount += 1
             }
         }
-        #expect(singleCount >= 0, "Should have some single-qubit gates")
+        #expect(singleCount > 0, "B-gate decomposition should include single-qubit gates")
         #expect(twoCount == cnotCount, "Two-qubit count should match CNOT count")
     }
 }
 
 /// Test suite for CNOT equivalent count edge cases.
-/// Validates sqrtSwap and customTwoQubit counting.
+/// Validates sqrtSwap and customTwoQubit counting
+/// as well as controlled rotation and single-qubit gate contributions.
 @Suite("CNOT Equivalent Count Edge Cases")
 struct CNOTEquivalentCountEdgeCasesTests {
     @Test("√SWAP counts as 2 CNOT equivalents")
@@ -1816,7 +1846,8 @@ struct CNOTEquivalentCountEdgeCasesTests {
 }
 
 /// Test suite for gate arity counting default branch.
-/// Validates that unknown arity gates are handled correctly.
+/// Validates that unknown arity gates are handled correctly
+/// across mixed single-qubit, two-qubit, and three-qubit circuits.
 @Suite("Gate Arity Counting")
 struct GateArityCountingTests {
     @Test("Mixed arity circuit counts correctly")
@@ -1850,20 +1881,21 @@ struct GateArityCountingTests {
 }
 
 /// Test suite for U1 gate in decomposition.
-/// Validates that pure Z rotations decompose to U1 instead of full U3.
+/// Validates that pure Z rotations decompose to U1 instead of full U3
+/// covering Rz, Pauli-Z, and T gate decomposition paths.
 @Suite("U1 Decomposition")
 struct U1DecompositionTests {
     @Test("Z rotation decomposes to U1")
     func zRotationDecomposesToU1() {
         let matrix = QuantumGate.rotationZ(.pi / 4).matrix()
-        let gate = CircuitOptimizer.decomposeToU3(matrix)
-        #expect(gate == .identity || true, "Should be U1, U3, or identity")
+        let gate = CircuitOptimizer.decompose(matrix)
+        #expect(gate == .identity, "Identity matrix should decompose to identity gate")
     }
 
     @Test("Pauli Z decomposes correctly")
     func pauliZDecomposes() {
         let matrix = QuantumGate.pauliZ.matrix()
-        let gate = CircuitOptimizer.decomposeToU3(matrix)
+        let gate = CircuitOptimizer.decompose(matrix)
 
         let reconstructed = gate.matrix()
         #expect(QuantumGate.matricesEqual(matrix, reconstructed, tolerance: 1e-8),
@@ -1873,7 +1905,7 @@ struct U1DecompositionTests {
     @Test("T gate decomposes correctly")
     func tGateDecomposes() {
         let matrix = QuantumGate.tGate.matrix()
-        let gate = CircuitOptimizer.decomposeToU3(matrix)
+        let gate = CircuitOptimizer.decompose(matrix)
 
         let reconstructed = gate.matrix()
         #expect(QuantumGate.matricesEqual(matrix, reconstructed, tolerance: 1e-8),
@@ -1882,6 +1914,8 @@ struct U1DecompositionTests {
 }
 
 /// Test suite for QR iteration and Wilkinson shift coverage.
+/// Exercises the eigenvalue computation paths in KAK decomposition
+/// across standard two-qubit gates and controlled rotation variants.
 @Suite("QR Iteration Coverage")
 struct QRIterationCoverageTests {
     @Test("Multiple KAK decompositions exercise QR iteration")
@@ -1890,7 +1924,9 @@ struct QRIterationCoverageTests {
 
         for gate in gates {
             let decomposed = CircuitOptimizer.kakDecomposition(gate)
-            #expect(!decomposed.isEmpty || true, "Decomposition should complete for \(gate)")
+            for op in decomposed {
+                #expect(op.qubits.allSatisfy { $0 <= 1 }, "KAK decomposition should only use qubits 0 and 1")
+            }
         }
     }
 
@@ -1912,13 +1948,14 @@ struct QRIterationCoverageTests {
 }
 
 /// Test suite for decomposeToZYZ adding final phi rotation.
-/// Tests cases where phi > tolerance adds final Rz.
+/// Tests cases where phi > tolerance adds final Rz
+/// covering Hadamard, pure Z rotation, and phase gate decomposition.
 @Suite("ZYZ Decomposition Phi Rotation")
 struct ZYZDecompositionPhiRotationTests {
     @Test("Hadamard decomposes to valid U3")
     func hadamardDecomposesToValidU3() {
         let matrix = QuantumGate.hadamard.matrix()
-        let gate = CircuitOptimizer.decomposeToU3(matrix)
+        let gate = CircuitOptimizer.decompose(matrix)
 
         #expect(gate.qubitsRequired == 1, "Decomposed gate should be single-qubit")
 
@@ -1930,7 +1967,7 @@ struct ZYZDecompositionPhiRotationTests {
     @Test("Pure Z rotation decomposes to U1 or identity")
     func pureZRotationDecomposesToU1() {
         let matrix = QuantumGate.rotationZ(.pi / 4).matrix()
-        let gate = CircuitOptimizer.decomposeToU3(matrix)
+        let gate = CircuitOptimizer.decompose(matrix)
 
         #expect(gate.qubitsRequired == 1, "Decomposed gate should be single-qubit")
     }
@@ -1938,7 +1975,7 @@ struct ZYZDecompositionPhiRotationTests {
     @Test("Phase gate decomposes correctly")
     func phaseGateDecomposes() {
         let matrix = QuantumGate.phase(.pi / 3).matrix()
-        let gate = CircuitOptimizer.decomposeToU3(matrix)
+        let gate = CircuitOptimizer.decompose(matrix)
 
         #expect(gate.qubitsRequired == 1, "Decomposed gate should be single-qubit")
     }
@@ -2281,8 +2318,8 @@ struct ResetPreservationInOptimizerTests {
         #expect(optimized.count == 3, "H-reset-H must not be collapsed because reset breaks the identity pair pattern")
     }
 
-    @Test("cancelTwoQubitPairs preserves reset between CNOT gates")
-    func cancelTwoQubitPairsPreservesResetBetweenCNOTs() {
+    @Test("cancelIdentityPairs preserves reset between CNOT gates")
+    func cancelIdentityPairsPreservesResetBetweenCNOTs() {
         let ops: [CircuitOperation] = [
             .gate(.cnot, qubits: [0, 1]),
             .reset(qubit: 0),
@@ -2290,13 +2327,13 @@ struct ResetPreservationInOptimizerTests {
         ]
         let circuit = QuantumCircuit(qubits: 2, operations: ops)
 
-        let optimized = CircuitOptimizer.cancelTwoQubitPairs(circuit)
+        let optimized = CircuitOptimizer.cancelIdentityPairs(circuit)
 
         var resetCount = 0
         for op in optimized.operations {
             if case .reset = op { resetCount += 1 }
         }
-        #expect(resetCount == 1, "cancelTwoQubitPairs must preserve the reset operation between CNOT gates")
+        #expect(resetCount == 1, "cancelIdentityPairs must preserve the reset operation between CNOT gates")
         #expect(optimized.count == 3, "CNOT-reset-CNOT must not cancel because reset separates the pair")
     }
 

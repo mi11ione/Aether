@@ -36,6 +36,9 @@ import Accelerate
 /// - SeeAlso: ``MatrixUtilities``
 /// - SeeAlso: ``QuantumCircuit``
 public enum CircuitUnitary {
+    /// Threshold below which complex magnitudes are treated as zero.
+    private static let magnitudeSquaredThreshold: Double = 1e-30
+
     // MARK: - Public API
 
     /// Compute full circuit unitary matrix via gate composition.
@@ -68,33 +71,34 @@ public enum CircuitUnitary {
         ValidationUtilities.validateMemoryLimit(qubits)
 
         let dimension = 1 << qubits
-        var unitary: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: dimension)
+        var resultMatrix: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: dimension)
 
         ValidationUtilities.validateUnitaryCircuit(circuit)
 
         for operation in circuit.operations {
             let gateMatrix: [[Complex<Double>]] = expandGateToFullSpace(
-                gate: operation.gate!,
+                gate: operation.gate!, // Safety: validateUnitaryCircuit ensures all operations have gates
                 qubits: operation.qubits,
-                numQubits: qubits,
+                qubitCount: qubits,
             )
-            unitary = MatrixUtilities.matrixMultiply(gateMatrix, unitary)
+            resultMatrix = MatrixUtilities.matrixMultiply(gateMatrix, resultMatrix)
         }
 
-        return unitary
+        return resultMatrix
     }
 
     // MARK: - Gate Expansion
 
     /// Embed gate matrix into full 2ⁿ x 2ⁿ Hilbert space via tensor product with identity.
+    @inline(__always)
     @_optimize(speed)
     @_eagerMove
     private static func expandGateToFullSpace(
         gate: QuantumGate,
         qubits: [Int],
-        numQubits: Int,
+        qubitCount: Int,
     ) -> [[Complex<Double>]] {
-        let dimension = 1 << numQubits
+        let dimension = 1 << qubitCount
 
         switch gate {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
@@ -113,7 +117,7 @@ public enum CircuitUnitary {
             return expandMultiQubitGate(gate: gate, qubits: qubits, dimension: dimension)
 
         case .controlled:
-            return expandControlledGate(gate: gate, qubits: qubits, dimension: dimension)
+            return expandControlledGate(gate: gate, dimension: dimension)
 
         case .customUnitary, .diagonal, .multiplexor:
             return expandMultiQubitGate(gate: gate, qubits: qubits, dimension: dimension)
@@ -129,10 +133,9 @@ public enum CircuitUnitary {
         dimension: Int,
     ) -> [[Complex<Double>]] {
         let smallMatrix: [[Complex<Double>]] = gate.matrix()
-        var fullMatrix: [[Complex<Double>]] = Array(
-            repeating: Array(repeating: Complex<Double>.zero, count: dimension),
-            count: dimension,
-        )
+        var fullMatrix: [[Complex<Double>]] = (0 ..< dimension).map { _ in
+            [Complex<Double>](repeating: .zero, count: dimension)
+        }
 
         let halfDimension = dimension >> 1
         let targetMask = 1 << targetQubit
@@ -160,10 +163,9 @@ public enum CircuitUnitary {
         dimension: Int,
     ) -> [[Complex<Double>]] {
         let smallMatrix: [[Complex<Double>]] = gate.matrix()
-        var fullMatrix: [[Complex<Double>]] = Array(
-            repeating: Array(repeating: Complex<Double>.zero, count: dimension),
-            count: dimension,
-        )
+        var fullMatrix: [[Complex<Double>]] = (0 ..< dimension).map { _ in
+            [Complex<Double>](repeating: .zero, count: dimension)
+        }
 
         let controlMask = 1 << control
         let targetMask = 1 << target
@@ -209,50 +211,41 @@ public enum CircuitUnitary {
         target: Int,
         dimension: Int,
     ) -> [[Complex<Double>]] {
-        var fullMatrix: [[Complex<Double>]] = Array(
-            repeating: Array(repeating: Complex<Double>.zero, count: dimension),
-            count: dimension,
-        )
+        var fullMatrix: [[Complex<Double>]] = (0 ..< dimension).map { _ in
+            [Complex<Double>](repeating: .zero, count: dimension)
+        }
 
-        let c1Mask = 1 << control1
-        let c2Mask = 1 << control2
-        let bothControlsMask = c1Mask | c2Mask
         let targetMask = 1 << target
 
         for row in 0 ..< dimension {
-            if (row & bothControlsMask) == bothControlsMask {
-                let flippedRow = row ^ targetMask
-                fullMatrix[row][flippedRow] = Complex<Double>(1, 0)
-            } else {
-                fullMatrix[row][row] = Complex<Double>(1, 0)
-            }
+            let bothSet = ((row >> control1) & (row >> control2)) & 1
+            let colIndex = row ^ (targetMask * bothSet)
+            fullMatrix[row][colIndex] = .one
         }
 
         return fullMatrix
     }
 
+    /// Expand controlled gate using its pre-built full-space matrix.
     @_optimize(speed)
     @_eagerMove
     private static func expandControlledGate(
         gate: QuantumGate,
-        qubits _: [Int],
         dimension: Int,
     ) -> [[Complex<Double>]] {
         let gateMatrix = gate.matrix()
-        var fullMatrix: [[Complex<Double>]] = Array(
-            repeating: Array(repeating: Complex<Double>.zero, count: dimension),
-            count: dimension,
-        )
+        var fullMatrix: [[Complex<Double>]] = (0 ..< dimension).map { _ in
+            [Complex<Double>](repeating: .zero, count: dimension)
+        }
 
         for row in 0 ..< dimension {
-            for col in 0 ..< dimension {
-                fullMatrix[row][col] = gateMatrix[row][col]
-            }
+            fullMatrix[row] = gateMatrix[row]
         }
 
         return fullMatrix
     }
 
+    /// Expand multi-qubit gate to full space via qubit-index bit mapping.
     @_optimize(speed)
     @_eagerMove
     private static func expandMultiQubitGate(
@@ -262,34 +255,31 @@ public enum CircuitUnitary {
     ) -> [[Complex<Double>]] {
         let gateMatrix = gate.matrix()
         let gateSize = gateMatrix.count
-        var fullMatrix: [[Complex<Double>]] = Array(
-            repeating: Array(repeating: Complex<Double>.zero, count: dimension),
-            count: dimension,
-        )
+        var fullMatrix: [[Complex<Double>]] = (0 ..< dimension).map { _ in
+            [Complex<Double>](repeating: .zero, count: dimension)
+        }
+
+        let qubitMasks = qubits.map { 1 << $0 }
+        let idxMasks = (0 ..< qubits.count).map { 1 << $0 }
 
         for row in 0 ..< dimension {
             var gateRow = 0
-            for (idx, qubit) in qubits.enumerated() {
-                if (row & (1 << qubit)) != 0 {
-                    gateRow |= (1 << idx)
+            for idx in 0 ..< qubits.count {
+                if (row & qubitMasks[idx]) != 0 {
+                    gateRow |= idxMasks[idx]
                 }
             }
 
             for gateCol in 0 ..< gateSize {
                 let matrixElement = gateMatrix[gateRow][gateCol]
-                if matrixElement.real == 0, matrixElement.imaginary == 0 {
+                if matrixElement.magnitudeSquared < magnitudeSquaredThreshold {
                     continue
                 }
 
                 var col = row
-                for (idx, qubit) in qubits.enumerated() {
+                for idx in 0 ..< qubits.count {
                     let colBit = (gateCol >> idx) & 1
-                    let mask = 1 << qubit
-                    if colBit == 1 {
-                        col |= mask
-                    } else {
-                        col &= ~mask
-                    }
+                    col = (col & ~qubitMasks[idx]) | (colBit << qubits[idx])
                 }
                 fullMatrix[row][col] = matrixElement
             }
@@ -305,7 +295,7 @@ public enum CircuitUnitary {
     /// Computes memory required for 2ⁿ x 2ⁿ complex matrix.
     ///
     /// ```swift
-    /// let bytes = CircuitUnitary.memoryUsage(for: 10)
+    /// let bytes = CircuitUnitary.estimateMemoryUsage(forQubits: 10)
     /// print("\(bytes / 1_048_576) MB")
     /// ```
     ///
@@ -314,7 +304,9 @@ public enum CircuitUnitary {
     /// - Complexity: O(1).
     @_effects(readonly)
     @inlinable
-    public static func memoryUsage(for qubits: Int) -> Int {
+    public static func estimateMemoryUsage(forQubits qubits: Int) -> Int {
+        ValidationUtilities.validateNonNegativeInt(qubits, name: "Qubits")
+        ValidationUtilities.validateMemoryLimit(qubits)
         let dimension = 1 << qubits
         let complexSize: Int = MemoryLayout<Complex<Double>>.stride
         return dimension * dimension * complexSize
@@ -336,14 +328,14 @@ public enum CircuitUnitary {
     /// - Complexity: O(1).
     /// - Precondition: `qubits > 0`.
     /// - Precondition: `qubits <= 30`.
-    /// - SeeAlso: ``memoryUsage(for:)`` for estimated memory usage.
+    /// - SeeAlso: ``estimateMemoryUsage(forQubits:)``
     @_effects(readonly)
     @inlinable
     public static func canConvert(qubits: Int) -> Bool {
         ValidationUtilities.validatePositiveQubits(qubits)
         ValidationUtilities.validateMemoryLimit(qubits)
 
-        let memoryBytes: Int = memoryUsage(for: qubits)
+        let memoryBytes: Int = estimateMemoryUsage(forQubits: qubits)
         let availableMemory: UInt64 = ProcessInfo.processInfo.physicalMemory
         let threshold: UInt64 = (availableMemory * 80) / 100
 

@@ -319,24 +319,9 @@ public struct TypedCircuit<Size: QubitSize>: Sendable {
         }
 
         for operation in b.circuit.operations {
-            let shifted = shiftOperation(operation, by: shift)
-            combined.addOperation(shifted)
+            combined.addOperation(operation.shifted(by: shift))
         }
 
         return TypedCircuit<QubitSum<A, B>>(combined)
-    }
-
-    /// Shifts all qubit indices in a circuit operation by the given offset.
-    @inline(__always)
-    private static func shiftOperation(_ operation: CircuitOperation, by offset: Int) -> CircuitOperation {
-        switch operation {
-        case let .gate(gate, qubits, timestamp):
-            let shifted = qubits.map { $0 + offset }
-            return .gate(gate, qubits: shifted, timestamp: timestamp)
-        case let .reset(qubit, timestamp):
-            return .reset(qubit: qubit + offset, timestamp: timestamp)
-        case let .measure(qubit, classicalBit, timestamp):
-            return .measure(qubit: qubit + offset, classicalBit: classicalBit.map { $0 + offset }, timestamp: timestamp)
-        }
     }
 }

@@ -152,8 +152,6 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
     /// Returns the ``QuantumGate`` for `.gate` cases and `nil` for `.reset` and
     /// other non-unitary operations.
     ///
-    /// - Complexity: O(1)
-    ///
     /// **Example:**
     /// ```swift
     /// let op = CircuitOperation.gate(.hadamard, qubits: [0])
@@ -162,6 +160,8 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
     /// let reset = CircuitOperation.reset(qubit: 0)
     /// let none = reset.gate // nil
     /// ```
+    ///
+    /// - Complexity: O(1)
     @inlinable
     public var gate: QuantumGate? {
         switch self {
@@ -289,7 +289,7 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
     ///
     /// - Returns: Set of symbolic parameters in this operation
     /// - Complexity: O(1) for gates with at most 3 parameters, O(1) for reset
-    @_optimize(speed)
+    @inlinable
     @_effects(readonly)
     public func parameters() -> Set<Parameter> {
         switch self {
@@ -325,7 +325,7 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
     /// - Parameter bindings: Dictionary mapping parameter names to numerical values
     /// - Returns: Operation with all symbolic parameters substituted
     /// - Complexity: O(1) for gates with at most 3 parameters, O(1) for reset
-    @_optimize(speed)
+    @inlinable
     @_effects(readonly)
     public func bound(with bindings: [String: Double]) -> CircuitOperation {
         switch self {
@@ -358,6 +358,7 @@ public enum CircuitOperation: Equatable, Hashable, CustomStringConvertible, Send
     /// ```
     ///
     /// - Returns: Formatted string describing the operation
+    /// - Complexity: O(1)
     public var description: String {
         switch self {
         case let .gate(gate, qubits, timestamp):

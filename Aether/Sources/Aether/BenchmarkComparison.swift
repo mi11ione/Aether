@@ -12,12 +12,12 @@ import Foundation
 ///
 /// **Example:**
 /// ```swift
-/// let baseline = CircuitCostEstimator.estimate(originalCircuit)
-/// let optimized = CircuitCostEstimator.estimate(optimizedCircuit)
+/// let baseline = CircuitCostEstimator.cost(of: originalCircuit)
+/// let optimized = CircuitCostEstimator.cost(of: optimizedCircuit)
 /// let comparison = BenchmarkComparison(baseline: baseline, optimized: optimized)
 /// print(comparison.speedup)        // 1.5 (50% faster)
 /// print(comparison.gateReduction)  // 0.33 (33% fewer gates)
-/// print(comparison.isImprovement)  // true
+/// print(comparison.isImproved)  // true
 /// ```
 ///
 /// - SeeAlso: ``CircuitCost``
@@ -58,6 +58,7 @@ import Foundation
     /// ```
     ///
     /// - Returns: Speedup factor (>1.0 means faster), or 0.0 if optimized gate count is zero.
+    /// - Complexity: O(1)
     @inlinable
     public var speedup: Double {
         guard optimized.totalGates > 0 else { return 0.0 }
@@ -77,6 +78,7 @@ import Foundation
     /// ```
     ///
     /// - Returns: Reduction fraction (0-1), or 0.0 if baseline gate count is zero.
+    /// - Complexity: O(1)
     @inlinable
     public var gateReduction: Double {
         guard baseline.totalGates > 0 else { return 0.0 }
@@ -96,6 +98,7 @@ import Foundation
     /// ```
     ///
     /// - Returns: Reduction fraction (0-1), or 0.0 if baseline depth is zero.
+    /// - Complexity: O(1)
     @inlinable
     public var depthReduction: Double {
         guard baseline.depth > 0 else { return 0.0 }
@@ -104,24 +107,38 @@ import Foundation
 
     /// Whether the optimization resulted in any improvement.
     ///
-    /// Returns true if speedup > 1.0, gateReduction > 0, or depthReduction > 0.
+    /// Returns true if gateReduction > 0 or depthReduction > 0.
     ///
     /// **Example:**
     /// ```swift
-    /// if comparison.isImprovement {
+    /// if comparison.isImproved {
     ///     print("Optimization successful")
     /// }
     /// ```
     ///
     /// - Returns: `true` if any metric shows improvement, `false` otherwise.
+    /// - Complexity: O(1)
     @inlinable
-    public var isImprovement: Bool {
-        speedup > 1.0 || gateReduction > 0 || depthReduction > 0
+    public var isImproved: Bool {
+        gateReduction > 0 || depthReduction > 0
     }
 
     /// Human-readable summary of the benchmark comparison.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let baseline = CircuitCost(gateCount: [:], depth: 20, cnotEquivalent: 50, tCount: 10, totalGates: 100)
+    /// let optimized = CircuitCost(gateCount: [:], depth: 15, cnotEquivalent: 30, tCount: 5, totalGates: 75)
+    /// let comparison = BenchmarkComparison(baseline: baseline, optimized: optimized)
+    /// print(comparison.description)
+    /// ```
+    ///
+    /// - Complexity: O(1)
     @inlinable
     public var description: String {
-        "BenchmarkComparison(speedup: \(String(format: "%.2f", speedup))x, gateReduction: \(String(format: "%.1f", gateReduction * 100))%, depthReduction: \(String(format: "%.1f", depthReduction * 100))%)"
+        let speedupValue = speedup
+        let gateReductionPercent = gateReduction * 100.0
+        let depthReductionPercent = depthReduction * 100.0
+        return "BenchmarkComparison(speedup: \(String(format: "%.2f", speedupValue))x, gateReduction: \(String(format: "%.1f", gateReductionPercent))%, depthReduction: \(String(format: "%.1f", depthReductionPercent))%)"
     }
 }

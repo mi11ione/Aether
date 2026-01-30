@@ -556,14 +556,14 @@ struct LargeHamiltonianTests {
 struct MemoryBoundaryTests {
     @Test("CircuitUnitary memory estimation accuracy")
     func memoryEstimationAccuracy() {
-        let mem10 = CircuitUnitary.memoryUsage(for: 10)
+        let mem10 = CircuitUnitary.estimateMemoryUsage(forQubits: 10)
         let expected10 = 1024 * 1024 * 16
         #expect(
             abs(mem10 - expected10) < expected10 / 10,
             "10-qubit memory estimate off: \(mem10) vs \(expected10)",
         )
 
-        let mem12 = CircuitUnitary.memoryUsage(for: 12)
+        let mem12 = CircuitUnitary.estimateMemoryUsage(forQubits: 12)
         let expected12 = 4096 * 4096 * 16
         #expect(
             abs(mem12 - expected12) < expected12 / 10,

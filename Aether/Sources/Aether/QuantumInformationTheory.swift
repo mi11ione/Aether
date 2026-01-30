@@ -148,13 +148,13 @@ import Foundation
         for fullIndex in 0 ..< state.stateSpaceSize {
             var aIndex = 0
             for position in 0 ..< subsystemAQubits.count {
-                let bit = BitUtilities.getBit(fullIndex, qubit: subsystemAQubits[position])
+                let bit = BitUtilities.bit(fullIndex, qubit: subsystemAQubits[position])
                 aIndex |= (bit << position)
             }
 
             var bIndex = 0
             for position in 0 ..< subsystemBQubits.count {
-                let bit = BitUtilities.getBit(fullIndex, qubit: subsystemBQubits[position])
+                let bit = BitUtilities.bit(fullIndex, qubit: subsystemBQubits[position])
                 bIndex |= (bit << position)
             }
 

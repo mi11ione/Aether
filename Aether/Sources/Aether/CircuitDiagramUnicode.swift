@@ -5,10 +5,10 @@
 ///
 /// Converts a ``QuantumCircuit`` into a human-readable Unicode string using box-drawing
 /// characters for gate boundaries, filled circles for control qubits, and double-line
-/// boxes for multi-qubit custom gates. The renderer uses a greedy column-major layout
-/// algorithm that assigns each ``CircuitOperation`` to the earliest available time layer,
-/// producing compact diagrams with precise gate alignment across qubit wires. Optionally
-/// emits ANSI color escape sequences for terminal rendering when ``colorEnabled`` is set.
+/// boxes for multi-qubit custom gates. The renderer organizes operations into time layers
+/// and renders each qubit wire with box-drawing characters, producing compact diagrams
+/// with precise gate alignment across qubit wires. Optionally emits ANSI color escape
+/// sequences for terminal rendering when ``isColorEnabled`` is set.
 ///
 /// **Example:**
 /// ```swift
@@ -26,20 +26,29 @@ public enum CircuitDiagramUnicode: Sendable {
     ///
     /// Produces a multi-line string where each qubit is drawn as a labeled horizontal wire
     /// with gates rendered inline using box-drawing delimiters. Single-qubit gates appear as
-    /// ``┤Label├``, controlled gates show ``●`` on control wires connected by ``│`` to target
-    /// symbols, SWAP gates display ``×`` on both wires, and reset operations render as ``┤0├``.
-    /// When ``colorEnabled`` is true, gate names are cyan, control dots yellow, and reset
+    /// `┤Label├`, controlled gates show `●` on control wires connected by `│` to target
+    /// symbols, SWAP gates display `×` on both wires, and reset operations render as `┤0├`.
+    /// When ``isColorEnabled`` is true, gate names are cyan, control dots yellow, and reset
     /// operations green, with ANSI reset codes after each colored segment.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let circuit = QuantumCircuit(qubits: 2)
+    /// circuit.addGate(.hadamard, qubit: 0)
+    /// circuit.addGate(.cnot, control: 0, target: 1)
+    /// let diagram = CircuitDiagramUnicode.render(circuit)
+    /// print(diagram)
+    /// ```
+    ///
     /// - Parameter circuit: Quantum circuit to render as a diagram
-    /// - Parameter colorEnabled: When true, emit ANSI escape codes for colored output
+    /// - Parameter isColorEnabled: When true, emit ANSI escape codes for colored output
     /// - Returns: Multi-line Unicode string representing the circuit diagram
     /// - Complexity: O(ops x qubits) where ops is the number of circuit operations
     /// - SeeAlso: ``QuantumCircuit``
     @_optimize(speed)
     @_effects(readonly)
     @inlinable
-    public static func render(_ circuit: QuantumCircuit, colorEnabled: Bool = false) -> String {
+    public static func render(_ circuit: QuantumCircuit, isColorEnabled: Bool = false) -> String {
         let qubitCount = circuit.qubits
         let operations = circuit.operations
 
@@ -51,9 +60,7 @@ public enum CircuitDiagramUnicode: Sendable {
         let layerCount = layers.count
 
         var columnWidths = [Int](unsafeUninitializedCapacity: layerCount) { buffer, count in
-            for i in 0 ..< layerCount {
-                buffer[i] = 1
-            }
+            buffer.initialize(repeating: 1)
             count = layerCount
         }
 
@@ -61,13 +68,11 @@ public enum CircuitDiagramUnicode: Sendable {
             for operation in layers[layerIndex] {
                 let label = gateLabel(for: operation)
                 let labelWidth = label.count + 2
-                if labelWidth > columnWidths[layerIndex] {
-                    columnWidths[layerIndex] = labelWidth
-                }
+                columnWidths[layerIndex] = max(columnWidths[layerIndex], labelWidth)
             }
         }
 
-        let labelWidth = qubitLabelWidth(qubitCount: qubitCount)
+        let labelWidth = CircuitDiagramUtilities.qubitLabelWidth(qubitCount)
         let totalQubitLines = 2 * qubitCount - 1
 
         var estimatedSize = totalQubitLines * (labelWidth + layerCount * 8 + 4)
@@ -83,9 +88,7 @@ public enum CircuitDiagramUnicode: Sendable {
                 let label = "q\(qubitIndex)"
                 result += label
                 let padding = labelWidth - label.count
-                for _ in 0 ..< padding {
-                    result += " "
-                }
+                result += String(repeating: " ", count: padding)
                 result += ": "
 
                 var measured = false
@@ -100,7 +103,7 @@ public enum CircuitDiagramUnicode: Sendable {
                     renderWireSegment(
                         role: role,
                         colWidth: colWidth,
-                        colorEnabled: colorEnabled,
+                        isColorEnabled: isColorEnabled,
                         into: &result,
                     )
                     if case .measureGate = role {
@@ -114,9 +117,7 @@ public enum CircuitDiagramUnicode: Sendable {
                     result += "─"
                 }
             } else {
-                for _ in 0 ..< labelWidth + 2 {
-                    result += " "
-                }
+                result += String(repeating: " ", count: labelWidth + 2)
 
                 let upperQubit = qubitIndex
                 let lowerQubit = qubitIndex + 1
@@ -146,6 +147,11 @@ public enum CircuitDiagramUnicode: Sendable {
         return result
     }
 
+    /// Boundary position flags for a qubit within a multi-qubit gate span.
+    @usableFromInline
+    typealias BoundaryFlags = (isTop: Bool, isBottom: Bool, isMiddle: Bool)
+
+    /// Rendering role of a qubit wire within a single time layer.
     @frozen
     @usableFromInline
     enum QubitRole {
@@ -161,45 +167,31 @@ public enum CircuitDiagramUnicode: Sendable {
     }
 
     /// Assign operations to time layers using greedy scheduling.
+    @_effects(readonly)
     @_optimize(speed)
     @usableFromInline
     static func assignLayers(operations: [CircuitOperation], qubitCount: Int) -> [[CircuitOperation]] {
-        var nextAvailable = [Int](unsafeUninitializedCapacity: qubitCount) { buffer, count in
-            for i in 0 ..< qubitCount {
-                buffer[i] = 0
-            }
-            count = qubitCount
+        let assignments = CircuitDiagramUtilities.assignLayers(operations: operations, qubitCount: qubitCount)
+        let layerCount = (assignments.max() ?? -1) + 1
+        var layers = [[CircuitOperation]](repeating: [], count: layerCount)
+        var layerCounts = [Int](unsafeUninitializedCapacity: layerCount) { buffer, count in
+            buffer.initialize(repeating: 0)
+            count = layerCount
         }
-
-        let upperBound = operations.count
-        var layers = [[CircuitOperation]]()
-        layers.reserveCapacity(upperBound)
-
-        for operation in operations {
-            let involvedQubits = operation.qubits
-            var layer = 0
-            for q in involvedQubits {
-                if q < qubitCount, nextAvailable[q] > layer {
-                    layer = nextAvailable[q]
-                }
-            }
-
-            while layers.count <= layer {
-                layers.append([])
-            }
-            layers[layer].append(operation)
-
-            for q in involvedQubits {
-                if q < qubitCount {
-                    nextAvailable[q] = layer + 1
-                }
-            }
+        for i in operations.indices {
+            layerCounts[assignments[i]] += 1
         }
-
+        for i in 0 ..< layerCount {
+            layers[i].reserveCapacity(layerCounts[i])
+        }
+        for i in operations.indices {
+            layers[assignments[i]].append(operations[i])
+        }
         return layers
     }
 
     /// Produce the display label for a gate operation.
+    @_effects(readonly)
     @usableFromInline
     static func gateLabel(for operation: CircuitOperation) -> String {
         switch operation {
@@ -212,27 +204,21 @@ public enum CircuitDiagramUnicode: Sendable {
         }
     }
 
-    /// Produce the display label for a quantum gate.
+    /// Produce the Unicode-specific display label for a quantum gate.
+    @_effects(readonly)
     @usableFromInline
     static func gateLabelForGate(_ gate: QuantumGate, qubits: [Int]) -> String {
-        switch gate {
-        case .identity: "I"
-        case .pauliX: "X"
-        case .pauliY: "Y"
-        case .pauliZ: "Z"
-        case .hadamard: "H"
+        if let shared = CircuitDiagramUtilities.gateLabel(gate) {
+            return shared
+        }
+        return switch gate {
         case let .phase(angle): "P(\(formatAngle(angle)))"
-        case .sGate: "S"
-        case .tGate: "T"
         case let .rotationX(theta): "Rx(\(formatAngle(theta)))"
         case let .rotationY(theta): "Ry(\(formatAngle(theta)))"
         case let .rotationZ(theta): "Rz(\(formatAngle(theta)))"
         case let .u1(lambda): "U1(\(formatAngle(lambda)))"
         case let .u2(phi, lambda): "U2(\(formatAngle(phi)),\(formatAngle(lambda)))"
         case let .u3(theta, phi, lambda): "U3(\(formatAngle(theta)),\(formatAngle(phi)),\(formatAngle(lambda)))"
-        case .sx: "SX"
-        case .sy: "SY"
-        case .customSingleQubit: "U"
         case let .globalPhase(phi): "GP(\(formatAngle(phi)))"
         case .cnot: "X"
         case .cz: "Z"
@@ -242,10 +228,10 @@ public enum CircuitDiagramUnicode: Sendable {
         case let .controlledRotationX(theta): "Rx(\(formatAngle(theta)))"
         case let .controlledRotationY(theta): "Ry(\(formatAngle(theta)))"
         case let .controlledRotationZ(theta): "Rz(\(formatAngle(theta)))"
-        case .swap: "×"
-        case .sqrtSwap: "√SW"
+        case .swap: "\u{00D7}"
+        case .sqrtSwap: "\u{221A}SW"
         case .iswap: "iSW"
-        case .sqrtISwap: "√iSW"
+        case .sqrtISwap: "\u{221A}iSW"
         case .fswap: "fSW"
         case let .givens(theta): "Giv(\(formatAngle(theta)))"
         case let .xx(theta): "XX(\(formatAngle(theta)))"
@@ -253,27 +239,33 @@ public enum CircuitDiagramUnicode: Sendable {
         case let .zz(theta): "ZZ(\(formatAngle(theta)))"
         case .customTwoQubit: "U"
         case .toffoli: "X"
-        case .fredkin: "×"
+        case .fredkin: "\u{00D7}"
         case .ccz: "Z"
         case let .controlled(innerGate, _):
             gateLabelForGate(innerGate, qubits: qubits)
         case .diagonal: "Diag"
         case .multiplexor: "Mux"
-        case .customUnitary: "U"
+        default: gate.description
         }
     }
 
+    /// Epsilon for floating-point angle comparisons in display formatting.
+    @usableFromInline
+    static let angleEpsilon: Double = 1e-12
+
     /// Format a parameter angle value for display.
+    @_effects(readonly)
+    @inline(__always)
     @usableFromInline
     static func formatAngle(_ value: ParameterValue) -> String {
         switch value {
         case let .value(v):
-            if v == .pi { return "π" }
-            if v == -.pi { return "-π" }
-            if v == .pi / 2.0 { return "π/2" }
-            if v == -.pi / 2.0 { return "-π/2" }
-            if v == .pi / 4.0 { return "π/4" }
-            if v == -.pi / 4.0 { return "-π/4" }
+            if abs(v - .pi) < angleEpsilon { return "π" }
+            if abs(v + .pi) < angleEpsilon { return "-π" }
+            if abs(v - .pi / 2.0) < angleEpsilon { return "π/2" }
+            if abs(v + .pi / 2.0) < angleEpsilon { return "-π/2" }
+            if abs(v - .pi / 4.0) < angleEpsilon { return "π/4" }
+            if abs(v + .pi / 4.0) < angleEpsilon { return "-π/4" }
             let rounded = (v * 100.0).rounded() / 100.0
             return String(rounded)
         case let .parameter(p):
@@ -285,29 +277,8 @@ public enum CircuitDiagramUnicode: Sendable {
         }
     }
 
-    /// Compute the width needed for qubit labels.
-    @usableFromInline
-    static func qubitLabelWidth(qubitCount: Int) -> Int {
-        var maxWidth = 2
-        for i in 0 ..< qubitCount {
-            var width = 1
-            var n = i
-            if n == 0 {
-                width = 1
-            } else {
-                width = 0
-                while n > 0 {
-                    width += 1
-                    n /= 10
-                }
-            }
-            let totalWidth = width + 1
-            if totalWidth > maxWidth { maxWidth = totalWidth }
-        }
-        return maxWidth
-    }
-
     /// Determine the role of a qubit within a specific layer.
+    @_effects(readonly)
     @usableFromInline
     static func qubitRole(qubit: Int, layer: [CircuitOperation]) -> QubitRole {
         for operation in layer {
@@ -329,9 +300,9 @@ public enum CircuitDiagramUnicode: Sendable {
     /// Compute qubit boundary position flags from a qubit array.
     @inlinable
     @_effects(readonly)
-    static func qubitBoundaryFlags(qubit: Int, in qubits: [Int]) -> (isTop: Bool, isBottom: Bool, isMiddle: Bool) {
-        let minQ = qubits.min()!
-        let maxQ = qubits.max()!
+    static func qubitBoundaryFlags(qubit: Int, in qubits: [Int]) -> BoundaryFlags {
+        let minQ = qubits.min()! // Safe: qubits guaranteed non-empty for multi-qubit gates
+        let maxQ = qubits.max()! // Safe: qubits guaranteed non-empty for multi-qubit gates
         let isTop = qubit == minQ
         let isBottom = qubit == maxQ
         let isMiddle = !isTop && !isBottom
@@ -339,6 +310,7 @@ public enum CircuitDiagramUnicode: Sendable {
     }
 
     /// Classify the role of a qubit within a gate operation.
+    @_effects(readonly)
     @usableFromInline
     static func classifyGateRole(gate: QuantumGate, qubit: Int, qubits: [Int]) -> QubitRole {
         switch gate {
@@ -404,140 +376,120 @@ public enum CircuitDiagramUnicode: Sendable {
     }
 
     /// Determine if a vertical connector is needed between two adjacent qubit lines.
+    @_effects(readonly)
     @usableFromInline
     static func layerNeedsVerticalBetween(upper: Int, lower: Int, layer: [CircuitOperation]) -> Bool {
         for operation in layer {
             let qubits = operation.qubits
             if qubits.count < 2 { continue }
-            let minQ = qubits.min()!
-            let maxQ = qubits.max()!
+            let minQ = qubits.min()! // Safe: guard above ensures qubits.count >= 2
+            let maxQ = qubits.max()! // Safe: guard above ensures qubits.count >= 2
             if upper >= minQ, lower <= maxQ { return true }
         }
         return false
     }
 
+    /// ANSI escape code for cyan text.
+    private static let ansiCyan = "\u{1b}[36m"
+    /// ANSI escape code for yellow text.
+    private static let ansiYellow = "\u{1b}[33m"
+    /// ANSI escape code for green text.
+    private static let ansiGreen = "\u{1b}[32m"
+    /// ANSI escape code for magenta text.
+    private static let ansiMagenta = "\u{1b}[35m"
+    /// ANSI escape code to reset text formatting.
+    private static let ansiReset = "\u{1b}[0m"
+
     /// Render a wire-line segment for a given qubit role and column width.
+    @_optimize(speed)
     @usableFromInline
     static func renderWireSegment(
         role: QubitRole,
         colWidth: Int,
-        colorEnabled: Bool,
+        isColorEnabled: Bool,
         into result: inout String,
     ) {
-        let ansiCyan = "\u{1b}[36m"
-        let ansiYellow = "\u{1b}[33m"
-        let ansiGreen = "\u{1b}[32m"
-        let ansiReset = "\u{1b}[0m"
-
         switch role {
         case .idle:
-            for _ in 0 ..< colWidth + 2 {
-                result += "─"
-            }
+            result += String(repeating: "─", count: colWidth + 2)
 
         case .classicalIdle:
-            for _ in 0 ..< colWidth + 2 {
-                result += "═"
-            }
+            result += String(repeating: "═", count: colWidth + 2)
 
         case let .singleGate(label):
             result += "┤"
-            if colorEnabled { result += ansiCyan }
+            if isColorEnabled { result += Self.ansiCyan }
             result += label
-            if colorEnabled { result += ansiReset }
+            if isColorEnabled { result += Self.ansiReset }
             result += "├"
-            let used = label.count + 2
-            for _ in used ..< colWidth + 2 {
-                result += "─"
-            }
+            let remaining = colWidth + 2 - label.count - 2
+            if remaining > 0 { result += String(repeating: "─", count: remaining) }
 
         case .controlDot:
             let mid = colWidth / 2
-            for _ in 0 ..< mid {
-                result += "─"
-            }
-            if colorEnabled { result += ansiYellow }
+            result += String(repeating: "─", count: mid)
+            if isColorEnabled { result += Self.ansiYellow }
             result += "●"
-            if colorEnabled { result += ansiReset }
-            for _ in (mid + 1) ..< colWidth + 2 {
-                result += "─"
-            }
+            if isColorEnabled { result += Self.ansiReset }
+            result += String(repeating: "─", count: colWidth + 2 - mid - 1)
 
         case .cnotTarget:
             let mid = colWidth / 2
-            for _ in 0 ..< mid {
-                result += "─"
-            }
-            if colorEnabled { result += ansiCyan }
+            result += String(repeating: "─", count: mid)
+            if isColorEnabled { result += Self.ansiCyan }
             result += "⊕"
-            if colorEnabled { result += ansiReset }
-            for _ in (mid + 1) ..< colWidth + 2 {
-                result += "─"
-            }
+            if isColorEnabled { result += Self.ansiReset }
+            result += String(repeating: "─", count: colWidth + 2 - mid - 1)
 
         case .swapCross:
             let mid = colWidth / 2
-            for _ in 0 ..< mid {
-                result += "─"
-            }
-            if colorEnabled { result += ansiCyan }
+            result += String(repeating: "─", count: mid)
+            if isColorEnabled { result += Self.ansiCyan }
             result += "×"
-            if colorEnabled { result += ansiReset }
-            for _ in (mid + 1) ..< colWidth + 2 {
-                result += "─"
-            }
+            if isColorEnabled { result += Self.ansiReset }
+            result += String(repeating: "─", count: colWidth + 2 - mid - 1)
 
         case .resetGate:
             result += "┤"
-            if colorEnabled { result += ansiGreen }
+            if isColorEnabled { result += ansiGreen }
             result += "0"
-            if colorEnabled { result += ansiReset }
+            if isColorEnabled { result += ansiReset }
             result += "├"
-            let used = 3
-            for _ in used ..< colWidth + 2 {
-                result += "─"
-            }
+            let remaining = colWidth + 2 - 3
+            if remaining > 0 { result += String(repeating: "─", count: remaining) }
 
         case .measureGate:
-            let ansiMagenta = "\u{1b}[35m"
             result += "┤"
-            if colorEnabled { result += ansiMagenta }
+            if isColorEnabled { result += ansiMagenta }
             result += "M"
-            if colorEnabled { result += ansiReset }
+            if isColorEnabled { result += ansiReset }
             result += "├"
-            let mUsed = 3
-            for _ in mUsed ..< colWidth + 2 {
-                result += "─"
-            }
+            let remaining = colWidth + 2 - 3
+            if remaining > 0 { result += String(repeating: "─", count: remaining) }
 
         case let .multiGateSegment(label, isTop, isBottom, isMiddle):
             if isTop {
                 result += "╔"
-                if colorEnabled { result += ansiCyan }
+                if isColorEnabled { result += Self.ansiCyan }
                 result += label
-                if colorEnabled { result += ansiReset }
-                let used = label.count + 1
-                for _ in used ..< colWidth + 1 {
-                    result += "═"
-                }
+                if isColorEnabled { result += Self.ansiReset }
+                let remaining = colWidth + 1 - label.count - 1
+                if remaining > 0 { result += String(repeating: "═", count: remaining) }
                 result += "╗"
             } else if isMiddle {
                 result += "╠"
-                for _ in 1 ..< colWidth + 1 {
-                    result += "═"
-                }
+                result += String(repeating: "═", count: colWidth)
                 result += "╣"
             } else if isBottom {
                 result += "╚"
-                for _ in 1 ..< colWidth + 1 {
-                    result += "═"
-                }
+                result += String(repeating: "═", count: colWidth)
                 result += "╝"
             }
         }
     }
 
     /// Render a spacer line segment between two qubit wire lines.
+    @_optimize(speed)
     @usableFromInline
     static func renderSpacerSegment(
         colWidth: Int,
@@ -546,17 +498,11 @@ public enum CircuitDiagramUnicode: Sendable {
     ) {
         if needsVertical {
             let mid = colWidth / 2
-            for _ in 0 ..< mid {
-                result += " "
-            }
+            result += String(repeating: " ", count: mid)
             result += "│"
-            for _ in (mid + 1) ..< colWidth + 2 {
-                result += " "
-            }
+            result += String(repeating: " ", count: colWidth + 2 - mid - 1)
         } else {
-            for _ in 0 ..< colWidth + 2 {
-                result += " "
-            }
+            result += String(repeating: " ", count: colWidth + 2)
         }
     }
 }

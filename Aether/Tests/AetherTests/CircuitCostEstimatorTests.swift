@@ -4,15 +4,39 @@
 @testable import Aether
 import Testing
 
-/// Test suite for CircuitCostEstimator.estimate function.
+/// Test suite for CircuitCostEstimator.cost(of:) function.
 /// Validates gate count, depth calculation, CNOT-equivalent cost,
 /// and T-count metrics for quantum circuit resource estimation.
-@Suite("CircuitCostEstimator.estimate")
+@Suite("CircuitCostEstimator.cost(of:)")
 struct CircuitCostEstimatorEstimateTests {
+    @Test("Reset operation skipped by cost estimator guard")
+    func resetOperationSkipped() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.reset, to: 0)
+        circuit.append(.pauliX, to: 1)
+        let cost = CircuitCostEstimator.cost(of: circuit)
+
+        #expect(cost.totalGates == 2, "Reset should be skipped, only H and X counted")
+        #expect(cost.depth == 1, "H and X are parallel on different qubits, depth should be 1")
+        #expect(cost.gateCount[.hadamard] == 1, "Should count 1 Hadamard despite reset present")
+    }
+
+    @Test("Measure operation skipped by cost estimator guard")
+    func measureOperationSkipped() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.measure, to: 0)
+        circuit.append(.cnot, to: [0, 1])
+        let cost = CircuitCostEstimator.cost(of: circuit)
+
+        #expect(cost.totalGates == 1, "Measure should be skipped, only CNOT counted")
+        #expect(cost.cnotEquivalent == 1, "Only CNOT contributes to CNOT-equivalent cost")
+    }
+
     @Test("Empty circuit returns zero for all metrics")
     func emptyCircuit() {
         let circuit = QuantumCircuit(qubits: 2)
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.totalGates == 0, "Empty circuit should have 0 total gates")
         #expect(cost.depth == 0, "Empty circuit should have depth 0")
@@ -25,7 +49,7 @@ struct CircuitCostEstimatorEstimateTests {
     func singleHadamard() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.totalGates == 1, "Single gate circuit should have totalGates=1")
         #expect(cost.depth == 1, "Single gate circuit should have depth=1")
@@ -39,7 +63,7 @@ struct CircuitCostEstimatorEstimateTests {
         circuit.append(.tGate, to: 0)
         circuit.append(.tGate, to: 0)
         circuit.append(.hadamard, to: 0)
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.tCount == 2, "Circuit with 2 T-gates should have tCount=2")
         #expect(cost.totalGates == 3, "Circuit should have 3 total gates")
@@ -51,7 +75,7 @@ struct CircuitCostEstimatorEstimateTests {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.totalGates == 2, "Bell circuit has 2 gates")
         #expect(cost.depth == 2, "Bell circuit has depth 2 (H then CNOT)")
@@ -72,7 +96,7 @@ struct CnotEquivalentCostTests {
         circuit.append(.pauliZ, to: 0)
         circuit.append(.hadamard, to: 0)
         circuit.append(.sGate, to: 0)
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.cnotEquivalent == 0, "All single-qubit gates should have CNOT-equivalent 0")
         #expect(cost.totalGates == 5, "Should count all 5 single-qubit gates")
@@ -82,7 +106,7 @@ struct CnotEquivalentCostTests {
     func cnotCostOne() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.cnot, to: [0, 1])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.cnotEquivalent == 1, "CNOT should have CNOT-equivalent cost 1")
     }
@@ -91,7 +115,7 @@ struct CnotEquivalentCostTests {
     func czCostOne() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.cz, to: [0, 1])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.cnotEquivalent == 1, "CZ should have CNOT-equivalent cost 1")
     }
@@ -100,7 +124,7 @@ struct CnotEquivalentCostTests {
     func swapCostThree() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.swap, to: [0, 1])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.cnotEquivalent == 3, "SWAP decomposes to 3 CNOTs")
     }
@@ -109,7 +133,7 @@ struct CnotEquivalentCostTests {
     func toffoliCostSix() {
         var circuit = QuantumCircuit(qubits: 3)
         circuit.append(.toffoli, to: [0, 1, 2])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.cnotEquivalent == 6, "Toffoli decomposes to 6 CNOT-equivalents")
     }
@@ -119,7 +143,7 @@ struct CnotEquivalentCostTests {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.controlledPhase(.pi / 4), to: [0, 1])
         circuit.append(.sqrtSwap, to: [0, 1])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.cnotEquivalent == 4, "controlledPhase(2) + sqrtSwap(2) = 4")
     }
@@ -129,7 +153,7 @@ struct CnotEquivalentCostTests {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.cy, to: [0, 1])
         circuit.append(.ch, to: [0, 1])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.cnotEquivalent == 4, "CY(2) + CH(2) = 4 CNOT-equivalents")
         #expect(cost.totalGates == 2, "Circuit should have 2 gates")
@@ -139,7 +163,7 @@ struct CnotEquivalentCostTests {
     func controlledGateCostTwo() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.controlled(gate: .pauliX, controls: [0]), to: [0, 1])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.cnotEquivalent == 2, "Generic controlled gate should have CNOT-equivalent cost 2")
     }
@@ -156,7 +180,7 @@ struct CircuitDepthTests {
         circuit.append(.hadamard, to: 0)
         circuit.append(.pauliX, to: 1)
         circuit.append(.pauliZ, to: 2)
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.depth == 1, "Independent gates on different qubits execute in parallel")
     }
@@ -167,7 +191,7 @@ struct CircuitDepthTests {
         circuit.append(.hadamard, to: 0)
         circuit.append(.pauliX, to: 0)
         circuit.append(.pauliZ, to: 0)
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.depth == 3, "3 sequential gates on same qubit have depth 3")
     }
@@ -178,7 +202,7 @@ struct CircuitDepthTests {
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
         circuit.append(.pauliX, to: 1)
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.depth == 3, "H(d=1) -> CNOT(d=2) -> X(d=3)")
     }
@@ -189,7 +213,7 @@ struct CircuitDepthTests {
         circuit.append(.hadamard, to: 0)
         circuit.append(.hadamard, to: 1)
         circuit.append(.cnot, to: [0, 1])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.depth == 2, "Parallel H gates (d=1), then CNOT (d=2)")
     }
@@ -207,7 +231,7 @@ struct GateCountTests {
         circuit.append(.hadamard, to: 1)
         circuit.append(.cnot, to: [0, 1])
         circuit.append(.pauliX, to: 0)
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.gateCount[.hadamard] == 2, "Should count 2 Hadamards")
         #expect(cost.gateCount[.cnot] == 1, "Should count 1 CNOT")
@@ -220,7 +244,7 @@ struct GateCountTests {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.rotationZ(.pi / 4), to: 0)
         circuit.append(.rotationZ(.pi / 2), to: 0)
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.totalGates == 2, "Should count both rotation gates")
     }
@@ -237,7 +261,7 @@ struct CircuitCostStructTests {
         circuit.append(.hadamard, to: 0)
         circuit.append(.tGate, to: 0)
         circuit.append(.cnot, to: [0, 1])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         let description = cost.description
         #expect(description.contains("gates: 3"), "Description should show totalGates")
@@ -246,13 +270,44 @@ struct CircuitCostStructTests {
         #expect(description.contains("T-count: 1"), "Description should show T-count")
     }
 
+    @Test("CircuitCost memberwise init stores all fields")
+    func memberwiseInit() {
+        let cost = CircuitCost(
+            gateCount: [.hadamard: 2, .cnot: 1],
+            depth: 3,
+            cnotEquivalent: 1,
+            tCount: 0,
+            totalGates: 3,
+        )
+
+        #expect(cost.gateCount[.hadamard] == 2, "Memberwise init should store hadamard count")
+        #expect(cost.depth == 3, "Memberwise init should store depth")
+        #expect(cost.cnotEquivalent == 1, "Memberwise init should store cnotEquivalent")
+        #expect(cost.tCount == 0, "Memberwise init should store tCount")
+        #expect(cost.totalGates == 3, "Memberwise init should store totalGates")
+    }
+
+    @Test("CircuitCost description matches expected format")
+    func descriptionExactFormat() {
+        let cost = CircuitCost(
+            gateCount: [.pauliX: 1],
+            depth: 2,
+            cnotEquivalent: 5,
+            tCount: 3,
+            totalGates: 7,
+        )
+
+        let expected = "CircuitCost(gates: 7, depth: 2, CNOT-eq: 5, T-count: 3)"
+        #expect(cost.description == expected, "Description should match exact format string")
+    }
+
     @Test("CircuitCost Equatable conformance")
     func equatableConformance() {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
 
-        let cost1 = CircuitCostEstimator.estimate(circuit)
-        let cost2 = CircuitCostEstimator.estimate(circuit)
+        let cost1 = CircuitCostEstimator.cost(of: circuit)
+        let cost2 = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost1 == cost2, "Same circuit should produce equal CircuitCost")
     }
@@ -267,7 +322,7 @@ struct ThreeQubitGateCostTests {
     func fredkinCostSix() {
         var circuit = QuantumCircuit(qubits: 3)
         circuit.append(.fredkin, to: [0, 1, 2])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.cnotEquivalent == 6, "Fredkin decomposes to 6 CNOT-equivalents")
         #expect(cost.depth == 1, "Single Fredkin has depth 1")
@@ -277,7 +332,7 @@ struct ThreeQubitGateCostTests {
     func cczCostSix() {
         var circuit = QuantumCircuit(qubits: 3)
         circuit.append(.ccz, to: [0, 1, 2])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.cnotEquivalent == 6, "CCZ decomposes to 6 CNOT-equivalents")
     }
@@ -286,7 +341,7 @@ struct ThreeQubitGateCostTests {
     func diagonalCostTwo() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.diagonal(phases: [0, .pi / 4, .pi / 2, .pi]), to: [0, 1])
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.cnotEquivalent == 2, "Diagonal gate should have CNOT-equivalent cost 2")
         #expect(cost.totalGates == 1, "Circuit should have 1 diagonal gate")
@@ -297,9 +352,22 @@ struct ThreeQubitGateCostTests {
     func highQubitIndexTriggersResize() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 10)
-        let cost = CircuitCostEstimator.estimate(circuit)
+        let cost = CircuitCostEstimator.cost(of: circuit)
 
         #expect(cost.totalGates == 1, "Should count gate on high qubit index")
         #expect(cost.depth == 1, "Single gate on any qubit should have depth 1")
+    }
+
+    @Test("QubitDepth array resizes when operation targets qubit beyond initial count")
+    func qubitDepthArrayResize() {
+        let operations: [CircuitOperation] = [
+            .gate(.hadamard, qubits: [0]),
+            .gate(.pauliX, qubits: [3]),
+        ]
+        let circuit = QuantumCircuit(qubits: 1, operations: operations)
+        let cost = CircuitCostEstimator.cost(of: circuit)
+
+        #expect(cost.totalGates == 2, "Both gates should be counted after array resize")
+        #expect(cost.depth == 1, "Gates on different qubits should have depth 1")
     }
 }

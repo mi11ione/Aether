@@ -5,10 +5,9 @@ import Foundation
 
 /// Decode ``QuantumCircuit`` from JSON ``Data`` using the schema defined by ``CircuitJSON``.
 ///
-/// Parses JSON data into an internal ``CircuitJSONSchema``, validates the schema version,
-/// reconstructs gate operations with parameters, and returns a ``ParseResult`` containing the
-/// best-effort circuit alongside any diagnostics. Malformed JSON produces an empty circuit with
-/// an error diagnostic rather than throwing.
+/// Parses JSON data, validates the schema version, reconstructs gate operations with parameters,
+/// and returns a ``ParseResult`` containing the best-effort circuit alongside any diagnostics.
+/// Malformed JSON produces an empty circuit with an error diagnostic rather than throwing.
 ///
 /// **Example:**
 /// ```swift
@@ -22,10 +21,12 @@ import Foundation
 /// - SeeAlso: ``ParseResult``
 /// - SeeAlso: ``ParseDiagnostic``
 public enum CircuitJSONDecoder {
+    /// Shared JSON decoder instance.
+    private static let jsonDecoder = JSONDecoder()
     /// Decode a ``QuantumCircuit`` from JSON ``Data``.
     ///
-    /// Attempts to parse the provided data as a ``CircuitJSONSchema``, validate the schema
-    /// version, and convert each operation into the corresponding ``CircuitOperation``. All
+    /// Attempts to parse the provided data, validate the schema version, and convert each
+    /// operation into the corresponding ``CircuitOperation``. All
     /// diagnostics are collected and returned alongside the best-effort circuit, enabling
     /// partial recovery from malformed input.
     ///
@@ -52,12 +53,14 @@ public enum CircuitJSONDecoder {
         }
 
         var diagnostics = decodeDiagnostics
+        diagnostics.reserveCapacity(decodeDiagnostics.count + schema.operations.count)
         validateVersion(schema.version, diagnostics: &diagnostics)
 
         let qubitCount = max(schema.qubitCount, 1)
         var circuit = QuantumCircuit(qubits: qubitCount)
 
-        for (index, operation) in schema.operations.enumerated() {
+        for index in schema.operations.indices {
+            let operation = schema.operations[index]
             convertOperation(
                 operation,
                 index: index,
@@ -70,10 +73,9 @@ public enum CircuitJSONDecoder {
     }
 
     /// Bridge Foundation's throwing JSONDecoder into diagnostic-based result.
-    private static func decodeSchema(from data: Data) -> (CircuitJSONSchema?, [ParseDiagnostic]) {
+    private static func decodeSchema(from data: Data) -> (schema: CircuitJSONSchema?, diagnostics: [ParseDiagnostic]) {
         do {
-            let decoder = JSONDecoder()
-            let schema = try decoder.decode(CircuitJSONSchema.self, from: data)
+            let schema = try jsonDecoder.decode(CircuitJSONSchema.self, from: data)
             return (schema, [])
         } catch {
             let diagnostic = ParseDiagnostic(
@@ -113,18 +115,18 @@ public enum CircuitJSONDecoder {
         diagnostics: inout [ParseDiagnostic],
     ) {
         switch operation.type {
-        case "gate":
+        case OperationSchema.gateType:
             convertGateOperation(operation, index: index, circuit: &circuit, diagnostics: &diagnostics)
-        case "measurement":
+        case OperationSchema.measurementType:
             convertMeasurementOperation(operation, index: index, circuit: &circuit, diagnostics: &diagnostics)
-        case "barrier":
+        case OperationSchema.barrierType:
             diagnostics.append(ParseDiagnostic(
                 line: 1,
                 column: 1,
                 message: "Operation \(index): barrier operations are not represented in the circuit model; skipping",
                 severity: .warning,
             ))
-        case "reset":
+        case OperationSchema.resetType:
             convertResetOperation(operation, index: index, circuit: &circuit, diagnostics: &diagnostics)
         default:
             diagnostics.append(ParseDiagnostic(
@@ -153,13 +155,11 @@ public enum CircuitJSONDecoder {
             return
         }
 
-        if let matrix = operation.matrix, gateName == "custom_unitary" {
+        if let matrix = operation.matrix, gateName == OperationSchema.customUnitaryName {
             convertCustomGateOperation(
                 operation,
-                index: index,
                 matrix: matrix,
                 circuit: &circuit,
-                diagnostics: &diagnostics,
             )
             return
         }
@@ -175,41 +175,45 @@ public enum CircuitJSONDecoder {
         }
 
         if let schemaParameters = operation.parameters, !schemaParameters.isEmpty {
-            gate = applyParameters(to: gate, schemaParameters: schemaParameters, index: index, diagnostics: &diagnostics)
+            gate = applyingParameters(to: gate, schemaParameters: schemaParameters, index: index, diagnostics: &diagnostics)
         }
 
-        if let controls = operation.controls, !controls.isEmpty {
-            gate = .controlled(gate: gate, controls: controls)
-        }
-
-        circuit.append(gate, to: operation.qubits)
+        appendGate(gate, from: operation, to: &circuit)
     }
 
     /// Convert a custom unitary gate from its matrix representation.
     private static func convertCustomGateOperation(
         _ operation: OperationSchema,
-        index _: Int,
         matrix: [[ComplexSchema]],
         circuit: inout QuantumCircuit,
-        diagnostics _: inout [ParseDiagnostic],
     ) {
-        let converted: [[Complex<Double>]] = matrix.map { row in
+        let converted = matrix.map { row in
             row.map { Complex($0.real, $0.imaginary) }
         }
 
         let dimension = converted.count
-        var gate: QuantumGate = if dimension == 2 {
+        let gate: QuantumGate = switch dimension {
+        case 2:
             .customSingleQubit(matrix: converted)
-        } else if dimension == 4 {
+        case 4:
             .customTwoQubit(matrix: converted)
-        } else {
+        default:
             .customUnitary(matrix: converted)
         }
 
+        appendGate(gate, from: operation, to: &circuit)
+    }
+
+    /// Apply controls (if any) and append a gate to the circuit.
+    private static func appendGate(
+        _ gate: QuantumGate,
+        from operation: OperationSchema,
+        to circuit: inout QuantumCircuit,
+    ) {
+        var gate = gate
         if let controls = operation.controls, !controls.isEmpty {
             gate = .controlled(gate: gate, controls: controls)
         }
-
         circuit.append(gate, to: operation.qubits)
     }
 
@@ -254,13 +258,13 @@ public enum CircuitJSONDecoder {
     }
 
     /// Apply decoded parameters to a placeholder gate from GateNameMapping.
-    private static func applyParameters(
+    private static func applyingParameters(
         to gate: QuantumGate,
         schemaParameters: [ParameterSchema],
         index: Int,
         diagnostics: inout [ParseDiagnostic],
     ) -> QuantumGate {
-        let paramValues = schemaParameters.map { reconstructParameterValue($0) }
+        let paramValues = schemaParameters.map(reconstructParameterValue)
 
         switch gate {
         case .rotationX:
@@ -330,14 +334,17 @@ public enum CircuitJSONDecoder {
     }
 
     /// Reconstruct a ParameterValue from a ParameterSchema.
+    @_effects(readonly)
     private static func reconstructParameterValue(_ schema: ParameterSchema) -> ParameterValue {
         switch schema.type {
-        case "value":
+        case ParameterSchema.valueType:
             .value(schema.value ?? 0)
-        case "symbolic":
+        case ParameterSchema.symbolicType:
             .parameter(Parameter(name: schema.name ?? "unnamed"))
-        case "negated":
+        case ParameterSchema.negatedType:
             .negatedParameter(Parameter(name: schema.name ?? "unnamed"))
+        case ParameterSchema.expressionType:
+            .value(schema.value ?? 0)
         default:
             .value(schema.value ?? 0)
         }

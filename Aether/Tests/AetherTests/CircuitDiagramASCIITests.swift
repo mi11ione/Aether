@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Testing
 
 /// Validates CircuitDiagramASCII.render produces correct ASCII diagrams.
@@ -159,6 +159,9 @@ struct CircuitDiagramASCIIMeasurementAndLayoutTests {
     }
 }
 
+/// Validates ASCII rendering of various gate types including
+/// controlled gates, swap variants, and multi-control gates
+/// to ensure correct symbol and connector placement.
 @Suite("CircuitDiagramASCII - Gate Variant Coverage")
 struct CircuitDiagramASCIIGateVariantTests {
     @Test("Reset operation renders ket-zero symbol")
@@ -353,6 +356,9 @@ struct CircuitDiagramASCIIGateVariantTests {
     }
 }
 
+/// Validates that controlled gates wrapping multi-qubit inner gates
+/// render correctly with proper symbol ordering across
+/// control and target qubit wires.
 @Suite("CircuitDiagramASCII - Controlled Inner Gate Multi-Qubit Branch")
 struct CircuitDiagramASCIIControlledInnerMultiQubitTests {
     @Test("Controlled swap gate renders control dot and bracketed label for multi-qubit inner gate")
@@ -367,6 +373,9 @@ struct CircuitDiagramASCIIControlledInnerMultiQubitTests {
     }
 }
 
+/// Validates the ASCII label mapping for every gate type to ensure
+/// each QuantumGate case produces the correct display string
+/// in diagram rendering.
 @Suite("CircuitDiagramASCII - singleGateLabel Switch Coverage")
 struct CircuitDiagramASCIISingleGateLabelTests {
     @Test("Identity gate renders I label")
@@ -538,6 +547,9 @@ struct CircuitDiagramASCIISingleGateLabelTests {
     }
 }
 
+/// Validates that controlled gates with non-monotonic qubit ordering
+/// render correctly with connectors spanning the full
+/// qubit range regardless of index order.
 @Suite("CircuitDiagramASCII - Non-Monotonic Qubit Range")
 struct CircuitDiagramASCIINonMonotonicQubitTests {
     @Test("Controlled gate with reversed qubit order triggers qubitRange min/max scan")

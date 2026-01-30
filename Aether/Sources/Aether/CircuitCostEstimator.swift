@@ -14,7 +14,7 @@
 /// var circuit = QuantumCircuit(qubits: 3)
 /// circuit.append(.hadamard, to: 0)
 /// circuit.append(.cnot, to: [0, 1])
-/// let cost = CircuitCostEstimator.estimate(circuit)
+/// let cost = CircuitCostEstimator.cost(of: circuit)
 /// print(cost.totalGates, cost.depth, cost.cnotEquivalent)
 /// ```
 ///
@@ -29,7 +29,7 @@ public enum CircuitCostEstimator {
     /// **Example:**
     /// ```swift
     /// let circuit = QuantumCircuit.grover(qubits: 3, target: 5)
-    /// let cost = CircuitCostEstimator.estimate(circuit)
+    /// let cost = CircuitCostEstimator.cost(of: circuit)
     /// print("Total gates: \(cost.totalGates)")
     /// print("Circuit depth: \(cost.depth)")
     /// print("CNOT-equivalent: \(cost.cnotEquivalent)")
@@ -39,14 +39,20 @@ public enum CircuitCostEstimator {
     /// - Parameter circuit: Quantum circuit to analyze
     /// - Returns: Complete cost analysis including gate counts, depth, CNOT-equivalent, and T-count
     /// - Complexity: O(n) where n = operation count
+    @inlinable
     @_optimize(speed)
     @_effects(readonly)
-    public static func estimate(_ circuit: QuantumCircuit) -> CircuitCost {
+    public static func cost(of circuit: QuantumCircuit) -> CircuitCost {
         var gateCount: [QuantumGate: Int] = [:]
+        gateCount.reserveCapacity(min(circuit.operations.count, 32))
         var totalGates = 0
         var cnotEquivalent = 0
         var tCount = 0
-        var qubitDepth = [Int](repeating: 0, count: max(circuit.qubits, 1))
+        var qubitDepth = [Int](unsafeUninitializedCapacity: max(circuit.qubits, 1)) { buffer, initializedCount in
+            buffer.initialize(repeating: 0)
+            initializedCount = max(circuit.qubits, 1)
+        }
+        var depth = 0
 
         for operation in circuit.operations {
             guard let gate = operation.gate else { continue }
@@ -60,25 +66,29 @@ public enum CircuitCostEstimator {
                 tCount += 1
             }
 
+            let targetQubits = operation.qubits
             var maxDepth = 0
-            for qubit in operation.qubits {
+            for qubit in targetQubits {
                 if qubit < qubitDepth.count {
                     maxDepth = max(maxDepth, qubitDepth[qubit])
                 } else {
                     let newSize = qubit + 1
-                    qubitDepth.append(contentsOf: [Int](repeating: 0, count: newSize - qubitDepth.count))
+                    let oldCount = qubitDepth.count
+                    qubitDepth.reserveCapacity(newSize)
+                    for _ in oldCount ..< newSize {
+                        qubitDepth.append(0)
+                    }
                 }
             }
 
             let newDepth = maxDepth + 1
-            for qubit in operation.qubits {
+            depth = max(depth, newDepth)
+            for qubit in targetQubits {
                 if qubit < qubitDepth.count {
                     qubitDepth[qubit] = newDepth
                 }
             }
         }
-
-        let depth = qubitDepth.max() ?? 0
 
         return CircuitCost(
             gateCount: gateCount,
@@ -90,9 +100,11 @@ public enum CircuitCostEstimator {
     }
 
     /// Returns the CNOT-equivalent cost for a given gate type.
+    @inline(__always)
+    @usableFromInline
     @_optimize(speed)
     @_effects(readonly)
-    private static func cnotEquivalentCost(_ gate: QuantumGate) -> Int {
+    static func cnotEquivalentCost(_ gate: QuantumGate) -> Int {
         switch gate {
         case .identity, .pauliX, .pauliY, .pauliZ, .hadamard, .phase, .sGate, .tGate,
              .rotationX, .rotationY, .rotationZ, .u1, .u2, .u3, .sx, .sy,
@@ -123,7 +135,7 @@ public enum CircuitCostEstimator {
 ///
 /// **Example:**
 /// ```swift
-/// let cost = CircuitCostEstimator.estimate(circuit)
+/// let cost = CircuitCostEstimator.cost(of: circuit)
 /// print(cost)  // "CircuitCost(gates: 10, depth: 5, CNOT-eq: 4, T-count: 2)"
 /// ```
 ///
@@ -143,6 +155,15 @@ public enum CircuitCostEstimator {
 
     /// Total number of gates in the circuit.
     public let totalGates: Int
+
+    /// Creates a cost analysis from precomputed metrics.
+    public init(gateCount: [QuantumGate: Int], depth: Int, cnotEquivalent: Int, tCount: Int, totalGates: Int) {
+        self.gateCount = gateCount
+        self.depth = depth
+        self.cnotEquivalent = cnotEquivalent
+        self.tCount = tCount
+        self.totalGates = totalGates
+    }
 
     /// Human-readable summary of circuit cost metrics.
     @inlinable

@@ -154,14 +154,14 @@ struct AmplitudeEstimationResultTests {
     }
 }
 
-/// Test suite for AEConfiguration initialization and validation.
+/// Test suite for AmplitudeEstimationConfiguration initialization and validation.
 /// Validates precision qubit bounds, iterative flag handling,
 /// and precondition enforcement for invalid inputs.
-@Suite("AEConfiguration Initialization")
-struct AEConfigurationTests {
+@Suite("AmplitudeEstimationConfiguration Initialization")
+struct AmplitudeEstimationConfigurationTests {
     @Test("Configuration with valid precision qubits")
     func validPrecisionQubits() {
-        let config = AEConfiguration(precisionQubits: 6)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 6)
 
         #expect(config.precisionQubits == 6, "Precision qubits should be 6")
         #expect(config.useIterative == false, "Default useIterative should be false")
@@ -169,21 +169,21 @@ struct AEConfigurationTests {
 
     @Test("Configuration with minimum precision qubits")
     func minimumPrecisionQubits() {
-        let config = AEConfiguration(precisionQubits: 1)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 1)
 
         #expect(config.precisionQubits == 1, "Minimum precision qubits should be 1")
     }
 
     @Test("Configuration with maximum precision qubits")
     func maximumPrecisionQubits() {
-        let config = AEConfiguration(precisionQubits: 15)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 15)
 
         #expect(config.precisionQubits == 15, "Maximum precision qubits should be 15")
     }
 
     @Test("Configuration with useIterative true")
     func useIterativeTrue() {
-        let config = AEConfiguration(precisionQubits: 8, useIterative: true)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 8, useIterative: true)
 
         #expect(config.precisionQubits == 8, "Precision qubits should be 8")
         #expect(config.useIterative == true, "useIterative should be true")
@@ -191,7 +191,7 @@ struct AEConfigurationTests {
 
     @Test("Configuration with useIterative false explicit")
     func useIterativeFalseExplicit() {
-        let config = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
 
         #expect(config.precisionQubits == 4, "Precision qubits should be 4")
         #expect(config.useIterative == false, "useIterative should be false")
@@ -199,8 +199,8 @@ struct AEConfigurationTests {
 
     @Test("Configuration stores precision independently of iterative flag")
     func precisionIndependentOfIterative() {
-        let standardConfig = AEConfiguration(precisionQubits: 10, useIterative: false)
-        let iterativeConfig = AEConfiguration(precisionQubits: 10, useIterative: true)
+        let standardConfig = AmplitudeEstimationConfiguration(precisionQubits: 10, useIterative: false)
+        let iterativeConfig = AmplitudeEstimationConfiguration(precisionQubits: 10, useIterative: true)
 
         #expect(standardConfig.precisionQubits == iterativeConfig.precisionQubits, "Precision should be same regardless of iterative flag")
     }
@@ -327,7 +327,7 @@ struct AmplitudeEstimationStandardQPETests {
     @Test("2 qubits, 1 marked state yields amplitude ~0.5")
     func twoQubitsOneMarkedState() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0])
-        let config = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -341,7 +341,7 @@ struct AmplitudeEstimationStandardQPETests {
     @Test("3 qubits, 2 marked states estimation")
     func threeQubitsTwoMarkedStates() async {
         let oracle = CountingOracle(qubits: 3, markedStates: [0, 1])
-        let config = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -353,7 +353,7 @@ struct AmplitudeEstimationStandardQPETests {
     @Test("Estimated probability in [0, 1]")
     func estimatedProbabilityInRange() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [1, 2])
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -365,7 +365,7 @@ struct AmplitudeEstimationStandardQPETests {
     @Test("Estimated amplitude in [0, 1]")
     func estimatedAmplitudeInRange() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0])
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -377,7 +377,7 @@ struct AmplitudeEstimationStandardQPETests {
     @Test("Confidence interval bounds probability estimate")
     func confidenceIntervalBoundsEstimate() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [1])
-        let config = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -389,7 +389,7 @@ struct AmplitudeEstimationStandardQPETests {
     @Test("Oracle calls positive")
     func oracleCallsPositive() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0])
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -400,7 +400,7 @@ struct AmplitudeEstimationStandardQPETests {
     @Test("Classical equivalent samples > oracle calls (quadratic speedup)")
     func classicalSamplesGreaterThanOracleCalls() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [1])
-        let config = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -411,8 +411,8 @@ struct AmplitudeEstimationStandardQPETests {
     @Test("More precision qubits yield more oracle calls")
     func morePrecisionMoreOracleCalls() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0])
-        let configLow = AEConfiguration(precisionQubits: 2, useIterative: false)
-        let configHigh = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let configLow = AmplitudeEstimationConfiguration(precisionQubits: 2, useIterative: false)
+        let configHigh = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
 
         let aeLow = AmplitudeEstimation(oracle: oracle, configuration: configLow)
         let aeHigh = AmplitudeEstimation(oracle: oracle, configuration: configHigh)
@@ -426,7 +426,7 @@ struct AmplitudeEstimationStandardQPETests {
     @Test("Confidence interval lower bound non-negative")
     func confidenceIntervalLowerNonNegative() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0])
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -437,7 +437,7 @@ struct AmplitudeEstimationStandardQPETests {
     @Test("Confidence interval upper bound at most 1")
     func confidenceIntervalUpperAtMostOne() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0, 1, 2, 3])
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -454,7 +454,7 @@ struct AmplitudeEstimationIterativePETests {
     @Test("Iterative PE produces valid probability")
     func iterativePEValidProbability() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [1])
-        let config = AEConfiguration(precisionQubits: 4, useIterative: true)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: true)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -466,7 +466,7 @@ struct AmplitudeEstimationIterativePETests {
     @Test("Iterative PE produces valid amplitude")
     func iterativePEValidAmplitude() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0])
-        let config = AEConfiguration(precisionQubits: 3, useIterative: true)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: true)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -478,7 +478,7 @@ struct AmplitudeEstimationIterativePETests {
     @Test("Iterative PE confidence interval valid")
     func iterativePEConfidenceIntervalValid() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [1, 2])
-        let config = AEConfiguration(precisionQubits: 4, useIterative: true)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: true)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -491,7 +491,7 @@ struct AmplitudeEstimationIterativePETests {
     @Test("Iterative PE oracle calls positive")
     func iterativePEOracleCallsPositive() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0])
-        let config = AEConfiguration(precisionQubits: 3, useIterative: true)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: true)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -502,7 +502,7 @@ struct AmplitudeEstimationIterativePETests {
     @Test("Iterative PE demonstrates quadratic speedup")
     func iterativePEQuadraticSpeedup() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [1])
-        let config = AEConfiguration(precisionQubits: 4, useIterative: true)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: true)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -531,7 +531,7 @@ struct AmplitudeEstimationProgressTests {
     @Test("Progress callback receives messages")
     func progressCallbackReceivesMessages() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0])
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let counter = MessageCounter()
@@ -547,7 +547,7 @@ struct AmplitudeEstimationProgressTests {
     @Test("Progress callback receives messages in iterative mode")
     func progressCallbackIterativeMode() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [1])
-        let config = AEConfiguration(precisionQubits: 3, useIterative: true)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: true)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let counter = MessageCounter()
@@ -563,7 +563,7 @@ struct AmplitudeEstimationProgressTests {
     @Test("Result valid without progress callback")
     func resultValidWithoutProgressCallback() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0])
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -582,9 +582,9 @@ struct AmplitudeEstimationComplexityTests {
     func oracleCallsScaleWithPrecision() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0])
 
-        let config2 = AEConfiguration(precisionQubits: 2, useIterative: false)
-        let config3 = AEConfiguration(precisionQubits: 3, useIterative: false)
-        let config4 = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let config2 = AmplitudeEstimationConfiguration(precisionQubits: 2, useIterative: false)
+        let config3 = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
+        let config4 = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
 
         let ae2 = AmplitudeEstimation(oracle: oracle, configuration: config2)
         let ae3 = AmplitudeEstimation(oracle: oracle, configuration: config3)
@@ -602,8 +602,8 @@ struct AmplitudeEstimationComplexityTests {
     func classicalSamplesScaleQuadratically() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [1])
 
-        let config3 = AEConfiguration(precisionQubits: 3, useIterative: false)
-        let config4 = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let config3 = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
+        let config4 = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
 
         let ae3 = AmplitudeEstimation(oracle: oracle, configuration: config3)
         let ae4 = AmplitudeEstimation(oracle: oracle, configuration: config4)
@@ -620,8 +620,8 @@ struct AmplitudeEstimationComplexityTests {
     func speedupRatioIncreasesWithPrecision() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0])
 
-        let configLow = AEConfiguration(precisionQubits: 2, useIterative: false)
-        let configHigh = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let configLow = AmplitudeEstimationConfiguration(precisionQubits: 2, useIterative: false)
+        let configHigh = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
 
         let aeLow = AmplitudeEstimation(oracle: oracle, configuration: configLow)
         let aeHigh = AmplitudeEstimation(oracle: oracle, configuration: configHigh)
@@ -644,7 +644,7 @@ struct AmplitudeEstimationEdgeCasesTests {
     @Test("All states marked yields valid probability")
     func allStatesMarkedProbabilityNearOne() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0, 1, 2, 3])
-        let config = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -656,7 +656,7 @@ struct AmplitudeEstimationEdgeCasesTests {
     @Test("No states marked yields probability near 0")
     func noStatesMarkedProbabilityNearZero() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [])
-        let config = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -668,7 +668,7 @@ struct AmplitudeEstimationEdgeCasesTests {
     @Test("Single qubit oracle")
     func singleQubitOracle() async {
         let oracle = CountingOracle(qubits: 1, markedStates: [0])
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -680,7 +680,7 @@ struct AmplitudeEstimationEdgeCasesTests {
     @Test("Half states marked yields valid probability")
     func halfStatesMarkedProbabilityNearHalf() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0, 1])
-        let config = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -692,7 +692,7 @@ struct AmplitudeEstimationEdgeCasesTests {
     @Test("Minimum precision qubits")
     func minimumPrecisionQubits() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [1])
-        let config = AEConfiguration(precisionQubits: 1, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 1, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -711,7 +711,7 @@ struct AmplitudeEstimationRelationshipTests {
     @Test("Amplitude squared approximately equals probability")
     func amplitudeSquaredApproximatelyEqualsProbability() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [0])
-        let config = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -725,7 +725,7 @@ struct AmplitudeEstimationRelationshipTests {
     @Test("Amplitude is square root of probability")
     func amplitudeIsSquareRootOfProbability() async {
         let oracle = CountingOracle(qubits: 2, markedStates: [1, 2])
-        let config = AEConfiguration(precisionQubits: 4, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
@@ -1087,145 +1087,145 @@ struct AmplitudeEstimationControlledGateTests {
     @Test("Controlled PauliY gate produces valid result")
     func controlledPauliYProducesValidResult() async {
         let oracle = PauliYOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Controlled Hadamard probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Controlled Hadamard probability should not exceed 1")
     }
 
     @Test("Controlled RotationZ gate produces valid result")
     func controlledRotationZProducesValidResult() async {
         let oracle = RotationZOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Controlled RotationZ probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Controlled RotationZ probability should not exceed 1")
     }
 
     @Test("Controlled RotationY gate produces valid result")
     func controlledRotationYProducesValidResult() async {
         let oracle = RotationYOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Controlled RotationY probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Controlled RotationY probability should not exceed 1")
     }
 
     @Test("Controlled RotationX gate produces valid result")
     func controlledRotationXProducesValidResult() async {
         let oracle = RotationXOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Controlled RotationX probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Controlled RotationX probability should not exceed 1")
     }
 
     @Test("Controlled CNOT produces Toffoli")
     func controlledCNOTProducesToffoli() async {
         let oracle = CNOTOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Controlled CNOT (Toffoli) probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Controlled CNOT (Toffoli) probability should not exceed 1")
     }
 
     @Test("Controlled Phase gate produces valid result")
     func controlledPhaseProducesValidResult() async {
         let oracle = PhaseOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Controlled Phase probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Controlled Phase probability should not exceed 1")
     }
 
     @Test("Controlled S gate produces valid result")
     func controlledSGateProducesValidResult() async {
         let oracle = SGateOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Controlled S gate probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Controlled S gate probability should not exceed 1")
     }
 
     @Test("Controlled T gate produces valid result")
     func controlledTGateProducesValidResult() async {
         let oracle = TGateOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Controlled T gate probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Controlled T gate probability should not exceed 1")
     }
 
     @Test("Controlled controlled-phase gate produces valid result")
     func controlledControlledPhaseProducesValidResult() async {
         let oracle = ControlledPhaseOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Controlled controlled-phase probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Controlled controlled-phase probability should not exceed 1")
     }
 
     @Test("Controlled Toffoli gate produces valid result")
     func controlledToffoliProducesValidResult() async {
         let oracle = ToffoliOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Controlled Toffoli probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Controlled Toffoli probability should not exceed 1")
     }
 
     @Test("Default gate handling produces valid result")
     func defaultGateHandlingProducesValidResult() async {
         let oracle = IdentityOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Default gate handling probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Default gate handling probability should not exceed 1")
     }
 
     @Test("Single control multi-controlled X uses CNOT")
     func singleControlMultiControlledXUsesCNOT() async {
         let oracle = SingleControlOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Single control multi-controlled X probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Single control multi-controlled X probability should not exceed 1")
     }
 }
 
@@ -1237,60 +1237,60 @@ struct AmplitudeEstimationSymbolicParameterTests {
     @Test("Symbolic RotationZ uses default 0.0 half angle")
     func symbolicRotationZDefaultHalfAngle() async {
         let oracle = SymbolicRotationZOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Symbolic RotationZ probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Symbolic RotationZ probability should not exceed 1")
     }
 
     @Test("Symbolic RotationY uses default 0.0 half angle")
     func symbolicRotationYDefaultHalfAngle() async {
         let oracle = SymbolicRotationYOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Symbolic RotationY probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Symbolic RotationY probability should not exceed 1")
     }
 
     @Test("Symbolic RotationX uses default 0.0 half angle")
     func symbolicRotationXDefaultHalfAngle() async {
         let oracle = SymbolicRotationXOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Symbolic RotationX probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Symbolic RotationX probability should not exceed 1")
     }
 
     @Test("Symbolic Phase uses default 0.0 half angle")
     func symbolicPhaseDefaultHalfAngle() async {
         let oracle = SymbolicPhaseOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Symbolic Phase probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Symbolic Phase probability should not exceed 1")
     }
 
     @Test("Symbolic ControlledPhase uses default 0.0 angle")
     func symbolicControlledPhaseDefaultAngle() async {
         let oracle = SymbolicControlledPhaseOracle()
-        let config = AEConfiguration(precisionQubits: 3, useIterative: false)
+        let config = AmplitudeEstimationConfiguration(precisionQubits: 3, useIterative: false)
         let ae = AmplitudeEstimation(oracle: oracle, configuration: config)
 
         let result = await ae.run()
 
-        #expect(result.estimatedProbability >= 0)
-        #expect(result.estimatedProbability <= 1)
+        #expect(result.estimatedProbability >= 0, "Symbolic ControlledPhase probability should be non-negative")
+        #expect(result.estimatedProbability <= 1, "Symbolic ControlledPhase probability should not exceed 1")
     }
 }

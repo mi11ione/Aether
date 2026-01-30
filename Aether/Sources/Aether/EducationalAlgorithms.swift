@@ -305,7 +305,7 @@ public extension QuantumState {
 
         return [Int](unsafeUninitializedCapacity: qubits.count) { buffer, count in
             for i in 0 ..< qubits.count {
-                buffer[i] = BitUtilities.getBit(maxIndex, qubit: qubits[i])
+                buffer[i] = BitUtilities.bit(maxIndex, qubit: qubits[i])
             }
             count = qubits.count
         }
@@ -333,7 +333,7 @@ public extension QuantumState {
         let (maxIndex, _) = mostProbableState()
 
         for qubit in qubits {
-            if BitUtilities.getBit(maxIndex, qubit: qubit) != 0 { return false }
+            if BitUtilities.bit(maxIndex, qubit: qubit) != 0 { return false }
         }
         return true
     }

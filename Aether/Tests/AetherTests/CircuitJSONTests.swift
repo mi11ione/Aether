@@ -243,6 +243,18 @@ struct CircuitJSONEncoderCoverageTests {
         #expect(result.circuit.count == 1, "Round-trip of custom unitary gate should preserve operation count")
     }
 
+    @Test("Encode expression parameter produces expression type in JSON")
+    func encodeExpressionParameter() {
+        var circuit = QuantumCircuit(qubits: 1)
+        let alpha = Parameter(name: "alpha")
+        let expr = ParameterExpression(alpha) + ParameterExpression(2.0)
+        circuit.append(.rotationX(.expression(expr)), to: 0)
+        let data = CircuitJSONEncoder.encode(circuit)
+        let json = String(data: data, encoding: .utf8)!
+        #expect(json.contains("expression"), "Expression parameter should encode with type expression")
+        #expect(json.contains("alpha"), "Expression parameter name alpha should appear in JSON")
+    }
+
     @Test("Encode controlled gate preserves controls in JSON")
     func encodeControlledGate() {
         var circuit = QuantumCircuit(qubits: 3)
