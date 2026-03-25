@@ -31,7 +31,7 @@ struct DMRGInitializationTests {
         let config = DMRGConfiguration(
             maxSweeps: 10,
             convergenceThreshold: 1e-6,
-            subspaceExpansion: false,
+            isSubspaceExpansionEnabled: false,
         )
         let dmrg = DMRG(hamiltonian: mpo, maxBondDimension: 4, configuration: config)
 
@@ -50,7 +50,7 @@ struct DMRGInitializationTests {
         let config = DMRGConfiguration(
             maxSweeps: 5,
             convergenceThreshold: 1e-4,
-            subspaceExpansion: true,
+            isSubspaceExpansionEnabled: true,
             noiseStrength: 1e-4,
         )
         let dmrg = DMRG(hamiltonian: mpo, maxBondDimension: 8, configuration: config)
@@ -134,7 +134,7 @@ struct DMRGGroundStateTests {
         let config = DMRGConfiguration(
             maxSweeps: 10,
             convergenceThreshold: 1e-5,
-            subspaceExpansion: true,
+            isSubspaceExpansionEnabled: true,
             noiseStrength: 1e-3,
         )
         let dmrg = DMRG(hamiltonian: mpo, maxBondDimension: 8, configuration: config)
@@ -143,6 +143,32 @@ struct DMRGGroundStateTests {
 
         #expect(result.groundStateEnergy < 0.0, "Ground state with subspace expansion should have negative energy")
         #expect(result.sweeps <= config.maxSweeps, "Sweeps should not exceed max sweeps")
+    }
+
+    @Test("Subspace expansion triggers truncation noise injection")
+    func isSubspaceExpansionEnabledTruncation() async {
+        let hamiltonian = Observable(terms: [
+            (-1.0, PauliString(.z(0), .z(1))),
+            (-1.0, PauliString(.z(1), .z(2))),
+            (-1.0, PauliString(.z(2), .z(3))),
+            (-0.5, PauliString(.x(0))),
+            (-0.5, PauliString(.x(1))),
+            (-0.5, PauliString(.x(2))),
+            (-0.5, PauliString(.x(3))),
+        ])
+        let mpo = MatrixProductOperator(observable: hamiltonian)
+        let config = DMRGConfiguration(
+            maxSweeps: 5,
+            convergenceThreshold: 1e-12,
+            isSubspaceExpansionEnabled: true,
+            noiseStrength: 1e-3,
+        )
+        let dmrg = DMRG(hamiltonian: mpo, maxBondDimension: 2, configuration: config)
+
+        let result = await dmrg.findGroundState(from: nil)
+
+        #expect(result.groundStateEnergy < 0.0, "Ground state energy should be negative")
+        #expect(result.sweeps > 0, "Should complete at least one sweep")
     }
 
     @Test("Find ground state of four-site transverse field Ising model")
@@ -165,8 +191,6 @@ struct DMRGGroundStateTests {
 
         let result = await dmrg.findGroundState(from: nil)
 
-        // Ground state energy should be negative and reasonably converged
-        // For 4-site TFIM with J=1, h=0.5, use a tolerance appropriate for limited sweeps
         #expect(result.groundStateEnergy < 0.0, "Ground state energy should be negative")
         #expect(result.groundState.qubits == 4, "Ground state MPS should have 4 qubits")
         #expect(result.convergenceHistory.count > 0, "Convergence history should not be empty")
@@ -195,9 +219,6 @@ struct DMRGGroundStateTests {
 
     @Test("Energy converges for simple diagonal Hamiltonian")
     func energyConvergesForDiagonalHamiltonian() async {
-        // Diagonal Hamiltonians (pure Z terms) are challenging for DMRG since
-        // there's no entanglement structure. Test that DMRG produces a finite
-        // result without requiring exact convergence to the analytical value.
         let hamiltonian = Observable(terms: [
             (1.0, PauliString(.z(0))),
             (1.0, PauliString(.z(1))),
@@ -350,7 +371,7 @@ struct DMRGProgressTests {
 
     @Test("DMRGProgress struct initialization")
     func dmrgProgressStructInitialization() {
-        let progress = DMRG.DMRGProgress(sweep: 5, energy: -2.5, maxTruncationError: 1e-8)
+        let progress = DMRG.Progress(sweep: 5, energy: -2.5, maxTruncationError: 1e-8)
 
         #expect(progress.sweep == 5, "Sweep should be set correctly")
         #expect(abs(progress.energy + 2.5) < 1e-10, "Energy should be set correctly")
@@ -360,7 +381,7 @@ struct DMRGProgressTests {
     @Test("DMRGResult struct initialization")
     func dmrgResultStructInitialization() {
         let mps = MatrixProductState(qubits: 2, maxBondDimension: 4)
-        let result = DMRG.DMRGResult(
+        let result = DMRG.Result(
             groundStateEnergy: -1.5,
             groundState: mps,
             sweeps: 10,

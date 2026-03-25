@@ -50,6 +50,13 @@ public struct QubitNoiseParameters: Sendable, Equatable {
 
     /// Create qubit noise parameters.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let params = QubitNoiseParameters(
+    ///     t1: 100_000, t2: 80_000, singleQubitErrorRate: 0.001,
+    ///     readoutError0Given1: 0.02, readoutError1Given0: 0.01)
+    /// ```
+    ///
     /// - Parameters:
     ///   - t1: T₁ relaxation time in nanoseconds
     ///   - t2: T₂ coherence time in nanoseconds (must be ≤ 2*T₁)
@@ -125,10 +132,11 @@ public struct QubitNoiseParameters: Sendable, Equatable {
     @_effects(readonly)
     @inlinable
     public func phaseDampingGamma(gateTime: Double) -> Double {
-        let tPhi = 1.0 / (1.0 / t2 - 1.0 / (2.0 * t1))
-        if tPhi <= 0 || !tPhi.isFinite {
+        let denom = 2.0 * t1 - t2
+        if denom <= 0 {
             return 0
         }
+        let tPhi = (2.0 * t1 * t2) / denom
         return 1.0 - exp(-gateTime / tPhi)
     }
 
@@ -191,7 +199,8 @@ public struct EdgeNoiseParameters: Sendable, Equatable, Hashable {
     /// **Example:**
     /// ```swift
     /// let edge = EdgeNoiseParameters(qubit1: 3, qubit2: 1, twoQubitErrorRate: 0.01)
-    /// // edge.qubit1 == 1, edge.qubit2 == 3 (sorted)
+    /// let q1 = edge.qubit1  // 1 (sorted)
+    /// let q2 = edge.qubit2  // 3 (sorted)
     /// ```
     ///
     /// - Parameters:
@@ -213,17 +222,6 @@ public struct EdgeNoiseParameters: Sendable, Equatable, Hashable {
         self.gateTime = gateTime
     }
 
-    /// Canonical edge identifier as sorted qubit pair (qubit1, qubit2).
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let edge = EdgeNoiseParameters(qubit1: 0, qubit2: 1, twoQubitErrorRate: 0.01)
-    /// let key = edge.edgeKey  // (0, 1)
-    /// ```
-    ///
-    /// - Complexity: O(1)
-    @inlinable
-    public var edgeKey: (Int, Int) { (qubit1, qubit2) }
 }
 
 // MARK: - Hardware Noise Profile
@@ -236,17 +234,8 @@ public struct EdgeNoiseParameters: Sendable, Equatable, Hashable {
 ///
 /// **Example:**
 /// ```swift
-/// // Create profile for 5-qubit device
-/// let profile = HardwareNoiseProfile(
-///     name: "Custom Device",
-///     qubitCount: 5,
-///     qubitParameters: qubitParams,
-///     edges: edges,
-///     gateTimings: GateTimingModel.ibmDefault
-/// )
-///
-/// // Or use preset
-/// let ibmProfile = HardwareNoiseProfile.ibmManila
+/// let profile = HardwareNoiseProfile.ibmManila
+/// let model = profile.noiseModel()
 /// ```
 ///
 /// - SeeAlso: ``NoiseModel`` for applying profile to simulation
@@ -270,6 +259,21 @@ public struct HardwareNoiseProfile: Sendable {
 
     /// Connectivity graph as adjacency set.
     public let connectivity: Set<EdgeKey>
+
+    /// O(1) edge parameter lookup by qubit pair.
+    private let edgeLookup: [EdgeKey: EdgeNoiseParameters]
+
+    /// Cached average two-qubit error rate.
+    private let cachedAverageTwoQubitError: Double
+
+    /// Cached average single-qubit error rate.
+    private let cachedAverageSingleQubitError: Double
+
+    /// Cached average T1.
+    private let cachedAverageT1: Double
+
+    /// Cached average T2.
+    private let cachedAverageT2: Double
 
     /// Canonical edge identifier for O(1) connectivity lookup.
     ///
@@ -302,9 +306,10 @@ public struct HardwareNoiseProfile: Sendable {
     ///
     /// **Example:**
     /// ```swift
-    /// let profile = HardwareNoiseProfile(
-    ///     name: "Test Device", qubitCount: 2,
-    ///     qubitParameters: [qubit0Params, qubit1Params],
+    /// let qp = QubitNoiseParameters(t1: 100_000, t2: 80_000,
+    ///     singleQubitErrorRate: 0.001, readoutError0Given1: 0.02, readoutError1Given0: 0.01)
+    /// let profile = HardwareNoiseProfile(name: "Device", qubitCount: 2,
+    ///     qubitParameters: [qp, qp],
     ///     edges: [EdgeNoiseParameters(qubit1: 0, qubit2: 1, twoQubitErrorRate: 0.01)])
     /// ```
     ///
@@ -333,10 +338,30 @@ public struct HardwareNoiseProfile: Sendable {
 
         var conn = Set<EdgeKey>()
         conn.reserveCapacity(edges.count)
+        var lookup = [EdgeKey: EdgeNoiseParameters](minimumCapacity: edges.count)
+        var twoQubitErrorSum = 0.0
         for edge in edges {
-            conn.insert(EdgeKey(edge.qubit1, edge.qubit2))
+            let key = EdgeKey(edge.qubit1, edge.qubit2)
+            conn.insert(key)
+            lookup[key] = edge
+            twoQubitErrorSum += edge.twoQubitErrorRate
         }
         connectivity = conn
+        edgeLookup = lookup
+        cachedAverageTwoQubitError = edges.isEmpty ? 0 : twoQubitErrorSum / Double(edges.count)
+
+        var sumSingleError = 0.0
+        var sumT1 = 0.0
+        var sumT2 = 0.0
+        for param in qubitParameters {
+            sumSingleError += param.singleQubitErrorRate
+            sumT1 += param.t1
+            sumT2 += param.t2
+        }
+        let invQ = qubitParameters.isEmpty ? 0.0 : 1.0 / Double(qubitCount)
+        cachedAverageSingleQubitError = sumSingleError * invQ
+        cachedAverageT1 = sumT1 * invQ
+        cachedAverageT2 = sumT2 * invQ
     }
 
     /// Create profile with uniform parameters for all qubits.
@@ -345,10 +370,11 @@ public struct HardwareNoiseProfile: Sendable {
     ///
     /// **Example:**
     /// ```swift
-    /// let uniformParams = QubitNoiseParameters(t1: 100_000, t2: 80_000,
+    /// let qp = QubitNoiseParameters(t1: 100_000, t2: 80_000,
     ///     singleQubitErrorRate: 0.001, readoutError0Given1: 0.02, readoutError1Given0: 0.01)
-    /// let profile = HardwareNoiseProfile(name: "Uniform", qubitCount: 5,
-    ///     uniformParameters: uniformParams, edges: edgeList)
+    /// let edge = EdgeNoiseParameters(qubit1: 0, qubit2: 1, twoQubitErrorRate: 0.01)
+    /// let profile = HardwareNoiseProfile(name: "Uniform", qubitCount: 2,
+    ///     uniformParameters: qp, edges: [edge])
     /// ```
     ///
     /// - Parameters:
@@ -381,7 +407,8 @@ public struct HardwareNoiseProfile: Sendable {
     /// **Example:**
     /// ```swift
     /// let profile = HardwareNoiseProfile.ibmManila
-    /// let connected = profile.areConnected(0, 1)  // true for linear topology
+    /// let connected = profile.areConnected(0, 1)
+    /// let disconnected = !profile.areConnected(0, 3)
     /// ```
     ///
     /// - Parameters:
@@ -409,11 +436,10 @@ public struct HardwareNoiseProfile: Sendable {
     ///   - q1: First qubit index
     ///   - q2: Second qubit index
     /// - Returns: Edge parameters if connected, nil otherwise
-    /// - Complexity: O(E) where E is the number of edges
+    /// - Complexity: O(1)
     @_effects(readonly)
     public func edgeParameters(q1: Int, q2: Int) -> EdgeNoiseParameters? {
-        let key = EdgeKey(q1, q2)
-        return edges.first { EdgeKey($0.qubit1, $0.qubit2) == key }
+        edgeLookup[EdgeKey(q1, q2)]
     }
 
     /// Average single-qubit error rate across all qubits.
@@ -424,10 +450,9 @@ public struct HardwareNoiseProfile: Sendable {
     /// let avgError = profile.averageSingleQubitError
     /// ```
     ///
-    /// - Complexity: O(Q)
-    @inlinable
+    /// - Complexity: O(1)
     public var averageSingleQubitError: Double {
-        qubitParameters.reduce(0) { $0 + $1.singleQubitErrorRate } / Double(qubitCount)
+        cachedAverageSingleQubitError
     }
 
     /// Average two-qubit error rate across all edges.
@@ -438,11 +463,9 @@ public struct HardwareNoiseProfile: Sendable {
     /// let avgError = profile.averageTwoQubitError
     /// ```
     ///
-    /// - Complexity: O(E)
-    @inlinable
+    /// - Complexity: O(1)
     public var averageTwoQubitError: Double {
-        guard !edges.isEmpty else { return 0 }
-        return edges.reduce(0) { $0 + $1.twoQubitErrorRate } / Double(edges.count)
+        cachedAverageTwoQubitError
     }
 
     /// Average T₁ relaxation time across all qubits in nanoseconds.
@@ -453,10 +476,9 @@ public struct HardwareNoiseProfile: Sendable {
     /// let avgT1 = profile.averageT1
     /// ```
     ///
-    /// - Complexity: O(Q)
-    @inlinable
+    /// - Complexity: O(1)
     public var averageT1: Double {
-        qubitParameters.reduce(0) { $0 + $1.t1 } / Double(qubitCount)
+        cachedAverageT1
     }
 
     /// Average T₂ coherence time across all qubits in nanoseconds.
@@ -467,10 +489,9 @@ public struct HardwareNoiseProfile: Sendable {
     /// let avgT2 = profile.averageT2
     /// ```
     ///
-    /// - Complexity: O(Q)
-    @inlinable
+    /// - Complexity: O(1)
     public var averageT2: Double {
-        qubitParameters.reduce(0) { $0 + $1.t2 } / Double(qubitCount)
+        cachedAverageT2
     }
 
     // MARK: - Noise Model Generation
@@ -484,24 +505,29 @@ public struct HardwareNoiseProfile: Sendable {
     /// **Example:**
     /// ```swift
     /// let profile = HardwareNoiseProfile.ibmManila
-    /// let noiseModel = profile.toNoiseModel()
+    /// let noiseModel = profile.noiseModel()
+    /// let hasNoise = noiseModel.hasNoise
     /// ```
     ///
     /// - Returns: Noise model with averaged error rates
     /// - Complexity: O(Q)
     @_effects(readonly)
     @_eagerMove
-    public func toNoiseModel() -> NoiseModel {
-        let avgSingleError = averageSingleQubitError
-        let avgTwoError = averageTwoQubitError
-
-        let avgReadout0Given1 = qubitParameters.reduce(0) { $0 + $1.readoutError0Given1 } / Double(qubitCount)
-        let avgReadout1Given0 = qubitParameters.reduce(0) { $0 + $1.readoutError1Given0 } / Double(qubitCount)
+    public func noiseModel() -> NoiseModel {
+        var sumReadout0Given1 = 0.0
+        var sumReadout1Given0 = 0.0
+        for param in qubitParameters {
+            sumReadout0Given1 += param.readoutError0Given1
+            sumReadout1Given0 += param.readoutError1Given0
+        }
+        let invCount = qubitParameters.isEmpty ? 0.0 : 1.0 / Double(qubitCount)
 
         return NoiseModel(
-            singleQubitNoise: DepolarizingChannel(errorProbability: avgSingleError),
-            twoQubitNoise: TwoQubitDepolarizingChannel(errorProbability: avgTwoError),
-            measurementError: MeasurementErrorModel(p0Given1: avgReadout0Given1, p1Given0: avgReadout1Given0),
+            singleQubitNoise: DepolarizingChannel(errorProbability: cachedAverageSingleQubitError),
+            twoQubitNoise: TwoQubitDepolarizingChannel(errorProbability: cachedAverageTwoQubitError),
+            measurementError: MeasurementErrorModel(
+                p0Given1: sumReadout0Given1 * invCount,
+                p1Given0: sumReadout1Given0 * invCount),
         )
     }
 
@@ -511,6 +537,7 @@ public struct HardwareNoiseProfile: Sendable {
     /// ```swift
     /// let profile = HardwareNoiseProfile.ibmManila
     /// let channel = profile.singleQubitChannel(for: 0)
+    /// let errorRate = channel.errorProbability
     /// ```
     ///
     /// - Parameter qubit: Qubit index
@@ -532,21 +559,22 @@ public struct HardwareNoiseProfile: Sendable {
     /// **Example:**
     /// ```swift
     /// let profile = HardwareNoiseProfile.ibmManila
-    /// let channel = profile.twoQubitChannel(for: 0, 1)
+    /// let channel = profile.twoQubitChannel(q1: 0, q2: 1)
+    /// let errorRate = channel.errorProbability
     /// ```
     ///
     /// - Parameters:
     ///   - q1: First qubit index
     ///   - q2: Second qubit index
     /// - Returns: Two-qubit depolarizing channel
-    /// - Complexity: O(E)
+    /// - Complexity: O(1)
     @_effects(readonly)
     @_eagerMove
-    public func twoQubitChannel(for q1: Int, _ q2: Int) -> TwoQubitDepolarizingChannel {
+    public func twoQubitChannel(q1: Int, q2: Int) -> TwoQubitDepolarizingChannel {
         if let edge = edgeParameters(q1: q1, q2: q2) {
             return TwoQubitDepolarizingChannel(errorProbability: edge.twoQubitErrorRate)
         }
-        return TwoQubitDepolarizingChannel(errorProbability: averageTwoQubitError)
+        return TwoQubitDepolarizingChannel(errorProbability: cachedAverageTwoQubitError)
     }
 
     /// Create measurement error models for all qubits.
@@ -555,6 +583,7 @@ public struct HardwareNoiseProfile: Sendable {
     /// ```swift
     /// let profile = HardwareNoiseProfile.ibmManila
     /// let models = profile.measurementErrorModels()
+    /// let firstModel = models[0]
     /// ```
     ///
     /// - Returns: Array of measurement error models indexed by qubit
@@ -601,6 +630,7 @@ public struct GateTimingModel: Sendable, Equatable {
     /// ```swift
     /// let timing = GateTimingModel(
     ///     singleQubitGateTime: 35, twoQubitGateTime: 300, measurementTime: 1000)
+    /// let cnotTime = timing.gateTime(for: 2)
     /// ```
     ///
     /// - Parameters:
@@ -634,7 +664,8 @@ public struct GateTimingModel: Sendable, Equatable {
     /// **Example:**
     /// ```swift
     /// let timing = GateTimingModel.ibmDefault
-    /// let cnot_time = timing.gateTime(for: 2)  // 300 ns
+    /// let singleTime = timing.gateTime(for: 1)
+    /// let cnotTime = timing.gateTime(for: 2)
     /// ```
     ///
     /// - Parameter qubitsRequired: Number of qubits the gate operates on (1, 2, or 3)
@@ -718,21 +749,18 @@ public extension HardwareNoiseProfile {
     /// **Example:**
     /// ```swift
     /// let profile = HardwareNoiseProfile.ibmManila
-    /// let noiseModel = profile.toNoiseModel()
+    /// let noiseModel = profile.noiseModel()
     /// ```
     ///
     /// - Complexity: O(1)
-    @_eagerMove
-    static var ibmManila: HardwareNoiseProfile {
-        let qubitParams = (0 ..< 5).map { _ in
-            QubitNoiseParameters(
-                t1: 100_000,
-                t2: 80000,
-                singleQubitErrorRate: 0.0003,
-                readoutError0Given1: 0.02,
-                readoutError1Given0: 0.01,
-            )
-        }
+    static let ibmManila: HardwareNoiseProfile = {
+        let qubitParam = QubitNoiseParameters(
+            t1: 100_000,
+            t2: 80000,
+            singleQubitErrorRate: 0.0003,
+            readoutError0Given1: 0.02,
+            readoutError1Given0: 0.01,
+        )
 
         let edges = [
             EdgeNoiseParameters(qubit1: 0, qubit2: 1, twoQubitErrorRate: 0.008),
@@ -744,11 +772,11 @@ public extension HardwareNoiseProfile {
         return HardwareNoiseProfile(
             name: "IBM Manila (approx)",
             qubitCount: 5,
-            qubitParameters: qubitParams,
+            qubitParameters: [QubitNoiseParameters](repeating: qubitParam, count: 5),
             edges: edges,
             gateTimings: .ibmDefault,
         )
-    }
+    }()
 
     /// IBM Quito 5-qubit device approximation with T-shaped topology (0 connects to 2, linear 1-2-3-4).
     ///
@@ -759,8 +787,7 @@ public extension HardwareNoiseProfile {
     /// ```
     ///
     /// - Complexity: O(1)
-    @_eagerMove
-    static var ibmQuito: HardwareNoiseProfile {
+    static let ibmQuito: HardwareNoiseProfile = {
         let qubitParams = [
             QubitNoiseParameters(t1: 95000, t2: 75000, singleQubitErrorRate: 0.0004,
                                  readoutError0Given1: 0.025, readoutError1Given0: 0.012),
@@ -788,7 +815,7 @@ public extension HardwareNoiseProfile {
             edges: edges,
             gateTimings: .ibmDefault,
         )
-    }
+    }()
 
     /// Google Sycamore-like 12-qubit subset with 3*4 grid topology.
     ///
@@ -799,17 +826,14 @@ public extension HardwareNoiseProfile {
     /// ```
     ///
     /// - Complexity: O(1)
-    @_eagerMove
-    static var googleSycamore12: HardwareNoiseProfile {
-        let qubitParams = (0 ..< 12).map { _ in
-            QubitNoiseParameters(
-                t1: 15000,
-                t2: 10000,
-                singleQubitErrorRate: 0.001,
-                readoutError0Given1: 0.03,
-                readoutError1Given0: 0.01,
-            )
-        }
+    static let googleSycamore12: HardwareNoiseProfile = {
+        let qubitParam = QubitNoiseParameters(
+            t1: 15000,
+            t2: 10000,
+            singleQubitErrorRate: 0.001,
+            readoutError0Given1: 0.03,
+            readoutError1Given0: 0.01,
+        )
 
         var edges: [EdgeNoiseParameters] = []
         edges.reserveCapacity(17)
@@ -829,11 +853,11 @@ public extension HardwareNoiseProfile {
         return HardwareNoiseProfile(
             name: "Google Sycamore 12Q (approx)",
             qubitCount: 12,
-            qubitParameters: qubitParams,
+            qubitParameters: [QubitNoiseParameters](repeating: qubitParam, count: 12),
             edges: edges,
             gateTimings: .googleSycamore,
         )
-    }
+    }()
 
     /// IonQ Harmony 11-qubit device approximation with all-to-all connectivity.
     ///
@@ -846,17 +870,14 @@ public extension HardwareNoiseProfile {
     /// ```
     ///
     /// - Complexity: O(Q²)
-    @_eagerMove
-    static var ionQHarmony: HardwareNoiseProfile {
-        let qubitParams = (0 ..< 11).map { _ in
-            QubitNoiseParameters(
-                t1: 10_000_000,
-                t2: 1_000_000,
-                singleQubitErrorRate: 0.0003,
-                readoutError0Given1: 0.005,
-                readoutError1Given0: 0.005,
-            )
-        }
+    static let ionQHarmony: HardwareNoiseProfile = {
+        let qubitParam = QubitNoiseParameters(
+            t1: 10_000_000,
+            t2: 1_000_000,
+            singleQubitErrorRate: 0.0003,
+            readoutError0Given1: 0.005,
+            readoutError1Given0: 0.005,
+        )
 
         var edges: [EdgeNoiseParameters] = []
         edges.reserveCapacity(55)
@@ -874,11 +895,11 @@ public extension HardwareNoiseProfile {
         return HardwareNoiseProfile(
             name: "IonQ Harmony (approx)",
             qubitCount: 11,
-            qubitParameters: qubitParams,
+            qubitParameters: [QubitNoiseParameters](repeating: qubitParam, count: 11),
             edges: edges,
             gateTimings: .ionQ,
         )
-    }
+    }()
 
     /// Rigetti Aspen-M 8-qubit subset approximation with octagonal topology.
     ///
@@ -889,17 +910,14 @@ public extension HardwareNoiseProfile {
     /// ```
     ///
     /// - Complexity: O(1)
-    @_eagerMove
-    static var rigettiAspen8: HardwareNoiseProfile {
-        let qubitParams = (0 ..< 8).map { _ in
-            QubitNoiseParameters(
-                t1: 30000,
-                t2: 20000,
-                singleQubitErrorRate: 0.002,
-                readoutError0Given1: 0.04,
-                readoutError1Given0: 0.02,
-            )
-        }
+    static let rigettiAspen8: HardwareNoiseProfile = {
+        let qubitParam = QubitNoiseParameters(
+            t1: 30000,
+            t2: 20000,
+            singleQubitErrorRate: 0.002,
+            readoutError0Given1: 0.04,
+            readoutError1Given0: 0.02,
+        )
 
         let edges = [
             EdgeNoiseParameters(qubit1: 0, qubit2: 1, twoQubitErrorRate: 0.02),
@@ -917,18 +935,19 @@ public extension HardwareNoiseProfile {
         return HardwareNoiseProfile(
             name: "Rigetti Aspen-M 8Q (approx)",
             qubitCount: 8,
-            qubitParameters: qubitParams,
+            qubitParameters: [QubitNoiseParameters](repeating: qubitParam, count: 8),
             edges: edges,
             gateTimings: .rigetti,
         )
-    }
+    }()
 
     /// Create custom linear chain topology with uniform parameters.
     ///
     /// **Example:**
     /// ```swift
-    /// let profile = HardwareNoiseProfile.linearChain(qubits: 10, t1: 100_000, t2: 80_000)
-    /// let connected = profile.areConnected(4, 5)  // true
+    /// let profile = HardwareNoiseProfile.linearChain(qubits: 10)
+    /// let connected = profile.areConnected(4, 5)
+    /// let model = profile.noiseModel()
     /// ```
     ///
     /// - Parameters:
@@ -949,15 +968,13 @@ public extension HardwareNoiseProfile {
         twoQubitError: Double = 0.01,
         readoutError: Double = 0.02,
     ) -> HardwareNoiseProfile {
-        let qubitParams = (0 ..< qubits).map { _ in
-            QubitNoiseParameters(
-                t1: t1,
-                t2: t2,
-                singleQubitErrorRate: singleQubitError,
-                readoutError0Given1: readoutError,
-                readoutError1Given0: readoutError * 0.5,
-            )
-        }
+        let qubitParam = QubitNoiseParameters(
+            t1: t1,
+            t2: t2,
+            singleQubitErrorRate: singleQubitError,
+            readoutError0Given1: readoutError,
+            readoutError1Given0: readoutError * 0.5,
+        )
 
         let edges = (0 ..< qubits - 1).map { i in
             EdgeNoiseParameters(qubit1: i, qubit2: i + 1, twoQubitErrorRate: twoQubitError)
@@ -966,7 +983,7 @@ public extension HardwareNoiseProfile {
         return HardwareNoiseProfile(
             name: "Linear Chain (\(qubits)Q)",
             qubitCount: qubits,
-            qubitParameters: qubitParams,
+            qubitParameters: [QubitNoiseParameters](repeating: qubitParam, count: qubits),
             edges: edges,
         )
     }
@@ -979,7 +996,8 @@ public extension HardwareNoiseProfile {
     /// **Example:**
     /// ```swift
     /// let profile = HardwareNoiseProfile.grid(rows: 3, cols: 4)
-    /// let connected = profile.areConnected(0, 4)  // true (vertical neighbor)
+    /// let connected = profile.areConnected(0, 4)
+    /// let qubits = profile.qubitCount
     /// ```
     ///
     /// - Parameters:
@@ -1004,17 +1022,15 @@ public extension HardwareNoiseProfile {
     ) -> HardwareNoiseProfile {
         let qubitCount = rows * cols
 
-        let qubitParams = (0 ..< qubitCount).map { _ in
-            QubitNoiseParameters(
-                t1: t1,
-                t2: t2,
-                singleQubitErrorRate: singleQubitError,
-                readoutError0Given1: readoutError,
-                readoutError1Given0: readoutError * 0.5,
-            )
-        }
+        let qubitParam = QubitNoiseParameters(
+            t1: t1,
+            t2: t2,
+            singleQubitErrorRate: singleQubitError,
+            readoutError0Given1: readoutError,
+            readoutError1Given0: readoutError * 0.5,
+        )
 
-        let edgeCount = (rows - 1) * cols + rows * (cols - 1)
+        let edgeCount = max(0, (rows - 1) * cols + rows * (cols - 1))
         var edges: [EdgeNoiseParameters] = []
         edges.reserveCapacity(edgeCount)
 
@@ -1033,7 +1049,7 @@ public extension HardwareNoiseProfile {
         return HardwareNoiseProfile(
             name: "Grid (\(rows)*\(cols))",
             qubitCount: qubitCount,
-            qubitParameters: qubitParams,
+            qubitParameters: [QubitNoiseParameters](repeating: qubitParam, count: qubitCount),
             edges: edges,
         )
     }

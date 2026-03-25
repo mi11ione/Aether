@@ -106,7 +106,9 @@ public enum IsingHamiltonian {
     ///   - periodic: If true, uses periodic boundary conditions (torus topology, default: false)
     /// - Returns: Observable representing the 2D Ising lattice Hamiltonian
     /// - Complexity: O(rows * cols) terms
-    /// - Precondition: rows * cols ≤ 30
+    /// - Precondition: `rows` >= 1
+    /// - Precondition: `cols` >= 1
+    /// - Precondition: `rows * cols` <= 30
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -123,37 +125,53 @@ public enum IsingHamiltonian {
         let qubits = rows * cols
         ValidationUtilities.validateMemoryLimit(qubits)
 
-        var terms: PauliTerms = []
-
         let horizontalEdges = periodic ? rows * cols : rows * (cols - 1)
         let verticalEdges = periodic ? rows * cols : (rows - 1) * cols
-        let estimatedTerms = horizontalEdges + verticalEdges + qubits
-        terms.reserveCapacity(estimatedTerms)
+        let termCount = horizontalEdges + verticalEdges + qubits
 
-        for row in 0 ..< rows {
-            for col in 0 ..< cols {
-                let site = row * cols + col
+        let terms = PauliTerms(unsafeUninitializedCapacity: termCount) { buffer, count in
+            var index = 0
 
-                if col < cols - 1 {
-                    let rightNeighbor = row * cols + (col + 1)
-                    terms.append((coefficient: -J, pauliString: PauliString(.z(site), .z(rightNeighbor))))
-                } else if periodic, cols > 1 {
-                    let rightNeighbor = row * cols
-                    terms.append((coefficient: -J, pauliString: PauliString(.z(site), .z(rightNeighbor))))
-                }
-
-                if row < rows - 1 {
-                    let downNeighbor = (row + 1) * cols + col
-                    terms.append((coefficient: -J, pauliString: PauliString(.z(site), .z(downNeighbor))))
-                } else if periodic, rows > 1 {
-                    let downNeighbor = col
-                    terms.append((coefficient: -J, pauliString: PauliString(.z(site), .z(downNeighbor))))
+            for row in 0 ..< rows {
+                let rowBase = row * cols
+                for col in 0 ..< cols - 1 {
+                    let site = rowBase + col
+                    buffer[index] = (coefficient: -J, pauliString: PauliString(.z(site), .z(site + 1)))
+                    index += 1
                 }
             }
-        }
 
-        for i in 0 ..< qubits {
-            terms.append((coefficient: -h, pauliString: PauliString(.x(i))))
+            if periodic, cols > 1 {
+                for row in 0 ..< rows {
+                    let rowBase = row * cols
+                    buffer[index] = (coefficient: -J, pauliString: PauliString(.z(rowBase + cols - 1), .z(rowBase)))
+                    index += 1
+                }
+            }
+
+            for row in 0 ..< rows - 1 {
+                let rowBase = row * cols
+                for col in 0 ..< cols {
+                    let site = rowBase + col
+                    buffer[index] = (coefficient: -J, pauliString: PauliString(.z(site), .z(site + cols)))
+                    index += 1
+                }
+            }
+
+            if periodic, rows > 1 {
+                let lastRowBase = (rows - 1) * cols
+                for col in 0 ..< cols {
+                    buffer[index] = (coefficient: -J, pauliString: PauliString(.z(lastRowBase + col), .z(col)))
+                    index += 1
+                }
+            }
+
+            for i in 0 ..< qubits {
+                buffer[index] = (coefficient: -h, pauliString: PauliString(.x(i)))
+                index += 1
+            }
+
+            count = index
         }
 
         return Observable(terms: terms)
@@ -169,7 +187,7 @@ public enum IsingHamiltonian {
     /// ```swift
     /// let couplings = [(0, 1, 1.0), (1, 2, 0.5), (0, 2, 0.8)]
     /// let fields = [0: 0.3, 1: 0.5, 2: 0.3]
-    /// let hamiltonian = IsingHamiltonian.fromCouplings(
+    /// let hamiltonian = IsingHamiltonian.custom(
     ///     zzCouplings: couplings,
     ///     xFields: fields,
     ///     qubits: 3
@@ -182,11 +200,14 @@ public enum IsingHamiltonian {
     ///   - qubits: Total number of qubits in the system
     /// - Returns: Observable representing the custom Ising Hamiltonian
     /// - Complexity: O(|zzCouplings| + |xFields|) terms
-    /// - Precondition: All qubit indices in range [0, qubits), qubits ≤ 30
+    /// - Precondition: `qubits` in range 1...30
+    /// - Precondition: All zzCouplings qubit indices in range 0..<`qubits`
+    /// - Precondition: All xFields keys in range 0..<`qubits`
+    /// - Precondition: Each coupling connects distinct qubits (no self-loops)
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
-    public static func fromCouplings(
+    public static func custom(
         zzCouplings: [(Int, Int, Double)],
         xFields: [Int: Double],
         qubits: Int,
@@ -194,23 +215,34 @@ public enum IsingHamiltonian {
         ValidationUtilities.validatePositiveQubits(qubits)
         ValidationUtilities.validateMemoryLimit(qubits)
 
-        let termCount = zzCouplings.count + xFields.count
-        var terms: PauliTerms = []
-        terms.reserveCapacity(termCount)
-
-        for (i, j, Jij) in zzCouplings {
+        for (i, j, _) in zzCouplings {
             ValidationUtilities.validateQubitIndex(i, qubits: qubits)
             ValidationUtilities.validateQubitIndex(j, qubits: qubits)
             ValidationUtilities.validateDistinctVertices(i, j)
-
-            let site1 = min(i, j)
-            let site2 = max(i, j)
-            terms.append((coefficient: -Jij, pauliString: PauliString(.z(site1), .z(site2))))
         }
 
-        for (qubit, hi) in xFields {
+        for (qubit, _) in xFields {
             ValidationUtilities.validateQubitIndex(qubit, qubits: qubits)
-            terms.append((coefficient: -hi, pauliString: PauliString(.x(qubit))))
+        }
+
+        let termCount = zzCouplings.count + xFields.count
+
+        let terms = PauliTerms(unsafeUninitializedCapacity: termCount) { buffer, count in
+            var index = 0
+
+            for (i, j, Jij) in zzCouplings {
+                let site1 = min(i, j)
+                let site2 = max(i, j)
+                buffer[index] = (coefficient: -Jij, pauliString: PauliString(.z(site1), .z(site2)))
+                index += 1
+            }
+
+            for (qubit, hi) in xFields {
+                buffer[index] = (coefficient: -hi, pauliString: PauliString(.x(qubit)))
+                index += 1
+            }
+
+            count = index
         }
 
         return Observable(terms: terms)
@@ -235,7 +267,8 @@ public enum IsingHamiltonian {
     ///   - h: Transverse field strength applied to each site
     /// - Returns: Observable representing the long-range Ising Hamiltonian
     /// - Complexity: O(n²) terms for all-to-all coupling
-    /// - Precondition: `qubits` in range 1...30, alpha ≥ 0
+    /// - Precondition: `qubits` in range 1...30
+    /// - Precondition: `alpha` >= 0
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -252,19 +285,30 @@ public enum IsingHamiltonian {
         let zzCount = qubits * (qubits - 1) / 2
         let termCount = zzCount + qubits
 
-        var terms: PauliTerms = []
-        terms.reserveCapacity(termCount)
-
-        for i in 0 ..< qubits {
-            for j in (i + 1) ..< qubits {
-                let distance = Double(j - i)
-                let coupling = J0 / pow(distance, alpha)
-                terms.append((coefficient: -coupling, pauliString: PauliString(.z(i), .z(j))))
+        let maxDistance = qubits - 1
+        let negCouplings = [Double](unsafeUninitializedCapacity: max(maxDistance, 0)) { buf, cnt in
+            for d in 0 ..< maxDistance {
+                buf[d] = -J0 / pow(Double(d + 1), alpha)
             }
+            cnt = maxDistance
         }
 
-        for i in 0 ..< qubits {
-            terms.append((coefficient: -h, pauliString: PauliString(.x(i))))
+        let terms = PauliTerms(unsafeUninitializedCapacity: termCount) { buffer, count in
+            var index = 0
+
+            for i in 0 ..< qubits {
+                for j in (i + 1) ..< qubits {
+                    buffer[index] = (coefficient: negCouplings[j - i - 1], pauliString: PauliString(.z(i), .z(j)))
+                    index += 1
+                }
+            }
+
+            for i in 0 ..< qubits {
+                buffer[index] = (coefficient: -h, pauliString: PauliString(.x(i)))
+                index += 1
+            }
+
+            count = index
         }
 
         return Observable(terms: terms)
@@ -294,7 +338,8 @@ public enum IsingHamiltonian {
     ///   - periodic: If true, adds coupling between last and first sites (default: false)
     /// - Returns: Observable representing the random-field Ising Hamiltonian
     /// - Complexity: O(n) terms where n is the number of qubits
-    /// - Precondition: `qubits` in range 1...30, hValues.count == qubits
+    /// - Precondition: `qubits` in range 1...30
+    /// - Precondition: `hValues.count` == `qubits`
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)

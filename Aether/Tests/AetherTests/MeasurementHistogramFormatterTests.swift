@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -173,6 +173,14 @@ struct HistogramExpectedValuesTests {
         let output = MeasurementHistogramFormatter.render(counts, qubits: 1, expected: expected)
         #expect(output.contains("\u{03C7}\u{00B2} ="), "Output should contain chi-squared for imperfect match")
         #expect(!output.contains("\u{03C7}\u{00B2} = 0.000"), "Chi-squared should not be 0.000 for mismatched counts")
+    }
+
+    @Test("Chi-squared formats two-digit fractional thousandths correctly")
+    func chiSquaredTwoDigitFractional() {
+        let counts = [504, 496]
+        let expected = [0.5, 0.5]
+        let output = MeasurementHistogramFormatter.render(counts, qubits: 1, expected: expected)
+        #expect(output.contains("\u{03C7}\u{00B2} = 0.064"), "Chi-squared of 0.064 should format with leading zero in fractional part")
     }
 
     @Test("Expected count rounds to nearest integer in display")

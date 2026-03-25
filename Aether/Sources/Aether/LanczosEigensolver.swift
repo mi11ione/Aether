@@ -3,12 +3,13 @@
 
 import Accelerate
 
-/// Thick-restart Lanczos eigensolver for finding lowest eigenvalue of large Hermitian matrices
+/// Thick-restart Lanczos eigensolver for finding lowest eigenvalue of large Hermitian matrices.
 ///
-/// Implements thick-restart Lanczos algorithm for finding the lowest eigenvalue and corresponding
-/// eigenvector of large Hermitian matrices where direct diagonalization is prohibitively expensive.
-/// Used by DMRG when effective Hamiltonian dimension exceeds 1000. Uses modified Gram-Schmidt for
-/// reorthogonalization and HermitianEigenDecomposition for tridiagonal eigenproblem.
+/// Implements thick-restart Lanczos algorithm for finding the lowest eigenvalue E₀ and corresponding
+/// eigenvector |ψ₀⟩ satisfying H|ψ₀⟩ = E₀|ψ₀⟩ for large Hermitian matrices where direct
+/// diagonalization is prohibitively expensive. Used by DMRG when effective Hamiltonian dimension
+/// exceeds 1000. Uses modified Gram-Schmidt for reorthogonalization and
+/// ``HermitianEigenDecomposition`` for tridiagonal eigenproblem.
 ///
 /// **Example:**
 /// ```swift
@@ -27,21 +28,38 @@ import Accelerate
 /// let groundStateEnergy = result.eigenvalues[0]
 /// let groundStateVector = result.eigenvectors[0]
 /// ```
+///
+/// - SeeAlso: ``HermitianEigenDecomposition``
+/// - SeeAlso: ``HermitianEigenResult``
+/// - SeeAlso: ``DMRG``
 public enum LanczosEigensolver {
-    /// Finds lowest eigenvalue and eigenvector using thick-restart Lanczos algorithm
+    /// Maximum number of thick-restart iterations before returning best result.
+    private static let maxRestarts = 100
+    /// Maximum Krylov subspace dimension.
+    private static let maxKrylovDimension = 30
+    /// Threshold below which Lanczos beta signals invariant subspace breakdown.
+    private static let invariantBreakdownThreshold: Double = 1e-14
+    /// Threshold for overlap magnitude squared in reorthogonalization.
+    private static let overlapMagnitudeSquaredThreshold: Double = 1e-28
+
+    /// Finds lowest eigenvalue and eigenvector using thick-restart Lanczos algorithm.
     ///
-    /// Iteratively builds Krylov subspace and extracts lowest eigenvalue via Ritz approximation.
-    /// Uses thick-restart strategy to maintain convergence when Krylov dimension reaches limit.
-    /// Convergence achieved when |lambda_new - lambda_old| < tolerance.
+    /// Iteratively builds Krylov subspace K = span{v, Hv, H²v, ...} and extracts the lowest
+    /// eigenvalue E₀ satisfying H|ψ₀⟩ = E₀|ψ₀⟩ via Ritz approximation. Uses thick-restart
+    /// strategy to maintain convergence when Krylov dimension reaches limit. Convergence
+    /// achieved when |λ_new - λ_old| < tolerance.
     ///
     /// - Parameters:
-    ///   - applying: Async closure that applies Hermitian matrix H to input vector, returning H|v>
+    ///   - applying: Async closure that applies Hermitian matrix H to input vector, returning H|v⟩
     ///   - dimension: Dimension of the Hilbert space (size of input/output vectors)
     ///   - tolerance: Convergence threshold for eigenvalue change between iterations
     /// - Returns: ``HermitianEigenResult`` containing lowest eigenvalue and corresponding eigenvector
-    /// - Precondition: dimension must be positive
-    /// - Precondition: tolerance must be positive
+    /// - Precondition: `dimension` > 0
+    /// - Precondition: `tolerance` > 0
     /// - Complexity: O(k * dimension * iterations) where k = Krylov dimension
+    ///
+    /// - SeeAlso: ``HermitianEigenResult``
+    /// - SeeAlso: ``HermitianEigenDecomposition``
     ///
     /// **Example:**
     /// ```swift
@@ -72,12 +90,10 @@ public enum LanczosEigensolver {
 
         var initialVector = createRandomNormalizedVector(dimension: dimension)
         var previousEigenvalue = Double.infinity
-        let maxRestarts = 100
 
         for _ in 0 ..< maxRestarts {
             let (converged, eigenvalue, eigenvector) = await lanczosIteration(
                 applying: applying,
-                dimension: dimension,
                 krylovDimension: krylovDimension,
                 initialVector: initialVector,
                 lanczosVectors: &lanczosVectors,
@@ -107,16 +123,14 @@ public enum LanczosEigensolver {
 
     /// Computes optimal Krylov subspace dimension based on problem size.
     @_effects(readonly)
-    @inlinable
-    static func computeKrylovDimension(_ dimension: Int) -> Int {
-        min(30, dimension / 2)
+    private static func computeKrylovDimension(_ dimension: Int) -> Int {
+        min(maxKrylovDimension, dimension)
     }
 
     /// Performs single Lanczos iteration building Krylov subspace.
     @_optimize(speed)
     private static func lanczosIteration(
         applying: @Sendable ([Complex<Double>]) async -> [Complex<Double>],
-        dimension _: Int,
         krylovDimension: Int,
         initialVector: [Complex<Double>],
         lanczosVectors: inout [[Complex<Double>]],
@@ -130,7 +144,7 @@ public enum LanczosEigensolver {
         for j in 0 ..< krylovDimension {
             var w = await applying(lanczosVectors[j])
 
-            let alpha = computeRealInnerProduct(lanczosVectors[j], w)
+            let alpha = realInnerProduct(lanczosVectors[j], w)
             alphas[j] = alpha
 
             subtractScaled(&w, alpha, lanczosVectors[j])
@@ -144,7 +158,7 @@ public enum LanczosEigensolver {
             let beta = computeNorm(w)
             betas[j] = beta
 
-            if beta < 1e-14 {
+            if beta < invariantBreakdownThreshold {
                 let (eigenvalue, eigenvector) = solveTridiagonal(
                     alphas: alphas,
                     betas: betas,
@@ -182,10 +196,11 @@ public enum LanczosEigensolver {
             count: dimension,
         )
 
+        var basisVector = [Complex<Double>](repeating: .zero, count: dimension)
         for j in 0 ..< dimension {
-            var basisVector = [Complex<Double>](repeating: .zero, count: dimension)
             basisVector[j] = .one
             let column = await applying(basisVector)
+            basisVector[j] = .zero
             for i in 0 ..< dimension {
                 matrix[i][j] = column[i]
             }
@@ -235,24 +250,22 @@ public enum LanczosEigensolver {
         }
 
         let norm = computeNorm(eigenvector)
-        if norm > 1e-14 {
+        if norm > invariantBreakdownThreshold {
             eigenvector = normalizeVector(eigenvector, norm: norm)
         }
 
         return (lowestEigenvalue, eigenvector)
     }
 
-    /// Computes real part of inner product between two complex vectors.
+    /// Real-valued inner product Re(v1† · v2) between two complex vectors.
     @_effects(readonly)
     @_optimize(speed)
-    @inlinable
-    static func computeRealInnerProduct(_ v1: [Complex<Double>], _ v2: [Complex<Double>]) -> Double {
+    private static func realInnerProduct(_ v1: [Complex<Double>], _ v2: [Complex<Double>]) -> Double {
         var result = 0.0
         let count = v1.count
         for i in 0 ..< count {
-            let conj = v1[i].conjugate
-            let prod = conj * v2[i]
-            result += prod.real
+            result = Double.fusedMultiplyAdd(v1[i].real, v2[i].real,
+                     Double.fusedMultiplyAdd(v1[i].imaginary, v2[i].imaginary, result))
         }
         return result
     }
@@ -260,40 +273,46 @@ public enum LanczosEigensolver {
     /// Computes Euclidean norm of a complex vector.
     @_effects(readonly)
     @_optimize(speed)
-    @inlinable
-    static func computeNorm(_ v: [Complex<Double>]) -> Double {
+    private static func computeNorm(_ v: [Complex<Double>]) -> Double {
         var sumSquared = 0.0
         for element in v {
-            sumSquared += element.magnitudeSquared
+            sumSquared = Double.fusedMultiplyAdd(element.real, element.real,
+                         Double.fusedMultiplyAdd(element.imaginary, element.imaginary, sumSquared))
         }
         return Double.squareRoot(of: sumSquared)
     }
 
     /// Subtracts scaled source vector from target in place.
     @_optimize(speed)
-    @inlinable
-    static func subtractScaled(_ target: inout [Complex<Double>], _ scalar: Double, _ source: [Complex<Double>]) {
+    private static func subtractScaled(_ target: inout [Complex<Double>], _ scalar: Double, _ source: [Complex<Double>]) {
         let count = target.count
+        let negScalar = -scalar
         for i in 0 ..< count {
-            target[i] = target[i] - Complex(scalar, 0) * source[i]
+            target[i] = Complex(
+                Double.fusedMultiplyAdd(negScalar, source[i].real, target[i].real),
+                Double.fusedMultiplyAdd(negScalar, source[i].imaginary, target[i].imaginary)
+            )
         }
     }
 
     /// Adds scaled source vector to target in place.
     @_optimize(speed)
-    @inlinable
-    static func addScaled(_ target: inout [Complex<Double>], _ scalar: Complex<Double>, _ source: [Complex<Double>]) {
+    private static func addScaled(_ target: inout [Complex<Double>], _ scalar: Complex<Double>, _ source: [Complex<Double>]) {
         let count = target.count
+        let sr = scalar.real, si = scalar.imaginary
         for i in 0 ..< count {
-            target[i] = target[i] + scalar * source[i]
+            let srcR = source[i].real, srcI = source[i].imaginary
+            target[i] = Complex(
+                Double.fusedMultiplyAdd(sr, srcR, Double.fusedMultiplyAdd(-si, srcI, target[i].real)),
+                Double.fusedMultiplyAdd(sr, srcI, Double.fusedMultiplyAdd(si, srcR, target[i].imaginary))
+            )
         }
     }
 
     /// Returns normalized copy of vector given precomputed norm.
     @_effects(readonly)
     @_optimize(speed)
-    @inlinable
-    static func normalizeVector(_ v: [Complex<Double>], norm: Double) -> [Complex<Double>] {
+    private static func normalizeVector(_ v: [Complex<Double>], norm: Double) -> [Complex<Double>] {
         let invNorm = 1.0 / norm
         let result = [Complex<Double>](unsafeUninitializedCapacity: v.count) { buffer, count in
             for i in 0 ..< v.count {
@@ -306,42 +325,49 @@ public enum LanczosEigensolver {
 
     /// Reorthogonalizes vector against Lanczos basis using modified Gram-Schmidt.
     @_optimize(speed)
-    static func reorthogonalize(_ w: inout [Complex<Double>], against vectors: [[Complex<Double>]], count: Int) {
+    private static func reorthogonalize(_ w: inout [Complex<Double>], against vectors: [[Complex<Double>]], count: Int) {
         for _ in 0 ..< 2 {
             for j in 0 ..< count {
-                let overlap = computeComplexInnerProduct(vectors[j], w)
-                if overlap.magnitudeSquared > 1e-28 {
-                    subtractComplex(&w, overlap, vectors[j])
+                let overlap = complexInnerProduct(vectors[j], w)
+                if overlap.magnitudeSquared > overlapMagnitudeSquaredThreshold {
+                    subtractScaled(&w, overlap, vectors[j])
                 }
             }
         }
     }
 
-    /// Computes complex inner product between two vectors.
+    /// Complex-valued inner product v1† · v2 between two vectors.
     @_effects(readonly)
     @_optimize(speed)
-    @inlinable
-    static func computeComplexInnerProduct(_ v1: [Complex<Double>], _ v2: [Complex<Double>]) -> Complex<Double> {
-        var result = Complex<Double>.zero
+    private static func complexInnerProduct(_ v1: [Complex<Double>], _ v2: [Complex<Double>]) -> Complex<Double> {
+        var rr = 0.0, ri = 0.0
         let count = v1.count
         for i in 0 ..< count {
-            result = result + v1[i].conjugate * v2[i]
+            let ar = v1[i].real, ai = v1[i].imaginary
+            let br = v2[i].real, bi = v2[i].imaginary
+            rr = Double.fusedMultiplyAdd(ar, br, Double.fusedMultiplyAdd(ai, bi, rr))
+            ri = Double.fusedMultiplyAdd(ar, bi, Double.fusedMultiplyAdd(-ai, br, ri))
         }
-        return result
+        return Complex(rr, ri)
     }
 
-    /// Subtracts complex-scaled source vector from target in place.
+    /// Subtracts complex scalar times source vector from target in place.
     @_optimize(speed)
-    @inlinable
-    static func subtractComplex(_ target: inout [Complex<Double>], _ scalar: Complex<Double>, _ source: [Complex<Double>]) {
+    private static func subtractScaled(_ target: inout [Complex<Double>], _ scalar: Complex<Double>, _ source: [Complex<Double>]) {
         let count = target.count
+        let sr = scalar.real, si = scalar.imaginary
         for i in 0 ..< count {
-            target[i] = target[i] - scalar * source[i]
+            let srcR = source[i].real, srcI = source[i].imaginary
+            target[i] = Complex(
+                Double.fusedMultiplyAdd(-sr, srcR, Double.fusedMultiplyAdd(si, srcI, target[i].real)),
+                Double.fusedMultiplyAdd(-sr, srcI, Double.fusedMultiplyAdd(-si, srcR, target[i].imaginary))
+            )
         }
     }
 
     /// Creates deterministic pseudo-random normalized vector for initial guess.
     @_effects(readonly)
+    @_optimize(speed)
     private static func createRandomNormalizedVector(dimension: Int) -> [Complex<Double>] {
         let vector = [Complex<Double>](unsafeUninitializedCapacity: dimension) { buffer, count in
             var seed: UInt64 = 12345

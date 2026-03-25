@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -161,7 +161,7 @@ struct IsingFromCouplingsTests {
     func fromCouplingsTriangleTermCount() {
         let couplings = [(0, 1, 1.0), (1, 2, 1.0), (0, 2, 1.0)]
         let fields: [Int: Double] = [0: 0.5, 1: 0.5, 2: 0.5]
-        let hamiltonian = IsingHamiltonian.fromCouplings(zzCouplings: couplings, xFields: fields, qubits: 3)
+        let hamiltonian = IsingHamiltonian.custom(zzCouplings: couplings, xFields: fields, qubits: 3)
         #expect(hamiltonian.terms.count == 6, "Triangle with 3 X fields should have 6 terms")
     }
 
@@ -169,7 +169,7 @@ struct IsingFromCouplingsTests {
     func fromCouplingsNonUniformStrengths() {
         let couplings = [(0, 1, 1.5), (1, 2, 2.0)]
         let fields: [Int: Double] = [:]
-        let hamiltonian = IsingHamiltonian.fromCouplings(zzCouplings: couplings, xFields: fields, qubits: 3)
+        let hamiltonian = IsingHamiltonian.custom(zzCouplings: couplings, xFields: fields, qubits: 3)
         let coefficients = hamiltonian.terms.map(\.coefficient).sorted()
         #expect(abs(coefficients[0] - -2.0) < 1e-10, "Larger coupling should produce coefficient -2.0")
         #expect(abs(coefficients[1] - -1.5) < 1e-10, "Smaller coupling should produce coefficient -1.5")
@@ -179,7 +179,7 @@ struct IsingFromCouplingsTests {
     func fromCouplingsSiteDependentFields() {
         let couplings: [(Int, Int, Double)] = []
         let fields: [Int: Double] = [0: 0.3, 1: 0.7, 2: 0.5]
-        let hamiltonian = IsingHamiltonian.fromCouplings(zzCouplings: couplings, xFields: fields, qubits: 3)
+        let hamiltonian = IsingHamiltonian.custom(zzCouplings: couplings, xFields: fields, qubits: 3)
         let xTerms = hamiltonian.terms.filter { $0.pauliString.operators.count == 1 }
         for term in xTerms {
             let qubit = term.pauliString.operators[0].qubit
@@ -190,7 +190,7 @@ struct IsingFromCouplingsTests {
 
     @Test("Empty couplings and fields produce empty Hamiltonian")
     func fromCouplingsEmpty() {
-        let hamiltonian = IsingHamiltonian.fromCouplings(zzCouplings: [], xFields: [:], qubits: 3)
+        let hamiltonian = IsingHamiltonian.custom(zzCouplings: [], xFields: [:], qubits: 3)
         #expect(hamiltonian.terms.isEmpty, "Empty couplings and fields should produce empty Hamiltonian")
     }
 
@@ -198,7 +198,7 @@ struct IsingFromCouplingsTests {
     func fromCouplingsStarGraph() {
         let couplings = [(0, 1, 1.0), (0, 2, 1.0), (0, 3, 1.0)]
         let fields: [Int: Double] = [:]
-        let hamiltonian = IsingHamiltonian.fromCouplings(zzCouplings: couplings, xFields: fields, qubits: 4)
+        let hamiltonian = IsingHamiltonian.custom(zzCouplings: couplings, xFields: fields, qubits: 4)
         let zzTerms = hamiltonian.terms.filter { $0.pauliString.operators.count == 2 }
         #expect(zzTerms.count == 3, "Star graph should have 3 ZZ edges")
         for term in zzTerms {

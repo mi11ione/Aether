@@ -1,7 +1,5 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov, Apache License 2.0
 
-import GameplayKit
-
 /// Asynchronous actor for efficient Clifford circuit simulation using stabilizer formalism.
 ///
 /// Provides thread-safe execution of Clifford-only quantum circuits with O(n^2) gate complexity
@@ -11,21 +9,20 @@ import GameplayKit
 /// **Example:**
 /// ```swift
 /// let simulator = CliffordSimulator()
-///
-/// var circuit = QuantumCircuit(qubits: 100)
+/// var circuit = QuantumCircuit(qubits: 3)
 /// circuit.append(.hadamard, to: 0)
-/// for i in 1..<100 {
-///     circuit.append(.cnot, to: [0, i])
-/// }
-///
+/// circuit.append(.cnot, to: [0, 1])
 /// let tableau = await simulator.execute(circuit)
-/// let samples = await simulator.sample(circuit, shots: 1_000_000, seed: 42)
 /// ```
 ///
 /// - SeeAlso: ``StabilizerTableau``
 /// - SeeAlso: ``CliffordGateClassifier``
 /// - SeeAlso: ``QuantumCircuit``
 public actor CliffordSimulator {
+    private static let twoPi = 2.0 * Double.pi
+    private static let halfPi = Double.pi / 2.0
+    private static let tolerance: Double = 1e-10
+
     /// Creates a new Clifford circuit simulator.
     ///
     /// Initializes an actor-isolated simulator for thread-safe Clifford circuit execution.
@@ -33,6 +30,8 @@ public actor CliffordSimulator {
     /// **Example:**
     /// ```swift
     /// let simulator = CliffordSimulator()
+    /// let circuit = QuantumCircuit(qubits: 2)
+    /// let tableau = await simulator.execute(circuit)
     /// ```
     public init() {}
 
@@ -48,10 +47,7 @@ public actor CliffordSimulator {
     /// var circuit = QuantumCircuit(qubits: 3)
     /// circuit.append(.hadamard, to: 0)
     /// circuit.append(.cnot, to: [0, 1])
-    /// circuit.append(.cnot, to: [0, 2])
-    ///
     /// let tableau = await simulator.execute(circuit)
-    /// let (p0, p1) = tableau.probability(of: 0, measuring: .z)
     /// ```
     ///
     /// - Parameter circuit: Quantum circuit containing only Clifford gates
@@ -75,26 +71,23 @@ public actor CliffordSimulator {
     /// **Example:**
     /// ```swift
     /// let simulator = CliffordSimulator()
-    ///
     /// var initial = StabilizerTableau(qubits: 2)
     /// initial.apply(.hadamard, to: 0)
-    ///
     /// var circuit = QuantumCircuit(qubits: 2)
-    /// circuit.append(.cnot, to: [0, 1])
-    ///
-    /// let final = await simulator.execute(circuit, from: initial)
+    /// let result = await simulator.execute(circuit, from: initial)
     /// ```
     ///
     /// - Parameters:
     ///   - circuit: Quantum circuit containing only Clifford gates
     ///   - from: Starting stabilizer tableau state
     /// - Returns: Final stabilizer tableau after applying all circuit operations
+    /// - Precondition: Circuit contains only Clifford gates (no T or non-Clifford rotations).
     /// - Complexity: O(n^2 * g / w) where n = qubits, g = gate count, w = 64 (word size)
     @_optimize(speed)
-    public func execute(_ circuit: QuantumCircuit, from: StabilizerTableau) async -> StabilizerTableau {
+    public func execute(_ circuit: QuantumCircuit, from initial: StabilizerTableau) async -> StabilizerTableau {
         validateCliffordCircuit(circuit)
 
-        var tableau = from
+        var tableau = initial
 
         for operation in circuit.operations {
             applyOperation(operation, to: &tableau)
@@ -113,16 +106,10 @@ public actor CliffordSimulator {
     /// **Example:**
     /// ```swift
     /// let simulator = CliffordSimulator()
-    ///
-    /// var circuit = QuantumCircuit(qubits: 10)
+    /// var circuit = QuantumCircuit(qubits: 3)
     /// circuit.append(.hadamard, to: 0)
-    /// for i in 1..<10 {
-    ///     circuit.append(.cnot, to: [0, i])
-    /// }
-    ///
-    /// let samples = await simulator.sample(circuit, shots: 1_000_000, seed: 42)
-    /// let countZero = samples.filter { $0 == 0 }.count
-    /// let countMax = samples.filter { $0 == 1023 }.count
+    /// circuit.append(.cnot, to: [0, 1])
+    /// let samples = await simulator.sample(circuit, shots: 1000, seed: 42)
     /// ```
     ///
     /// - Parameters:
@@ -130,34 +117,29 @@ public actor CliffordSimulator {
     ///   - shots: Number of measurement samples to collect (must be positive)
     ///   - seed: Optional seed for reproducible random results
     /// - Returns: Array of n-qubit measurement outcomes (each 0 to 2^n - 1)
+    /// - Precondition: shots > 0
     /// - Complexity: O(n^2 * g / w + shots * n / w) where n = qubits, g = gates, w = 64
     @_optimize(speed)
     public func sample(_ circuit: QuantumCircuit, shots: Int, seed: UInt64?) async -> [Int] {
         ValidationUtilities.validatePositiveInt(shots, name: "shots")
-        validateCliffordCircuit(circuit)
-
-        let n = determineQubitCount(circuit)
-        var tableau = StabilizerTableau(qubits: n)
-
-        for operation in circuit.operations {
-            applyOperation(operation, to: &tableau)
-        }
-
+        var tableau = await execute(circuit)
         return tableau.sample(shots: shots, seed: seed)
     }
 
+    /// Returns the qubit count for the given circuit.
     @inline(__always)
     private func determineQubitCount(_ circuit: QuantumCircuit) -> Int {
         let maxQubit = circuit.highestQubitIndex
         return max(circuit.qubits, maxQubit + 1)
     }
 
+    /// Validates that the circuit contains only Clifford gates.
     @inline(__always)
     private func validateCliffordCircuit(_ circuit: QuantumCircuit) {
-        let analysis = CliffordGateClassifier.analyze(circuit)
-        precondition(analysis.isClifford, "CliffordSimulator requires Clifford-only circuits (found \(analysis.tCount) T-equivalent gates)")
+        ValidationUtilities.validateCliffordCircuit(circuit)
     }
 
+    /// Dispatches a circuit operation to the appropriate gate application.
     @inline(__always)
     @_optimize(speed)
     private func applyOperation(_ operation: CircuitOperation, to tableau: inout StabilizerTableau) {
@@ -171,6 +153,7 @@ public actor CliffordSimulator {
         }
     }
 
+    /// Applies a single quantum gate to the stabilizer tableau.
     @inline(__always)
     @_optimize(speed)
     private func applyGate(_ gate: QuantumGate, qubits: [Int], to tableau: inout StabilizerTableau) {
@@ -180,70 +163,77 @@ public actor CliffordSimulator {
         case .cnot, .cz, .swap:
             tableau.apply(gate, to: qubits)
         case .cy:
-            tableau.apply(.sGate, to: qubits[1])
-            tableau.apply(.sGate, to: qubits[1])
-            tableau.apply(.sGate, to: qubits[1])
+            let target = qubits[1]
+            tableau.apply(.sGate, to: target)
+            tableau.apply(.sGate, to: target)
+            tableau.apply(.sGate, to: target)
             tableau.apply(.cnot, to: qubits)
-            tableau.apply(.sGate, to: qubits[1])
+            tableau.apply(.sGate, to: target)
         case .ch:
-            tableau.apply(.sGate, to: qubits[1])
-            tableau.apply(.hadamard, to: qubits[1])
-            tableau.apply(.sGate, to: qubits[1])
+            let target = qubits[1]
+            tableau.apply(.sGate, to: target)
+            tableau.apply(.hadamard, to: target)
+            tableau.apply(.sGate, to: target)
             tableau.apply(.cnot, to: qubits)
-            tableau.apply(.hadamard, to: qubits[1])
-            tableau.apply(.sGate, to: qubits[1])
+            tableau.apply(.hadamard, to: target)
+            tableau.apply(.sGate, to: target)
             tableau.apply(.cnot, to: qubits)
-            tableau.apply(.sGate, to: qubits[1])
-            tableau.apply(.sGate, to: qubits[1])
-            tableau.apply(.sGate, to: qubits[1])
+            tableau.apply(.sGate, to: target)
+            tableau.apply(.sGate, to: target)
+            tableau.apply(.sGate, to: target)
         case .iswap:
+            let q0 = qubits[0]
+            let q1 = qubits[1]
             tableau.apply(.swap, to: qubits)
-            tableau.apply(.sGate, to: qubits[0])
-            tableau.apply(.sGate, to: qubits[1])
+            tableau.apply(.sGate, to: q0)
+            tableau.apply(.sGate, to: q1)
             tableau.apply(.cz, to: qubits)
         case let .phase(angle):
             if case let .value(theta) = angle {
                 applyCliffordPhase(theta, qubit: qubits[0], to: &tableau)
             }
         case let .controlled(innerGate, _):
-            applyControlledClifford(innerGate, control: qubits[0], target: qubits[1], to: &tableau)
+            applyControlledClifford(innerGate, control: qubits[0], target: qubits[1], qubits: qubits, to: &tableau)
         default:
             break
         }
     }
 
+    /// Applies a Clifford-compatible phase rotation to the tableau.
     @inline(__always)
+    @_optimize(speed)
     private func applyCliffordPhase(_ theta: Double, qubit: Int, to tableau: inout StabilizerTableau) {
-        let normalized = theta.truncatingRemainder(dividingBy: 2.0 * .pi)
-        let adjusted = normalized < 0 ? normalized + 2.0 * .pi : normalized
-        let tolerance = 1e-10
+        let normalized = theta.truncatingRemainder(dividingBy: Self.twoPi)
+        let adjusted = (normalized + Self.twoPi).truncatingRemainder(dividingBy: Self.twoPi)
 
-        if abs(adjusted - .pi / 2.0) < tolerance || abs(adjusted - 5.0 * .pi / 2.0) < tolerance {
+        if abs(adjusted - Self.halfPi) < Self.tolerance {
             tableau.apply(.sGate, to: qubit)
-        } else if abs(adjusted - .pi) < tolerance {
+        } else if abs(adjusted - .pi) < Self.tolerance {
             tableau.apply(.pauliZ, to: qubit)
-        } else if abs(adjusted - 3.0 * .pi / 2.0) < tolerance || abs(adjusted - 7.0 * .pi / 2.0) < tolerance {
+        } else if abs(adjusted - 3.0 * Self.halfPi) < Self.tolerance {
             tableau.apply(.sGate, to: qubit)
             tableau.apply(.sGate, to: qubit)
             tableau.apply(.sGate, to: qubit)
         }
     }
 
+    /// Decomposes and applies a controlled Clifford gate to the tableau.
     @inline(__always)
-    private func applyControlledClifford(_ innerGate: QuantumGate, control: Int, target: Int, to tableau: inout StabilizerTableau) {
+    @_optimize(speed)
+    private func applyControlledClifford(_ innerGate: QuantumGate, control _: Int, target: Int, qubits: [Int], to tableau: inout StabilizerTableau) {
         switch innerGate {
         case .pauliX:
-            tableau.apply(.cnot, to: [control, target])
+            tableau.apply(.cnot, to: qubits)
         case .pauliY:
             tableau.apply(.sGate, to: target)
             tableau.apply(.sGate, to: target)
             tableau.apply(.sGate, to: target)
-            tableau.apply(.cnot, to: [control, target])
+            tableau.apply(.cnot, to: qubits)
             tableau.apply(.sGate, to: target)
         case .pauliZ:
-            tableau.apply(.cz, to: [control, target])
+            tableau.apply(.cz, to: qubits)
         case .sGate:
-            tableau.apply(.cz, to: [control, target])
+            tableau.apply(.cz, to: qubits)
             tableau.apply(.sGate, to: target)
         default:
             break

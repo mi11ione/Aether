@@ -654,7 +654,7 @@ func benchmarkQAOA() async -> [BenchmarkResult] {
 
     let optimizer = COBYLAOptimizer()
 
-    let edges4 = MaxCut.Examples.square()
+    let edges4 = MaxCut.Examples.square
     let cost4 = MaxCut.hamiltonian(edges: edges4)
     let mixer4 = MixerHamiltonian.x(qubits: 4)
     let qaoa4 = QAOA(
@@ -1133,7 +1133,7 @@ func benchmarkQAOACI() async -> [CIBenchmarkResult] {
 
     let optimizer = COBYLAOptimizer()
 
-    let edges4 = MaxCut.Examples.square()
+    let edges4 = MaxCut.Examples.square
     let cost4 = MaxCut.hamiltonian(edges: edges4)
     let mixer4 = MixerHamiltonian.x(qubits: 4)
     let qaoa4 = QAOA(

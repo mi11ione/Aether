@@ -15,7 +15,7 @@ struct DMRGConfigurationTests {
 
         #expect(config.maxSweeps == 20, "Default maxSweeps should be 20")
         #expect(abs(config.convergenceThreshold - 1e-8) < 1e-15, "Default convergenceThreshold should be 1e-8")
-        #expect(config.subspaceExpansion == false, "Default subspaceExpansion should be false")
+        #expect(config.isSubspaceExpansionEnabled == false, "Default isSubspaceExpansionEnabled should be false")
         #expect(abs(config.noiseStrength - 0.0) < 1e-15, "Default noiseStrength should be 0.0")
     }
 
@@ -25,7 +25,7 @@ struct DMRGConfigurationTests {
 
         #expect(config.maxSweeps == 50, "maxSweeps should be 50 when set explicitly")
         #expect(abs(config.convergenceThreshold - 1e-8) < 1e-15, "convergenceThreshold should remain default")
-        #expect(config.subspaceExpansion == false, "subspaceExpansion should remain default")
+        #expect(config.isSubspaceExpansionEnabled == false, "isSubspaceExpansionEnabled should remain default")
         #expect(abs(config.noiseStrength - 0.0) < 1e-15, "noiseStrength should remain default")
     }
 
@@ -35,17 +35,17 @@ struct DMRGConfigurationTests {
 
         #expect(config.maxSweeps == 20, "maxSweeps should remain default")
         #expect(abs(config.convergenceThreshold - 1e-12) < 1e-18, "convergenceThreshold should be 1e-12 when set explicitly")
-        #expect(config.subspaceExpansion == false, "subspaceExpansion should remain default")
+        #expect(config.isSubspaceExpansionEnabled == false, "isSubspaceExpansionEnabled should remain default")
         #expect(abs(config.noiseStrength - 0.0) < 1e-15, "noiseStrength should remain default")
     }
 
     @Test("Configuration with subspace expansion enabled")
-    func subspaceExpansionEnabled() {
-        let config = DMRGConfiguration(subspaceExpansion: true, noiseStrength: 1e-4)
+    func isSubspaceExpansionEnabledEnabled() {
+        let config = DMRGConfiguration(isSubspaceExpansionEnabled: true, noiseStrength: 1e-4)
 
         #expect(config.maxSweeps == 20, "maxSweeps should remain default")
         #expect(abs(config.convergenceThreshold - 1e-8) < 1e-15, "convergenceThreshold should remain default")
-        #expect(config.subspaceExpansion == true, "subspaceExpansion should be true when enabled")
+        #expect(config.isSubspaceExpansionEnabled == true, "isSubspaceExpansionEnabled should be true when enabled")
         #expect(abs(config.noiseStrength - 1e-4) < 1e-10, "noiseStrength should be 1e-4 when set explicitly")
     }
 
@@ -54,13 +54,13 @@ struct DMRGConfigurationTests {
         let config = DMRGConfiguration(
             maxSweeps: 100,
             convergenceThreshold: 1e-10,
-            subspaceExpansion: true,
+            isSubspaceExpansionEnabled: true,
             noiseStrength: 1e-5,
         )
 
         #expect(config.maxSweeps == 100, "maxSweeps should be 100")
         #expect(abs(config.convergenceThreshold - 1e-10) < 1e-16, "convergenceThreshold should be 1e-10")
-        #expect(config.subspaceExpansion == true, "subspaceExpansion should be true")
+        #expect(config.isSubspaceExpansionEnabled == true, "isSubspaceExpansionEnabled should be true")
         #expect(abs(config.noiseStrength - 1e-5) < 1e-11, "noiseStrength should be 1e-5")
     }
 
@@ -88,12 +88,12 @@ struct DMRGConfigurationTests {
         #expect(config1 != config2, "Configurations with different convergenceThreshold should not be equal")
     }
 
-    @Test("Configurations with different subspaceExpansion are not equal")
+    @Test("Configurations with different isSubspaceExpansionEnabled are not equal")
     func configurationsWithDifferentSubspaceExpansionNotEqual() {
-        let config1 = DMRGConfiguration(subspaceExpansion: false)
-        let config2 = DMRGConfiguration(subspaceExpansion: true)
+        let config1 = DMRGConfiguration(isSubspaceExpansionEnabled: false)
+        let config2 = DMRGConfiguration(isSubspaceExpansionEnabled: true)
 
-        #expect(config1 != config2, "Configurations with different subspaceExpansion should not be equal")
+        #expect(config1 != config2, "Configurations with different isSubspaceExpansionEnabled should not be equal")
     }
 
     @Test("Configurations with different noiseStrength are not equal")
@@ -121,9 +121,9 @@ struct DMRGConfigurationTests {
 
     @Test("Configuration with zero noiseStrength")
     func zeroNoiseStrength() {
-        let config = DMRGConfiguration(subspaceExpansion: true, noiseStrength: 0.0)
+        let config = DMRGConfiguration(isSubspaceExpansionEnabled: true, noiseStrength: 0.0)
 
-        #expect(config.subspaceExpansion == true, "subspaceExpansion should be true")
+        #expect(config.isSubspaceExpansionEnabled == true, "isSubspaceExpansionEnabled should be true")
         #expect(abs(config.noiseStrength - 0.0) < 1e-15, "noiseStrength should be exactly 0.0")
     }
 

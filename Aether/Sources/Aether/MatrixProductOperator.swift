@@ -33,6 +33,8 @@
     /// let mpo = MatrixProductOperator(pauliString: PauliString(.z(0)), sites: 4)
     /// print(mpo.sites)  // 4
     /// ```
+    ///
+    /// - SeeAlso: ``tensors``
     public let sites: Int
 
     /// Array of MPO tensors forming the operator chain.
@@ -45,6 +47,8 @@
     /// let mpo = MatrixProductOperator(pauliString: PauliString(.z(0)), sites: 2)
     /// print(mpo.tensors.count)  // 2
     /// ```
+    ///
+    /// - SeeAlso: ``MPOTensor``
     public let tensors: [MPOTensor]
 
     /// Creates MPO from a quantum observable (weighted sum of Pauli strings).
@@ -66,6 +70,8 @@
     /// - Parameter observable: Observable as weighted sum of Pauli strings
     /// - Complexity: O(k * n * d^4) where k is number of terms, n is sites, d is physical dimension
     /// - Precondition: Observable must have at least one term with at least one Pauli operator
+    /// - SeeAlso: ``Observable``
+    /// - SeeAlso: ``init(pauliString:sites:)``
     public init(observable: Observable) {
         let maxQubit = Self.findMaxQubit(observable: observable)
         ValidationUtilities.validatePositiveInt(maxQubit + 1, name: "Sites count")
@@ -85,10 +91,12 @@
             if accumulatedTensors == nil {
                 accumulatedTensors = pauliMPO
             } else {
+                // Safety: accumulatedTensors is non-nil in this branch
                 accumulatedTensors = Self.addMPOTensors(accumulatedTensors!, pauliMPO)
             }
         }
 
+        // Safety: precondition ensures at least one term, so loop executes at least once
         tensors = accumulatedTensors!
     }
 
@@ -109,6 +117,8 @@
     ///   - sites: Total number of sites in the MPO chain
     /// - Complexity: O(n) where n is sites
     /// - Precondition: sites > 0, all Pauli operator qubit indices < sites
+    /// - SeeAlso: ``PauliString``
+    /// - SeeAlso: ``init(observable:)``
     public init(pauliString: PauliString, sites: Int) {
         ValidationUtilities.validatePositiveInt(sites, name: "Sites count")
 
@@ -140,6 +150,8 @@
     /// - Returns: New MPS representing O|psi> with truncated bond dimensions
     /// - Complexity: O(chi_MPO * chi_MPS^2 * d^2 * n) where d is physical dimension
     /// - Precondition: mps.qubits == sites
+    /// - SeeAlso: ``MatrixProductState``
+    /// - SeeAlso: ``SVDTruncation``
     @_optimize(speed)
     public func applying(to mps: MatrixProductState, truncation: SVDTruncation) -> MatrixProductState {
         ValidationUtilities.validateQubitCountsEqual(mps.qubits, sites, name1: "MPS qubits", name2: "MPO sites")
@@ -156,7 +168,6 @@
 
         var result = Self.buildMPSFromTensors(tensors: resultTensors, maxBondDimension: mps.maxBondDimension)
         result = Self.truncateMPS(mps: result, truncation: truncation)
-        result = Self.canonicalizeMPS(mps: result, truncation: truncation)
 
         return result
     }
@@ -181,6 +192,7 @@
     /// - Returns: Real part of matrix element <phi|O|psi>
     /// - Complexity: O(chi_bra * chi_ket * chi_MPO * d^2 * n)
     /// - Precondition: bra.qubits == ket.qubits == sites
+    /// - SeeAlso: ``MatrixProductState``
     @_optimize(speed)
     public func expectationValue(bra: MatrixProductState, ket: MatrixProductState) -> Double {
         ValidationUtilities.validateQubitCountsEqual(bra.qubits, sites, name1: "Bra qubits", name2: "MPO sites")
@@ -227,10 +239,7 @@
         sites: Int,
         coefficient: Double,
     ) -> [MPOTensor] {
-        var pauliMap = [Int: PauliBasis]()
-        for op in pauliString.operators {
-            pauliMap[op.qubit] = op.basis
-        }
+        let pauliMap = Dictionary(uniqueKeysWithValues: pauliString.operators.map { ($0.qubit, $0.basis) })
 
         var mpoTensors = [MPOTensor]()
         mpoTensors.reserveCapacity(sites)
@@ -239,17 +248,14 @@
             let pauliAtSite = pauliMap[site]
             let matrix = pauliMatrix(pauliAtSite)
 
-            var elements = [Complex<Double>]()
-            elements.reserveCapacity(4)
-
-            for physIn in 0 ..< 2 {
-                for physOut in 0 ..< 2 {
-                    var element = matrix[physIn][physOut]
-                    if site == 0 {
-                        element = element * coefficient
+            let coeff = site == 0 ? coefficient : 1.0
+            let elements = [Complex<Double>](unsafeUninitializedCapacity: 4) { buffer, count in
+                for physIn in 0 ..< 2 {
+                    for physOut in 0 ..< 2 {
+                        buffer[physIn * 2 + physOut] = matrix[physIn][physOut] * coeff
                     }
-                    elements.append(element)
                 }
+                count = 4
             }
 
             mpoTensors.append(MPOTensor(
@@ -262,13 +268,20 @@
         return mpoTensors
     }
 
-    /// Adds two MPOs using direct sum of bond dimensions with optional truncation.
+    /// Magnitude-squared threshold below which transfer matrix elements are skipped.
+    private static let transferMatrixSkipThreshold: Double = 1e-30
+
+    /// 3D array indexed [bra][mpo][ket] for transfer matrix contraction.
+    private typealias TransferMatrix = [[[Complex<Double>]]]
+    /// 4D cache indexed [mpoLeft][physKet][braRight][mpoRight] for intermediate contraction.
+    private typealias BraMPOCache = [[[[Complex<Double>]]]]
+
+    /// Adds two MPOs using direct sum of bond dimensions.
+    @_effects(readonly)
     @_optimize(speed)
     private static func addMPOTensors(_ mpo1: [MPOTensor], _ mpo2: [MPOTensor]) -> [MPOTensor] {
         var result = [MPOTensor]()
         result.reserveCapacity(mpo1.count)
-
-        let maxMPOBondDimension = 64
 
         for site in 0 ..< mpo1.count {
             let t1 = mpo1[site]
@@ -278,376 +291,109 @@
             let isLast = site == mpo1.count - 1
 
             if isFirst, isLast {
-                var elements = [Complex<Double>]()
-                elements.reserveCapacity(4)
-                for physIn in 0 ..< 2 {
-                    for physOut in 0 ..< 2 {
-                        elements.append(t1[0, physIn, physOut, 0] + t2[0, physIn, physOut, 0])
+                let elements = [Complex<Double>](unsafeUninitializedCapacity: 4) { buffer, count in
+                    for physIn in 0 ..< 2 {
+                        for physOut in 0 ..< 2 {
+                            buffer[physIn * 2 + physOut] = t1[0, physIn, physOut, 0] + t2[0, physIn, physOut, 0]
+                        }
                     }
+                    count = 4
                 }
                 result.append(MPOTensor(leftBondDimension: 1, rightBondDimension: 1, elements: elements))
             } else if isFirst {
-                let rawRightDim = t1.rightBondDimension + t2.rightBondDimension
-                let newRightDim = min(rawRightDim, maxMPOBondDimension)
-
-                if rawRightDim <= maxMPOBondDimension {
-                    var elements = [Complex<Double>]()
-                    elements.reserveCapacity(4 * newRightDim)
-
+                let newRightDim = t1.rightBondDimension + t2.rightBondDimension
+                let elements = [Complex<Double>](unsafeUninitializedCapacity: 4 * newRightDim) { buffer, count in
+                    var idx = 0
                     for physIn in 0 ..< 2 {
                         for physOut in 0 ..< 2 {
                             for beta in 0 ..< t1.rightBondDimension {
-                                elements.append(t1[0, physIn, physOut, beta])
+                                buffer[idx] = t1[0, physIn, physOut, beta]
+                                idx += 1
                             }
                             for beta in 0 ..< t2.rightBondDimension {
-                                elements.append(t2[0, physIn, physOut, beta])
+                                buffer[idx] = t2[0, physIn, physOut, beta]
+                                idx += 1
                             }
                         }
                     }
-
-                    result.append(MPOTensor(leftBondDimension: 1, rightBondDimension: newRightDim, elements: elements))
-                } else {
-                    let truncated = truncateMPOTensorRight(
-                        t1: t1,
-                        t2: t2,
-                        targetDim: maxMPOBondDimension,
-                        isFirst: true,
-                    )
-                    result.append(truncated)
+                    count = 4 * newRightDim
                 }
+                result.append(MPOTensor(leftBondDimension: 1, rightBondDimension: newRightDim, elements: elements))
             } else if isLast {
-                let rawLeftDim = t1.leftBondDimension + t2.leftBondDimension
-                let newLeftDim = min(rawLeftDim, maxMPOBondDimension)
-
-                if rawLeftDim <= maxMPOBondDimension {
-                    var elements = [Complex<Double>]()
-                    elements.reserveCapacity(newLeftDim * 4)
-
+                let newLeftDim = t1.leftBondDimension + t2.leftBondDimension
+                let elements = [Complex<Double>](unsafeUninitializedCapacity: newLeftDim * 4) { buffer, count in
+                    var idx = 0
                     for alpha in 0 ..< t1.leftBondDimension {
                         for physIn in 0 ..< 2 {
                             for physOut in 0 ..< 2 {
-                                elements.append(t1[alpha, physIn, physOut, 0])
+                                buffer[idx] = t1[alpha, physIn, physOut, 0]
+                                idx += 1
                             }
                         }
                     }
                     for alpha in 0 ..< t2.leftBondDimension {
                         for physIn in 0 ..< 2 {
                             for physOut in 0 ..< 2 {
-                                elements.append(t2[alpha, physIn, physOut, 0])
+                                buffer[idx] = t2[alpha, physIn, physOut, 0]
+                                idx += 1
                             }
                         }
                     }
-
-                    result.append(MPOTensor(leftBondDimension: newLeftDim, rightBondDimension: 1, elements: elements))
-                } else {
-                    let truncated = truncateMPOTensorLeft(
-                        t1: t1,
-                        t2: t2,
-                        targetDim: maxMPOBondDimension,
-                        isLast: true,
-                    )
-                    result.append(truncated)
+                    count = newLeftDim * 4
                 }
+                result.append(MPOTensor(leftBondDimension: newLeftDim, rightBondDimension: 1, elements: elements))
             } else {
-                let rawLeftDim = t1.leftBondDimension + t2.leftBondDimension
-                let rawRightDim = t1.rightBondDimension + t2.rightBondDimension
-                let newLeftDim = min(rawLeftDim, maxMPOBondDimension)
-                let newRightDim = min(rawRightDim, maxMPOBondDimension)
-
-                if rawLeftDim <= maxMPOBondDimension, rawRightDim <= maxMPOBondDimension {
-                    var elements = [Complex<Double>]()
-                    elements.reserveCapacity(newLeftDim * 4 * newRightDim)
-
-                    for alpha in 0 ..< newLeftDim {
+                let newLeftDim = t1.leftBondDimension + t2.leftBondDimension
+                let newRightDim = t1.rightBondDimension + t2.rightBondDimension
+                let totalCount = newLeftDim * 4 * newRightDim
+                let elements = [Complex<Double>](unsafeUninitializedCapacity: totalCount) { buffer, count in
+                    buffer.initialize(repeating: .zero)
+                    for alpha in 0 ..< t1.leftBondDimension {
                         for physIn in 0 ..< 2 {
                             for physOut in 0 ..< 2 {
-                                for beta in 0 ..< newRightDim {
-                                    if alpha < t1.leftBondDimension, beta < t1.rightBondDimension {
-                                        elements.append(t1[alpha, physIn, physOut, beta])
-                                    } else if alpha >= t1.leftBondDimension, beta >= t1.rightBondDimension {
-                                        let a2 = alpha - t1.leftBondDimension
-                                        let b2 = beta - t1.rightBondDimension
-                                        elements.append(t2[a2, physIn, physOut, b2])
-                                    } else {
-                                        elements.append(.zero)
-                                    }
+                                for beta in 0 ..< t1.rightBondDimension {
+                                    buffer[alpha * 4 * newRightDim + physIn * 2 * newRightDim + physOut * newRightDim + beta] = t1[alpha, physIn, physOut, beta]
                                 }
                             }
                         }
                     }
-
-                    result.append(MPOTensor(leftBondDimension: newLeftDim, rightBondDimension: newRightDim, elements: elements))
-                } else {
-                    let truncated = truncateMPOTensorBoth(
-                        t1: t1,
-                        t2: t2,
-                        targetLeftDim: maxMPOBondDimension,
-                        targetRightDim: maxMPOBondDimension,
-                    )
-                    result.append(truncated)
+                    for alpha in 0 ..< t2.leftBondDimension {
+                        for physIn in 0 ..< 2 {
+                            for physOut in 0 ..< 2 {
+                                for beta in 0 ..< t2.rightBondDimension {
+                                    let idx = (t1.leftBondDimension + alpha) * 4 * newRightDim + physIn * 2 * newRightDim + physOut * newRightDim + (t1.rightBondDimension + beta)
+                                    buffer[idx] = t2[alpha, physIn, physOut, beta]
+                                }
+                            }
+                        }
+                    }
+                    count = totalCount
                 }
+                result.append(MPOTensor(leftBondDimension: newLeftDim, rightBondDimension: newRightDim, elements: elements))
             }
         }
 
         return result
     }
 
-    /// Truncates combined MPO tensor right bond dimension via SVD.
-    @_optimize(speed)
-    private static func truncateMPOTensorRight(
-        t1: MPOTensor,
-        t2: MPOTensor,
-        targetDim: Int,
-        isFirst: Bool,
-    ) -> MPOTensor {
-        let leftDim = isFirst ? 1 : t1.leftBondDimension + t2.leftBondDimension
-        let combinedRightDim = t1.rightBondDimension + t2.rightBondDimension
-
-        var matrix = [[Complex<Double>]](
-            repeating: [Complex<Double>](repeating: .zero, count: combinedRightDim),
-            count: leftDim * 4,
-        )
-
-        for alpha in 0 ..< (isFirst ? 1 : t1.leftBondDimension) {
-            for physIn in 0 ..< 2 {
-                for physOut in 0 ..< 2 {
-                    let row = alpha * 4 + physIn * 2 + physOut
-                    for beta in 0 ..< t1.rightBondDimension {
-                        matrix[row][beta] = t1[isFirst ? 0 : alpha, physIn, physOut, beta]
-                    }
-                }
-            }
-        }
-
-        if !isFirst {
-            for alpha in 0 ..< t2.leftBondDimension {
-                for physIn in 0 ..< 2 {
-                    for physOut in 0 ..< 2 {
-                        let row = (t1.leftBondDimension + alpha) * 4 + physIn * 2 + physOut
-                        for beta in 0 ..< t2.rightBondDimension {
-                            matrix[row][t1.rightBondDimension + beta] = t2[alpha, physIn, physOut, beta]
-                        }
-                    }
-                }
-            }
-        } else {
-            for physIn in 0 ..< 2 {
-                for physOut in 0 ..< 2 {
-                    let row = physIn * 2 + physOut
-                    for beta in 0 ..< t2.rightBondDimension {
-                        matrix[row][t1.rightBondDimension + beta] = t2[0, physIn, physOut, beta]
-                    }
-                }
-            }
-        }
-
-        let svdResult = SVDDecomposition.decompose(matrix: matrix, truncation: .maxBondDimension(targetDim))
-        let newRightDim = svdResult.singularValues.count
-
-        var elements = [Complex<Double>]()
-        let actualLeftDim = isFirst ? 1 : leftDim
-        elements.reserveCapacity(actualLeftDim * 4 * newRightDim)
-
-        for alpha in 0 ..< actualLeftDim {
-            for physIn in 0 ..< 2 {
-                for physOut in 0 ..< 2 {
-                    for beta in 0 ..< newRightDim {
-                        let row = alpha * 4 + physIn * 2 + physOut
-                        elements.append(svdResult.u[row][beta] * svdResult.singularValues[beta])
-                    }
-                }
-            }
-        }
-
-        return MPOTensor(leftBondDimension: actualLeftDim, rightBondDimension: newRightDim, elements: elements)
-    }
-
-    /// Truncates combined MPO tensor left bond dimension via SVD.
-    @_optimize(speed)
-    private static func truncateMPOTensorLeft(
-        t1: MPOTensor,
-        t2: MPOTensor,
-        targetDim: Int,
-        isLast: Bool,
-    ) -> MPOTensor {
-        let combinedLeftDim = t1.leftBondDimension + t2.leftBondDimension
-        let rightDim = isLast ? 1 : t1.rightBondDimension + t2.rightBondDimension
-
-        var matrix = [[Complex<Double>]](
-            repeating: [Complex<Double>](repeating: .zero, count: rightDim * 4),
-            count: combinedLeftDim,
-        )
-
-        for alpha in 0 ..< t1.leftBondDimension {
-            for physIn in 0 ..< 2 {
-                for physOut in 0 ..< 2 {
-                    for beta in 0 ..< (isLast ? 1 : t1.rightBondDimension) {
-                        let col = beta * 4 + physIn * 2 + physOut
-                        matrix[alpha][col] = t1[alpha, physIn, physOut, isLast ? 0 : beta]
-                    }
-                }
-            }
-        }
-
-        for alpha in 0 ..< t2.leftBondDimension {
-            for physIn in 0 ..< 2 {
-                for physOut in 0 ..< 2 {
-                    for beta in 0 ..< (isLast ? 1 : t2.rightBondDimension) {
-                        let col = (isLast ? 0 : t1.rightBondDimension + beta) * 4 + physIn * 2 + physOut
-                        matrix[t1.leftBondDimension + alpha][col] = t2[alpha, physIn, physOut, isLast ? 0 : beta]
-                    }
-                }
-            }
-        }
-
-        let svdResult = SVDDecomposition.decompose(matrix: matrix, truncation: .maxBondDimension(targetDim))
-        let newLeftDim = svdResult.singularValues.count
-
-        var elements = [Complex<Double>]()
-        let actualRightDim = isLast ? 1 : rightDim
-        elements.reserveCapacity(newLeftDim * 4 * actualRightDim)
-
-        for alpha in 0 ..< newLeftDim {
-            for physIn in 0 ..< 2 {
-                for physOut in 0 ..< 2 {
-                    for beta in 0 ..< actualRightDim {
-                        let col = beta * 4 + physIn * 2 + physOut
-                        var sum: Complex<Double> = .zero
-                        for k in 0 ..< combinedLeftDim {
-                            sum = sum + svdResult.u[k][alpha].conjugate * svdResult.singularValues[alpha] * matrix[k][col]
-                        }
-                        elements.append(sum)
-                    }
-                }
-            }
-        }
-
-        return MPOTensor(leftBondDimension: newLeftDim, rightBondDimension: actualRightDim, elements: elements)
-    }
-
-    /// Truncates combined MPO tensor on both left and right bond dimensions.
-    @_optimize(speed)
-    private static func truncateMPOTensorBoth(
-        t1: MPOTensor,
-        t2: MPOTensor,
-        targetLeftDim: Int,
-        targetRightDim: Int,
-    ) -> MPOTensor {
-        let combinedLeftDim = t1.leftBondDimension + t2.leftBondDimension
-        let combinedRightDim = t1.rightBondDimension + t2.rightBondDimension
-
-        var fullTensor = [Complex<Double>](repeating: .zero, count: combinedLeftDim * 4 * combinedRightDim)
-
-        for alpha in 0 ..< t1.leftBondDimension {
-            for physIn in 0 ..< 2 {
-                for physOut in 0 ..< 2 {
-                    for beta in 0 ..< t1.rightBondDimension {
-                        let idx = alpha * 4 * combinedRightDim + physIn * 2 * combinedRightDim + physOut * combinedRightDim + beta
-                        fullTensor[idx] = t1[alpha, physIn, physOut, beta]
-                    }
-                }
-            }
-        }
-
-        for alpha in 0 ..< t2.leftBondDimension {
-            for physIn in 0 ..< 2 {
-                for physOut in 0 ..< 2 {
-                    for beta in 0 ..< t2.rightBondDimension {
-                        let newAlpha = t1.leftBondDimension + alpha
-                        let newBeta = t1.rightBondDimension + beta
-                        let idx = newAlpha * 4 * combinedRightDim + physIn * 2 * combinedRightDim + physOut * combinedRightDim + newBeta
-                        fullTensor[idx] = t2[alpha, physIn, physOut, beta]
-                    }
-                }
-            }
-        }
-
-        var matrix = [[Complex<Double>]](
-            repeating: [Complex<Double>](repeating: .zero, count: combinedRightDim),
-            count: combinedLeftDim * 4,
-        )
-
-        for alpha in 0 ..< combinedLeftDim {
-            for physIn in 0 ..< 2 {
-                for physOut in 0 ..< 2 {
-                    let row = alpha * 4 + physIn * 2 + physOut
-                    for beta in 0 ..< combinedRightDim {
-                        let idx = alpha * 4 * combinedRightDim + physIn * 2 * combinedRightDim + physOut * combinedRightDim + beta
-                        matrix[row][beta] = fullTensor[idx]
-                    }
-                }
-            }
-        }
-
-        let svdResult = SVDDecomposition.decompose(matrix: matrix, truncation: .maxBondDimension(targetRightDim))
-        let newRightDim = svdResult.singularValues.count
-
-        var intermediate = [[Complex<Double>]](
-            repeating: [Complex<Double>](repeating: .zero, count: newRightDim),
-            count: combinedLeftDim * 4,
-        )
-
-        for row in 0 ..< combinedLeftDim * 4 {
-            for beta in 0 ..< newRightDim {
-                intermediate[row][beta] = svdResult.u[row][beta] * svdResult.singularValues[beta]
-            }
-        }
-
-        var leftMatrix = [[Complex<Double>]](
-            repeating: [Complex<Double>](repeating: .zero, count: 4 * newRightDim),
-            count: combinedLeftDim,
-        )
-
-        for alpha in 0 ..< combinedLeftDim {
-            for physIn in 0 ..< 2 {
-                for physOut in 0 ..< 2 {
-                    let row = alpha * 4 + physIn * 2 + physOut
-                    for beta in 0 ..< newRightDim {
-                        let col = physIn * 2 * newRightDim + physOut * newRightDim + beta
-                        leftMatrix[alpha][col] = intermediate[row][beta]
-                    }
-                }
-            }
-        }
-
-        let svdResult2 = SVDDecomposition.decompose(matrix: leftMatrix, truncation: .maxBondDimension(targetLeftDim))
-        let newLeftDim = svdResult2.singularValues.count
-
-        var elements = [Complex<Double>]()
-        elements.reserveCapacity(newLeftDim * 4 * newRightDim)
-
-        for alpha in 0 ..< newLeftDim {
-            for physIn in 0 ..< 2 {
-                for physOut in 0 ..< 2 {
-                    for beta in 0 ..< newRightDim {
-                        let col = physIn * 2 * newRightDim + physOut * newRightDim + beta
-                        var sum: Complex<Double> = .zero
-                        for k in 0 ..< combinedLeftDim {
-                            sum = sum + svdResult2.u[k][alpha].conjugate * svdResult2.singularValues[alpha] * leftMatrix[k][col]
-                        }
-                        elements.append(sum)
-                    }
-                }
-            }
-        }
-
-        return MPOTensor(leftBondDimension: newLeftDim, rightBondDimension: newRightDim, elements: elements)
-    }
+    /// 2x2 identity matrix.
+    private static let pauliI: [[Complex<Double>]] = [[.one, .zero], [.zero, .one]]
+    /// 2x2 Pauli-X matrix.
+    private static let pauliX: [[Complex<Double>]] = [[.zero, .one], [.one, .zero]]
+    /// 2x2 Pauli-Y matrix.
+    private static let pauliY: [[Complex<Double>]] = [[.zero, Complex(0, -1)], [Complex(0, 1), .zero]]
+    /// 2x2 Pauli-Z matrix.
+    private static let pauliZ: [[Complex<Double>]] = [[.one, .zero], [.zero, Complex(-1, 0)]]
 
     /// Returns 2x2 matrix representation of Pauli operator or identity.
+    @inline(__always)
     @_effects(readonly)
     private static func pauliMatrix(_ basis: PauliBasis?) -> [[Complex<Double>]] {
-        guard let basis else {
-            return [[.one, .zero], [.zero, .one]]
-        }
-
+        guard let basis else { return pauliI }
         switch basis {
-        case .x:
-            return [[.zero, .one], [.one, .zero]]
-        case .y:
-            return [[.zero, Complex(0, -1)], [Complex(0, 1), .zero]]
-        case .z:
-            return [[.one, .zero], [.zero, Complex(-1, 0)]]
+        case .x: return pauliX
+        case .y: return pauliY
+        case .z: return pauliZ
         }
     }
 
@@ -662,32 +408,32 @@
         let newLeftDim = mpoLeftDim * mpsLeftDim
         let newRightDim = mpoRightDim * mpsRightDim
 
-        var elements = [Complex<Double>]()
-        elements.reserveCapacity(newLeftDim * 2 * newRightDim)
-
-        for alphaO in 0 ..< mpoLeftDim {
-            for alphaS in 0 ..< mpsLeftDim {
-                for physOut in 0 ..< 2 {
-                    for betaO in 0 ..< mpoRightDim {
-                        for betaS in 0 ..< mpsRightDim {
-                            var sum: Complex<Double> = .zero
-                            for physIn in 0 ..< 2 {
-                                let mpoElement = mpo[alphaO, physIn, physOut, betaO]
-                                let mpsElement = mps[alphaS, physIn, betaS]
-                                sum = sum + mpoElement * mpsElement
+        let elements = [Complex<Double>](unsafeUninitializedCapacity: newLeftDim * 2 * newRightDim) { buffer, count in
+            var idx = 0
+            for alphaO in 0 ..< mpoLeftDim {
+                for alphaS in 0 ..< mpsLeftDim {
+                    for physOut in 0 ..< 2 {
+                        for betaO in 0 ..< mpoRightDim {
+                            for betaS in 0 ..< mpsRightDim {
+                                var sum: Complex<Double> = .zero
+                                for physIn in 0 ..< 2 {
+                                    sum = sum + mpo[alphaO, physIn, physOut, betaO] * mps[alphaS, physIn, betaS]
+                                }
+                                buffer[idx] = sum
+                                idx += 1
                             }
-                            elements.append(sum)
                         }
                     }
                 }
             }
+            count = newLeftDim * 2 * newRightDim
         }
 
         return MPSTensor(
             leftBondDimension: newLeftDim,
             rightBondDimension: newRightDim,
             site: site,
-            elements: elements,
+            elements: elements
         )
     }
 
@@ -717,16 +463,18 @@
             let newRightDim = svdResult.singularValues.count
             let leftDim = tensor.leftBondDimension
 
-            var leftElements = [Complex<Double>]()
-            leftElements.reserveCapacity(leftDim * 2 * newRightDim)
-
-            for alpha in 0 ..< leftDim {
-                for physical in 0 ..< 2 {
-                    for beta in 0 ..< newRightDim {
+            let leftElements = [Complex<Double>](unsafeUninitializedCapacity: leftDim * 2 * newRightDim) { buffer, count in
+                var idx = 0
+                for alpha in 0 ..< leftDim {
+                    for physical in 0 ..< 2 {
                         let rowIdx = alpha * 2 + physical
-                        leftElements.append(svdResult.u[rowIdx][beta])
+                        for beta in 0 ..< newRightDim {
+                            buffer[idx] = svdResult.u[rowIdx][beta]
+                            idx += 1
+                        }
                     }
                 }
+                count = leftDim * 2 * newRightDim
             }
 
             let leftTensor = MPSTensor(
@@ -742,25 +490,23 @@
             let nextTensor = result.tensors[site + 1]
             let nextRightDim = nextTensor.rightBondDimension
 
-            var nextElements = [Complex<Double>]()
-            nextElements.reserveCapacity(newRightDim * 2 * nextRightDim)
-
-            for alpha in 0 ..< newRightDim {
-                for physical in 0 ..< 2 {
-                    for beta in 0 ..< nextRightDim {
-                        var sum: Complex<Double> = .zero
-                        let oldLeftDim = nextTensor.leftBondDimension
-                        for gamma in 0 ..< min(oldLeftDim, svdResult.vDagger[0].count) {
-                            let sigma = svdResult.singularValues[alpha]
-                            let vElement = svdResult.vDagger[alpha][gamma]
-                            let sVt = vElement * sigma
-                            if gamma < oldLeftDim {
-                                sum = sum + sVt * nextTensor[gamma, physical, beta]
+            let oldLeftDim = nextTensor.leftBondDimension
+            let nextElements = [Complex<Double>](unsafeUninitializedCapacity: newRightDim * 2 * nextRightDim) { buffer, count in
+                var idx = 0
+                for alpha in 0 ..< newRightDim {
+                    let sigma = svdResult.singularValues[alpha]
+                    for physical in 0 ..< 2 {
+                        for beta in 0 ..< nextRightDim {
+                            var sum: Complex<Double> = .zero
+                            for gamma in 0 ..< min(oldLeftDim, svdResult.vDagger[0].count) {
+                                sum = sum + svdResult.vDagger[alpha][gamma] * nextTensor[gamma, physical, beta]
                             }
+                            buffer[idx] = sum * sigma
+                            idx += 1
                         }
-                        nextElements.append(sum)
                     }
                 }
+                count = newRightDim * 2 * nextRightDim
             }
 
             let nextNewTensor = MPSTensor(
@@ -782,8 +528,8 @@
         braLeftDim: Int,
         ketLeftDim: Int,
         mpoLeftDim: Int,
-    ) -> [[[Complex<Double>]]] {
-        var transfer = [[[Complex<Double>]]](
+    ) -> TransferMatrix {
+        var transfer: TransferMatrix = [[[Complex<Double>]]](
             repeating: [[Complex<Double>]](
                 repeating: [Complex<Double>](repeating: .zero, count: ketLeftDim),
                 count: mpoLeftDim,
@@ -794,69 +540,14 @@
         return transfer
     }
 
-    /// Propagates transfer matrix through one site by tensor contraction.
-    @_optimize(speed)
-    private static func propagateTransferMatrix(
-        transfer: [[[Complex<Double>]]],
-        braTensor: MPSTensor,
-        mpoTensor: MPOTensor,
-        ketTensor: MPSTensor,
-    ) -> [[[Complex<Double>]]] {
-        let braRightDim = braTensor.rightBondDimension
-        let mpoRightDim = mpoTensor.rightBondDimension
-        let ketRightDim = ketTensor.rightBondDimension
-
-        var newTransfer = [[[Complex<Double>]]](
-            repeating: [[Complex<Double>]](
-                repeating: [Complex<Double>](repeating: .zero, count: ketRightDim),
-                count: mpoRightDim,
-            ),
-            count: braRightDim,
-        )
-
-        let braLeftDim = braTensor.leftBondDimension
-        let mpoLeftDim = mpoTensor.leftBondDimension
-        let ketLeftDim = ketTensor.leftBondDimension
-
-        for alphaBra in 0 ..< braLeftDim {
-            for alphaO in 0 ..< mpoLeftDim {
-                for alphaKet in 0 ..< ketLeftDim {
-                    let transferElement = transfer[alphaBra][alphaO][alphaKet]
-                    if transferElement.magnitudeSquared < 1e-30 {
-                        continue
-                    }
-
-                    for physBra in 0 ..< 2 {
-                        for physKet in 0 ..< 2 {
-                            for betaBra in 0 ..< braRightDim {
-                                for betaO in 0 ..< mpoRightDim {
-                                    for betaKet in 0 ..< ketRightDim {
-                                        let braConj = braTensor[alphaBra, physBra, betaBra].conjugate
-                                        let mpoElement = mpoTensor[alphaO, physKet, physBra, betaO]
-                                        let ketElement = ketTensor[alphaKet, physKet, betaKet]
-
-                                        let contribution = transferElement * braConj * mpoElement * ketElement
-                                        newTransfer[betaBra][betaO][betaKet] = newTransfer[betaBra][betaO][betaKet] + contribution
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        return newTransfer
-    }
-
     /// Propagates transfer matrix with intermediate caching for better performance.
     @_optimize(speed)
     private static func propagateTransferMatrixOptimized(
-        transfer: [[[Complex<Double>]]],
+        transfer: TransferMatrix,
         braTensor: MPSTensor,
         mpoTensor: MPOTensor,
         ketTensor: MPSTensor,
-    ) -> [[[Complex<Double>]]] {
+    ) -> TransferMatrix {
         let braLeftDim = braTensor.leftBondDimension
         let braRightDim = braTensor.rightBondDimension
         let mpoLeftDim = mpoTensor.leftBondDimension
@@ -868,7 +559,7 @@
         let mpoElements = mpoTensor.elements
         let ketElements = ketTensor.elements
 
-        var braMpoIntermediate = [[[[Complex<Double>]]]](
+        var braMpoIntermediate: BraMPOCache = [[[[Complex<Double>]]]](
             repeating: [[[Complex<Double>]]](
                 repeating: [[Complex<Double>]](
                     repeating: [Complex<Double>](repeating: .zero, count: mpoRightDim),
@@ -888,7 +579,7 @@
 
                         for alphaKet in 0 ..< ketLeftDim {
                             let transferElement = transfer[alphaBra][alphaO][alphaKet]
-                            if transferElement.magnitudeSquared < 1e-30 {
+                            if transferElement.magnitudeSquared < transferMatrixSkipThreshold {
                                 continue
                             }
 
@@ -908,7 +599,7 @@
             }
         }
 
-        var newTransfer = [[[Complex<Double>]]](
+        var newTransfer: TransferMatrix = [[[Complex<Double>]]](
             repeating: [[Complex<Double>]](
                 repeating: [Complex<Double>](repeating: .zero, count: ketRightDim),
                 count: mpoRightDim,
@@ -937,87 +628,4 @@
         return newTransfer
     }
 
-    /// Brings MPS to right-canonical form with bond dimension truncation.
-    @_optimize(speed)
-    private static func canonicalizeMPS(mps: MatrixProductState, truncation: SVDTruncation) -> MatrixProductState {
-        var result = mps
-
-        let targetDim: Int
-        switch truncation {
-        case let .maxBondDimension(dim):
-            targetDim = dim
-        case .relativeThreshold, .cumulativeWeight, .none:
-            return result
-        }
-
-        for site in (1 ..< result.qubits).reversed() {
-            let tensor = result.tensors[site]
-            if tensor.leftBondDimension <= targetDim {
-                continue
-            }
-
-            let matrix = tensor.reshapeForSVD(mergeLeft: false)
-            let svdResult = SVDDecomposition.decompose(matrix: matrix, truncation: .maxBondDimension(targetDim))
-
-            let newLeftDim = svdResult.singularValues.count
-            let rightDim = tensor.rightBondDimension
-
-            var rightElements = [Complex<Double>]()
-            rightElements.reserveCapacity(newLeftDim * 2 * rightDim)
-
-            for alpha in 0 ..< newLeftDim {
-                for physical in 0 ..< 2 {
-                    for beta in 0 ..< rightDim {
-                        let colIdx = physical * rightDim + beta
-                        rightElements.append(svdResult.vDagger[alpha][colIdx])
-                    }
-                }
-            }
-
-            let rightTensor = MPSTensor(
-                leftBondDimension: newLeftDim,
-                rightBondDimension: rightDim,
-                site: site,
-                elements: rightElements,
-            )
-
-            result.updateTensor(at: site, with: rightTensor)
-            result.addTruncationError(svdResult.truncationError)
-
-            let prevTensor = result.tensors[site - 1]
-            let prevLeftDim = prevTensor.leftBondDimension
-
-            var prevElements = [Complex<Double>]()
-            prevElements.reserveCapacity(prevLeftDim * 2 * newLeftDim)
-
-            for alpha in 0 ..< prevLeftDim {
-                for physical in 0 ..< 2 {
-                    for beta in 0 ..< newLeftDim {
-                        var sum: Complex<Double> = .zero
-                        let oldRightDim = prevTensor.rightBondDimension
-                        for gamma in 0 ..< min(oldRightDim, svdResult.u.count) {
-                            let sigma = svdResult.singularValues[beta]
-                            let uElement = svdResult.u[gamma][beta]
-                            let uSigma = uElement * sigma
-                            if gamma < oldRightDim {
-                                sum = sum + prevTensor[alpha, physical, gamma] * uSigma
-                            }
-                        }
-                        prevElements.append(sum)
-                    }
-                }
-            }
-
-            let prevNewTensor = MPSTensor(
-                leftBondDimension: prevLeftDim,
-                rightBondDimension: newLeftDim,
-                site: site - 1,
-                elements: prevElements,
-            )
-
-            result.updateTensor(at: site - 1, with: prevNewTensor)
-        }
-
-        return result
-    }
 }

@@ -14,9 +14,9 @@ import Foundation
 /// physical dimension (2 for qubits), and n is system size. This enables accurate ground state
 /// calculations for systems with hundreds of sites when entanglement follows area law.
 ///
-/// Eigensolver dispatch: uses HermitianEigenDecomposition for effective Hamiltonians with dimension
-/// at most 1000, and LanczosEigensolver for larger dimensions. Subspace expansion adds perturbative
-/// corrections controlled by ``DMRGConfiguration/noiseStrength`` to escape local minima.
+/// Automatically selects between direct and iterative eigensolvers based on effective Hamiltonian
+/// size. Subspace expansion adds perturbative corrections controlled by
+/// ``DMRGConfiguration/noiseStrength`` to escape local minima.
 ///
 /// **Example:**
 /// ```swift
@@ -28,8 +28,8 @@ import Foundation
 ///
 /// - Complexity: O(chi^3 * d^2 * n) per sweep where chi = bond dimension, d = 2, n = sites
 /// - SeeAlso: ``DMRGConfiguration``
-/// - SeeAlso: ``DMRGResult``
-/// - SeeAlso: ``DMRGProgress``
+/// - SeeAlso: ``Result``
+/// - SeeAlso: ``Progress``
 /// - SeeAlso: ``MatrixProductOperator``
 /// - SeeAlso: ``MatrixProductState``
 public actor DMRG {
@@ -84,10 +84,11 @@ public actor DMRG {
     /// ```
     ///
     /// - Parameter initial: Initial MPS guess (nil for random initialization)
-    /// - Returns: ``DMRGResult`` containing ground state energy, MPS, and convergence history
+    /// - Returns: ``Result`` containing ground state energy, MPS, and convergence history
     /// - Complexity: O(sweeps * chi^3 * d^2 * n) where chi = bond dimension, d = 2, n = sites
+    /// - SeeAlso: ``Result``
     @_optimize(speed)
-    public func findGroundState(from initial: MatrixProductState?) async -> DMRGResult {
+    public func findGroundState(from initial: MatrixProductState?) async -> Result {
         let sites = hamiltonian.sites
         var mps = initial ?? initializeRandomMPS(sites: sites)
 
@@ -97,13 +98,14 @@ public actor DMRG {
         var rightEnvironments = buildInitialRightEnvironments(mps: mps)
 
         var convergenceHistory = [Double]()
+        convergenceHistory.reserveCapacity(configuration.maxSweeps)
         var previousEnergy = Double.infinity
         currentSweep = 0
 
         for sweep in 0 ..< configuration.maxSweeps {
             currentSweep = sweep
 
-            let noiseStrength = configuration.subspaceExpansion ? computeNoise(sweep: sweep) : 0.0
+            let noiseStrength = configuration.isSubspaceExpansionEnabled ? computeNoise(sweep: sweep) : 0.0
 
             (mps, leftEnvironments, currentEnergy) = await performLeftToRightSweep(
                 mps: mps,
@@ -128,7 +130,7 @@ public actor DMRG {
 
             let energyChange = abs(currentEnergy - previousEnergy)
             if energyChange < configuration.convergenceThreshold {
-                return DMRGResult(
+                return Result(
                     groundStateEnergy: currentEnergy,
                     groundState: mps,
                     sweeps: sweep + 1,
@@ -139,7 +141,7 @@ public actor DMRG {
             previousEnergy = currentEnergy
         }
 
-        return DMRGResult(
+        return Result(
             groundStateEnergy: currentEnergy,
             groundState: mps,
             sweeps: configuration.maxSweeps,
@@ -159,8 +161,9 @@ public actor DMRG {
     /// ```
     ///
     /// - Complexity: O(1)
-    public var progress: DMRGProgress {
-        DMRGProgress(
+    /// - SeeAlso: ``Progress``
+    public var progress: Progress {
+        Progress(
             sweep: currentSweep,
             energy: currentEnergy,
             maxTruncationError: currentMaxTruncationError,
@@ -280,36 +283,13 @@ public actor DMRG {
         mpoLeft: MPOTensor,
         mpoRight: MPOTensor,
     ) -> [[Complex<Double>]] {
-        // Safely compute dimensions with bounds checking for nested arrays
         let leftBraDim = leftEnv.count
-        let leftMPODim: Int
-        let leftKetDim: Int
-        if leftBraDim == 0 {
-            leftMPODim = 1
-            leftKetDim = 1
-        } else {
-            leftMPODim = leftEnv[0].count
-            if leftMPODim == 0 {
-                leftKetDim = 1
-            } else {
-                leftKetDim = leftEnv[0][0].count
-            }
-        }
+        let leftMPODim = leftBraDim > 0 ? leftEnv[0].count : 1
+        let leftKetDim = (leftBraDim > 0 && leftMPODim > 0) ? leftEnv[0][0].count : 1
 
         let rightBraDim = rightEnv.count
-        let rightMPODim: Int
-        let rightKetDim: Int
-        if rightBraDim == 0 {
-            rightMPODim = 1
-            rightKetDim = 1
-        } else {
-            rightMPODim = rightEnv[0].count
-            if rightMPODim == 0 {
-                rightKetDim = 1
-            } else {
-                rightKetDim = rightEnv[0][0].count
-            }
-        }
+        let rightMPODim = rightBraDim > 0 ? rightEnv[0].count : 1
+        let rightKetDim = (rightBraDim > 0 && rightMPODim > 0) ? rightEnv[0][0].count : 1
 
         let physicalDimension = 2
         let effectiveDim = max(1, leftKetDim) * physicalDimension * physicalDimension * max(1, rightKetDim)
@@ -317,21 +297,17 @@ public actor DMRG {
         var flatReal = [Double](repeating: 0.0, count: effectiveDim * effectiveDim)
         var flatImag = [Double](repeating: 0.0, count: effectiveDim * effectiveDim)
 
-        // Use constrained dimensions for MPO cache based on actual MPO bond dimensions
         let constrainedLeftMPODim = min(leftMPODim, mpoLeft.leftBondDimension)
         let constrainedRightMPODim = min(rightMPODim, mpoRight.rightBondDimension)
 
         let gammaDim = mpoLeft.rightBondDimension
-        var mpoCache = [[[[Complex<Double>]]]](
-            repeating: [[[Complex<Double>]]](
-                repeating: [[Complex<Double>]](
-                    repeating: [Complex<Double>](repeating: .zero, count: physicalDimension * physicalDimension),
-                    count: physicalDimension * physicalDimension,
-                ),
-                count: max(1, constrainedRightMPODim),
-            ),
-            count: max(1, constrainedLeftMPODim),
-        )
+        let d2 = physicalDimension * physicalDimension
+        let safeLeftMPO = max(1, constrainedLeftMPODim)
+        let safeRightMPO = max(1, constrainedRightMPODim)
+        let mpoCacheStride0 = safeRightMPO * d2 * d2
+        let mpoCacheStride1 = d2 * d2
+        let mpoCacheStride2 = d2
+        var mpoCache = [Complex<Double>](repeating: .zero, count: safeLeftMPO * mpoCacheStride0)
 
         for alphaO in 0 ..< constrainedLeftMPODim {
             for betaO in 0 ..< constrainedRightMPODim {
@@ -347,7 +323,7 @@ public actor DMRG {
                                 }
                                 let braPhys = s1Bra * physicalDimension + s2Bra
                                 let ketPhys = s1Ket * physicalDimension + s2Ket
-                                mpoCache[alphaO][betaO][braPhys][ketPhys] = mpoSum
+                                mpoCache[alphaO * mpoCacheStride0 + betaO * mpoCacheStride1 + braPhys * mpoCacheStride2 + ketPhys] = mpoSum
                             }
                         }
                     }
@@ -355,9 +331,12 @@ public actor DMRG {
             }
         }
 
-        // Use safe dimensions that account for actual array bounds at each nesting level
         let safeRightKetDim = max(1, rightKetDim)
         let safeRightBraDim = max(1, rightBraDim)
+        let braStride0 = physicalDimension * physicalDimension * safeRightBraDim
+        let braStride1 = physicalDimension * safeRightBraDim
+        let ketStride0 = physicalDimension * physicalDimension * safeRightKetDim
+        let ketStride1 = physicalDimension * safeRightKetDim
 
         for alphaBra in 0 ..< leftBraDim {
             guard alphaBra < leftEnv.count else { continue }
@@ -390,7 +369,7 @@ public actor DMRG {
                                 for braPhys in 0 ..< (physicalDimension * physicalDimension) {
                                     let s1Bra = braPhys / physicalDimension
                                     let s2Bra = braPhys % physicalDimension
-                                    let braIdx = alphaBra * (physicalDimension * physicalDimension * safeRightBraDim) + s1Bra * (physicalDimension * safeRightBraDim) + s2Bra * safeRightBraDim + betaBra
+                                    let braIdx = alphaBra * braStride0 + s1Bra * braStride1 + s2Bra * safeRightBraDim + betaBra
 
                                     guard braIdx < effectiveDim else { continue }
                                     let braOffset = braIdx * effectiveDim
@@ -398,10 +377,10 @@ public actor DMRG {
                                     for ketPhys in 0 ..< (physicalDimension * physicalDimension) {
                                         let s1Ket = ketPhys / physicalDimension
                                         let s2Ket = ketPhys % physicalDimension
-                                        let ketIdx = alphaKet * (physicalDimension * physicalDimension * safeRightKetDim) + s1Ket * (physicalDimension * safeRightKetDim) + s2Ket * safeRightKetDim + betaKet
+                                        let ketIdx = alphaKet * ketStride0 + s1Ket * ketStride1 + s2Ket * safeRightKetDim + betaKet
 
                                         guard ketIdx < effectiveDim else { continue }
-                                        let mpoVal = mpoCache[alphaO][betaO][braPhys][ketPhys]
+                                        let mpoVal = mpoCache[alphaO * mpoCacheStride0 + betaO * mpoCacheStride1 + braPhys * mpoCacheStride2 + ketPhys]
                                         let contribution = envProduct * mpoVal
                                         let flatIdx = braOffset + ketIdx
                                         guard flatIdx < flatReal.count else { continue }
@@ -416,16 +395,17 @@ public actor DMRG {
             }
         }
 
-        var effectiveH = [[Complex<Double>]](
-            repeating: [Complex<Double>](repeating: .zero, count: effectiveDim),
-            count: effectiveDim,
-        )
-
+        var effectiveH = [[Complex<Double>]]()
+        effectiveH.reserveCapacity(effectiveDim)
         for i in 0 ..< effectiveDim {
             let rowOffset = i * effectiveDim
-            for j in 0 ..< effectiveDim {
-                effectiveH[i][j] = Complex(flatReal[rowOffset + j], flatImag[rowOffset + j])
+            let row = [Complex<Double>](unsafeUninitializedCapacity: effectiveDim) { buffer, count in
+                for j in 0 ..< effectiveDim {
+                    buffer.initializeElement(at: j, to: Complex(flatReal[rowOffset + j], flatImag[rowOffset + j]))
+                }
+                count = effectiveDim
             }
+            effectiveH.append(row)
         }
 
         return effectiveH
@@ -440,8 +420,9 @@ public actor DMRG {
             return (result.eigenvalues[0], result.eigenvectors[0])
         }
 
+        let flatH = Self.flattenHamiltonian(effectiveH)
         let applyH: @Sendable ([Complex<Double>]) async -> [Complex<Double>] = { vector in
-            Self.applyEffectiveHamiltonian(effectiveH, to: vector)
+            Self.applyFlatHamiltonian(flatH, dimension: dimension, to: vector)
         }
 
         let result = await LanczosEigensolver.findLowest(
@@ -453,24 +434,66 @@ public actor DMRG {
         return (result.eigenvalues[0], result.eigenvectors[0])
     }
 
-    /// Applies effective Hamiltonian matrix to a vector.
+    /// Flattens 2D complex matrix into interleaved real/imaginary for BLAS.
+    private static func flattenHamiltonian(_ H: [[Complex<Double>]]) -> [Double] {
+        let n = H.count
+        return [Double](unsafeUninitializedCapacity: n * n * 2) { buffer, count in
+            var idx = 0
+            for i in 0 ..< n {
+                let row = H[i]
+                for j in 0 ..< n {
+                    buffer[idx] = row[j].real
+                    buffer[idx + 1] = row[j].imaginary
+                    idx += 2
+                }
+            }
+            count = n * n * 2
+        }
+    }
+
+    /// Applies flattened Hamiltonian to vector using cblas_zgemv.
     @_optimize(speed)
-    private static func applyEffectiveHamiltonian(
-        _ H: [[Complex<Double>]],
+    private static func applyFlatHamiltonian(
+        _ flatH: [Double],
+        dimension n: Int,
         to vector: [Complex<Double>],
     ) -> [Complex<Double>] {
-        let n = H.count
-        var result = [Complex<Double>](repeating: .zero, count: n)
-
-        for i in 0 ..< n {
-            var sum: Complex<Double> = .zero
+        var flatVec = [Double](unsafeUninitializedCapacity: n * 2) { buffer, count in
             for j in 0 ..< n {
-                sum = sum + H[i][j] * vector[j]
+                buffer[j * 2] = vector[j].real
+                buffer[j * 2 + 1] = vector[j].imaginary
             }
-            result[i] = sum
+            count = n * 2
         }
-
-        return result
+        var flatResult = [Double](unsafeUninitializedCapacity: n * 2) { _, count in count = n * 2 }
+        var alpha: (Double, Double) = (1.0, 0.0)
+        var beta: (Double, Double) = (0.0, 0.0)
+        // Safety: baseAddress is non-nil for all buffers since n > 1000 guarantees non-empty arrays
+        flatH.withUnsafeBufferPointer { hPtr in
+            flatVec.withUnsafeMutableBufferPointer { vecPtr in
+                flatResult.withUnsafeMutableBufferPointer { resPtr in
+                    withUnsafePointer(to: &alpha) { alphaPtr in
+                        withUnsafePointer(to: &beta) { betaPtr in
+                            cblas_zgemv(
+                                CblasRowMajor, CblasNoTrans,
+                                Int32(n), Int32(n),
+                                OpaquePointer(alphaPtr),
+                                OpaquePointer(hPtr.baseAddress!), Int32(n),
+                                OpaquePointer(vecPtr.baseAddress!), 1,
+                                OpaquePointer(betaPtr),
+                                OpaquePointer(resPtr.baseAddress!), 1,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        return [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
+            for i in 0 ..< n {
+                buffer.initializeElement(at: i, to: Complex(flatResult[i * 2], flatResult[i * 2 + 1]))
+            }
+            count = n
+        }
     }
 
     /// Splits optimized two-site tensor via SVD into left and right MPS tensors.
@@ -490,12 +513,17 @@ public actor DMRG {
             count: leftDim * physicalDimension,
         )
 
+        let vecStride0 = physicalDimension * physicalDimension * rightDim
+        let vecStride1 = physicalDimension * rightDim
         for alpha in 0 ..< leftDim {
+            let alphaOffset = alpha * vecStride0
             for s1 in 0 ..< physicalDimension {
+                let s1Offset = alphaOffset + s1 * vecStride1
+                let row = alpha * physicalDimension + s1
                 for s2 in 0 ..< physicalDimension {
+                    let s2Offset = s1Offset + s2 * rightDim
                     for beta in 0 ..< rightDim {
-                        let vecIdx = alpha * (physicalDimension * physicalDimension * rightDim) + s1 * (physicalDimension * rightDim) + s2 * rightDim + beta
-                        let row = alpha * physicalDimension + s1
+                        let vecIdx = s2Offset + beta
                         let col = s2 * rightDim + beta
                         if vecIdx < eigenvector.count {
                             matrix[row][col] = eigenvector[vecIdx]
@@ -533,10 +561,10 @@ public actor DMRG {
             }
 
             for gamma in 0 ..< newBondDim {
+                let sv = Complex(svdResult.singularValues[gamma], 0)
                 for s in 0 ..< physicalDimension {
                     for beta in 0 ..< rightDim {
                         let col = s * rightDim + beta
-                        let sv = Complex(svdResult.singularValues[gamma], 0)
                         rightElements.append(sv * svdResult.vDagger[gamma][col])
                     }
                 }
@@ -601,18 +629,11 @@ public actor DMRG {
     private func buildInitialRightEnvironments(mps: MatrixProductState) -> [[[[Complex<Double>]]]] {
         let sites = hamiltonian.sites
 
-        // Ensure array is large enough for all accesses including rightEnvironments[site + 2]
-        // Maximum access is at site + 2 where site can be sites - 1, so we need sites + 2 elements
-        // But we also need sites + 1 for the boundary, so total of sites + 2 elements (indices 0 to sites + 1)
         var envs = [[[[Complex<Double>]]]](repeating: [[[.one]]], count: sites + 2)
-
-        // Initialize boundary environments
         envs[sites + 1] = [[[.one]]]
         envs[sites] = [[[.one]]]
 
-        // Build right environments from right to left
         for site in stride(from: sites - 1, through: 0, by: -1) {
-            // Ensure site + 2 is within bounds before accessing
             let rightEnvIndex = min(site + 2, sites + 1)
             envs[site + 1] = updateRightEnvironment(
                 rightEnv: envs[rightEnvIndex],
@@ -656,13 +677,14 @@ public actor DMRG {
                     for sBra in 0 ..< 2 {
                         for sKet in 0 ..< 2 {
                             for betaBra in 0 ..< newBraDim {
+                                let mpsConj = mpsTensor[alphaBra, sBra, betaBra].conjugate
+                                let leftTimesConj = leftVal * mpsConj
                                 for betaO in 0 ..< newMPODim {
+                                    let mpo = mpoTensor[alphaO, sKet, sBra, betaO]
+                                    let partial = leftTimesConj * mpo
                                     for betaKet in 0 ..< newKetDim {
-                                        let mpsConj = mpsTensor[alphaBra, sBra, betaBra].conjugate
-                                        let mpo = mpoTensor[alphaO, sKet, sBra, betaO]
                                         let mpsKet = mpsTensor[alphaKet, sKet, betaKet]
-
-                                        newEnv[betaBra][betaO][betaKet] = newEnv[betaBra][betaO][betaKet] + leftVal * mpsConj * mpo * mpsKet
+                                        newEnv[betaBra][betaO][betaKet] = newEnv[betaBra][betaO][betaKet] + partial * mpsKet
                                     }
                                 }
                             }
@@ -707,13 +729,14 @@ public actor DMRG {
                     for sBra in 0 ..< 2 {
                         for sKet in 0 ..< 2 {
                             for alphaBra in 0 ..< newBraDim {
+                                let mpsConj = mpsTensor[alphaBra, sBra, betaBra].conjugate
+                                let rightTimesConj = rightVal * mpsConj
                                 for alphaO in 0 ..< newMPODim {
+                                    let mpo = mpoTensor[alphaO, sKet, sBra, betaO]
+                                    let partial = rightTimesConj * mpo
                                     for alphaKet in 0 ..< newKetDim {
-                                        let mpsConj = mpsTensor[alphaBra, sBra, betaBra].conjugate
-                                        let mpo = mpoTensor[alphaO, sKet, sBra, betaO]
                                         let mpsKet = mpsTensor[alphaKet, sKet, betaKet]
-
-                                        newEnv[alphaBra][alphaO][alphaKet] = newEnv[alphaBra][alphaO][alphaKet] + rightVal * mpsConj * mpo * mpsKet
+                                        newEnv[alphaBra][alphaO][alphaKet] = newEnv[alphaBra][alphaO][alphaKet] + partial * mpsKet
                                     }
                                 }
                             }
@@ -736,15 +759,16 @@ public actor DMRG {
             let leftDim = mps.tensors[site].leftBondDimension
             let rightDim = mps.tensors[site].rightBondDimension
 
-            var elements = [Complex<Double>]()
-            elements.reserveCapacity(leftDim * 2 * rightDim)
-
-            for _ in 0 ..< leftDim * 2 * rightDim {
-                seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
-                let real = Double(Int64(bitPattern: seed)) / Double(Int64.max)
-                seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
-                let imag = Double(Int64(bitPattern: seed)) / Double(Int64.max)
-                elements.append(Complex(real, imag))
+            let elementCount = leftDim * 2 * rightDim
+            var elements = [Complex<Double>](unsafeUninitializedCapacity: elementCount) { buffer, count in
+                for idx in 0 ..< elementCount {
+                    seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                    let real = Double(Int64(bitPattern: seed)) / Double(Int64.max)
+                    seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                    let imag = Double(Int64(bitPattern: seed)) / Double(Int64.max)
+                    buffer.initializeElement(at: idx, to: Complex(real, imag))
+                }
+                count = elementCount
             }
 
             let tensor = MPSTensor(
@@ -806,16 +830,15 @@ public actor DMRG {
                 for alpha in 0 ..< oldLeftDim {
                     for s in 0 ..< 2 {
                         for gamma in 0 ..< newLeftDim {
+                            let sv = Complex(svdResult.singularValues[gamma], 0)
                             var sum: Complex<Double> = .zero
                             for oldBeta in 0 ..< leftTensor.rightBondDimension {
                                 let leftVal = leftTensor[alpha, s, oldBeta]
-                                let row = oldBeta
-                                if row < svdResult.u.count, gamma < svdResult.u[row].count {
-                                    let sv = Complex(svdResult.singularValues[gamma], 0)
-                                    sum = sum + leftVal * svdResult.u[row][gamma] * sv
+                                if oldBeta < svdResult.u.count, gamma < svdResult.u[oldBeta].count {
+                                    sum = sum + leftVal * svdResult.u[oldBeta][gamma]
                                 }
                             }
-                            leftElements.append(sum)
+                            leftElements.append(sum * sv)
                         }
                     }
                 }
@@ -849,29 +872,18 @@ public actor DMRG {
 
         guard keptCount < fullSingularValues.count else { return matrix }
 
-        var perturbation = [[Complex<Double>]](
-            repeating: [Complex<Double>](repeating: .zero, count: cols),
-            count: rows,
-        )
+        var result = matrix
 
         for k in keptCount ..< fullSingularValues.count {
             let discardedWeight = fullSingularValues[k] * strength
-
             guard k < fullSVD.u.count, k < fullSVD.vDagger.count else { continue }
-
+            let scaledWeight = Complex(discardedWeight, 0)
+            let vRow = fullSVD.vDagger[k]
             for i in 0 ..< rows {
-                let uVal = fullSVD.u[i][k]
+                let scaled = fullSVD.u[i][k] * scaledWeight
                 for j in 0 ..< cols {
-                    let vVal = fullSVD.vDagger[k][j]
-                    perturbation[i][j] = perturbation[i][j] + uVal * Complex(discardedWeight, 0) * vVal
+                    result[i][j] = result[i][j] + scaled * vRow[j]
                 }
-            }
-        }
-
-        var result = matrix
-        for i in 0 ..< rows {
-            for j in 0 ..< cols {
-                result[i][j] = result[i][j] + perturbation[i][j]
             }
         }
 
@@ -900,7 +912,7 @@ public actor DMRG {
     /// - SeeAlso: ``DMRG``
     /// - SeeAlso: ``MatrixProductState``
     @frozen
-    public struct DMRGResult: Sendable {
+    public struct Result: Sendable {
         /// Ground state energy (variational upper bound on true E0).
         public let groundStateEnergy: Double
 
@@ -920,7 +932,7 @@ public actor DMRG {
         ///   - groundState: Optimized MPS
         ///   - sweeps: Number of sweeps performed
         ///   - convergenceHistory: Energy history per sweep
-        public init(
+        init(
             groundStateEnergy: Double,
             groundState: MatrixProductState,
             sweeps: Int,
@@ -946,7 +958,7 @@ public actor DMRG {
     ///
     /// - SeeAlso: ``DMRG``
     @frozen
-    public struct DMRGProgress: Sendable {
+    public struct Progress: Sendable {
         /// Current sweep number (0-indexed).
         public let sweep: Int
 
@@ -962,7 +974,7 @@ public actor DMRG {
         ///   - sweep: Current sweep number
         ///   - energy: Current energy value
         ///   - maxTruncationError: Maximum truncation error
-        public init(sweep: Int, energy: Double, maxTruncationError: Double) {
+        init(sweep: Int, energy: Double, maxTruncationError: Double) {
             self.sweep = sweep
             self.energy = energy
             self.maxTruncationError = maxTruncationError

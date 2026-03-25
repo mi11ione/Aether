@@ -51,12 +51,13 @@ public actor DensityMatrixSimulator {
         /// Total number of gates in circuit.
         public let total: Int
 
-        /// Completion percentage (0-100).
+        /// Execution progress as fraction in [0.0, 1.0].
         @inlinable
         public var percentage: Double {
-            total == 0 ? 100.0 : Double(executed) / Double(total) * 100.0
+            total > 0 ? Double(executed) / Double(total) : 0.0
         }
 
+        /// Create progress snapshot with executed and total gate counts.
         @inlinable
         public init(executed: Int, total: Int) {
             self.executed = executed
@@ -145,7 +146,8 @@ public actor DensityMatrixSimulator {
         )
 
         let operations = circuit.operations
-        progress = Progress(executed: 0, total: operations.count)
+        let totalOps = operations.count
+        progress = Progress(executed: 0, total: totalOps)
 
         var state = initial
         let useIdleNoise = noiseModel.hasIdleNoise
@@ -170,13 +172,13 @@ public actor DensityMatrixSimulator {
                 }
             }
 
-            progress = Progress(executed: index + 1, total: operations.count)
-
             if index % 10 == 0 {
+                progress = Progress(executed: index + 1, total: totalOps)
                 await Task.yield()
             }
         }
 
+        progress = Progress(executed: totalOps, total: totalOps)
         return state
     }
 
@@ -219,6 +221,8 @@ public actor DensityMatrixSimulator {
     ///   - pureState: Initial pure state |ψ⟩
     /// - Returns: Final density matrix (may be mixed due to noise)
     /// - Complexity: O(gates * 4^n)
+    /// - Precondition: Circuit must have no symbolic parameters
+    /// - Precondition: pureState.qubits == circuit.qubits
     @_optimize(speed)
     @_eagerMove
     public func execute(
@@ -278,34 +282,11 @@ public actor DensityMatrixSimulator {
         error: MeasurementErrorModel,
         qubits: Int,
     ) -> [Double] {
-        var noisyProbs = probabilities
-
-        for qubit in 0 ..< qubits {
-            let mask = 1 << qubit
-            let dim = probabilities.count
-
-            var newProbs = [Double](repeating: 0, count: dim)
-
-            for i in 0 ..< dim {
-                let bit = (i >> qubit) & 1
-                let partner = i ^ mask
-
-                let p0 = (bit == 0) ? probabilities[i] : probabilities[partner]
-                let p1 = (bit == 0) ? probabilities[partner] : probabilities[i]
-
-                let (noisyP0, noisyP1) = error.applyError(to: (p0, p1))
-
-                if bit == 0 {
-                    newProbs[i] += noisyP0
-                } else {
-                    newProbs[i] += noisyP1
-                }
-            }
-
-            noisyProbs = newProbs
-        }
-
-        return noisyProbs
+        applyMeasurementErrors(
+            probabilities: probabilities,
+            qubits: qubits,
+            modelForQubit: { _ in error },
+        )
     }
 
     // MARK: - Analysis Methods
@@ -318,8 +299,8 @@ public actor DensityMatrixSimulator {
     ///
     /// **Example:**
     /// ```swift
-    /// let fidelity = await simulator.fidelity(circuit, idealState: targetState)
-    /// print("Fidelity: \(fidelity)")  // 1.0 = perfect, 0.0 = orthogonal
+    /// let ideal = QuantumState(qubits: 2)
+    /// let f = await simulator.fidelity(circuit, idealState: ideal)
     /// ```
     ///
     /// - Parameters:
@@ -333,20 +314,7 @@ public actor DensityMatrixSimulator {
         idealState: QuantumState,
     ) async -> Double {
         let noisyState = await execute(circuit)
-
-        var fidelity = 0.0
-        let dim = noisyState.dimension
-
-        for i in 0 ..< dim {
-            for j in 0 ..< dim {
-                let rhoIJ = noisyState.element(row: i, col: j)
-                let psiI = idealState.amplitudes[i].conjugate
-                let psiJ = idealState.amplitudes[j]
-                fidelity += (psiI * rhoIJ * psiJ).real
-            }
-        }
-
-        return max(0, min(1, fidelity))
+        return computePureStateFidelity(densityMatrix: noisyState, pureState: idealState)
     }
 
     /// Execute circuit multiple times and compute statistics.
@@ -365,6 +333,7 @@ public actor DensityMatrixSimulator {
     ///   - observable: Observable to measure
     ///   - repetitions: Number of executions
     /// - Returns: Statistics (mean, std, min, max) of expectation values
+    /// - Complexity: O(repetitions * gates * 4^n)
     /// - Precondition: repetitions > 0
     @_optimize(speed)
     public func statisticalAnalysis(
@@ -374,19 +343,23 @@ public actor DensityMatrixSimulator {
     ) async -> (mean: Double, std: Double, min: Double, max: Double) {
         ValidationUtilities.validatePositiveInt(repetitions, name: "Repetitions")
 
-        var values: [Double] = []
-        values.reserveCapacity(repetitions)
+        var sum = 0.0
+        var sumSq = 0.0
+        var minVal = Double.infinity
+        var maxVal = -Double.infinity
 
         for _ in 0 ..< repetitions {
-            await values.append(expectationValue(circuit, observable: observable))
+            let v = await expectationValue(circuit, observable: observable)
+            sum += v
+            sumSq += v * v
+            minVal = min(minVal, v)
+            maxVal = max(maxVal, v)
         }
 
-        let mean = values.reduce(0, +) / Double(repetitions)
-        let variance = values.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(repetitions)
+        let invN = 1.0 / Double(repetitions)
+        let mean = sum * invN
+        let variance = max(0, sumSq * invN - mean * mean)
         let std = sqrt(variance)
-        // Safety: values is guaranteed non-empty since repetitions > 0 is validated
-        let minVal = values.min()!
-        let maxVal = values.max()!
 
         return (mean, std, minVal, maxVal)
     }
@@ -406,6 +379,7 @@ public actor DensityMatrixSimulator {
     ///   - circuit: Circuit to analyze
     ///   - timings: Gate timing model (default: IBM timings)
     /// - Returns: Total execution time in nanoseconds
+    /// - Complexity: O(gates)
     @_effects(readonly)
     public nonisolated func circuitTime(
         _ circuit: QuantumCircuit,
@@ -427,7 +401,7 @@ public actor DensityMatrixSimulator {
     ///
     /// **Example:**
     /// ```swift
-    /// let fidelity = simulator.estimatedDecoherenceFidelity(
+    /// let fidelity = simulator.estimateDecoherenceFidelity(
     ///     circuit, t1: 100_000, t2: 50_000
     /// )
     /// print("Expected fidelity: \(fidelity)")
@@ -439,8 +413,9 @@ public actor DensityMatrixSimulator {
     ///   - t2: T₂ time in nanoseconds
     ///   - timings: Gate timing model
     /// - Returns: Estimated fidelity retention factor (0-1)
+    /// - Complexity: O(gates)
     @_effects(readonly)
-    public nonisolated func estimatedDecoherenceFidelity(
+    public nonisolated func estimateDecoherenceFidelity(
         _ circuit: QuantumCircuit,
         t1: Double,
         t2: Double,
@@ -479,7 +454,7 @@ public actor TimingAwareDensityMatrixSimulator {
     public let profile: HardwareNoiseProfile
 
     /// Timing-aware noise model.
-    public let noiseModel: TimingAwareNoiseModel
+    private let noiseModel: TimingAwareNoiseModel
 
     /// Progress tracking.
     public private(set) var progress: DensityMatrixSimulator.Progress
@@ -534,6 +509,7 @@ public actor TimingAwareDensityMatrixSimulator {
     /// - Precondition: Circuit must have no symbolic parameters
     /// - Precondition: circuit.qubits ≤ profile.qubitCount
     /// - Precondition: circuit.qubits == initial.qubits
+    /// - Complexity: O(gates * 4^n * qubits)
     @_optimize(speed)
     @_eagerMove
     public func execute(
@@ -555,7 +531,8 @@ public actor TimingAwareDensityMatrixSimulator {
         )
 
         let operations = circuit.operations
-        progress = DensityMatrixSimulator.Progress(executed: 0, total: operations.count)
+        let totalOps = operations.count
+        progress = DensityMatrixSimulator.Progress(executed: 0, total: totalOps)
 
         var state = initial
 
@@ -570,13 +547,13 @@ public actor TimingAwareDensityMatrixSimulator {
                 )
             }
 
-            progress = DensityMatrixSimulator.Progress(executed: index + 1, total: operations.count)
-
             if index % 10 == 0 {
+                progress = DensityMatrixSimulator.Progress(executed: index + 1, total: totalOps)
                 await Task.yield()
             }
         }
 
+        progress = DensityMatrixSimulator.Progress(executed: totalOps, total: totalOps)
         return state
     }
 
@@ -592,6 +569,7 @@ public actor TimingAwareDensityMatrixSimulator {
     ///   - circuit: Quantum circuit to execute
     ///   - observable: Observable to measure
     /// - Returns: Expectation value Tr(ρO)
+    /// - Complexity: O(gates * 4^n * qubits + terms * 4^n)
     @_optimize(speed)
     public func expectationValue(
         _ circuit: QuantumCircuit,
@@ -613,6 +591,7 @@ public actor TimingAwareDensityMatrixSimulator {
     ///   - shots: Number of samples
     ///   - seed: Random seed
     /// - Returns: Array of measurement outcomes
+    /// - Complexity: O(gates * 4^n * qubits + shots * log(2^n))
     /// - Precondition: shots > 0
     @_optimize(speed)
     public func sample(
@@ -642,35 +621,11 @@ public actor TimingAwareDensityMatrixSimulator {
         models: [MeasurementErrorModel],
         qubits: Int,
     ) -> [Double] {
-        var noisyProbs = probabilities
-
-        for qubit in 0 ..< qubits {
-            let model = models[qubit]
-            let mask = 1 << qubit
-            let dim = probabilities.count
-
-            var newProbs = [Double](repeating: 0, count: dim)
-
-            for i in 0 ..< dim {
-                let bit = (i >> qubit) & 1
-                let partner = i ^ mask
-
-                let p0 = (bit == 0) ? noisyProbs[i] : noisyProbs[partner]
-                let p1 = (bit == 0) ? noisyProbs[partner] : noisyProbs[i]
-
-                let (noisyP0, noisyP1) = model.applyError(to: (p0, p1))
-
-                if bit == 0 {
-                    newProbs[i] += noisyP0
-                } else {
-                    newProbs[i] += noisyP1
-                }
-            }
-
-            noisyProbs = newProbs
-        }
-
-        return noisyProbs
+        applyMeasurementErrors(
+            probabilities: probabilities,
+            qubits: qubits,
+            modelForQubit: { models[$0] },
+        )
     }
 
     /// Compute fidelity between noisy and ideal execution.
@@ -679,8 +634,8 @@ public actor TimingAwareDensityMatrixSimulator {
     ///
     /// **Example:**
     /// ```swift
-    /// let ideal = circuit.execute()
-    /// let fidelity = await simulator.fidelity(circuit, idealState: ideal)
+    /// let ideal = QuantumState(qubits: 2)
+    /// let f = await simulator.fidelity(circuit, idealState: ideal)
     /// ```
     ///
     /// - Parameters:
@@ -694,20 +649,7 @@ public actor TimingAwareDensityMatrixSimulator {
         idealState: QuantumState,
     ) async -> Double {
         let noisyState = await execute(circuit)
-
-        var fidelity = 0.0
-        let dim = noisyState.dimension
-
-        for i in 0 ..< dim {
-            for j in 0 ..< dim {
-                let rhoIJ = noisyState.element(row: i, col: j)
-                let psiI = idealState.amplitudes[i].conjugate
-                let psiJ = idealState.amplitudes[j]
-                fidelity += (psiI * rhoIJ * psiJ).real
-            }
-        }
-
-        return max(0, min(1, fidelity))
+        return computePureStateFidelity(densityMatrix: noisyState, pureState: idealState)
     }
 
     /// Compute total circuit execution time from hardware profile timings.
@@ -735,6 +677,65 @@ public actor TimingAwareDensityMatrixSimulator {
 
 // MARK: - Shared Helpers
 
+/// Compute fidelity F = ⟨ψ|ρ|ψ⟩ between density matrix and pure state.
+@_optimize(speed)
+private func computePureStateFidelity(
+    densityMatrix: DensityMatrix,
+    pureState: QuantumState,
+) -> Double {
+    var result = 0.0
+    let dim = densityMatrix.dimension
+
+    for i in 0 ..< dim {
+        let psiI = pureState.amplitudes[i].conjugate
+        var rowSum = Complex<Double>.zero
+        for j in 0 ..< dim {
+            rowSum = rowSum + densityMatrix[row: i, col: j] * pureState.amplitudes[j]
+        }
+        result += (psiI * rowSum).real
+    }
+
+    return max(0, min(1, result))
+}
+
+/// Apply measurement errors per qubit using provided model lookup.
+@_optimize(speed)
+private func applyMeasurementErrors(
+    probabilities: [Double],
+    qubits: Int,
+    modelForQubit: (Int) -> MeasurementErrorModel,
+) -> [Double] {
+    let dim = probabilities.count
+    var noisyProbs = probabilities
+    var newProbs = [Double](repeating: 0, count: dim)
+
+    for qubit in 0 ..< qubits {
+        let model = modelForQubit(qubit)
+        let mask = 1 << qubit
+
+        newProbs.withUnsafeMutableBufferPointer { buf in
+            // Safety: buf.baseAddress is non-nil since dim > 0
+            buf.baseAddress!.initialize(repeating: 0, count: dim)
+        }
+
+        for i in 0 ..< dim {
+            let bit = (i >> qubit) & 1
+            if bit == 0 {
+                let partner = i | mask
+                let p0 = noisyProbs[i]
+                let p1 = noisyProbs[partner]
+                let (noisyP0, noisyP1) = model.applyError(to: (p0, p1))
+                newProbs[i] = noisyP0
+                newProbs[partner] = noisyP1
+            }
+        }
+
+        swap(&noisyProbs, &newProbs)
+    }
+
+    return noisyProbs
+}
+
 /// Sample outcomes from probability distribution.
 @_optimize(speed)
 private func sampleOutcomesFromDistribution(
@@ -742,6 +743,8 @@ private func sampleOutcomesFromDistribution(
     shots: Int,
     seed: UInt64?,
 ) -> [Int] {
+    guard !probabilities.isEmpty else { return [] }
+
     var generator = Measurement.createRNG(seed: seed)
 
     var cdf = [Double](unsafeUninitializedCapacity: probabilities.count) { buffer, count in
@@ -755,23 +758,27 @@ private func sampleOutcomesFromDistribution(
 
     let total = cdf[probabilities.count - 1]
     if total > 0 {
+        let invTotal = 1.0 / total
         for i in 0 ..< cdf.count {
-            cdf[i] /= total
+            cdf[i] *= invTotal
         }
     }
 
+    let cdfCount = cdf.count
     return [Int](unsafeUninitializedCapacity: shots) { buffer, count in
         for i in 0 ..< shots {
             let r = Double.random(in: 0 ..< 1, using: &generator)
-            var outcome = 0
-            for j in 0 ..< cdf.count {
-                if r < cdf[j] {
-                    outcome = j
-                    break
+            var lo = 0
+            var hi = cdfCount - 1
+            while lo < hi {
+                let mid = (lo + hi) >> 1
+                if r < cdf[mid] {
+                    hi = mid
+                } else {
+                    lo = mid + 1
                 }
-                outcome = j
             }
-            buffer[i] = outcome
+            buffer[i] = lo
         }
         count = shots
     }

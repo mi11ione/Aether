@@ -22,7 +22,8 @@
 /// - SeeAlso: ``Observable``
 /// - SeeAlso: ``MixerHamiltonian``
 public enum MaxCut {
-    private static let zzCoefficient = -0.5
+    @usableFromInline
+    internal static let zzCoefficient = -0.5
 
     /// Creates a MaxCut cost Hamiltonian from graph edges.
     ///
@@ -40,27 +41,32 @@ public enum MaxCut {
     /// - Parameter edges: Undirected edges as vertex pairs with non-negative indices
     /// - Returns: Observable with one ZZ term per edge, coefficient -0.5
     /// - Complexity: O(|E|) time and space
-    /// - Precondition: Vertices must be non-negative and below the 30-qubit memory limit
+    /// - Precondition: `edges` must be non-empty
+    /// - Precondition: Vertex indices must be non-negative
+    /// - Precondition: Vertex indices must be below the 30-qubit memory limit
+    /// - Precondition: Edge endpoints must be distinct (no self-loops)
+    @inlinable
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
     public static func hamiltonian(edges: [(Int, Int)]) -> Observable {
         ValidationUtilities.validateNonEmpty(edges, name: "edges")
 
-        var terms: PauliTerms = []
-        terms.reserveCapacity(edges.count)
+        let terms = PauliTerms(unsafeUninitializedCapacity: edges.count) { buffer, count in
+            var idx = 0
+            for (i, j) in edges {
+                ValidationUtilities.validateNonNegativeInt(i, name: "edge vertex i")
+                ValidationUtilities.validateNonNegativeInt(j, name: "edge vertex j")
+                ValidationUtilities.validateMemoryLimit(max(i, j) + 1)
+                ValidationUtilities.validateDistinctVertices(i, j)
 
-        for (i, j) in edges {
-            ValidationUtilities.validateNonNegativeInt(i, name: "edge vertex i")
-            ValidationUtilities.validateNonNegativeInt(j, name: "edge vertex j")
-            ValidationUtilities.validateMemoryLimit(max(i, j) + 1)
-            ValidationUtilities.validateDistinctVertices(i, j)
-
-            let vertex1 = min(i, j)
-            let vertex2 = max(i, j)
-            let pauliString = PauliString(.z(vertex1), .z(vertex2))
-
-            terms.append((coefficient: zzCoefficient, pauliString: pauliString))
+                let vertex1 = min(i, j)
+                let vertex2 = max(i, j)
+                let pauliString = PauliString(.z(vertex1), .z(vertex2))
+                buffer[idx] = (coefficient: zzCoefficient, pauliString: pauliString)
+                idx += 1
+            }
+            count = edges.count
         }
 
         return Observable(terms: terms)
@@ -70,35 +76,41 @@ public enum MaxCut {
     public enum Examples {
         /// Triangle graph K₃ with 3 vertices and 3 edges. Optimal maxcut = 2, E₀ = -1.0.
         @inlinable
-        @_effects(readonly)
-        public static func triangle() -> [(Int, Int)] {
+        public static var triangle: [(Int, Int)] {
             [(0, 1), (1, 2), (0, 2)]
         }
 
         /// Square cycle graph C₄ with 4 vertices and 4 edges. Optimal maxcut = 4, E₀ = -2.0.
         @inlinable
-        @_effects(readonly)
-        public static func square() -> [(Int, Int)] {
+        public static var square: [(Int, Int)] {
             [(0, 1), (1, 2), (2, 3), (3, 0)]
         }
 
         /// Pentagon cycle graph C₅ with 5 vertices and 5 edges. Optimal maxcut = 4, E₀ = -2.0.
         @inlinable
-        @_effects(readonly)
-        public static func pentagon() -> [(Int, Int)] {
+        public static var pentagon: [(Int, Int)] {
             [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)]
         }
 
         /// Complete graph K₄ with 4 vertices and 6 edges. Optimal maxcut = 4, E₀ = -2.0.
         @inlinable
-        @_effects(readonly)
-        public static func complete4() -> [(Int, Int)] {
+        public static var complete4: [(Int, Int)] {
             [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
         }
 
         /// Path graph with n vertices and n-1 edges. Optimal maxcut = n-1, E₀ = -(n-1)/2.
         ///
+        /// **Example:**
+        /// ```swift
+        /// let path = MaxCut.Examples.linearChain(vertices: 5)
+        /// let hamiltonian = MaxCut.hamiltonian(edges: path)
+        /// ```
+        ///
         /// - Parameter vertices: Number of vertices in path (≥ 2)
+        /// - Returns: Array of n-1 edges connecting consecutive vertices
+        /// - Complexity: O(n)
+        /// - Precondition: `vertices` >= 2
+        @inlinable
         @_optimize(speed)
         @_eagerMove
         @_effects(readonly)
@@ -117,7 +129,17 @@ public enum MaxCut {
         /// Star graph with central vertex 0 connected to n-1 peripheral vertices.
         /// Optimal maxcut = n-1, E₀ = -(n-1)/2.
         ///
+        /// **Example:**
+        /// ```swift
+        /// let star = MaxCut.Examples.star(vertices: 4)
+        /// let hamiltonian = MaxCut.hamiltonian(edges: star)
+        /// ```
+        ///
         /// - Parameter vertices: Total vertices including center (≥ 2)
+        /// - Returns: Array of n-1 edges from vertex 0 to each peripheral vertex
+        /// - Complexity: O(n)
+        /// - Precondition: `vertices` >= 2
+        @inlinable
         @_optimize(speed)
         @_eagerMove
         @_effects(readonly)
@@ -134,10 +156,20 @@ public enum MaxCut {
         }
 
         /// Cycle graph Cₙ with n vertices and n edges forming a ring.
-        /// Generalizes `square()` (C₄) and `pentagon()` (C₅).
+        /// Generalizes ``square`` (C₄) and ``pentagon`` (C₅).
         /// For even n: maxcut = n, E₀ = -n/2. For odd n: maxcut = n-1, E₀ = -(n-1)/2.
         ///
+        /// **Example:**
+        /// ```swift
+        /// let hexagon = MaxCut.Examples.cycle(vertices: 6)
+        /// let hamiltonian = MaxCut.hamiltonian(edges: hexagon)
+        /// ```
+        ///
         /// - Parameter vertices: Number of vertices in cycle (≥ 3)
+        /// - Returns: Array of n edges forming a closed ring
+        /// - Complexity: O(n)
+        /// - Precondition: `vertices` >= 3
+        @inlinable
         @_optimize(speed)
         @_eagerMove
         @_effects(readonly)
@@ -154,10 +186,20 @@ public enum MaxCut {
         }
 
         /// Complete graph Kₙ with n vertices and n(n-1)/2 edges.
-        /// Generalizes `triangle()` (K₃) and `complete4()` (K₄).
+        /// Generalizes ``triangle`` (K₃) and ``complete4`` (K₄).
         /// Optimal maxcut = ⌊n²/4⌋, E₀ = -⌊n²/4⌋/2.
         ///
+        /// **Example:**
+        /// ```swift
+        /// let k5 = MaxCut.Examples.complete(vertices: 5)
+        /// let hamiltonian = MaxCut.hamiltonian(edges: k5)
+        /// ```
+        ///
         /// - Parameter vertices: Number of vertices (≥ 2)
+        /// - Returns: Array of n(n-1)/2 edges connecting every vertex pair
+        /// - Complexity: O(n²)
+        /// - Precondition: `vertices` >= 2
+        @inlinable
         @_optimize(speed)
         @_eagerMove
         @_effects(readonly)

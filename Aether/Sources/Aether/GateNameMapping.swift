@@ -17,7 +17,9 @@
 ///
 /// - SeeAlso: ``GateNameMapping``
 @frozen public enum QASMVersion: Sendable {
+    /// OpenQASM 2.0 using qelib1.inc gate definitions (phase gate exported as "u1").
     case v2
+    /// OpenQASM 3.0 using stdgates.inc gate definitions (phase gate exported as "p").
     case v3
 }
 
@@ -38,8 +40,9 @@
 ///
 /// - SeeAlso: ``QuantumGate``
 /// - SeeAlso: ``QASMVersion``
-public enum GateNameMapping: Sendable {
-    @usableFromInline static let placeholder: ParameterValue = .value(0)
+public enum GateNameMapping {
+    /// Zero-valued parameter placeholder substituted by importers after parsing.
+    private static let placeholder: ParameterValue = .value(0)
 
     /// Resolve the OpenQASM gate identifier for a given ``QuantumGate``.
     ///
@@ -172,6 +175,7 @@ public enum GateNameMapping: Sendable {
     /// - Returns: Corresponding quantum gate or nil if unrecognized
     /// - Complexity: O(1) average via dictionary lookup
     /// - SeeAlso: ``qasmName(for:version:)``
+    @inlinable
     @_optimize(speed)
     @_effects(readonly)
     public static func gate(forQASMName name: String, version: QASMVersion) -> QuantumGate? {
@@ -181,8 +185,10 @@ public enum GateNameMapping: Sendable {
         }
     }
 
-    @usableFromInline static let v2NameToGate: [String: QuantumGate] = buildV2Table()
+    /// QASM 2.0 gate-name-to-gate lookup table.
+    @usableFromInline static let v2NameToGate: [String: QuantumGate] = buildCommonTable()
 
+    /// QASM 3.0 gate-name-to-gate lookup table with version-specific entries.
     @usableFromInline static let v3NameToGate: [String: QuantumGate] = buildV3Table()
 
     /// Build the shared gate-name-to-gate lookup table common to both QASM versions.
@@ -227,13 +233,6 @@ public enum GateNameMapping: Sendable {
         ]
     }
 
-    /// Build the QASM 2.0 gate-name lookup table with version-specific overrides.
-    private static func buildV2Table() -> [String: QuantumGate] {
-        var table = buildCommonTable()
-        table["u1"] = .u1(lambda: placeholder)
-        return table
-    }
-
     /// Build the QASM 3.0 gate-name lookup table with version-specific overrides.
     private static func buildV3Table() -> [String: QuantumGate] {
         var table = buildCommonTable()
@@ -241,7 +240,9 @@ public enum GateNameMapping: Sendable {
         return table
     }
 
-    @usableFromInline static func controlledQASMName(for innerGate: QuantumGate, version: QASMVersion) -> String {
+    /// Produces the QASM identifier for a controlled wrapper around an inner gate.
+    @inlinable
+    static func controlledQASMName(for innerGate: QuantumGate, version: QASMVersion) -> String {
         let baseName = qasmName(for: innerGate, version: version)
         switch version {
         case .v2:

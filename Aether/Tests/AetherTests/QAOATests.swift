@@ -11,7 +11,7 @@ import Testing
 struct QAOAAlgorithmTests {
     @Test("Triangle graph optimization")
     func triangleGraph() async {
-        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.triangle())
+        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.triangle)
 
         let qaoa = QAOA(
             cost: cost,
@@ -34,7 +34,7 @@ struct QAOAAlgorithmTests {
 
     @Test("Square graph optimization")
     func squareGraph() async {
-        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.square())
+        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.square)
 
         let qaoa = QAOA(
             cost: cost,
@@ -80,7 +80,7 @@ struct QAOAAlgorithmTests {
 
     @Test("Pentagon graph optimization")
     func pentagonGraph() async {
-        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.pentagon())
+        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.pentagon)
 
         let qaoa = QAOA(
             cost: cost,
@@ -97,7 +97,7 @@ struct QAOAAlgorithmTests {
 
     @Test("Complete K₄ optimization")
     func completeK4() async {
-        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.complete4())
+        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.complete4)
 
         let qaoa = QAOA(
             cost: cost,

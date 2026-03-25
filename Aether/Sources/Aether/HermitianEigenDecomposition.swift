@@ -27,6 +27,15 @@ import Accelerate
     public let eigenvectors: [[Complex<Double>]]
 
     /// Dimension of the decomposed matrix
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let result = HermitianEigenDecomposition.decompose(matrix: matrix)
+    /// let n = result.dimension
+    /// let vectorCount = result.eigenvectors.count
+    /// ```
+    ///
+    /// - Complexity: O(1)
     @inlinable
     public var dimension: Int { eigenvalues.count }
 }
@@ -45,8 +54,9 @@ import Accelerate
 ///     [Complex(0, 1), Complex(1, 0)]
 /// ]
 /// let result = HermitianEigenDecomposition.decompose(matrix: hamiltonian)
+/// let eigenvalues = result.eigenvalues
 /// ```
-@frozen public enum HermitianEigenDecomposition {
+public enum HermitianEigenDecomposition {
     /// Computes eigendecomposition of a Hermitian matrix
     ///
     /// Diagonalizes the input Hermitian matrix H (n x n) into H = V * diag(lambda) * V-dagger
@@ -55,7 +65,8 @@ import Accelerate
     ///
     /// - Parameter matrix: Input Hermitian complex matrix (n x n) to decompose
     /// - Returns: ``HermitianEigenResult`` containing eigenvalues and eigenvectors
-    /// - Precondition: Matrix must be square and non-empty
+    /// - Precondition: Matrix must be non-empty
+    /// - Precondition: Matrix must be square (all rows equal to column count)
     /// - Complexity: O(n^3) for dense Hermitian eigensolver
     ///
     /// **Example:**
@@ -65,10 +76,10 @@ import Accelerate
     ///     [Complex(0, 0), Complex(-1, 0)]
     /// ]
     /// let result = HermitianEigenDecomposition.decompose(matrix: pauli_z)
+    /// let eigenvalues = result.eigenvalues
     /// ```
     @_optimize(speed)
     @_eagerMove
-    @_effects(readonly)
     public static func decompose(matrix: [[Complex<Double>]]) -> HermitianEigenResult {
         ValidationUtilities.validateSquareMatrix(matrix, name: "Hermitian input matrix")
 
@@ -78,9 +89,10 @@ import Accelerate
             for col in 0 ..< n {
                 let colOffset = 2 * col * n
                 for row in 0 ..< n {
+                    let element = matrix[row][col]
                     let idx = colOffset + 2 * row
-                    buffer[idx] = matrix[row][col].real
-                    buffer[idx + 1] = matrix[row][col].imaginary
+                    buffer[idx] = element.real
+                    buffer[idx + 1] = element.imaginary
                 }
             }
             count = 2 * n * n
@@ -88,8 +100,8 @@ import Accelerate
 
         var w = [Double](unsafeUninitializedCapacity: n) { _, count in count = n }
 
-        var jobz = CChar(Character("V").asciiValue!)
-        var uplo = CChar(Character("U").asciiValue!)
+        var jobz = CChar(Character("V").asciiValue!) // Safety: ASCII letter always has asciiValue
+        var uplo = CChar(Character("U").asciiValue!) // Safety: ASCII letter always has asciiValue
         var nn = __LAPACK_int(n)
         var lda = __LAPACK_int(n)
         var lwork = __LAPACK_int(-1)
@@ -98,10 +110,10 @@ import Accelerate
         let rworkSize = max(1, 3 * n - 2)
         var rwork = [Double](unsafeUninitializedCapacity: rworkSize) { _, count in count = rworkSize }
 
-        var workQuery = [Double](unsafeUninitializedCapacity: 2) { _, count in count = 2 }
+        var workQuery: (Double, Double) = (0, 0)
 
         a.withUnsafeMutableBytes { aPtr in
-            workQuery.withUnsafeMutableBytes { workPtr in
+            withUnsafeMutablePointer(to: &workQuery) { workPtr in
                 w.withUnsafeMutableBufferPointer { wPtr in
                     rwork.withUnsafeMutableBufferPointer { rworkPtr in
                         zheev_(
@@ -109,7 +121,7 @@ import Accelerate
                             OpaquePointer(aPtr.baseAddress),
                             &lda,
                             wPtr.baseAddress,
-                            OpaquePointer(workPtr.baseAddress!),
+                            OpaquePointer(workPtr),
                             &lwork,
                             rworkPtr.baseAddress,
                             &info,
@@ -121,7 +133,7 @@ import Accelerate
 
         ValidationUtilities.validateLAPACKSuccess(info, operation: "zheev_ workspace query")
 
-        let optimalWorkSize = max(1, Int(workQuery[0]))
+        let optimalWorkSize = max(1, Int(workQuery.0))
         lwork = __LAPACK_int(optimalWorkSize)
         var work = [Double](unsafeUninitializedCapacity: 2 * optimalWorkSize) { _, count in count = 2 * optimalWorkSize }
 
@@ -134,7 +146,7 @@ import Accelerate
                             OpaquePointer(aPtr.baseAddress),
                             &lda,
                             wPtr.baseAddress,
-                            OpaquePointer(workPtr.baseAddress!),
+                            OpaquePointer(workPtr.baseAddress!), // Safety: work array is non-empty (optimalWorkSize >= 1)
                             &lwork,
                             rworkPtr.baseAddress,
                             &info,

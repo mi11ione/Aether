@@ -34,29 +34,53 @@ public struct DebugSnapshot: Sendable, Equatable {
     public let elapsedNs: UInt64
 }
 
+/// Bloch sphere coordinates for a single-qubit reduced state.
+///
+/// Represents the (x, y, z) Bloch vector where pure states lie on the surface (|r| = 1)
+/// and mixed states lie inside (|r| < 1). The components are computed from the reduced
+/// density matrix rho: the x component equals 2 Re(rho_01), y equals -2 Im(rho_01),
+/// and z equals rho_00 - rho_11.
+///
+/// **Example:**
+/// ```swift
+/// let vector = BlochVector(x: 1.0, y: 0.0, z: 0.0)
+/// let length = sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z)
+/// print(length) // 1.0 for a pure state on the equator
+/// ```
+///
+/// - SeeAlso: ``QubitAmplitudeBreakdown``
+@frozen
+public struct BlochVector: Sendable, Equatable {
+    /// Projection along the X axis of the Bloch sphere.
+    public let x: Double
+    /// Projection along the Y axis of the Bloch sphere.
+    public let y: Double
+    /// Projection along the Z axis of the Bloch sphere.
+    public let z: Double
+}
+
 /// Breakdown of single-qubit amplitude probabilities and Bloch sphere coordinates.
 ///
 /// Provides per-qubit analysis of the reduced density matrix by tracing out all other qubits.
 /// The Bloch vector (x, y, z) represents the qubit state on the Bloch sphere where pure states
 /// lie on the surface (|r| = 1) and mixed states lie inside (|r| < 1).
 ///
-/// Bloch vector components are computed from the reduced density matrix rho:
-/// - x = 2 * Re(rho_01) = 2 * Re(⟨0|rho|1⟩)
-/// - y = -2 * Im(rho_01) = 2 * Im(rho_10) = Tr(rho * Y)
-/// - z = p0 - p1 = rho_00 - rho_11
+/// The Bloch vector components are computed from the reduced density matrix rho: the x
+/// component equals 2 Re(rho_01), which is 2 Re(⟨0|rho|1⟩); y equals -2 Im(rho_01),
+/// equivalently 2 Im(rho_10) or Tr(rho * Y); and z equals p0 - p1, that is rho_00 - rho_11.
 ///
 /// **Example:**
 /// ```swift
 /// let debug = DebugExecution(circuit: circuit)
 /// _ = debug.step()
-/// let breakdown = debug.amplitudes(qubit: 0)
+/// let breakdown = debug.amplitudeBreakdown(for: 0)
 /// print(breakdown.p0, breakdown.p1)
 /// print(breakdown.blochVector)
 /// ```
 ///
 /// - SeeAlso: ``DebugExecution``
 @frozen
-public struct QubitAmplitudeBreakdown: Sendable {
+public struct QubitAmplitudeBreakdown: Sendable, Equatable {
     /// The qubit index this breakdown describes.
     public let qubit: Int
 
@@ -67,7 +91,7 @@ public struct QubitAmplitudeBreakdown: Sendable {
     public let p1: Double
 
     /// Bloch sphere coordinates (x, y, z) for the reduced single-qubit state.
-    public let blochVector: (x: Double, y: Double, z: Double)
+    public let blochVector: BlochVector
 }
 
 /// Step-through circuit debugger with gate-by-gate execution, state snapshots, and timing.
@@ -86,7 +110,7 @@ public struct QubitAmplitudeBreakdown: Sendable {
 /// while !debug.isComplete {
 ///     let snapshot = debug.step()
 ///     print("Step \(snapshot.index): \(snapshot.elapsedNs) ns")
-///     let q0 = debug.amplitudes(qubit: 0)
+///     let q0 = debug.amplitudeBreakdown(for: 0)
 ///     print("Qubit 0: p0=\(q0.p0), p1=\(q0.p1)")
 /// }
 /// debug.reset()
@@ -109,11 +133,7 @@ public struct DebugExecution: Sendable {
     @usableFromInline
     var internalState: QuantumState
 
-    @usableFromInline
-    let timebaseNumer: Double
-
-    @usableFromInline
-    let timebaseDenom: Double
+    private let timebaseRatio: Double
 
     /// Creates a debug execution session for the specified circuit.
     ///
@@ -132,24 +152,23 @@ public struct DebugExecution: Sendable {
     ///   - circuit: The quantum circuit to debug.
     ///   - initialState: Optional custom initial state (defaults to ground state).
     /// - Precondition: initialState.qubits must equal circuit.qubits if provided.
+    /// - Complexity: O(2^n) where n is the number of qubits.
     public init(circuit: QuantumCircuit, initialState: QuantumState? = nil) {
         self.circuit = circuit
         currentIndex = 0
 
+        let maxQubit = circuit.highestQubitIndex
         if let state = initialState {
             ValidationUtilities.validateStateQubitCount(state, required: circuit.qubits)
-            let maxQubit = circuit.highestQubitIndex
             internalState = QuantumCircuit.expandStateForAncilla(state, maxQubit: maxQubit)
         } else {
-            let maxQubit = circuit.highestQubitIndex
             let groundState = QuantumState(qubits: circuit.qubits)
             internalState = QuantumCircuit.expandStateForAncilla(groundState, maxQubit: maxQubit)
         }
 
         var timebaseInfo = mach_timebase_info_data_t()
         mach_timebase_info(&timebaseInfo)
-        timebaseNumer = Double(timebaseInfo.numer)
-        timebaseDenom = Double(timebaseInfo.denom)
+        timebaseRatio = Double(timebaseInfo.numer) / Double(timebaseInfo.denom)
 
         let initialSnapshot = DebugSnapshot(
             index: -1,
@@ -157,7 +176,9 @@ public struct DebugExecution: Sendable {
             state: internalState,
             elapsedNs: 0,
         )
-        trace = [initialSnapshot]
+        trace = []
+        trace.reserveCapacity(circuit.operations.count + 1)
+        trace.append(initialSnapshot)
     }
 
     /// Executes the next operation and returns a snapshot of the resulting state.
@@ -176,6 +197,7 @@ public struct DebugExecution: Sendable {
     /// - Returns: Snapshot containing the operation, resulting state, and timing.
     /// - Complexity: O(2^n) where n is the number of qubits.
     @discardableResult
+    @_optimize(speed)
     public mutating func step() -> DebugSnapshot {
         guard currentIndex < circuit.operations.count else {
             return trace[trace.count - 1]
@@ -188,7 +210,7 @@ public struct DebugExecution: Sendable {
         let endTime = mach_absolute_time()
 
         let elapsedMach = Double(endTime - startTime)
-        let elapsedNs = UInt64(elapsedMach * timebaseNumer / timebaseDenom)
+        let elapsedNs = UInt64(elapsedMach * timebaseRatio)
 
         let snapshot = DebugSnapshot(
             index: currentIndex,
@@ -220,6 +242,7 @@ public struct DebugExecution: Sendable {
     /// - Precondition: count must be positive.
     /// - Complexity: O(count * 2^n) where n is the number of qubits.
     @discardableResult
+    @_optimize(speed)
     public mutating func step(count: Int) -> DebugSnapshot {
         ValidationUtilities.validatePositiveInt(count, name: "Step count")
 
@@ -245,12 +268,17 @@ public struct DebugExecution: Sendable {
     /// print(debug.currentIndex)  // 0
     /// print(debug.trace.count)   // 1 (initial snapshot only)
     /// ```
+    ///
+    /// - Complexity: O(1)
+    @_optimize(speed)
     public mutating func reset() {
         currentIndex = 0
 
         let initialSnapshot = trace[0]
         internalState = initialSnapshot.state
-        trace = [initialSnapshot]
+        trace = []
+        trace.reserveCapacity(circuit.operations.count + 1)
+        trace.append(initialSnapshot)
     }
 
     /// Computes the amplitude breakdown for a single qubit in the current state.
@@ -262,7 +290,7 @@ public struct DebugExecution: Sendable {
     /// ```swift
     /// var debug = DebugExecution(circuit: circuit)
     /// _ = debug.step()
-    /// let breakdown = debug.amplitudes(qubit: 0)
+    /// let breakdown = debug.amplitudeBreakdown(for: 0)
     /// print("P(|0⟩) = \(breakdown.p0)")
     /// print("Bloch: (\(breakdown.blochVector.x), \(breakdown.blochVector.y), \(breakdown.blochVector.z))")
     /// ```
@@ -271,7 +299,9 @@ public struct DebugExecution: Sendable {
     /// - Returns: Amplitude breakdown with probabilities and Bloch vector.
     /// - Precondition: qubit must be a valid index for the current state.
     /// - Complexity: O(2^n) where n is the number of qubits.
-    public func amplitudes(qubit: Int) -> QubitAmplitudeBreakdown {
+    @_effects(readonly)
+    @_optimize(speed)
+    public func amplitudeBreakdown(for qubit: Int) -> QubitAmplitudeBreakdown {
         ValidationUtilities.validateQubitIndex(qubit, qubits: internalState.qubits)
 
         let (p0, p1) = internalState.probabilities(for: qubit)
@@ -281,14 +311,16 @@ public struct DebugExecution: Sendable {
         var rho01Imag = 0.0
 
         let stateSize = internalState.stateSpaceSize
-        for i in 0 ..< stateSize where (i & qubitMask) == 0 {
+        let halfSize = stateSize >> 1
+        for k in 0 ..< halfSize {
+            let i = BitUtilities.insertZeroBit(k, at: qubit)
             let j = i | qubitMask
             let amp0 = internalState.amplitudes[i]
             let amp1 = internalState.amplitudes[j]
             let conjAmp1Real = amp1.real
             let conjAmp1Imag = -amp1.imaginary
-            rho01Real += amp0.real * conjAmp1Real - amp0.imaginary * conjAmp1Imag
-            rho01Imag += amp0.real * conjAmp1Imag + amp0.imaginary * conjAmp1Real
+            rho01Real += Double.fusedMultiplyAdd(amp0.real, conjAmp1Real, -amp0.imaginary * conjAmp1Imag)
+            rho01Imag += Double.fusedMultiplyAdd(amp0.real, conjAmp1Imag, amp0.imaginary * conjAmp1Real)
         }
 
         let x = 2.0 * rho01Real
@@ -299,7 +331,7 @@ public struct DebugExecution: Sendable {
             qubit: qubit,
             p0: p0,
             p1: p1,
-            blochVector: (x: x, y: y, z: z),
+            blochVector: BlochVector(x: x, y: y, z: z),
         )
     }
 

@@ -25,38 +25,60 @@ public protocol ComplexScalar: BinaryFloatingPoint, Sendable {
 }
 
 extension Double: ComplexScalar {
+    /// The additive identity.
     @inlinable public static var zero: Double { 0.0 }
+    /// The multiplicative identity.
     @inlinable public static var one: Double { 1.0 }
+    /// The comparison tolerance for Double precision.
     @inlinable public static var epsilon: Double { 1e-10 }
+    /// The minimum denominator magnitude for safe division.
     @inlinable public static var divisionThreshold: Double { 1e-15 }
 
+    /// Returns the square root.
     @inlinable public static func squareRoot(of value: Double) -> Double { Foundation.sqrt(value) }
+    /// Returns the cosine of the angle.
     @inlinable public static func cosine(of value: Double) -> Double { Foundation.cos(value) }
+    /// Returns the sine of the angle.
     @inlinable public static func sine(of value: Double) -> Double { Foundation.sin(value) }
+    /// Returns the two-argument arctangent.
     @inlinable public static func arctangent(y: Double, x: Double) -> Double { Foundation.atan2(y, x) }
+    /// Returns the absolute value.
     @inlinable public static func absoluteValue(of value: Double) -> Double {
         Double(bitPattern: value.bitPattern & 0x7FFF_FFFF_FFFF_FFFF)
     }
 
+    /// Returns the hypotenuse from the two sides.
     @inlinable public static func hypotenuse(x: Double, y: Double) -> Double { Foundation.hypot(x, y) }
+    /// Returns a fused multiply-add result.
     @inlinable public static func fusedMultiplyAdd(_ a: Double, _ b: Double, _ c: Double) -> Double { Foundation.fma(a, b, c) }
 }
 
 extension Float: ComplexScalar {
+    /// The additive identity.
     @inlinable public static var zero: Float { 0.0 }
+    /// The multiplicative identity.
     @inlinable public static var one: Float { 1.0 }
+    /// The comparison tolerance for Float precision.
     @inlinable public static var epsilon: Float { 1e-6 }
+    /// The minimum denominator magnitude for safe division.
     @inlinable public static var divisionThreshold: Float { 1e-10 }
 
+    /// Returns the square root.
     @inlinable public static func squareRoot(of value: Float) -> Float { Foundation.sqrt(value) }
+    /// Returns the cosine of the angle.
     @inlinable public static func cosine(of value: Float) -> Float { Foundation.cos(value) }
+    /// Returns the sine of the angle.
     @inlinable public static func sine(of value: Float) -> Float { Foundation.sin(value) }
+    /// Returns the two-argument arctangent.
     @inlinable public static func arctangent(y: Float, x: Float) -> Float { Foundation.atan2(y, x) }
+    /// Returns the absolute value.
     @inlinable public static func absoluteValue(of value: Float) -> Float {
         Float(bitPattern: value.bitPattern & 0x7FFF_FFFF)
     }
 
+    /// Returns the hypotenuse from the two sides.
     @inlinable public static func hypotenuse(x: Float, y: Float) -> Float { Foundation.hypot(x, y) }
+    /// Returns a fused multiply-add result.
     @inlinable public static func fusedMultiplyAdd(_ a: Float, _ b: Float, _ c: Float) -> Float { Foundation.fma(a, b, c) }
 }
 
@@ -76,25 +98,19 @@ extension Float: ComplexScalar {
 ///
 /// **Example:**
 /// ```swift
-/// // Cartesian construction
 /// let amplitude = Complex(0.6, 0.8)
 /// let probability = amplitude.magnitudeSquared  // 1.0 (normalized)
-///
-/// // Polar construction for phase gates
 /// let phaseGate = Complex(magnitude: 1.0, phase: .pi/4)
-///
-/// // Euler's formula for unit phases
 /// let i = Complex<Double>(phase: .pi/2)  // i
-///
-/// // Arithmetic
 /// let product = amplitude * amplitude.conjugate
-/// print(product.real)  // 1.0 (Born rule probability)
 /// ```
 @frozen
 public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConvertible, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral, AdditiveArithmetic, Sendable {
     // MARK: - Properties
 
+    /// The real component.
     public let real: T
+    /// The imaginary component.
     public let imaginary: T
 
     // MARK: - Initialization
@@ -110,7 +126,8 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// **Example:**
     /// ```swift
     /// let amplitude = Complex(0.6, 0.8)
-    /// let prob = amplitude.magnitudeSquared  // 1.0
+    /// let real = amplitude.real        // 0.6
+    /// let imaginary = amplitude.imaginary  // 0.8
     /// ```
     @inlinable
     public init(_ real: T, _ imaginary: T) {
@@ -125,11 +142,12 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// **Example:**
     /// ```swift
     /// let eigenvalue = Complex(1.0)  // 1 + 0i
+    /// let real = eigenvalue.real          // 1.0
+    /// let imaginary = eigenvalue.imaginary  // 0.0
     /// ```
     @inlinable
     public init(_ real: T) {
-        self.real = real
-        imaginary = T.zero
+        self.init(real, T.zero)
     }
 
     /// Integer literal support enabling `let z: Complex<Double> = 5`
@@ -137,11 +155,12 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// **Example:**
     /// ```swift
     /// let identity: Complex<Double> = 1
+    /// let real = identity.real       // 1.0
+    /// let imaginary = identity.imaginary  // 0.0
     /// ```
     @inlinable
     public init(integerLiteral value: Int) {
-        real = T(value)
-        imaginary = T.zero
+        self.init(T(value), T.zero)
     }
 
     /// Float literal support enabling `let z: Complex<Double> = 3.14`
@@ -149,11 +168,12 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// **Example:**
     /// ```swift
     /// let pi: Complex<Double> = 3.14159
+    /// let real = pi.real       // 3.14159
+    /// let imaginary = pi.imaginary  // 0.0
     /// ```
     @inlinable
     public init(floatLiteral value: Double) {
-        real = T(value)
-        imaginary = T.zero
+        self.init(T(value), T.zero)
     }
 
     // MARK: - Static Constants
@@ -164,6 +184,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// ```swift
     /// var z = Complex<Double>.zero
     /// z += Complex(3, 4)  // Now 3 + 4i
+    /// let real = z.real   // 3.0
     /// ```
     @inlinable
     public static var zero: Complex<T> {
@@ -176,6 +197,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// ```swift
     /// let z = Complex(3.0, 4.0)
     /// let result = z * .one  // 3 + 4i (unchanged)
+    /// let isUnchanged = result == z  // true
     /// ```
     @inlinable
     public static var one: Complex<T> {
@@ -227,6 +249,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// ```swift
     /// let amplitude = Complex(0.6, 0.8)
     /// let probability = amplitude.magnitudeSquared  // 1.0
+    /// let isNormalized = probability == 1.0  // true
     /// ```
     ///
     /// - Complexity: O(1)
@@ -265,6 +288,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// ```swift
     /// let z = Complex(1.0, 1.0)
     /// let angle = z.phase  // π/4 radians (45°)
+    /// let magnitude = z.magnitude  // √2
     /// ```
     ///
     /// - Complexity: O(1)
@@ -305,15 +329,15 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// **Example:**
     /// ```swift
     /// let z = Complex(magnitude: 2.0, phase: .pi/3)
-    /// // Creates: 2·e^(iπ/3) = 1 + √3i
+    /// let real = z.real        // 1.0
+    /// let imaginary = z.imaginary  // √3
     /// ```
     ///
     /// - Complexity: O(1)
     /// - SeeAlso: ``magnitude``, ``phase``, ``init(phase:)``
     @inlinable
     public init(magnitude: T, phase: T) {
-        real = magnitude * T.cosine(of: phase)
-        imaginary = magnitude * T.sine(of: phase)
+        self.init(magnitude * T.cosine(of: phase), magnitude * T.sine(of: phase))
     }
 
     // MARK: - Exponential Form
@@ -337,8 +361,7 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// - SeeAlso: ``init(magnitude:phase:)``
     @inlinable
     public init(phase: T) {
-        real = T.cosine(of: phase)
-        imaginary = T.sine(of: phase)
+        self.init(T.cosine(of: phase), T.sine(of: phase))
     }
 
     // MARK: - CustomStringConvertible
@@ -355,12 +378,12 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// print(Complex(0, -2))   // "-2.0i"
     /// ```
     public var description: String {
-        let epsilon = T.epsilon
+        let tolerance = T.epsilon
 
-        if T.absoluteValue(of: imaginary) < epsilon {
+        if T.absoluteValue(of: imaginary) < tolerance {
             return "\(real)"
         }
-        if T.absoluteValue(of: real) < epsilon {
+        if T.absoluteValue(of: real) < tolerance {
             return "\(imaginary)i"
         }
         if imaginary >= 0 {
@@ -384,10 +407,14 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// let z2 = Complex(1.0 + 1e-11, 0.0)
     /// print(z1 == z2)  // true (within epsilon)
     /// ```
+    @_specialize(exported: true, where T == Double)
+    @_specialize(exported: true, where T == Float)
+    @_effects(readonly)
+    @inlinable
     public static func == (lhs: Complex<T>, rhs: Complex<T>) -> Bool {
-        let epsilon = T.epsilon
-        return T.absoluteValue(of: lhs.real - rhs.real) < epsilon &&
-            T.absoluteValue(of: lhs.imaginary - rhs.imaginary) < epsilon
+        let tolerance = T.epsilon
+        return T.absoluteValue(of: lhs.real - rhs.real) < tolerance &&
+            T.absoluteValue(of: lhs.imaginary - rhs.imaginary) < tolerance
     }
 
     // MARK: - Hashable
@@ -402,12 +429,15 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
     /// ```swift
     /// var uniqueAmplitudes = Set<Complex<Double>>()
     /// uniqueAmplitudes.insert(Complex(0.707, 0.707))
+    /// let count = uniqueAmplitudes.count  // 1
     /// ```
+    @inlinable
     public func hash(into hasher: inout Hasher) {
-        let realBucket = Int64((real / T.epsilon).rounded())
-        let imagBucket = Int64((imaginary / T.epsilon).rounded())
+        let invEpsilon = T.one / T.epsilon
+        let realBucket = Int64((real * invEpsilon).rounded())
+        let imaginaryBucket = Int64((imaginary * invEpsilon).rounded())
         hasher.combine(realBucket)
-        hasher.combine(imagBucket)
+        hasher.combine(imaginaryBucket)
     }
 }
 
@@ -415,6 +445,13 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
 
 /// Complex addition: (a+bi) + (c+di) = (a+c) + (b+d)i
 /// - Complexity: O(1)
+///
+/// **Example:**
+/// ```swift
+/// let a = Complex(1.0, 2.0)
+/// let b = Complex(3.0, 4.0)
+/// let sum = a + b  // 4.0 + 6.0i
+/// ```
 @_specialize(exported: true, where T == Double)
 @_specialize(exported: true, where T == Float)
 @_effects(readonly)
@@ -425,6 +462,13 @@ public func + <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
 
 /// Complex subtraction: (a+bi) - (c+di) = (a-c) + (b-d)i
 /// - Complexity: O(1)
+///
+/// **Example:**
+/// ```swift
+/// let a = Complex(3.0, 4.0)
+/// let b = Complex(1.0, 2.0)
+/// let diff = a - b  // 2.0 + 2.0i
+/// ```
 @_specialize(exported: true, where T == Double)
 @_specialize(exported: true, where T == Float)
 @_effects(readonly)
@@ -435,23 +479,38 @@ public func - <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
 
 /// Complex multiplication: (a+bi)·(c+di) = (ac-bd) + (ad+bc)i
 /// - Complexity: O(1)
+///
+/// **Example:**
+/// ```swift
+/// let a = Complex(1.0, 2.0)
+/// let b = Complex(3.0, 4.0)
+/// let product = a * b  // -5.0 + 10.0i
+/// ```
 @_specialize(exported: true, where T == Double)
 @_specialize(exported: true, where T == Float)
 @_optimize(speed)
 @_effects(readonly)
 @inlinable
 public func * <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
-    let real = lhs.real * rhs.real - lhs.imaginary * rhs.imaginary
-    let imag = lhs.real * rhs.imaginary + lhs.imaginary * rhs.real
-    return Complex(real, imag)
+    let real = T.fusedMultiplyAdd(lhs.real, rhs.real, -(lhs.imaginary * rhs.imaginary))
+    let imaginary = T.fusedMultiplyAdd(lhs.real, rhs.imaginary, lhs.imaginary * rhs.real)
+    return Complex(real, imaginary)
 }
 
 /// Complex division: (a+bi) / (c+di) = [(a+bi)·(c-di)] / (c²+d²)
 /// - Complexity: O(1)
 /// - Precondition: `rhs.magnitudeSquared > 0` (division by zero not allowed)
+///
+/// **Example:**
+/// ```swift
+/// let a = Complex(2.0, 4.0)
+/// let b = Complex(1.0, 1.0)
+/// let quotient = a / b  // 3.0 + 1.0i
+/// ```
 @_specialize(exported: true, where T == Double)
 @_specialize(exported: true, where T == Float)
 @_optimize(speed)
+@_effects(readonly)
 @inlinable
 public func / <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
     let denominator: T = rhs.magnitudeSquared
@@ -459,12 +518,19 @@ public func / <T>(lhs: Complex<T>, rhs: Complex<T>) -> Complex<T> {
 
     let invDenom = T.one / denominator
     let real = T.fusedMultiplyAdd(lhs.real, rhs.real, lhs.imaginary * rhs.imaginary) * invDenom
-    let imag = T.fusedMultiplyAdd(lhs.imaginary, rhs.real, -lhs.real * rhs.imaginary) * invDenom
-    return Complex(real, imag)
+    let imaginary = T.fusedMultiplyAdd(lhs.imaginary, rhs.real, -lhs.real * rhs.imaginary) * invDenom
+    return Complex(real, imaginary)
 }
 
 /// Complex negation: -(a+bi) = -a - bi
 /// - Complexity: O(1)
+///
+/// **Example:**
+/// ```swift
+/// let z = Complex(3.0, 4.0)
+/// let neg = -z  // -3.0 - 4.0i
+/// print(neg.real)  // -3.0
+/// ```
 @_specialize(exported: true, where T == Double)
 @_specialize(exported: true, where T == Float)
 @_effects(readonly)
@@ -477,6 +543,13 @@ public prefix func - <T>(z: Complex<T>) -> Complex<T> {
 
 /// Scalar multiplication: k·(a+bi) = ka + kbi
 /// - Complexity: O(1)
+///
+/// **Example:**
+/// ```swift
+/// let z = Complex(1.0, 2.0)
+/// let scaled = 3.0 * z  // 3.0 + 6.0i
+/// print(scaled.imaginary)  // 6.0
+/// ```
 @_specialize(exported: true, where T == Double)
 @_specialize(exported: true, where T == Float)
 @_effects(readonly)
@@ -487,6 +560,13 @@ public func * <T>(scalar: T, z: Complex<T>) -> Complex<T> {
 
 /// Scalar multiplication: (a+bi)·k = ka + kbi
 /// - Complexity: O(1)
+///
+/// **Example:**
+/// ```swift
+/// let z = Complex(1.0, 2.0)
+/// let scaled = z * 3.0  // 3.0 + 6.0i
+/// print(scaled.real)  // 3.0
+/// ```
 @_specialize(exported: true, where T == Double)
 @_specialize(exported: true, where T == Float)
 @_effects(readonly)
@@ -497,30 +577,64 @@ public func * <T>(z: Complex<T>, scalar: T) -> Complex<T> {
 
 /// Scalar division: (a+bi)/k = a/k + (b/k)i
 /// - Complexity: O(1)
+///
+/// **Example:**
+/// ```swift
+/// let z = Complex(4.0, 6.0)
+/// let halved = z / 2.0  // 2.0 + 3.0i
+/// print(halved.real)  // 2.0
+/// ```
 @_specialize(exported: true, where T == Double)
 @_specialize(exported: true, where T == Float)
 @_effects(readonly)
 @inlinable
 public func / <T>(z: Complex<T>, scalar: T) -> Complex<T> {
-    Complex(z.real / scalar, z.imaginary / scalar)
+    let inv = 1 / scalar
+    return Complex(z.real * inv, z.imaginary * inv)
 }
 
 // MARK: - Compound Assignment Operators
 
+/// Multiplies a complex number by another complex number in place.
+///
+/// **Example:**
+/// ```swift
+/// var z = Complex(1.0, 2.0)
+/// z *= Complex(3.0, 4.0)
+/// print(z)  // -5.0 + 10.0i
+/// ```
 @_specialize(exported: true, where T == Double)
 @_specialize(exported: true, where T == Float)
+@_optimize(speed)
 @inlinable
 public func *= <T>(lhs: inout Complex<T>, rhs: Complex<T>) {
     lhs = lhs * rhs
 }
 
+/// Divides a complex number by another complex number in place.
+///
+/// **Example:**
+/// ```swift
+/// var z = Complex(2.0, 4.0)
+/// z /= Complex(1.0, 1.0)
+/// print(z)  // 3.0 + 1.0i
+/// ```
 @_specialize(exported: true, where T == Double)
 @_specialize(exported: true, where T == Float)
+@_optimize(speed)
 @inlinable
 public func /= <T>(lhs: inout Complex<T>, rhs: Complex<T>) {
     lhs = lhs / rhs
 }
 
+/// Multiplies a complex number by a scalar in place.
+///
+/// **Example:**
+/// ```swift
+/// var z = Complex(1.0, 2.0)
+/// z *= 3.0
+/// print(z)  // 3.0 + 6.0i
+/// ```
 @_specialize(exported: true, where T == Double)
 @_specialize(exported: true, where T == Float)
 @inlinable
@@ -528,6 +642,14 @@ public func *= <T>(lhs: inout Complex<T>, scalar: T) {
     lhs = lhs * scalar
 }
 
+/// Divides a complex number by a scalar in place.
+///
+/// **Example:**
+/// ```swift
+/// var z = Complex(4.0, 6.0)
+/// z /= 2.0
+/// print(z)  // 2.0 + 3.0i
+/// ```
 @_specialize(exported: true, where T == Double)
 @_specialize(exported: true, where T == Float)
 @inlinable

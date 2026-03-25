@@ -425,7 +425,8 @@ struct MPOSendableConformanceTests {
     func mpoIsSendable() {
         let observable = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
         let mpo = MatrixProductOperator(observable: observable)
-        _ = mpo as Sendable
+        let copy: any Sendable = mpo
+        #expect(copy is MatrixProductOperator, "MPO should conform to Sendable")
     }
 }
 
@@ -533,5 +534,108 @@ struct MPOSparsePauliOperatorsTests {
         let mps = MatrixProductState(qubits: 4, basisState: 9)
         let expectation = mpo.expectationValue(bra: mps, ket: mps)
         #expect(abs(expectation - 1.0) < 1e-10, "Z0 Z3 expectation on |1001> should be (-1)*(-1) = +1")
+    }
+}
+
+/// Tests MPO direct sum with many terms and expectation values.
+/// Validates correct accumulation of bond dimensions for large observables
+/// and verifies expectation value accuracy after direct sum construction.
+@Suite("MPO Large Observable")
+struct MPOLargeObservableTests {
+    @Test("Many-term observable produces correct expectation")
+    func manyTermExpectation() {
+        var terms = [(Double, PauliString)]()
+        for _ in 0 ..< 10 {
+            terms.append((0.1, PauliString(.z(0), .z(1))))
+        }
+        let obs = Observable(terms: terms)
+        let mpo = MatrixProductOperator(observable: obs)
+        let mps = MatrixProductState(qubits: 2)
+        let expectation = mpo.expectationValue(bra: mps, ket: mps)
+        #expect(abs(expectation - 1.0) < 1e-10, "10 terms of 0.1 * Z0Z1 on |00> should give 1.0")
+    }
+
+    @Test("Three-qubit many-term observable builds correctly")
+    func threeQubitManyTerms() {
+        var terms = [(Double, PauliString)]()
+        for _ in 0 ..< 5 {
+            terms.append((0.2, PauliString(.z(0), .z(2))))
+        }
+        let obs = Observable(terms: terms)
+        let mpo = MatrixProductOperator(observable: obs)
+        #expect(mpo.sites == 3, "3-qubit observable should create 3-site MPO")
+        let mps = MatrixProductState(qubits: 3)
+        let expectation = mpo.expectationValue(bra: mps, ket: mps)
+        #expect(abs(expectation - 1.0) < 1e-10, "5 terms of 0.2 * Z0Z2 on |000> should give 1.0")
+    }
+}
+
+/// Tests MPS canonicalization during MPO-MPS application.
+/// Validates bond dimension control via right-canonical SVD sweep
+/// when applying MPO produces tensors exceeding target dimensions.
+@Suite("MPO Canonicalization")
+struct MPOCanonicalizationTests {
+    @Test("Applying multi-term MPO with small truncation triggers canonicalization")
+    func canonicalizationTrigger() {
+        var terms = [(Double, PauliString)]()
+        for i in 0 ..< 8 {
+            terms.append((0.1, PauliString(.z(i % 3), .z((i + 1) % 3))))
+        }
+        let obs = Observable(terms: terms)
+        let mpo = MatrixProductOperator(observable: obs)
+        let mps = MatrixProductState(qubits: 3)
+        let result = mpo.applying(to: mps, truncation: .maxBondDimension(2))
+        #expect(result.qubits == 3, "Result should have 3 qubits")
+        for i in 0 ..< result.tensors.count {
+            #expect(result.tensors[i].leftBondDimension <= 4, "Left bond at site \(i) should be bounded after canonicalization")
+            #expect(result.tensors[i].rightBondDimension <= 4, "Right bond at site \(i) should be bounded after canonicalization")
+        }
+    }
+
+    @Test("Applying with maxBondDimension preserves qubit structure")
+    func maxBondPreservesStructure() {
+        let obs = Observable(terms: [
+            (1.0, PauliString(.x(0), .x(1))),
+            (0.5, PauliString(.z(0))),
+            (0.5, PauliString(.z(1))),
+        ])
+        let mpo = MatrixProductOperator(observable: obs)
+        let mps = MatrixProductState(qubits: 2)
+        let result = mpo.applying(to: mps, truncation: .maxBondDimension(4))
+        #expect(result.qubits == 2, "Result MPS should have 2 qubits after truncated application")
+        #expect(result.tensors.count == 2, "Result should have 2 tensors after truncated application")
+    }
+
+    @Test("Applying with none truncation preserves expectation value")
+    func noneTruncationPreservesExpectation() {
+        let obs = Observable(coefficient: 1.0, pauliString: PauliString(.z(0), .z(1)))
+        let mpo = MatrixProductOperator(observable: obs)
+        let mps = MatrixProductState(qubits: 2)
+        let result = mpo.applying(to: mps, truncation: .none)
+        #expect(result.qubits == 2, "Result should have 2 qubits")
+        let expectation = mpo.expectationValue(bra: result, ket: result)
+        #expect(abs(expectation) > 0, "Expectation value after application should be non-zero")
+    }
+}
+
+/// Tests MPO addition with single-site observables.
+/// Validates element-wise addition path when system has exactly one site
+/// and verifies expectation values for accumulated single-qubit operators.
+@Suite("MPO Single Site Addition")
+struct MPOSingleSiteAdditionTests {
+    @Test("Multi-term single-qubit observable accumulates correctly")
+    func singleSiteMultiTerm() {
+        let obs = Observable(terms: [
+            (0.5, PauliString(.z(0))),
+            (0.3, PauliString(.z(0))),
+            (0.2, PauliString(.x(0))),
+        ])
+        let mpo = MatrixProductOperator(observable: obs)
+        #expect(mpo.sites == 1, "Single-qubit observable should have 1 site")
+        #expect(mpo.tensors[0].leftBondDimension == 1, "Single site left bond should be 1")
+        #expect(mpo.tensors[0].rightBondDimension == 1, "Single site right bond should be 1")
+        let mps = MatrixProductState(qubits: 1)
+        let expectation = mpo.expectationValue(bra: mps, ket: mps)
+        #expect(abs(expectation - 0.8) < 1e-10, "0.5*Z + 0.3*Z + 0.2*X on |0> should give 0.8")
     }
 }

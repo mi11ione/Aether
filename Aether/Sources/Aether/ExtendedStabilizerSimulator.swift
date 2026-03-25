@@ -30,6 +30,9 @@ import GameplayKit
 /// - SeeAlso: ``StabilizerTableau``
 /// - SeeAlso: ``CliffordGateClassifier``
 public actor ExtendedStabilizerSimulator {
+    /// Maximum T-gate count before simulation becomes impractical.
+    private static let maximumTCount = 50
+
     /// Maximum allowed stabilizer rank (number of terms in decomposition).
     ///
     /// Limits memory usage by capping the number of stabilizer terms. Each T-gate
@@ -44,6 +47,7 @@ public actor ExtendedStabilizerSimulator {
     /// ```
     ///
     /// - Parameter maxRank: Maximum number of stabilizer terms (must be positive)
+    /// - Precondition: maxRank > 0
     public init(maxRank: Int) {
         ValidationUtilities.validatePositiveInt(maxRank, name: "maxRank")
         self.maxRank = maxRank
@@ -69,6 +73,8 @@ public actor ExtendedStabilizerSimulator {
     ///
     /// - Parameter circuit: Quantum circuit to execute
     /// - Returns: Final extended stabilizer state after applying all gates
+    /// - Precondition: Circuit T-count must not exceed 50
+    /// - Complexity: O(gates * 2^t) where t = T-count
     @_optimize(speed)
     public func execute(_ circuit: QuantumCircuit) async -> ExtendedStabilizerState {
         let initial = ExtendedStabilizerState(qubits: circuit.qubits, maxRank: maxRank)
@@ -93,10 +99,12 @@ public actor ExtendedStabilizerSimulator {
     ///   - circuit: Quantum circuit to execute
     ///   - initial: Initial extended stabilizer state
     /// - Returns: Final extended stabilizer state after applying all gates
+    /// - Precondition: Circuit T-count must not exceed 50
+    /// - Complexity: O(gates * 2^t) where t = T-count
     @_optimize(speed)
     public func execute(_ circuit: QuantumCircuit, from initial: ExtendedStabilizerState) async -> ExtendedStabilizerState {
         let analysis = CliffordGateClassifier.analyze(circuit)
-        ValidationUtilities.validateUpperBound(analysis.tCount, max: 50, name: "T-count")
+        ValidationUtilities.validateUpperBound(analysis.tCount, max: Self.maximumTCount, name: "T-count")
 
         var state = initial
 
@@ -136,6 +144,7 @@ public actor ExtendedStabilizerSimulator {
     ///   - circuit: Quantum circuit to execute
     ///   - basisState: Computational basis state index (0 to 2^n - 1)
     /// - Returns: Complex amplitude of the specified basis state
+    /// - Complexity: O(gates * 2^t + rank * n) where t = T-count, n = qubits
     @_optimize(speed)
     public func amplitude(_ circuit: QuantumCircuit, of basisState: Int) async -> Complex<Double> {
         let state = await execute(circuit)
@@ -165,17 +174,19 @@ public actor ExtendedStabilizerSimulator {
     ///   - shots: Number of measurement samples to collect
     ///   - seed: Optional seed for reproducible random sampling
     /// - Returns: Array of measurement outcomes (each 0 to 2^n - 1)
+    /// - Precondition: shots > 0
+    /// - Complexity: O(gates * 2^t + 2^n + shots * log(2^n))
     @_optimize(speed)
-    public func sample(_ circuit: QuantumCircuit, shots: Int, seed: UInt64?) async -> [Int] {
+    public func sample(_ circuit: QuantumCircuit, shots: Int, seed: UInt64? = nil) async -> [Int] {
         ValidationUtilities.validatePositiveInt(shots, name: "shots")
 
         let state = await execute(circuit)
         return sampleFromState(state, shots: shots, seed: seed)
     }
 
-    @usableFromInline
+    /// Applies a gate by classifying as Clifford or non-Clifford.
     @_optimize(speed)
-    func applyGate(_ gate: QuantumGate, to qubits: [Int], state: ExtendedStabilizerState) -> ExtendedStabilizerState {
+    private func applyGate(_ gate: QuantumGate, to qubits: [Int], state: ExtendedStabilizerState) -> ExtendedStabilizerState {
         var result = state
 
         let classification = CliffordGateClassifier.classify(gate)
@@ -190,9 +201,10 @@ public actor ExtendedStabilizerSimulator {
         return result
     }
 
-    @usableFromInline
+    /// Applies a Clifford gate to all stabilizer terms.
     @_optimize(speed)
-    func applyCliffordGate(_ gate: QuantumGate, to qubits: [Int], state: inout ExtendedStabilizerState) {
+    @inline(__always)
+    private func applyCliffordGate(_ gate: QuantumGate, to qubits: [Int], state: inout ExtendedStabilizerState) {
         if qubits.count == 1 {
             state.apply(gate, to: qubits[0])
         } else {
@@ -200,9 +212,9 @@ public actor ExtendedStabilizerSimulator {
         }
     }
 
-    @usableFromInline
+    /// Dispatches non-Clifford gate to appropriate decomposition.
     @_optimize(speed)
-    func applyNonCliffordGate(_ gate: QuantumGate, to qubits: [Int], state: inout ExtendedStabilizerState) {
+    private func applyNonCliffordGate(_ gate: QuantumGate, to qubits: [Int], state: inout ExtendedStabilizerState) {
         switch gate {
         case .tGate:
             state.apply(.tGate, to: qubits[0])
@@ -221,16 +233,16 @@ public actor ExtendedStabilizerSimulator {
         }
     }
 
-    @usableFromInline
-    enum RotationType {
+    /// Axis type for rotation gate decomposition.
+    private enum RotationType {
         case rotationX
         case rotationY
         case rotationZ
     }
 
-    @usableFromInline
+    /// Applies a rotation gate via stabilizer rank decomposition.
     @_optimize(speed)
-    func applyRotationDecomposition(_ type: RotationType, angle: ParameterValue, to qubit: Int, state: inout ExtendedStabilizerState) {
+    private func applyRotationDecomposition(_ type: RotationType, angle: ParameterValue, to qubit: Int, state: inout ExtendedStabilizerState) {
         guard case .value = angle else { return }
 
         switch type {
@@ -243,48 +255,50 @@ public actor ExtendedStabilizerSimulator {
         }
     }
 
-    @usableFromInline
+    /// Decomposes Toffoli into Clifford+T gates.
     @_optimize(speed)
-    func applyToffoliDecomposition(to qubits: [Int], state: inout ExtendedStabilizerState) {
-        state.apply(.hadamard, to: qubits[2])
-        state.apply(.cnot, to: [qubits[1], qubits[2]])
-        state.apply(.tGate, to: qubits[2])
-        state = applyGate(.tGate.inverse, to: [qubits[2]], state: state)
-        state.apply(.cnot, to: [qubits[0], qubits[2]])
-        state.apply(.tGate, to: qubits[2])
-        state.apply(.cnot, to: [qubits[1], qubits[2]])
-        state = applyGate(.tGate.inverse, to: [qubits[2]], state: state)
-        state.apply(.cnot, to: [qubits[0], qubits[2]])
-        state.apply(.tGate, to: qubits[1])
-        state.apply(.tGate, to: qubits[2])
-        state.apply(.cnot, to: [qubits[0], qubits[1]])
-        state.apply(.hadamard, to: qubits[2])
-        state.apply(.tGate, to: qubits[0])
-        state = applyGate(.tGate.inverse, to: [qubits[1]], state: state)
-        state.apply(.cnot, to: [qubits[0], qubits[1]])
+    private func applyToffoliDecomposition(to qubits: [Int], state: inout ExtendedStabilizerState) {
+        let (q0, q1, q2) = (qubits[0], qubits[1], qubits[2])
+        state.apply(.hadamard, to: q2)
+        state.apply(.cnot, to: [q1, q2])
+        state.apply(.tGate, to: q2)
+        state = applyGate(.tGate.inverse, to: [q2], state: state)
+        state.apply(.cnot, to: [q0, q2])
+        state.apply(.tGate, to: q2)
+        state.apply(.cnot, to: [q1, q2])
+        state = applyGate(.tGate.inverse, to: [q2], state: state)
+        state.apply(.cnot, to: [q0, q2])
+        state.apply(.tGate, to: q1)
+        state.apply(.tGate, to: q2)
+        state.apply(.cnot, to: [q0, q1])
+        state.apply(.hadamard, to: q2)
+        state.apply(.tGate, to: q0)
+        state = applyGate(.tGate.inverse, to: [q1], state: state)
+        state.apply(.cnot, to: [q0, q1])
     }
 
-    @usableFromInline
+    /// Decomposes CCZ into Clifford+T gates.
     @_optimize(speed)
-    func applyCCZDecomposition(to qubits: [Int], state: inout ExtendedStabilizerState) {
-        state.apply(.cnot, to: [qubits[1], qubits[2]])
-        state = applyGate(.tGate.inverse, to: [qubits[2]], state: state)
-        state.apply(.cnot, to: [qubits[0], qubits[2]])
-        state.apply(.tGate, to: qubits[2])
-        state.apply(.cnot, to: [qubits[1], qubits[2]])
-        state = applyGate(.tGate.inverse, to: [qubits[2]], state: state)
-        state.apply(.cnot, to: [qubits[0], qubits[2]])
-        state.apply(.tGate, to: qubits[1])
-        state.apply(.tGate, to: qubits[2])
-        state.apply(.cnot, to: [qubits[0], qubits[1]])
-        state.apply(.tGate, to: qubits[0])
-        state = applyGate(.tGate.inverse, to: [qubits[1]], state: state)
-        state.apply(.cnot, to: [qubits[0], qubits[1]])
+    private func applyCCZDecomposition(to qubits: [Int], state: inout ExtendedStabilizerState) {
+        let (q0, q1, q2) = (qubits[0], qubits[1], qubits[2])
+        state.apply(.cnot, to: [q1, q2])
+        state = applyGate(.tGate.inverse, to: [q2], state: state)
+        state.apply(.cnot, to: [q0, q2])
+        state.apply(.tGate, to: q2)
+        state.apply(.cnot, to: [q1, q2])
+        state = applyGate(.tGate.inverse, to: [q2], state: state)
+        state.apply(.cnot, to: [q0, q2])
+        state.apply(.tGate, to: q1)
+        state.apply(.tGate, to: q2)
+        state.apply(.cnot, to: [q0, q1])
+        state.apply(.tGate, to: q0)
+        state = applyGate(.tGate.inverse, to: [q1], state: state)
+        state.apply(.cnot, to: [q0, q1])
     }
 
-    @usableFromInline
+    /// Handles remaining non-Clifford gates via decomposition.
     @_optimize(speed)
-    func applyGenericNonClifford(_ gate: QuantumGate, to qubits: [Int], state: inout ExtendedStabilizerState) {
+    private func applyGenericNonClifford(_ gate: QuantumGate, to qubits: [Int], state: inout ExtendedStabilizerState) {
         switch gate {
         case .fredkin:
             state.apply(.cnot, to: [qubits[2], qubits[1]])
@@ -305,9 +319,9 @@ public actor ExtendedStabilizerSimulator {
         }
     }
 
-    @usableFromInline
+    /// Decomposes controlled-phase into CNOT + rotation.
     @_optimize(speed)
-    func applyControlledPhaseDecomposition(angle: ParameterValue, to qubits: [Int], state: inout ExtendedStabilizerState) {
+    private func applyControlledPhaseDecomposition(angle: ParameterValue, to qubits: [Int], state: inout ExtendedStabilizerState) {
         guard case let .value(theta) = angle else { return }
 
         let halfTheta = theta / 2.0
@@ -317,9 +331,9 @@ public actor ExtendedStabilizerSimulator {
         state.apply(.cnot, to: qubits)
     }
 
-    @usableFromInline
+    /// Decomposes controlled-rotation into CNOT + half-angle rotation.
     @_optimize(speed)
-    func applyControlledRotationDecomposition(_ type: RotationType, angle: ParameterValue, to qubits: [Int], state: inout ExtendedStabilizerState) {
+    private func applyControlledRotationDecomposition(_ type: RotationType, angle: ParameterValue, to qubits: [Int], state: inout ExtendedStabilizerState) {
         guard case let .value(theta) = angle else { return }
 
         let halfTheta = theta / 2.0
@@ -329,18 +343,17 @@ public actor ExtendedStabilizerSimulator {
         state.apply(.cnot, to: qubits)
     }
 
-    @usableFromInline
+    /// Computes amplitude by summing contributions from all stabilizer terms.
     @_optimize(speed)
-    func computeAmplitude(state: ExtendedStabilizerState, basisState: Int) -> Complex<Double> {
+    @_effects(readonly)
+    @inline(__always)
+    private func computeAmplitude(state: ExtendedStabilizerState, basisState: Int) -> Complex<Double> {
         state.amplitude(of: basisState)
     }
 
-    @usableFromInline
+    /// Samples measurement outcomes using CDF binary search.
     @_optimize(speed)
-    func sampleFromState(_ state: ExtendedStabilizerState, shots: Int, seed: UInt64?) -> [Int] {
-        var results: [Int] = []
-        results.reserveCapacity(shots)
-
+    private func sampleFromState(_ state: ExtendedStabilizerState, shots: Int, seed: UInt64?) -> [Int] {
         let source = if let seed {
             GKMersenneTwisterRandomSource(seed: seed)
         } else {
@@ -348,29 +361,32 @@ public actor ExtendedStabilizerSimulator {
         }
 
         let dimension = 1 << state.qubits
-        var probabilities: [Double] = []
-        probabilities.reserveCapacity(dimension)
 
-        for basisState in 0 ..< dimension {
-            probabilities.append(state.probability(of: basisState))
-        }
-
-        for _ in 0 ..< shots {
-            let random = Double(source.nextUniform())
+        let cdf = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
             var cumulative = 0.0
-            var selectedState = dimension - 1
-
             for i in 0 ..< dimension {
-                cumulative += probabilities[i]
-                if random <= cumulative {
-                    selectedState = i
-                    break
-                }
+                cumulative += state.probability(of: i)
+                buffer[i] = cumulative
             }
-
-            results.append(selectedState)
+            count = dimension
         }
 
-        return results
+        return [Int](unsafeUninitializedCapacity: shots) { buffer, count in
+            for shot in 0 ..< shots {
+                let random = Double(source.nextUniform())
+                var lo = 0
+                var hi = dimension
+                while lo < hi {
+                    let mid = (lo + hi) / 2
+                    if cdf[mid] < random {
+                        lo = mid + 1
+                    } else {
+                        hi = mid
+                    }
+                }
+                buffer[shot] = min(lo, dimension - 1)
+            }
+            count = shots
+        }
     }
 }

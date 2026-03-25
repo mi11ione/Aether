@@ -28,11 +28,13 @@ import Accelerate
 /// - SeeAlso: ``DensityMatrixSimulator`` for noisy circuit execution
 @frozen
 public struct ZeroNoiseExtrapolation: Sendable {
+    private static let epsilon: Double = 1e-15
+    private static let fractionalThreshold: Double = 0.01
+
     /// Noise scale factors for extrapolation.
     ///
-    /// Must be positive and include 1.0 (unscaled). Common choices:
-    /// - [1, 2, 3] for linear/quadratic extrapolation
-    /// - [1, 3, 5] for higher-order odd folding
+    /// Must be positive and include 1.0 (unscaled). Common choices are
+    /// `[1, 2, 3]` for linear/quadratic extrapolation or `[1, 3, 5]` for higher-order odd folding.
     public let scaleFactors: [Double]
 
     /// Extrapolation method for fitting noisy data.
@@ -92,7 +94,9 @@ public struct ZeroNoiseExtrapolation: Sendable {
     ///   - scaleFactors: Noise scale factors (must include 1.0, all > 0)
     ///   - method: Extrapolation method (default: Richardson)
     ///   - foldingStrategy: How to fold circuits (default: global)
-    /// - Precondition: scaleFactors must contain 1.0 and have at least 2 elements
+    /// - Precondition: scaleFactors.count >= 2
+    /// - Precondition: scaleFactors must contain 1.0
+    /// - Precondition: All scale factors must be positive (> 0)
     public init(
         scaleFactors: [Double] = [1, 2, 3],
         method: ExtrapolationMethod = .richardson,
@@ -165,6 +169,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
     ///   - observables: Array of observables to measure
     ///   - simulator: Noisy density matrix simulator
     /// - Returns: Array of mitigated values (same order as observables)
+    /// - Complexity: O(k * gates * 4^n + m * k) where k = scale factors, m = observables
     @_optimize(speed)
     public func mitigateBatch(
         circuit: QuantumCircuit,
@@ -172,6 +177,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
         simulator: DensityMatrixSimulator,
     ) async -> [Double] {
         var statesAtScales: [(scale: Double, state: DensityMatrix)] = []
+        statesAtScales.reserveCapacity(scaleFactors.count)
 
         for scale in scaleFactors {
             let foldedCircuit = fold(circuit: circuit, scaleFactor: scale)
@@ -184,6 +190,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
         for observable in observables {
             var noisyValues: [(scale: Double, value: Double)] = []
+            noisyValues.reserveCapacity(statesAtScales.count)
             for (scale, state) in statesAtScales {
                 let value = state.expectationValue(of: observable)
                 noisyValues.append((scale, value))
@@ -211,11 +218,13 @@ public struct ZeroNoiseExtrapolation: Sendable {
     ///   - circuit: Original circuit
     ///   - scaleFactor: Noise amplification factor (≥ 1)
     /// - Returns: Folded circuit with amplified noise
+    /// - Precondition: scaleFactor >= 1.0
+    /// - Complexity: O(scaleFactor * gates)
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
     public func fold(circuit: QuantumCircuit, scaleFactor: Double) -> QuantumCircuit {
-        if scaleFactor == 1.0 {
+        if abs(scaleFactor - 1.0) < Self.epsilon {
             return circuit
         }
 
@@ -231,6 +240,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
     /// Global circuit folding: U -> U U† U for scale 3.
     @_optimize(speed)
+    @_effects(readonly)
     private func foldGlobal(circuit: QuantumCircuit, scaleFactor: Double) -> QuantumCircuit {
         let fullFolds = Int((scaleFactor - 1) / 2)
         let fractionalPart = (scaleFactor - 1).truncatingRemainder(dividingBy: 2)
@@ -244,7 +254,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
             result = appendCircuit(circuit, to: result)
         }
 
-        if fractionalPart > 0.01 {
+        if fractionalPart > Self.fractionalThreshold {
             let gatesToFold = Int(Double(circuit.count) * fractionalPart / 2)
             if gatesToFold > 0 {
                 let partialInverse = partialCircuit(circuit.inverse(), gateCount: gatesToFold)
@@ -259,6 +269,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
     /// Local gate folding for fine-grained scaling.
     @_optimize(speed)
+    @_effects(readonly)
     private func foldLocal(circuit: QuantumCircuit, scaleFactor: Double) -> QuantumCircuit {
         let gatesToFold = Int(Double(circuit.count) * (scaleFactor - 1) / 2)
         let foldInterval = circuit.count > 0 ? max(1, circuit.count / max(1, gatesToFold)) : 1
@@ -266,7 +277,8 @@ public struct ZeroNoiseExtrapolation: Sendable {
         var result = QuantumCircuit(qubits: circuit.qubits)
         var foldedCount = 0
 
-        for (index, operation) in circuit.operations.enumerated() {
+        for index in 0 ..< circuit.operations.count {
+            let operation = circuit.operations[index]
             switch operation {
             case let .gate(gate, qubits, _):
                 result.append(gate, to: qubits)
@@ -285,6 +297,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
     /// Fold from end of circuit.
     @_optimize(speed)
+    @_effects(readonly)
     private func foldFromEnd(circuit: QuantumCircuit, scaleFactor: Double) -> QuantumCircuit {
         let gatesToFold = Int(Double(circuit.count) * (scaleFactor - 1) / 2)
 
@@ -319,6 +332,8 @@ public struct ZeroNoiseExtrapolation: Sendable {
     }
 
     /// Helper to append one circuit to another.
+    @_effects(readonly)
+    @inline(__always)
     private func appendCircuit(_ source: QuantumCircuit, to target: QuantumCircuit) -> QuantumCircuit {
         var result = target
         for operation in source.operations {
@@ -328,6 +343,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
     }
 
     /// Helper to get first n gates of circuit.
+    @_effects(readonly)
     private func partialCircuit(_ circuit: QuantumCircuit, gateCount: Int) -> QuantumCircuit {
         var result = QuantumCircuit(qubits: circuit.qubits)
         for operation in circuit.operations.prefix(gateCount) {
@@ -340,6 +356,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
     /// Extrapolate to zero noise using configured method.
     @_optimize(speed)
+    @_effects(readonly)
     private func extrapolate(data: [(scale: Double, value: Double)]) -> Double {
         switch method {
         case .linear:
@@ -355,6 +372,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
     /// Linear least squares extrapolation.
     @_optimize(speed)
+    @_effects(readonly)
     private func extrapolateLinear(data: [(scale: Double, value: Double)]) -> Double {
         let n = Double(data.count)
         var sumX = 0.0
@@ -370,7 +388,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
         }
 
         let denom = n * sumX2 - sumX * sumX
-        if abs(denom) < 1e-15 {
+        if abs(denom) < Self.epsilon {
             return sumY / n
         }
 
@@ -380,22 +398,26 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
     /// Polynomial extrapolation using Vandermonde matrix.
     @_optimize(speed)
+    @_effects(readonly)
     private func extrapolatePolynomial(data: [(scale: Double, value: Double)], degree: Int) -> Double {
         let effectiveDegree = min(degree, data.count - 1)
         let n = data.count
         let m = effectiveDegree + 1
 
-        var vandermonde = [Double](repeating: 0, count: n * m)
-        var y = [Double](repeating: 0, count: n)
-
-        for i in 0 ..< n {
-            let x = data[i].scale
-            y[i] = data[i].value
-            var xPow = 1.0
-            for j in 0 ..< m {
-                vandermonde[i * m + j] = xPow
-                xPow *= x
+        let vandermonde = [Double](unsafeUninitializedCapacity: n * m) { buffer, count in
+            for i in 0 ..< n {
+                let x = data[i].scale
+                var xPow = 1.0
+                for j in 0 ..< m {
+                    buffer[i * m + j] = xPow
+                    xPow *= x
+                }
             }
+            count = n * m
+        }
+        let y = [Double](unsafeUninitializedCapacity: n) { buffer, count in
+            for i in 0 ..< n { buffer[i] = data[i].value }
+            count = n
         }
 
         let coefficients = solveLeastSquares(matrix: vandermonde, rows: n, cols: m, rhs: y)
@@ -405,6 +427,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
     /// Exponential extrapolation: E(λ) = a + b·exp(-c·λ).
     @_optimize(speed)
+    @_effects(readonly)
     private func extrapolateExponential(data: [(scale: Double, value: Double)]) -> Double {
         guard data.count >= 3 else {
             return extrapolateLinear(data: data)
@@ -418,8 +441,8 @@ public struct ZeroNoiseExtrapolation: Sendable {
         let x1 = data[data.count / 2].scale
         let x2 = data[data.count - 1].scale
 
-        let r1 = (y1 - y0) / (y2 - y1 + 1e-15)
-        let c = -log(max(0.01, min(100, r1))) / (x1 - x0 + 1e-15)
+        let r1 = (y1 - y0) / (y2 - y1 + Self.epsilon)
+        let c = -log(max(Self.fractionalThreshold, min(100, r1))) / (x1 - x0 + Self.epsilon)
 
         if c <= 0 || !c.isFinite {
             return extrapolateLinear(data: data)
@@ -427,7 +450,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
         let expCx0 = exp(-c * x0)
         let expCx2 = exp(-c * x2)
-        let b = (y0 - y2) / (expCx0 - expCx2 + 1e-15)
+        let b = (y0 - y2) / (expCx0 - expCx2 + Self.epsilon)
         let a = y0 - b * expCx0
 
         return a + b
@@ -435,13 +458,16 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
     /// Richardson extrapolation for systematic error cancellation.
     @_optimize(speed)
+    @_effects(readonly)
     private func extrapolateRichardson(data: [(scale: Double, value: Double)]) -> Double {
         var values = data.map(\.value)
         var scales = data.map(\.scale)
 
         while values.count > 1 {
             var newValues: [Double] = []
+            newValues.reserveCapacity(values.count - 1)
             var newScales: [Double] = []
+            newScales.reserveCapacity(values.count - 1)
 
             for i in 0 ..< values.count - 1 {
                 let ratio = scales[i + 1] / scales[i]
@@ -459,30 +485,26 @@ public struct ZeroNoiseExtrapolation: Sendable {
 
     /// Solve least squares Ax = b using normal equations.
     @_optimize(speed)
+    @_effects(readonly)
     private func solveLeastSquares(matrix: [Double], rows: Int, cols: Int, rhs: [Double]) -> [Double] {
         var ata = [Double](repeating: 0, count: cols * cols)
         var atb = [Double](repeating: 0, count: cols)
 
-        for i in 0 ..< cols {
-            for j in 0 ..< cols {
-                var sum = 0.0
-                for k in 0 ..< rows {
-                    sum += matrix[k * cols + i] * matrix[k * cols + j]
-                }
-                ata[i * cols + j] = sum
-            }
-            var sum = 0.0
-            for k in 0 ..< rows {
-                sum += matrix[k * cols + i] * rhs[k]
-            }
-            atb[i] = sum
-        }
+        cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
+                    Int32(cols), Int32(cols), Int32(rows),
+                    1.0, matrix, Int32(cols), matrix, Int32(cols),
+                    0.0, &ata, Int32(cols))
+        cblas_dgemv(CblasRowMajor, CblasTrans,
+                    Int32(rows), Int32(cols),
+                    1.0, matrix, Int32(cols), rhs, 1,
+                    0.0, &atb, 1)
 
         return solveLinearSystem(matrix: ata, size: cols, rhs: atb)
     }
 
     /// Solve linear system using Gaussian elimination with partial pivoting.
     @_optimize(speed)
+    @_effects(readonly)
     private func solveLinearSystem(matrix: [Double], size: Int, rhs: [Double]) -> [Double] {
         var a = matrix
         var b = rhs
@@ -510,16 +532,16 @@ public struct ZeroNoiseExtrapolation: Sendable {
             }
 
             let pivot = a[k * size + k]
-            if abs(pivot) < 1e-15 {
+            if abs(pivot) < Self.epsilon {
                 continue
             }
 
             for i in k + 1 ..< size {
                 let factor = a[i * size + k] / pivot
                 for j in k ..< size {
-                    a[i * size + j] -= factor * a[k * size + j]
+                    a[i * size + j] = a[i * size + j].addingProduct(-factor, a[k * size + j])
                 }
-                b[i] -= factor * b[k]
+                b[i] = b[i].addingProduct(-factor, b[k])
             }
         }
 
@@ -527,10 +549,10 @@ public struct ZeroNoiseExtrapolation: Sendable {
         for i in stride(from: size - 1, through: 0, by: -1) {
             var sum = b[i]
             for j in i + 1 ..< size {
-                sum -= a[i * size + j] * x[j]
+                sum = sum.addingProduct(-a[i * size + j], x[j])
             }
             let diag = a[i * size + i]
-            x[i] = abs(diag) > 1e-15 ? sum / diag : 0
+            x[i] = abs(diag) > Self.epsilon ? sum / diag : 0
         }
 
         return x
@@ -542,6 +564,9 @@ public struct ZeroNoiseExtrapolation: Sendable {
 /// Result of zero-noise extrapolation.
 @frozen
 public struct ZNEResult: Sendable, CustomStringConvertible {
+    @usableFromInline
+    static let epsilon: Double = 1e-15
+
     /// Extrapolated zero-noise value.
     public let mitigatedValue: Double
 
@@ -557,13 +582,14 @@ public struct ZNEResult: Sendable, CustomStringConvertible {
     /// Improvement factor: |noisy - mitigated| / |noisy|.
     @inlinable
     public var improvementFactor: Double {
-        guard let unscaled = noisyValues.first(where: { $0.scale == 1.0 }) else {
+        guard let unscaled = noisyValues.first(where: { abs($0.scale - 1.0) < Self.epsilon }) else {
             return 0
         }
         let noisyValue = unscaled.value
-        return abs(noisyValue) > 1e-15 ? abs(noisyValue - mitigatedValue) / abs(noisyValue) : 0
+        return abs(noisyValue) > Self.epsilon ? abs(noisyValue - mitigatedValue) / abs(noisyValue) : 0
     }
 
+    /// Human-readable summary of the ZNE result.
     public var description: String {
         let valuesStr = noisyValues.map { "λ=\($0.scale): \(String(format: "%.6f", $0.value))" }
             .joined(separator: ", ")
@@ -589,11 +615,8 @@ public struct ZNEResult: Sendable, CustomStringConvertible {
 ///
 /// **Example:**
 /// ```swift
-/// let pec = ProbabilisticErrorCancellation(
-///     noiseModel: NoiseModel.typicalNISQ,
-///     samples: 10000
-/// )
-/// let mitigated = await pec.mitigate(circuit: circuit, observable: hamiltonian)
+/// let pec = ProbabilisticErrorCancellation(errorProbability: 0.01, samples: 10000)
+/// let result = await pec.mitigate(circuit: circuit, observable: hamiltonian)
 /// ```
 ///
 /// - SeeAlso: ``ZeroNoiseExtrapolation`` for extrapolation-based mitigation
@@ -611,19 +634,12 @@ public struct ProbabilisticErrorCancellation: Sendable {
     // MARK: - Nested Types
 
     /// Pauli decomposition for noise inverse.
-    @frozen
-    public struct PauliDecomposition: Sendable {
-        /// Quasi-probability coefficients [qI, qX, qY, qZ].
-        public let coefficients: [Double]
-
-        /// Sampling overhead γ = Σ|qᵢ|.
-        public let gamma: Double
-
-        /// Sampling probabilities |qᵢ|/γ.
-        public let probabilities: [Double]
-
-        /// Signs of coefficients.
-        public let signs: [Int]
+    @usableFromInline
+    struct PauliDecomposition: Sendable {
+        let coefficients: [Double]
+        let gamma: Double
+        let probabilities: [Double]
+        let signs: [Int]
     }
 
     // MARK: - Initialization
@@ -676,15 +692,13 @@ public struct ProbabilisticErrorCancellation: Sendable {
     /// ```swift
     /// let result = await pec.mitigate(
     ///     circuit: circuit,
-    ///     observable: hamiltonian,
-    ///     simulator: simulator
+    ///     observable: hamiltonian
     /// )
     /// ```
     ///
     /// - Parameters:
     ///   - circuit: Quantum circuit to execute
     ///   - observable: Observable to measure
-    ///   - simulator: Density matrix simulator (noise will be cancelled)
     ///   - seed: Random seed for reproducibility
     /// - Returns: PEC result with mitigated value and statistics
     /// - Complexity: O(samples * gates * 4^n)
@@ -692,24 +706,33 @@ public struct ProbabilisticErrorCancellation: Sendable {
     public func mitigate(
         circuit: QuantumCircuit,
         observable: Observable,
-        simulator _: DensityMatrixSimulator,
         seed: UInt64? = nil,
     ) async -> PECResult {
-        var generator: RandomNumberGenerator = if let seed {
-            SeededPECGenerator(seed: seed)
+        if let seed {
+            var generator = SeededPECGenerator(seed: seed)
+            return await mitigateImpl(circuit: circuit, observable: observable, generator: &generator)
         } else {
-            SystemRandomNumberGenerator()
+            var generator = SystemRandomNumberGenerator()
+            return await mitigateImpl(circuit: circuit, observable: observable, generator: &generator)
         }
+    }
 
+    /// Generic implementation to avoid existential RNG overhead.
+    @_optimize(speed)
+    private func mitigateImpl<G: RandomNumberGenerator>(
+        circuit: QuantumCircuit,
+        observable: Observable,
+        generator: inout G,
+    ) async -> PECResult {
         var weightedSum = 0.0
         var weightedSumSquared = 0.0
         let gateCount = circuit.count
         let totalGamma = pow(decomposition.gamma, Double(gateCount))
 
+        let noiseFreeSimulator = DensityMatrixSimulator(noiseModel: .ideal)
+
         for _ in 0 ..< samples {
             let (sampledCircuit, sign) = sampleCircuit(circuit: circuit, generator: &generator)
-
-            let noiseFreeSimulator = DensityMatrixSimulator(noiseModel: .ideal)
             let value = await noiseFreeSimulator.expectationValue(sampledCircuit, observable: observable)
 
             let weight = Double(sign) * totalGamma
@@ -732,9 +755,9 @@ public struct ProbabilisticErrorCancellation: Sendable {
 
     /// Sample circuit with quasi-probability weighting.
     @_optimize(speed)
-    private func sampleCircuit(
+    private func sampleCircuit<G: RandomNumberGenerator>(
         circuit: QuantumCircuit,
-        generator: inout any RandomNumberGenerator,
+        generator: inout G,
     ) -> (circuit: QuantumCircuit, sign: Int) {
         var result = QuantumCircuit(qubits: circuit.qubits)
         var totalSign = 1
@@ -761,21 +784,24 @@ public struct ProbabilisticErrorCancellation: Sendable {
 
     /// Sample Pauli operator from quasi-probability distribution.
     @_optimize(speed)
-    private func samplePauli(generator: inout any RandomNumberGenerator) -> (index: Int, sign: Int) {
+    private func samplePauli<G: RandomNumberGenerator>(generator: inout G) -> (index: Int, sign: Int) {
         let r = Double.random(in: 0 ..< 1, using: &generator)
 
         var cumulative = 0.0
-        for (i, prob) in decomposition.probabilities.enumerated() {
+        var i = 0
+        for prob in decomposition.probabilities {
             cumulative += prob
             if r < cumulative {
                 return (i, decomposition.signs[i])
             }
+            i += 1
         }
 
         return (0, decomposition.signs[0])
     }
 
     /// Get Pauli gate for index (1=X, 2=Y, 3=Z).
+    @inline(__always)
     @_effects(readonly)
     private func pauliGateForIndex(_ index: Int) -> QuantumGate {
         switch index {
@@ -794,6 +820,8 @@ private struct SeededPECGenerator: RandomNumberGenerator {
         state = seed
     }
 
+    @_optimize(speed)
+    @inline(__always)
     mutating func next() -> UInt64 {
         state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
         return state
@@ -822,16 +850,17 @@ public struct PECResult: Sendable, CustomStringConvertible {
 
     /// 95% confidence interval.
     @inlinable
-    public var confidenceInterval: (low: Double, high: Double) {
+    public var confidenceInterval: (lower: Double, upper: Double) {
         (mitigatedValue - 1.96 * standardError, mitigatedValue + 1.96 * standardError)
     }
 
+    /// Human-readable summary of the PEC result.
     public var description: String {
         let ci = confidenceInterval
         return """
         PEC Result:
           Mitigated: \(String(format: "%.6f", mitigatedValue)) ± \(String(format: "%.6f", standardError))
-          95% CI: [\(String(format: "%.6f", ci.low)), \(String(format: "%.6f", ci.high))]
+          95% CI: [\(String(format: "%.6f", ci.lower)), \(String(format: "%.6f", ci.upper))]
           Samples: \(samples), γ = \(String(format: "%.2f", gamma))
         """
     }
@@ -842,13 +871,14 @@ public struct PECResult: Sendable, CustomStringConvertible {
 public extension MeasurementErrorModel {
     /// Mitigate measurement error from full histogram across all qubits.
     ///
-    /// Applies tensor product of per-qubit inverse confusion matrices.
-    /// More efficient than iterating `mitigateHistogram` per qubit.
+    /// Applies tensor product of per-qubit inverse confusion matrices for
+    /// efficient batch correction of readout errors.
     ///
     /// **Example:**
     /// ```swift
     /// let model = MeasurementErrorModel(p0Given1: 0.02, p1Given0: 0.01)
-    /// let corrected = MeasurementErrorModel.mitigateFullHistogram(histogram, totalQubits: 3, models: [model])
+    /// let histogram: [Int: Int] = [0: 480, 1: 520]
+    /// let corrected = MeasurementErrorModel.mitigateFullHistogram(histogram, totalQubits: 1, models: [model])
     /// ```
     ///
     /// - Parameters:
@@ -858,6 +888,7 @@ public extension MeasurementErrorModel {
     /// - Returns: Corrected histogram with mitigated counts
     /// - Complexity: O(2^n * n)
     /// - Precondition: models is non-empty
+    /// - Precondition: totalQubits > 0
     @_optimize(speed)
     static func mitigateFullHistogram(
         _ histogram: [Int: Int],
@@ -867,23 +898,27 @@ public extension MeasurementErrorModel {
         ValidationUtilities.validateNonEmpty(models, name: "Measurement error models")
 
         var corrected: [Int: Double] = [:]
+        corrected.reserveCapacity(histogram.count)
         let totalCounts = histogram.values.reduce(0, +)
+
+        let isSingleModel = models.count == 1
 
         for (state, count) in histogram {
             var correctionFactor = 1.0
             for qubit in 0 ..< totalQubits {
-                let model = models.count == 1 ? models[0] : models[qubit]
+                let model = isSingleModel ? models[0] : models[qubit]
                 let bit = (state >> qubit) & 1
-                correctionFactor *= bit == 0 ? model.inverseMatrix[0][0] : model.inverseMatrix[1][1]
+                correctionFactor *= model.inverseMatrix[bit][bit]
             }
             corrected[state] = Double(count) * correctionFactor
         }
 
+        let epsilon = 1e-15
         let correctedTotal = corrected.values.reduce(0, +)
-        if abs(correctedTotal) > 1e-15 {
+        if abs(correctedTotal) > epsilon {
             let scale = Double(totalCounts) / correctedTotal
             for key in corrected.keys {
-                corrected[key]! *= scale
+                corrected[key]! *= scale // Safety: key comes from corrected.keys
             }
         }
 

@@ -56,6 +56,14 @@ public struct HardwareEfficientAnsatz: Sendable {
         case full
 
         /// Number of parameters required per qubit per layer
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let single = HardwareEfficientAnsatz.Rotations.ry.parametersPerQubit  // 1
+        /// let full = HardwareEfficientAnsatz.Rotations.full.parametersPerQubit  // 3
+        /// ```
+        ///
+        /// - Complexity: O(1)
         @inlinable
         public var parametersPerQubit: Int {
             switch self {
@@ -96,6 +104,9 @@ public struct HardwareEfficientAnsatz: Sendable {
     /// Parameterized quantum circuit implementing this ansatz
     public let circuit: QuantumCircuit
 
+    /// Number of qubits in the ansatz
+    public let qubits: Int
+
     /// Number of rotation-entanglement layers
     public let depth: Int
 
@@ -110,10 +121,17 @@ public struct HardwareEfficientAnsatz: Sendable {
     /// Computed as depth x qubits x parametersPerQubit. Use this count when
     /// initializing parameter vectors for optimization.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let ansatz = HardwareEfficientAnsatz(qubits: 4, depth: 2)
+    /// let count = ansatz.parameterCount  // 8
+    /// ```
+    ///
     /// - Complexity: O(1)
     /// - SeeAlso: ``Rotations/parametersPerQubit``
+    @inlinable
     public var parameterCount: Int {
-        depth * circuit.qubits * rotations.parametersPerQubit
+        depth * qubits * rotations.parametersPerQubit
     }
 
     // MARK: - Initialization
@@ -138,7 +156,10 @@ public struct HardwareEfficientAnsatz: Sendable {
     ///   - entanglement: Two-qubit connectivity (default: linear)
     ///
     /// - Complexity: O(depth x qubits) gates constructed
-    /// - Precondition: `qubits` must be positive and ≤30, `depth` must be positive and ≤100
+    /// - Precondition: `qubits` > 0
+    /// - Precondition: `qubits` ≤ 30
+    /// - Precondition: `depth` > 0
+    /// - Precondition: `depth` ≤ 100
     @_optimize(speed)
     public init(
         qubits: Int,
@@ -169,6 +190,7 @@ public struct HardwareEfficientAnsatz: Sendable {
         }
 
         self.circuit = circuit
+        self.qubits = qubits
         self.depth = depth
         self.rotations = rotations
         self.entanglement = entanglement
@@ -176,6 +198,7 @@ public struct HardwareEfficientAnsatz: Sendable {
 
     // MARK: - Private Helpers
 
+    /// Appends parameterized rotation gates for one layer to the circuit.
     @_optimize(speed)
     private static func addRotations(
         to circuit: inout QuantumCircuit,
@@ -218,6 +241,7 @@ public struct HardwareEfficientAnsatz: Sendable {
         }
     }
 
+    /// Appends entangling CNOT gates based on the connectivity pattern.
     @_optimize(speed)
     private static func addEntanglement(
         to circuit: inout QuantumCircuit,

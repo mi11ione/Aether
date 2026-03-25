@@ -93,7 +93,7 @@ struct SuperoperatorApplicationTests {
         let tolerance = 1e-10
         for i in 0 ..< 2 {
             for j in 0 ..< 2 {
-                let diff = (superopResult.element(row: i, col: j) - krausResult.element(row: i, col: j)).magnitudeSquared
+                let diff = (superopResult[row: i, col: j] - krausResult[row: i, col: j]).magnitudeSquared
                 #expect(diff < tolerance * tolerance, "Superoperator application should match Kraus application at [\(i),\(j)]")
             }
         }
@@ -159,7 +159,7 @@ struct SuperoperatorPropertiesTests {
         let tolerance = 1e-10
         for i in 0 ..< 2 {
             for j in 0 ..< 2 {
-                let diff = (composedResult.element(row: i, col: j) - sequentialResult.element(row: i, col: j)).magnitudeSquared
+                let diff = (composedResult[row: i, col: j] - sequentialResult[row: i, col: j]).magnitudeSquared
                 #expect(diff < tolerance * tolerance, "Composed superoperator should match sequential application at [\(i),\(j)]")
             }
         }
@@ -875,7 +875,7 @@ struct ChoiMatrixKrausExtractionTests {
                     for k in 0 ..< 2 {
                         for l in 0 ..< 2 {
                             resultFromExtracted[i][j] = resultFromExtracted[i][j] +
-                                kraus[i][k] * dm.element(row: k, col: l) * kraus[j][l].conjugate
+                                kraus[i][k] * dm[row: k, col: l] * kraus[j][l].conjugate
                         }
                     }
                 }
@@ -887,7 +887,7 @@ struct ChoiMatrixKrausExtractionTests {
         let tolerance = 1e-10
         for i in 0 ..< 2 {
             for j in 0 ..< 2 {
-                let diff = (directResult.element(row: i, col: j) - resultFromExtracted[i][j]).magnitudeSquared
+                let diff = (directResult[row: i, col: j] - resultFromExtracted[i][j]).magnitudeSquared
                 #expect(diff < tolerance * tolerance, "Extracted Kraus should produce same result as original at [\(i),\(j)]")
             }
         }

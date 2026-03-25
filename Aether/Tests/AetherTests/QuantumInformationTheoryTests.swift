@@ -482,7 +482,7 @@ struct MutualInformationTests {
     @Test("Product state has zero mutual information")
     func productStateZeroMutualInformation() {
         let product = DensityMatrix(qubits: 2)
-        let mi = product.mutualInformation(subsystemA: [0], subsystemB: [1])
+        let mi = product.mutualInformation(between: [0], and: [1])
 
         #expect(abs(mi) < 1e-10, "Product state |00><00| should have zero mutual information")
     }
@@ -494,7 +494,7 @@ struct MutualInformationTests {
             Complex(invSqrt2, 0), .zero, .zero, Complex(invSqrt2, 0),
         ])
         let dm = DensityMatrix(pureState: bell)
-        let mi = dm.mutualInformation(subsystemA: [0], subsystemB: [1])
+        let mi = dm.mutualInformation(between: [0], and: [1])
 
         #expect(abs(mi - 2.0) < 1e-10, "Bell state should have mutual information I = 2*S(A) = 2.0 bits")
     }
@@ -508,7 +508,7 @@ struct MutualInformationTests {
             Complex(0.0, 0), Complex(0.05, 0), Complex(0.1, 0), Complex(0.2, 0),
         ]
         let dm = DensityMatrix(qubits: 2, elements: elements)
-        let mi = dm.mutualInformation(subsystemA: [0], subsystemB: [1])
+        let mi = dm.mutualInformation(between: [0], and: [1])
 
         #expect(mi >= -1e-10, "Mutual information should be non-negative by subadditivity of von Neumann entropy")
     }
@@ -516,7 +516,7 @@ struct MutualInformationTests {
     @Test("Maximally mixed state has zero mutual information")
     func maximallyMixedZeroMutualInformation() {
         let dm = DensityMatrix.maximallyMixed(qubits: 2)
-        let mi = dm.mutualInformation(subsystemA: [0], subsystemB: [1])
+        let mi = dm.mutualInformation(between: [0], and: [1])
 
         #expect(abs(mi) < 1e-10, "Maximally mixed 2-qubit state should have zero mutual information")
     }

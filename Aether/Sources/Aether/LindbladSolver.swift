@@ -19,6 +19,9 @@ import Accelerate
 ///     positivityEnforcement: .cholesky
 /// )
 /// ```
+///
+/// - SeeAlso: ``LindbladSolver``
+/// - SeeAlso: ``PositivityMethod``
 @frozen public struct LindbladConfiguration: Sendable {
     /// Absolute error tolerance for step acceptance.
     public let absoluteTolerance: Double
@@ -53,7 +56,7 @@ import Accelerate
         relativeTolerance: Double = 1e-6,
         maxSteps: Int = 10000,
         stiffnessThreshold: Int = 20,
-        positivityEnforcement: PositivityMethod = .cholesky,
+        positivityEnforcement: PositivityMethod = .cholesky
     ) {
         self.absoluteTolerance = absoluteTolerance
         self.relativeTolerance = relativeTolerance
@@ -67,6 +70,14 @@ import Accelerate
 ///
 /// Density matrices must be positive semidefinite. Numerical errors during integration
 /// can violate this constraint. These methods restore positivity after each step.
+///
+/// **Example:**
+/// ```swift
+/// let method = PositivityMethod.cholesky
+/// let config = LindbladConfiguration(positivityEnforcement: method)
+/// ```
+///
+/// - SeeAlso: ``LindbladConfiguration``
 @frozen public enum PositivityMethod: Sendable {
     /// Cholesky factorization: represent rho = L * L-dagger, evolve L.
     case cholesky
@@ -81,20 +92,45 @@ import Accelerate
 /// Integration method for Lindblad dynamics.
 ///
 /// Specifies which ODE solver to use for the master equation integration.
+///
+/// **Example:**
+/// ```swift
+/// let result = LindbladSolver.evolve(
+///     hamiltonian: Observable.pauliZ(qubit: 0),
+///     jumpOperators: [],
+///     initialState: DensityMatrix(qubits: 1),
+///     time: 1.0
+/// )
+/// let method: IntegrationMethod = result.finalMethod
+/// ```
+///
+/// - SeeAlso: ``LindbladResult``
+/// - SeeAlso: ``LindbladSolver``
 @frozen public enum IntegrationMethod: Sendable {
     /// RK45 Dormand-Prince: 7-stage embedded 4th/5th order pair with FSAL.
     case rk45
 
     /// TR-BDF2: Trapezoid predictor + BDF2 corrector, L-stable for stiff systems.
     case trBdf2
-
-    /// Adaptive: starts with RK45, switches to TR-BDF2 on stiffness detection.
-    case adaptive
 }
 
 /// Statistics from integration step history.
 ///
 /// Provides diagnostic information about solver performance and method switching.
+///
+/// **Example:**
+/// ```swift
+/// let result = LindbladSolver.evolve(
+///     hamiltonian: Observable.pauliZ(qubit: 0),
+///     jumpOperators: [],
+///     initialState: DensityMatrix(qubits: 1),
+///     time: 1.0
+/// )
+/// let stats = result.stepStatistics
+/// let total = stats.acceptedSteps + stats.rejectedSteps
+/// ```
+///
+/// - SeeAlso: ``LindbladResult``
 @frozen public struct StepStatistics: Sendable {
     /// Number of accepted integration steps.
     public let acceptedSteps: Int
@@ -112,6 +148,21 @@ import Accelerate
 /// Result of Lindblad master equation evolution.
 ///
 /// Contains the final density matrix state and integration statistics.
+///
+/// **Example:**
+/// ```swift
+/// let result = LindbladSolver.evolve(
+///     hamiltonian: Observable.pauliZ(qubit: 0),
+///     jumpOperators: [],
+///     initialState: DensityMatrix(qubits: 1),
+///     time: 1.0
+/// )
+/// let finalRho = result.finalState
+/// let elapsed = result.time
+/// ```
+///
+/// - SeeAlso: ``LindbladSolver``
+/// - SeeAlso: ``StepStatistics``
 @frozen public struct LindbladResult: Sendable {
     /// Final density matrix after time evolution.
     public let finalState: DensityMatrix
@@ -146,7 +197,20 @@ import Accelerate
 ///     time: 10.0
 /// )
 /// ```
+///
+/// - SeeAlso: ``LindbladConfiguration``
+/// - SeeAlso: ``LindbladResult``
 public enum LindbladSolver {
+
+    // MARK: - Private Types
+
+    /// Precomputed flat jump operator matrices for efficient RHS evaluation.
+    private struct JumpOperatorData {
+        let flatOps: [[Complex<Double>]]
+        let flatDags: [[Complex<Double>]]
+        let ldagL: [[Complex<Double>]]
+    }
+
     // MARK: - Dormand-Prince RK45 Coefficients
 
     private static let dp_c2: Double = 1.0 / 5.0
@@ -200,6 +264,15 @@ public enum LindbladSolver {
     private static let rejectionRateThreshold: Double = 0.3
     private static let minimumStepSize: Double = 1e-15
     private static let trBdf2Gamma: Double = 2.0 - sqrt(2.0)
+    private static let defaultInitialStepSize: Double = 0.01
+    private static let maxStepFraction: Double = 0.1
+    private static let maxNewtonIterations: Int = 10
+    private static let epsilon: Double = 1e-15
+    private static let stepGrowthExponent: Double = 0.2
+    private static let maxStepGrowthFactor: Double = 5.0
+    private static let minStepShrinkFactor: Double = 0.1
+    private static let stiffnessRecoveryMultiplier: Double = 100.0
+    private static let stepBoostFactor: Double = 10.0
 
     /// Evolve density matrix under Lindblad dynamics.
     ///
@@ -215,17 +288,22 @@ public enum LindbladSolver {
     ///   - initialState: Initial density matrix
     ///   - time: Total evolution time
     ///   - configuration: Solver configuration parameters
-    /// - Returns: LindbladResult with final state and statistics
+    /// - Returns: ``LindbladResult`` with final state and statistics
+    /// - Precondition: time >= 0
+    /// - Precondition: configuration.maxSteps > 0
+    /// - Complexity: O(steps * dim^3) where dim = 2^qubits and steps depends on adaptive tolerance
+    /// - SeeAlso: ``LindbladResult``
+    /// - SeeAlso: ``LindbladConfiguration``
     ///
     /// **Example:**
     /// ```swift
+    /// let decay: [[Complex<Double>]] = [[.zero, Complex(0.1, 0)], [.zero, .zero]]
     /// let result = LindbladSolver.evolve(
-    ///     hamiltonian: Observable.pauliZ(qubit: 0, coefficient: 1.0),
-    ///     jumpOperators: [decayOperator],
+    ///     hamiltonian: Observable.pauliZ(qubit: 0),
+    ///     jumpOperators: [decay],
     ///     initialState: DensityMatrix(qubits: 1),
     ///     time: 5.0
     /// )
-    /// print("Final purity:", result.finalState.purity())
     /// ```
     @_optimize(speed)
     public static func evolve(
@@ -233,23 +311,30 @@ public enum LindbladSolver {
         jumpOperators: [[[Complex<Double>]]],
         initialState: DensityMatrix,
         time: Double,
-        configuration: LindbladConfiguration = LindbladConfiguration(),
+        configuration: LindbladConfiguration = LindbladConfiguration()
     ) -> LindbladResult {
         ValidationUtilities.validateNonNegativeDouble(time, name: "Evolution time")
         ValidationUtilities.validatePositiveInt(configuration.maxSteps, name: "Max steps")
 
         let dim = initialState.dimension
-        // Build Hamiltonian matrix from Observable
         let hMatrix = buildHamiltonianMatrix(hamiltonian, dimension: dim)
-
-        // Flatten initial state to vector
         var rhoVec = flattenDensityMatrix(initialState)
 
-        // Integration state
+        let validJumpOps = jumpOperators.filter { $0.count == dim }
+        let flatOps = validJumpOps.map { flattenMatrix($0) }
+        let flatDags = flatOps.map { hermitianConjugateFlat($0, dim: dim) }
+        var ldagLProducts = [[Complex<Double>]]()
+        ldagLProducts.reserveCapacity(flatOps.count)
+        for i in 0 ..< flatOps.count {
+            var product = [Complex<Double>](repeating: .zero, count: dim * dim)
+            matrixMultiplyFlat(flatDags[i], flatOps[i], &product, dim: dim)
+            ldagLProducts.append(product)
+        }
+        let jumpData = JumpOperatorData(flatOps: flatOps, flatDags: flatDags, ldagL: ldagLProducts)
+
         var t = 0.0
-        var h = min(0.01, time / 10.0)
-        let hMin = 1e-15
-        let hMax = time / 10.0
+        var h = min(defaultInitialStepSize, time * maxStepFraction)
+        let hMax = time * maxStepFraction
 
         var acceptedSteps = 0
         var rejectedSteps = 0
@@ -257,11 +342,13 @@ public enum LindbladSolver {
         var methodSwitches = 0
         var currentMethod: IntegrationMethod = .rk45
 
-        var recentOutcomes = [Bool](repeating: true, count: 20)
+        let windowSize = configuration.stiffnessThreshold
+        var recentOutcomes = [Bool](repeating: true, count: windowSize)
         var outcomeIndex = 0
+        var runningRejectionCount = 0
 
-        // FSAL: store last k7 for next step
-        var k1 = computeLindbladRHS(rhoVec, hMatrix: hMatrix, jumpOperators: jumpOperators, dim: dim)
+        var k1 = computeLindbladRHS(rhoVec, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
+        var cachedRhoNorm = vectorNorm(rhoVec)
 
         var stepCount = 0
 
@@ -270,32 +357,33 @@ public enum LindbladSolver {
             let remainingTime = time - t
             h = min(h, remainingTime)
 
-            if h < hMin {
-                // Stiffness detected via step size
+            if h < minimumStepSize {
                 if currentMethod == .rk45 {
                     stiffnessDetections += 1
                     currentMethod = .trBdf2
                     methodSwitches += 1
-                    h = max(hMin * 100, h * 10)
+                    h = max(minimumStepSize * stiffnessRecoveryMultiplier, h * stepBoostFactor)
                 }
             }
 
             var accepted = false
             var rhoNew: [Complex<Double>]
-            var errorNorm: Double
 
             if currentMethod == .rk45 {
-                (rhoNew, errorNorm, k1) = rk45Step(
+                let (stepRho, errorNorm, _) = rk45Step(
                     rhoVec: rhoVec,
                     k1: k1,
                     h: h,
                     hMatrix: hMatrix,
-                    jumpOperators: jumpOperators,
-                    dim: dim,
+                    jumpData: jumpData,
+                    dim: dim
                 )
+                rhoNew = stepRho
 
-                let rhoNorm = vectorNorm(rhoVec)
-                let tol = configuration.absoluteTolerance + configuration.relativeTolerance * rhoNorm
+                let tol = configuration.absoluteTolerance + configuration.relativeTolerance * cachedRhoNorm
+
+                let previousWasRejection = !recentOutcomes[outcomeIndex]
+                if previousWasRejection { runningRejectionCount -= 1 }
 
                 if errorNorm < tol {
                     accepted = true
@@ -304,76 +392,72 @@ public enum LindbladSolver {
                 } else {
                     rejectedSteps += 1
                     recentOutcomes[outcomeIndex] = false
+                    runningRejectionCount += 1
                 }
-                outcomeIndex = (outcomeIndex + 1) % 20
+                outcomeIndex = (outcomeIndex + 1) % windowSize
 
-                // Stiffness detection via rejection rate > 30% over sliding window OR step < 1e-15
-                let rejectionCount = recentOutcomes.count(where: { !$0 })
-                let rejectionRate = Double(rejectionCount) / 20.0
+                let rejectionRate = Double(runningRejectionCount) / Double(windowSize)
                 if rejectionRate > rejectionRateThreshold || h < minimumStepSize {
                     stiffnessDetections += 1
                     currentMethod = .trBdf2
                     methodSwitches += 1
-                    recentOutcomes = [Bool](repeating: true, count: 20)
+                    for i in 0 ..< windowSize { recentOutcomes[i] = true }
                     outcomeIndex = 0
+                    runningRejectionCount = 0
                 }
 
-                // Step size adaptation
-                if errorNorm > 1e-15 {
-                    let factor = safetyFactor * pow(tol / errorNorm, 0.2)
-                    h = h * min(5.0, max(0.1, factor))
+                if errorNorm > epsilon {
+                    let factor = safetyFactor * pow(tol / errorNorm, stepGrowthExponent)
+                    h = h * min(maxStepGrowthFactor, max(minStepShrinkFactor, factor))
                 }
-                h = max(hMin, min(hMax, h))
+                h = max(minimumStepSize, min(hMax, h))
 
             } else {
-                // TR-BDF2 step
                 (rhoNew, accepted) = trBdf2Step(
                     rhoVec: rhoVec,
+                    f0: k1,
                     h: h,
                     hMatrix: hMatrix,
-                    jumpOperators: jumpOperators,
+                    jumpData: jumpData,
                     dim: dim,
                     atol: configuration.absoluteTolerance,
-                    rtol: configuration.relativeTolerance,
+                    rtol: configuration.relativeTolerance
                 )
 
                 acceptedSteps += 1
-                k1 = computeLindbladRHS(rhoNew, hMatrix: hMatrix, jumpOperators: jumpOperators, dim: dim)
             }
 
             if accepted {
                 t += h
                 rhoVec = rhoNew
-
-                // Enforce positivity
                 rhoVec = enforcePositivity(rhoVec, dim: dim, method: configuration.positivityEnforcement)
-
-                // Normalize trace
                 rhoVec = normalizeTrace(rhoVec, dim: dim)
+                cachedRhoNorm = vectorNorm(rhoVec)
+                k1 = computeLindbladRHS(rhoVec, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
             }
         }
 
-        // Reconstruct density matrix
         let finalState = unflattenToDensityMatrix(rhoVec, qubits: initialState.qubits)
 
         let stats = StepStatistics(
             acceptedSteps: acceptedSteps,
             rejectedSteps: rejectedSteps,
             stiffnessDetections: stiffnessDetections,
-            methodSwitches: methodSwitches,
+            methodSwitches: methodSwitches
         )
 
         return LindbladResult(
             finalState: finalState,
             time: t,
             stepStatistics: stats,
-            finalMethod: currentMethod,
+            finalMethod: currentMethod
         )
     }
 
     // MARK: - Hamiltonian Matrix Construction
 
     /// Builds Hamiltonian matrix from Observable.
+    @_effects(readonly)
     @_optimize(speed)
     private static func buildHamiltonianMatrix(_ hamiltonian: Observable, dimension: Int) -> [Complex<Double>] {
         var hMatrix = [Complex<Double>](repeating: .zero, count: dimension * dimension)
@@ -397,63 +481,61 @@ public enum LindbladSolver {
     // MARK: - Lindblad RHS Computation
 
     /// Computes Lindblad right-hand side for ODE integration.
+    @_effects(readonly)
     @_optimize(speed)
     private static func computeLindbladRHS(
         _ rhoVec: [Complex<Double>],
         hMatrix: [Complex<Double>],
-        jumpOperators: [[[Complex<Double>]]],
-        dim: Int,
+        jumpData: JumpOperatorData,
+        dim: Int
     ) -> [Complex<Double>] {
         let n2 = dim * dim
 
-        // Convert flat vector to matrix for BLAS operations
-        let rhoMatrix = rhoVec
-
-        // Allocate result
-        var result = [Complex<Double>](repeating: .zero, count: n2)
-
-        // Compute commutator: -i[H, rho] = -i(H*rho - rho*H)
-        var hRho = [Complex<Double>](repeating: .zero, count: n2)
-        var rhoH = [Complex<Double>](repeating: .zero, count: n2)
-
-        matrixMultiplyFlat(hMatrix, rhoMatrix, &hRho, dim: dim)
-        matrixMultiplyFlat(rhoMatrix, hMatrix, &rhoH, dim: dim)
-
-        let minusI = Complex<Double>(0.0, -1.0)
-        for i in 0 ..< n2 {
-            result[i] = minusI * (hRho[i] - rhoH[i])
+        var hRho = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = n2
+        }
+        var rhoH = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = n2
         }
 
-        // Lindblad dissipator: sum_k (L_k * rho * L_k^dag - 0.5 * {L_k^dag * L_k, rho})
-        for jumpOp in jumpOperators {
-            guard jumpOp.count == dim else { continue }
+        matrixMultiplyFlat(hMatrix, rhoVec, &hRho, dim: dim)
+        matrixMultiplyFlat(rhoVec, hMatrix, &rhoH, dim: dim)
 
-            let lFlat = flattenMatrix(jumpOp)
-            let lDagFlat = hermitianConjugateFlat(lFlat, dim: dim)
-
-            // L * rho
-            var lRho = [Complex<Double>](repeating: .zero, count: n2)
-            matrixMultiplyFlat(lFlat, rhoMatrix, &lRho, dim: dim)
-
-            // L * rho * L^dag
-            var lRhoLdag = [Complex<Double>](repeating: .zero, count: n2)
-            matrixMultiplyFlat(lRho, lDagFlat, &lRhoLdag, dim: dim)
-
-            // L^dag * L
-            var ldagL = [Complex<Double>](repeating: .zero, count: n2)
-            matrixMultiplyFlat(lDagFlat, lFlat, &ldagL, dim: dim)
-
-            // L^dag * L * rho
-            var ldagLRho = [Complex<Double>](repeating: .zero, count: n2)
-            matrixMultiplyFlat(ldagL, rhoMatrix, &ldagLRho, dim: dim)
-
-            // rho * L^dag * L
-            var rhoLdagL = [Complex<Double>](repeating: .zero, count: n2)
-            matrixMultiplyFlat(rhoMatrix, ldagL, &rhoLdagL, dim: dim)
-
-            // Add to result: L*rho*L^dag - 0.5*(L^dag*L*rho + rho*L^dag*L)
+        var result = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
             for i in 0 ..< n2 {
-                result[i] = result[i] + lRhoLdag[i] - Complex(0.5, 0) * (ldagLRho[i] + rhoLdagL[i])
+                let diff = hRho[i] - rhoH[i]
+                buffer[i] = Complex(diff.imaginary, -diff.real)
+            }
+            count = n2
+        }
+        var lRho = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = n2
+        }
+        var lRhoLdag = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = n2
+        }
+        var ldagLRho = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = n2
+        }
+        var rhoLdagL = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = n2
+        }
+
+        for opIndex in 0 ..< jumpData.flatOps.count {
+            matrixMultiplyFlat(jumpData.flatOps[opIndex], rhoVec, &lRho, dim: dim)
+            matrixMultiplyFlat(lRho, jumpData.flatDags[opIndex], &lRhoLdag, dim: dim)
+            matrixMultiplyFlat(jumpData.ldagL[opIndex], rhoVec, &ldagLRho, dim: dim)
+            matrixMultiplyFlat(rhoVec, jumpData.ldagL[opIndex], &rhoLdagL, dim: dim)
+
+            for i in 0 ..< n2 {
+                let anticomm = ldagLRho[i] + rhoLdagL[i]
+                result[i] = result[i] + lRhoLdag[i] - Complex(anticomm.real * 0.5, anticomm.imaginary * 0.5)
             }
         }
 
@@ -463,71 +545,102 @@ public enum LindbladSolver {
     // MARK: - RK45 Dormand-Prince Step
 
     /// Performs single RK45 Dormand-Prince step with error estimate.
+    @_effects(readonly)
     @_optimize(speed)
     private static func rk45Step(
         rhoVec: [Complex<Double>],
         k1: [Complex<Double>],
         h: Double,
         hMatrix: [Complex<Double>],
-        jumpOperators: [[[Complex<Double>]]],
-        dim: Int,
+        jumpData: JumpOperatorData,
+        dim: Int
     ) -> (rhoNew: [Complex<Double>], error: Double, k7: [Complex<Double>]) {
         let n2 = rhoVec.count
 
-        // Stage 2
-        var y2 = [Complex<Double>](repeating: .zero, count: n2)
-        for i in 0 ..< n2 {
-            y2[i] = rhoVec[i] + Complex(h * dp_a21, 0) * k1[i]
+        let h_a21 = Complex<Double>(h * dp_a21, 0)
+        let y2 = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            for i in 0 ..< n2 {
+                buffer[i] = rhoVec[i] + h_a21 * k1[i]
+            }
+            count = n2
         }
-        let k2 = computeLindbladRHS(y2, hMatrix: hMatrix, jumpOperators: jumpOperators, dim: dim)
+        let k2 = computeLindbladRHS(y2, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
 
-        // Stage 3
-        var y3 = [Complex<Double>](repeating: .zero, count: n2)
-        for i in 0 ..< n2 {
-            y3[i] = rhoVec[i] + Complex(h * dp_a31, 0) * k1[i] + Complex(h * dp_a32, 0) * k2[i]
+        let h_a31 = Complex<Double>(h * dp_a31, 0)
+        let h_a32 = Complex<Double>(h * dp_a32, 0)
+        let y3 = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            for i in 0 ..< n2 {
+                buffer[i] = rhoVec[i] + h_a31 * k1[i] + h_a32 * k2[i]
+            }
+            count = n2
         }
-        let k3 = computeLindbladRHS(y3, hMatrix: hMatrix, jumpOperators: jumpOperators, dim: dim)
+        let k3 = computeLindbladRHS(y3, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
 
-        // Stage 4
-        var y4 = [Complex<Double>](repeating: .zero, count: n2)
-        for i in 0 ..< n2 {
-            y4[i] = rhoVec[i] + Complex(h * dp_a41, 0) * k1[i] + Complex(h * dp_a42, 0) * k2[i] + Complex(h * dp_a43, 0) * k3[i]
+        let h_a41 = Complex<Double>(h * dp_a41, 0)
+        let h_a42 = Complex<Double>(h * dp_a42, 0)
+        let h_a43 = Complex<Double>(h * dp_a43, 0)
+        let y4 = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            for i in 0 ..< n2 {
+                buffer[i] = rhoVec[i] + h_a41 * k1[i] + h_a42 * k2[i] + h_a43 * k3[i]
+            }
+            count = n2
         }
-        let k4 = computeLindbladRHS(y4, hMatrix: hMatrix, jumpOperators: jumpOperators, dim: dim)
+        let k4 = computeLindbladRHS(y4, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
 
-        // Stage 5
-        var y5 = [Complex<Double>](repeating: .zero, count: n2)
-        for i in 0 ..< n2 {
-            y5[i] = rhoVec[i] + Complex(h * dp_a51, 0) * k1[i] + Complex(h * dp_a52, 0) * k2[i] +
-                Complex(h * dp_a53, 0) * k3[i] + Complex(h * dp_a54, 0) * k4[i]
+        let h_a51 = Complex<Double>(h * dp_a51, 0)
+        let h_a52 = Complex<Double>(h * dp_a52, 0)
+        let h_a53 = Complex<Double>(h * dp_a53, 0)
+        let h_a54 = Complex<Double>(h * dp_a54, 0)
+        let y5 = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            for i in 0 ..< n2 {
+                buffer[i] = rhoVec[i] + h_a51 * k1[i] + h_a52 * k2[i] +
+                    h_a53 * k3[i] + h_a54 * k4[i]
+            }
+            count = n2
         }
-        let k5 = computeLindbladRHS(y5, hMatrix: hMatrix, jumpOperators: jumpOperators, dim: dim)
+        let k5 = computeLindbladRHS(y5, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
 
-        // Stage 6
-        var y6 = [Complex<Double>](repeating: .zero, count: n2)
-        for i in 0 ..< n2 {
-            y6[i] = rhoVec[i] + Complex(h * dp_a61, 0) * k1[i] + Complex(h * dp_a62, 0) * k2[i] +
-                Complex(h * dp_a63, 0) * k3[i] + Complex(h * dp_a64, 0) * k4[i] + Complex(h * dp_a65, 0) * k5[i]
+        let h_a61 = Complex<Double>(h * dp_a61, 0)
+        let h_a62 = Complex<Double>(h * dp_a62, 0)
+        let h_a63 = Complex<Double>(h * dp_a63, 0)
+        let h_a64 = Complex<Double>(h * dp_a64, 0)
+        let h_a65 = Complex<Double>(h * dp_a65, 0)
+        let y6 = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            for i in 0 ..< n2 {
+                buffer[i] = rhoVec[i] + h_a61 * k1[i] + h_a62 * k2[i] +
+                    h_a63 * k3[i] + h_a64 * k4[i] + h_a65 * k5[i]
+            }
+            count = n2
         }
-        let k6 = computeLindbladRHS(y6, hMatrix: hMatrix, jumpOperators: jumpOperators, dim: dim)
+        let k6 = computeLindbladRHS(y6, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
 
-        // Stage 7 (FSAL: same as 5th order solution)
-        var y7 = [Complex<Double>](repeating: .zero, count: n2)
-        for i in 0 ..< n2 {
-            y7[i] = rhoVec[i] + Complex(h * dp_a71, 0) * k1[i] + Complex(h * dp_a73, 0) * k3[i] +
-                Complex(h * dp_a74, 0) * k4[i] + Complex(h * dp_a75, 0) * k5[i] + Complex(h * dp_a76, 0) * k6[i]
+        let h_a71 = Complex<Double>(h * dp_a71, 0)
+        let h_a73 = Complex<Double>(h * dp_a73, 0)
+        let h_a74 = Complex<Double>(h * dp_a74, 0)
+        let h_a75 = Complex<Double>(h * dp_a75, 0)
+        let h_a76 = Complex<Double>(h * dp_a76, 0)
+        let rhoNew = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            for i in 0 ..< n2 {
+                buffer[i] = rhoVec[i] + h_a71 * k1[i] + h_a73 * k3[i] +
+                    h_a74 * k4[i] + h_a75 * k5[i] + h_a76 * k6[i]
+            }
+            count = n2
         }
-        let k7 = computeLindbladRHS(y7, hMatrix: hMatrix, jumpOperators: jumpOperators, dim: dim)
+        let k7 = computeLindbladRHS(rhoNew, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
 
-        // 5th order solution (y7 is already the 5th order result due to FSAL)
-        let rhoNew = y7
-
-        // Error estimate: difference between 5th and 4th order
-        var errorVec = [Complex<Double>](repeating: .zero, count: n2)
-        for i in 0 ..< n2 {
-            errorVec[i] = Complex(h * dp_e1, 0) * k1[i] + Complex(h * dp_e3, 0) * k3[i] +
-                Complex(h * dp_e4, 0) * k4[i] + Complex(h * dp_e5, 0) * k5[i] +
-                Complex(h * dp_e6, 0) * k6[i] + Complex(h * dp_e7, 0) * k7[i]
+        let h_e1 = Complex<Double>(h * dp_e1, 0)
+        let h_e3 = Complex<Double>(h * dp_e3, 0)
+        let h_e4 = Complex<Double>(h * dp_e4, 0)
+        let h_e5 = Complex<Double>(h * dp_e5, 0)
+        let h_e6 = Complex<Double>(h * dp_e6, 0)
+        let h_e7 = Complex<Double>(h * dp_e7, 0)
+        let errorVec = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            for i in 0 ..< n2 {
+                buffer[i] = h_e1 * k1[i] + h_e3 * k3[i] +
+                    h_e4 * k4[i] + h_e5 * k5[i] +
+                    h_e6 * k6[i] + h_e7 * k7[i]
+            }
+            count = n2
         }
 
         let errorNorm = vectorNorm(errorVec)
@@ -538,33 +651,35 @@ public enum LindbladSolver {
     // MARK: - TR-BDF2 Step
 
     /// Performs single TR-BDF2 step for stiff dynamics.
+    @_effects(readonly)
     @_optimize(speed)
     private static func trBdf2Step(
         rhoVec: [Complex<Double>],
+        f0: [Complex<Double>],
         h: Double,
         hMatrix: [Complex<Double>],
-        jumpOperators: [[[Complex<Double>]]],
+        jumpData: JumpOperatorData,
         dim: Int,
         atol: Double,
-        rtol: Double,
+        rtol: Double
     ) -> (rhoNew: [Complex<Double>], accepted: Bool) {
         let n2 = rhoVec.count
         let gamma = trBdf2Gamma
 
-        // Trapezoid predictor: solve (I - gamma*h/2 * J) * y_gamma = rho + gamma*h/2 * f(rho)
-        let f0 = computeLindbladRHS(rhoVec, hMatrix: hMatrix, jumpOperators: jumpOperators, dim: dim)
-
-        var yGamma = [Complex<Double>](repeating: .zero, count: n2)
-        for i in 0 ..< n2 {
-            yGamma[i] = rhoVec[i] + Complex(gamma * h * 0.5, 0) * f0[i]
+        let gammaH2 = Complex<Double>(gamma * h * 0.5, 0)
+        var yGamma = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            for i in 0 ..< n2 {
+                buffer[i] = rhoVec[i] + gammaH2 * f0[i]
+            }
+            count = n2
         }
 
-        // Newton iteration for implicit trapezoid
-        for _ in 0 ..< 10 {
-            let fGamma = computeLindbladRHS(yGamma, hMatrix: hMatrix, jumpOperators: jumpOperators, dim: dim)
-            var residual = [Complex<Double>](repeating: .zero, count: n2)
+        var residual = [Complex<Double>](repeating: .zero, count: n2)
+
+        for _ in 0 ..< maxNewtonIterations {
+            let fGamma = computeLindbladRHS(yGamma, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
             for i in 0 ..< n2 {
-                residual[i] = yGamma[i] - rhoVec[i] - Complex(gamma * h * 0.5, 0) * (f0[i] + fGamma[i])
+                residual[i] = yGamma[i] - rhoVec[i] - gammaH2 * (f0[i] + fGamma[i])
             }
 
             let resNorm = vectorNorm(residual)
@@ -572,30 +687,35 @@ public enum LindbladSolver {
             let tol = atol + rtol * rhoNorm
             if resNorm < tol { break }
 
-            // Simplified Newton: use explicit correction
             for i in 0 ..< n2 {
                 yGamma[i] = yGamma[i] - residual[i]
             }
         }
 
-        // BDF2 corrector: solve (1 - (1-gamma)/(2-gamma) * h * J) * y_new = ...
-        let fGamma = computeLindbladRHS(yGamma, hMatrix: hMatrix, jumpOperators: jumpOperators, dim: dim)
+        let fGamma = computeLindbladRHS(yGamma, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
 
-        let c1 = (1.0 - gamma) / (2.0 - gamma)
-        let c2 = 1.0 / (gamma * (2.0 - gamma))
-        let c3 = (1.0 - gamma) * (1.0 - gamma) / (gamma * (2.0 - gamma))
+        let oneMinusGamma = 1.0 - gamma
+        let twoMinusGamma = 2.0 - gamma
+        let recipGammaTwoMinusGamma = 1.0 / (gamma * twoMinusGamma)
+        let c1 = oneMinusGamma / twoMinusGamma
+        let c2 = recipGammaTwoMinusGamma
+        let c3 = oneMinusGamma * oneMinusGamma * recipGammaTwoMinusGamma
 
-        var yNew = [Complex<Double>](repeating: .zero, count: n2)
-        for i in 0 ..< n2 {
-            yNew[i] = Complex(c2, 0) * yGamma[i] - Complex(c3, 0) * rhoVec[i] + Complex(c1 * h, 0) * fGamma[i]
+        let cc1h = Complex<Double>(c1 * h, 0)
+        let cc2 = Complex<Double>(c2, 0)
+        let cc3 = Complex<Double>(c3, 0)
+
+        var yNew = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+            for i in 0 ..< n2 {
+                buffer[i] = cc2 * yGamma[i] - cc3 * rhoVec[i] + cc1h * fGamma[i]
+            }
+            count = n2
         }
 
-        // Newton iteration for BDF2
-        for _ in 0 ..< 10 {
-            let fNew = computeLindbladRHS(yNew, hMatrix: hMatrix, jumpOperators: jumpOperators, dim: dim)
-            var residual = [Complex<Double>](repeating: .zero, count: n2)
+        for _ in 0 ..< maxNewtonIterations {
+            let fNew = computeLindbladRHS(yNew, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
             for i in 0 ..< n2 {
-                residual[i] = yNew[i] - Complex(c2, 0) * yGamma[i] + Complex(c3, 0) * rhoVec[i] - Complex(c1 * h, 0) * fNew[i]
+                residual[i] = yNew[i] - cc2 * yGamma[i] + cc3 * rhoVec[i] - cc1h * fNew[i]
             }
 
             let resNorm = vectorNorm(residual)
@@ -614,11 +734,12 @@ public enum LindbladSolver {
     // MARK: - Positivity Enforcement
 
     /// Enforces density matrix positivity using specified method.
+    @_effects(readonly)
     @_optimize(speed)
     private static func enforcePositivity(
         _ rhoVec: [Complex<Double>],
         dim: Int,
-        method: PositivityMethod,
+        method: PositivityMethod
     ) -> [Complex<Double>] {
         switch method {
         case .none:
@@ -632,9 +753,10 @@ public enum LindbladSolver {
         }
     }
 
+    /// Enforces positivity via eigenvalue clipping and renormalization.
+    @_effects(readonly)
     @_optimize(speed)
     private static func enforcePositivityEigenvalue(_ rhoVec: [Complex<Double>], dim: Int) -> [Complex<Double>] {
-        // Convert to 2D for eigendecomposition
         var matrix = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: dim), count: dim)
         for i in 0 ..< dim {
             for j in 0 ..< dim {
@@ -644,45 +766,49 @@ public enum LindbladSolver {
 
         let eigen = HermitianEigenDecomposition.decompose(matrix: matrix)
 
-        // Clip negative eigenvalues
         var clippedEigenvalues = eigen.eigenvalues.map { max(0.0, $0) }
 
-        // Renormalize
         let traceSum = clippedEigenvalues.reduce(0.0, +)
-        if traceSum > 1e-15 {
+        if traceSum > epsilon {
             for i in 0 ..< clippedEigenvalues.count {
                 clippedEigenvalues[i] /= traceSum
             }
         }
 
-        // Reconstruct: rho = V * diag(lambda) * V^dag
-        var result = [Complex<Double>](repeating: .zero, count: dim * dim)
-        for i in 0 ..< dim {
-            for j in 0 ..< dim {
-                var sum = Complex<Double>.zero
+        let sqrtEigenvalues = clippedEigenvalues.map { sqrt($0) }
+        let wFlat = [Complex<Double>](unsafeUninitializedCapacity: dim * dim) { buffer, count in
+            for i in 0 ..< dim {
                 for k in 0 ..< dim {
-                    sum = sum + Complex(clippedEigenvalues[k], 0) * eigen.eigenvectors[k][i] * eigen.eigenvectors[k][j].conjugate
+                    buffer[i * dim + k] = Complex(sqrtEigenvalues[k], 0) * eigen.eigenvectors[k][i]
                 }
-                result[i * dim + j] = sum
             }
+            count = dim * dim
         }
+
+        let wDag = hermitianConjugateFlat(wFlat, dim: dim)
+        var result = [Complex<Double>](repeating: .zero, count: dim * dim)
+        matrixMultiplyFlat(wFlat, wDag, &result, dim: dim)
 
         return result
     }
 
+    /// Enforces positivity via Cholesky factorization with eigenvalue fallback.
+    @_effects(readonly)
     @_optimize(speed)
     private static func enforcePositivityCholesky(_ rhoVec: [Complex<Double>], dim: Int) -> [Complex<Double>] {
-        // Attempt Cholesky factorization; if it fails (not positive definite), fall back to eigenvalue method
-        var aColMajor = [Double](repeating: 0.0, count: 2 * dim * dim)
-        for col in 0 ..< dim {
-            for row in 0 ..< dim {
-                let idx = 2 * (col * dim + row)
-                let val = rhoVec[row * dim + col]
-                aColMajor[idx] = val.real
-                aColMajor[idx + 1] = val.imaginary
+        var aColMajor = [Double](unsafeUninitializedCapacity: 2 * dim * dim) { buffer, count in
+            for col in 0 ..< dim {
+                for row in 0 ..< dim {
+                    let idx = 2 * (col * dim + row)
+                    let val = rhoVec[row * dim + col]
+                    buffer[idx] = val.real
+                    buffer[idx + 1] = val.imaginary
+                }
             }
+            count = 2 * dim * dim
         }
 
+        // Safety: ASCII 'L' always has a value
         var uplo = CChar(Character("L").asciiValue!)
         var n = __LAPACK_int(dim)
         var lda = __LAPACK_int(dim)
@@ -693,14 +819,9 @@ public enum LindbladSolver {
         }
 
         if info != 0 {
-            // Not positive definite, fall back to eigenvalue method
             return enforcePositivityEigenvalue(rhoVec, dim: dim)
         }
 
-        // Positivity guaranteed: zpotrf succeeds only for positive semidefinite matrices
-        // Reconstruction rho = L * L^dag preserves positivity by construction
-
-        // Zero out upper triangular part (keep only L)
         for col in 0 ..< dim {
             for row in 0 ..< col {
                 let idx = 2 * (col * dim + row)
@@ -709,13 +830,14 @@ public enum LindbladSolver {
             }
         }
 
-        // Reconstruct rho = L * L^dag
-        var lMatrix = [Complex<Double>](repeating: .zero, count: dim * dim)
-        for col in 0 ..< dim {
-            for row in 0 ..< dim {
-                let idx = 2 * (col * dim + row)
-                lMatrix[row * dim + col] = Complex(aColMajor[idx], aColMajor[idx + 1])
+        let lMatrix = [Complex<Double>](unsafeUninitializedCapacity: dim * dim) { buffer, count in
+            for col in 0 ..< dim {
+                for row in 0 ..< dim {
+                    let idx = 2 * (col * dim + row)
+                    buffer[row * dim + col] = Complex(aColMajor[idx], aColMajor[idx + 1])
+                }
             }
+            count = dim * dim
         }
 
         let lDag = hermitianConjugateFlat(lMatrix, dim: dim)
@@ -728,6 +850,7 @@ public enum LindbladSolver {
     // MARK: - Trace Normalization
 
     /// Normalizes density matrix trace to unity.
+    @_effects(readonly)
     @_optimize(speed)
     private static func normalizeTrace(_ rhoVec: [Complex<Double>], dim: Int) -> [Complex<Double>] {
         var trace = 0.0
@@ -735,14 +858,16 @@ public enum LindbladSolver {
             trace += rhoVec[i * dim + i].real
         }
 
-        if abs(trace) < 1e-15 {
+        if abs(trace) < epsilon {
             return rhoVec
         }
 
-        var result = [Complex<Double>](repeating: .zero, count: rhoVec.count)
-        let invTrace = 1.0 / trace
-        for i in 0 ..< rhoVec.count {
-            result[i] = Complex(invTrace, 0) * rhoVec[i]
+        let invTraceC = Complex<Double>(1.0 / trace, 0)
+        let result = [Complex<Double>](unsafeUninitializedCapacity: rhoVec.count) { buffer, count in
+            for i in 0 ..< rhoVec.count {
+                buffer[i] = invTraceC * rhoVec[i]
+            }
+            count = rhoVec.count
         }
 
         return result
@@ -751,13 +876,14 @@ public enum LindbladSolver {
     // MARK: - Matrix Utilities
 
     /// Flattens density matrix to row-major vector.
+    @_effects(readonly)
     @_optimize(speed)
     private static func flattenDensityMatrix(_ dm: DensityMatrix) -> [Complex<Double>] {
         let dim = dm.dimension
         let result = [Complex<Double>](unsafeUninitializedCapacity: dim * dim) { buffer, count in
             for i in 0 ..< dim {
                 for j in 0 ..< dim {
-                    buffer[i * dim + j] = dm.element(row: i, col: j)
+                    buffer[i * dim + j] = dm[row: i, col: j]
                 }
             }
             count = dim * dim
@@ -766,12 +892,14 @@ public enum LindbladSolver {
     }
 
     /// Reconstructs density matrix from flat vector.
+    @_effects(readonly)
     @_optimize(speed)
     private static func unflattenToDensityMatrix(_ vec: [Complex<Double>], qubits: Int) -> DensityMatrix {
         DensityMatrix(qubits: qubits, elements: vec)
     }
 
     /// Flattens 2D matrix to row-major vector.
+    @_effects(readonly)
     @_optimize(speed)
     private static func flattenMatrix(_ matrix: [[Complex<Double>]]) -> [Complex<Double>] {
         let dim = matrix.count
@@ -787,6 +915,7 @@ public enum LindbladSolver {
     }
 
     /// Computes Hermitian conjugate of flat matrix.
+    @_effects(readonly)
     @_optimize(speed)
     private static func hermitianConjugateFlat(_ matrix: [Complex<Double>], dim: Int) -> [Complex<Double>] {
         let result = [Complex<Double>](unsafeUninitializedCapacity: dim * dim) { buffer, count in
@@ -806,7 +935,7 @@ public enum LindbladSolver {
         _ a: [Complex<Double>],
         _ b: [Complex<Double>],
         _ c: inout [Complex<Double>],
-        dim: Int,
+        dim: Int
     ) {
         let n = dim
         let nn = n * n
@@ -828,7 +957,9 @@ public enum LindbladSolver {
             count = nn2
         }
 
-        var cInterleaved = [Double](repeating: 0.0, count: nn2)
+        var cInterleaved = [Double](unsafeUninitializedCapacity: nn2) { _, count in
+            count = nn2
+        }
 
         var alpha = (1.0, 0.0)
         var beta = (0.0, 0.0)
@@ -847,7 +978,7 @@ public enum LindbladSolver {
                                 OpaquePointer(aPtr.baseAddress), Int32(n),
                                 OpaquePointer(bPtr.baseAddress), Int32(n),
                                 OpaquePointer(betaPtr),
-                                OpaquePointer(cPtr.baseAddress), Int32(n),
+                                OpaquePointer(cPtr.baseAddress), Int32(n)
                             )
                         }
                     }
@@ -861,6 +992,8 @@ public enum LindbladSolver {
     }
 
     /// Computes Euclidean norm of complex vector.
+    @inline(__always)
+    @_effects(readonly)
     @_optimize(speed)
     private static func vectorNorm(_ vec: [Complex<Double>]) -> Double {
         var sum = 0.0

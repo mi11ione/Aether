@@ -95,10 +95,10 @@ public extension NoiseChannel {
                     let col1 = col | mask
                     let colBit = (col >> qubit) & 1
 
-                    let rho00 = matrix.element(row: row0, col: col0)
-                    let rho01 = matrix.element(row: row0, col: col1)
-                    let rho10 = matrix.element(row: row1, col: col0)
-                    let rho11 = matrix.element(row: row1, col: col1)
+                    let rho00 = matrix[row: row0, col: col0]
+                    let rho01 = matrix[row: row0, col: col1]
+                    let rho10 = matrix[row: row1, col: col0]
+                    let rho11 = matrix[row: row1, col: col1]
 
                     let kRow0 = rowBit == 0 ? k00 : k10
                     let kRow1 = rowBit == 0 ? k01 : k11
@@ -698,7 +698,7 @@ public struct TwoQubitDepolarizingChannel: NoiseChannel, Sendable {
 
                         let kElement = kraus[rowIdx][a]
                         let kDaggerElement = kraus[colIdx][b].conjugate
-                        let rhoElement = matrix.element(row: aRow, col: bCol)
+                        let rhoElement = matrix[row: aRow, col: bCol]
 
                         sum = sum + kElement * rhoElement * kDaggerElement
                     }

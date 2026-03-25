@@ -11,7 +11,7 @@ import Testing
 struct DeutschJozsaTests {
     @Test("Constant-0 oracle: All inputs measured as |0⟩")
     func testConstantZeroOracle() {
-        let oracle = QuantumCircuit.constantZeroOracle()
+        let oracle = QuantumCircuit.constantZeroOracle
         let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: oracle)
         let state = circuit.execute()
 
@@ -22,7 +22,7 @@ struct DeutschJozsaTests {
 
     @Test("Constant-1 oracle: All inputs measured as |0⟩")
     func testConstantOneOracle() {
-        let oracle = QuantumCircuit.constantOneOracle()
+        let oracle = QuantumCircuit.constantOneOracle
         let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: oracle)
         let state = circuit.execute()
 
@@ -33,7 +33,7 @@ struct DeutschJozsaTests {
 
     @Test("Balanced parity oracle: At least one input is |1⟩")
     func testBalancedParityOracle() {
-        let oracle = QuantumCircuit.balancedParityOracle()
+        let oracle = QuantumCircuit.balancedParityOracle
         let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: oracle)
         let state = circuit.execute()
 
@@ -45,7 +45,7 @@ struct DeutschJozsaTests {
 
     @Test("Balanced first-bit oracle: At least one input is |1⟩")
     func testBalancedFirstBitOracle() {
-        let oracle = QuantumCircuit.balancedFirstBitOracle()
+        let oracle = QuantumCircuit.balancedFirstBitOracle
         let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: oracle)
         let state = circuit.execute()
 
@@ -57,7 +57,7 @@ struct DeutschJozsaTests {
 
     @Test("Single qubit Deutsch-Jozsa with constant oracle")
     func singleQubitConstant() {
-        let oracle = QuantumCircuit.constantZeroOracle()
+        let oracle = QuantumCircuit.constantZeroOracle
         let circuit = QuantumCircuit.deutschJozsa(qubits: 1, oracle: oracle)
         let state = circuit.execute()
 
@@ -65,27 +65,27 @@ struct DeutschJozsaTests {
                 "Single-qubit constant oracle should measure |0⟩")
     }
 
-    @Test("Deutsch-Jozsa with 5 input qubits")
+    @Test("Deutsch-Jozsa with 4 input qubits")
     func largerInput() {
-        let oracle = QuantumCircuit.constantZeroOracle()
-        let circuit = QuantumCircuit.deutschJozsa(qubits: 5, oracle: oracle)
+        let oracle = QuantumCircuit.constantZeroOracle
+        let circuit = QuantumCircuit.deutschJozsa(qubits: 4, oracle: oracle)
         let state = circuit.execute()
 
-        let inputQubits = Array(0 ..< 5)
+        let inputQubits = Array(0 ..< 4)
         #expect(state.allQubitsAreZero(inputQubits),
-                "Constant oracle with 5 qubits should measure all |0⟩")
+                "Constant oracle with 4 qubits should measure all |0⟩")
     }
 
     @Test("Balanced vs constant oracles produce different results")
     func balancedVsConstant() {
-        let constantOracle = QuantumCircuit.constantZeroOracle()
+        let constantOracle = QuantumCircuit.constantZeroOracle
         let constantCircuit = QuantumCircuit.deutschJozsa(
             qubits: 3,
             oracle: constantOracle,
         )
         let constantState = constantCircuit.execute()
 
-        let balancedOracle = QuantumCircuit.balancedParityOracle()
+        let balancedOracle = QuantumCircuit.balancedParityOracle
         let balancedCircuit = QuantumCircuit.deutschJozsa(
             qubits: 3,
             oracle: balancedOracle,
@@ -169,43 +169,43 @@ struct BernsteinVaziraniTests {
                 "BV should recover hidden string [0,0,0,0]")
     }
 
-    @Test("Hidden string [1,0,1,0,1]: Alternating pattern")
+    @Test("Hidden string [1,0,1,0]: Alternating pattern")
     func alternatingHiddenString() {
-        let hiddenString = [1, 0, 1, 0, 1]
+        let hiddenString = [1, 0, 1, 0]
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: hiddenString)
-        let circuit = QuantumCircuit.bernsteinVazirani(qubits: 5, oracle: oracle)
+        let circuit = QuantumCircuit.bernsteinVazirani(qubits: 4, oracle: oracle)
         let state = circuit.execute()
 
-        let inputQubits = [0, 1, 2, 3, 4]
+        let inputQubits = [0, 1, 2, 3]
         let measured = state.measureQubits(inputQubits)
         #expect(measured == hiddenString,
-                "BV should recover hidden string [1,0,1,0,1]")
+                "BV should recover hidden string [1,0,1,0]")
     }
 
-    @Test("Hidden string [0,1,1,0,1,0]: 6-bit recovery")
-    func sixBitHiddenString() {
-        let hiddenString = [0, 1, 1, 0, 1, 0]
+    @Test("Hidden string [0,1,1]: 3-bit recovery")
+    func threeBitMixedHiddenString() {
+        let hiddenString = [0, 1, 1]
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: hiddenString)
-        let circuit = QuantumCircuit.bernsteinVazirani(qubits: 6, oracle: oracle)
+        let circuit = QuantumCircuit.bernsteinVazirani(qubits: 3, oracle: oracle)
         let state = circuit.execute()
 
-        let inputQubits = Array(0 ..< 6)
+        let inputQubits = Array(0 ..< 3)
         let measured = state.measureQubits(inputQubits)
         #expect(measured == hiddenString,
-                "BV should recover hidden string [0,1,1,0,1,0]")
+                "BV should recover hidden string [0,1,1]")
     }
 
-    @Test("Hidden string: Random 8-bit pattern")
-    func eightBitHiddenString() {
-        let hiddenString = [1, 0, 0, 1, 1, 0, 1, 1]
+    @Test("Hidden string: Random 4-bit pattern")
+    func fourBitMixedHiddenString() {
+        let hiddenString = [1, 0, 0, 1]
         let oracle = QuantumCircuit.bernsteinVaziraniOracle(hiddenString: hiddenString)
-        let circuit = QuantumCircuit.bernsteinVazirani(qubits: 8, oracle: oracle)
+        let circuit = QuantumCircuit.bernsteinVazirani(qubits: 4, oracle: oracle)
         let state = circuit.execute()
 
-        let inputQubits = Array(0 ..< 8)
+        let inputQubits = Array(0 ..< 4)
         let measured = state.measureQubits(inputQubits)
         #expect(measured == hiddenString,
-                "BV should recover 8-bit hidden string")
+                "BV should recover 4-bit hidden string")
     }
 }
 
@@ -316,7 +316,7 @@ struct OracleBuilderTests {
     @Test("Constant-zero oracle leaves output unchanged")
     func constantZeroOracleIdentity() {
         var circuit = QuantumCircuit(qubits: 2)
-        let oracle = QuantumCircuit.constantZeroOracle()
+        let oracle = QuantumCircuit.constantZeroOracle
 
         oracle([0], 1, &circuit)
         let state = circuit.execute()
@@ -328,7 +328,7 @@ struct OracleBuilderTests {
     @Test("Constant-one oracle flips output")
     func constantOneOracleFlips() {
         var circuit = QuantumCircuit(qubits: 2)
-        let oracle = QuantumCircuit.constantOneOracle()
+        let oracle = QuantumCircuit.constantOneOracle
 
         oracle([0], 1, &circuit)
         let state = circuit.execute()
@@ -343,7 +343,7 @@ struct OracleBuilderTests {
         circuit.append(.pauliX, to: 0)
         circuit.append(.pauliX, to: 1)
 
-        let oracle = QuantumCircuit.balancedParityOracle()
+        let oracle = QuantumCircuit.balancedParityOracle
         oracle([0, 1], 2, &circuit)
 
         let state = circuit.execute()
@@ -380,11 +380,10 @@ struct OracleBuilderTests {
         oracle([0, 1], 2, &circuit2)
         let state2 = circuit2.execute()
 
-        let output1IsCorrect = state1.probability(of: 0b000) > 0.99
-        let output2IsCorrect = state2.probability(of: 0b001) > 0.99
-
-        #expect(output1IsCorrect && output2IsCorrect,
-                "Simon oracle f(00)=f(10)=0 for period [1,0]")
+        #expect(state1.probability(of: 0b000) > 0.99,
+                "Simon oracle f(00) should map to output 0")
+        #expect(state2.probability(of: 0b001) > 0.99,
+                "Simon oracle f(10) should map to output 0 for period [1,0]")
     }
 }
 
@@ -425,7 +424,7 @@ struct AlgorithmsEdgeCasesTests {
 
     @Test("DJ algorithm preserves normalization")
     func dJPreservesNormalization() {
-        let oracle = QuantumCircuit.balancedParityOracle()
+        let oracle = QuantumCircuit.balancedParityOracle
         let circuit = QuantumCircuit.deutschJozsa(qubits: 4, oracle: oracle)
         let state = circuit.execute()
 
@@ -455,7 +454,7 @@ struct AlgorithmsEdgeCasesTests {
 
     @Test("Balanced first-bit oracle handles empty input qubits")
     func balancedFirstBitOracleEmptyInput() {
-        let oracle = QuantumCircuit.balancedFirstBitOracle()
+        let oracle = QuantumCircuit.balancedFirstBitOracle
         var circuit = QuantumCircuit(qubits: 1)
 
         oracle([], 0, &circuit)

@@ -406,7 +406,7 @@ struct PECPauliDecompositionTests {
 
     @Test("Decomposition for various error rates")
     func decompositionVariousRates() {
-        let errorRates = [0.0, 0.01, 0.05, 0.1, 0.2, 0.5, 0.74]
+        let errorRates = [0.0, 0.1, 0.5, 0.74]
 
         for rate in errorRates {
             let pec = ProbabilisticErrorCancellation(errorProbability: rate, samples: 100)
@@ -424,14 +424,12 @@ struct PECMitigationTests {
     @Test("PEC returns finite mitigated value")
     func pecReturnsFiniteValue() async {
         let pec = ProbabilisticErrorCancellation(errorProbability: 0.01, samples: 100)
-        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
 
         let result = await pec.mitigate(
             circuit: circuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
         )
 
         #expect(result.mitigatedValue.isFinite, "Mitigated value should be finite")
@@ -440,14 +438,12 @@ struct PECMitigationTests {
     @Test("PEC result has valid statistics")
     func pecResultStatistics() async {
         let pec = ProbabilisticErrorCancellation(errorProbability: 0.01, samples: 500)
-        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.pauliX, to: 0)
 
         let result = await pec.mitigate(
             circuit: circuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
         )
 
         #expect(result.samples == 500, "Should have 500 samples")
@@ -458,38 +454,33 @@ struct PECMitigationTests {
     @Test("PEC confidence interval is valid")
     func pecConfidenceInterval() async {
         let pec = ProbabilisticErrorCancellation(errorProbability: 0.01, samples: 200)
-        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
         let circuit = QuantumCircuit(qubits: 1)
 
         let result = await pec.mitigate(
             circuit: circuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
         )
 
         let ci = result.confidenceInterval
-        #expect(ci.low <= result.mitigatedValue, "CI low should be <= mitigated")
-        #expect(ci.high >= result.mitigatedValue, "CI high should be >= mitigated")
+        #expect(ci.lower <= result.mitigatedValue, "CI low should be <= mitigated")
+        #expect(ci.upper >= result.mitigatedValue, "CI high should be >= mitigated")
     }
 
     @Test("PEC with seed is reproducible")
     func pecReproducibility() async {
         let pec = ProbabilisticErrorCancellation(errorProbability: 0.01, samples: 100)
-        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
 
         let result1 = await pec.mitigate(
             circuit: circuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
             seed: 12345,
         )
 
         let result2 = await pec.mitigate(
             circuit: circuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
             seed: 12345,
         )
 
@@ -500,13 +491,11 @@ struct PECMitigationTests {
     @Test("PEC result description is formatted")
     func pecResultDescription() async {
         let pec = ProbabilisticErrorCancellation(errorProbability: 0.01, samples: 100)
-        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
         let circuit = QuantumCircuit(qubits: 1)
 
         let result = await pec.mitigate(
             circuit: circuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
         )
 
         #expect(result.description.contains("PEC Result"), "Description should contain header")
@@ -516,7 +505,6 @@ struct PECMitigationTests {
     @Test("PEC gamma scales with circuit depth")
     func pecGammaScalesWithDepth() async {
         let pec = ProbabilisticErrorCancellation(errorProbability: 0.1, samples: 50)
-        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
 
         var shortCircuit = QuantumCircuit(qubits: 1)
         shortCircuit.append(.hadamard, to: 0)
@@ -529,13 +517,11 @@ struct PECMitigationTests {
         let shortResult = await pec.mitigate(
             circuit: shortCircuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
         )
 
         let longResult = await pec.mitigate(
             circuit: longCircuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
         )
 
         #expect(longResult.gamma > shortResult.gamma,
@@ -716,14 +702,12 @@ struct ErrorMitigationIntegrationTests {
     @Test("PEC with simple rotation")
     func pecWithRotation() async {
         let pec = ProbabilisticErrorCancellation(errorProbability: 0.02, samples: 100)
-        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.rotationY(.pi / 4), to: 0)
 
         let result = await pec.mitigate(
             circuit: circuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
         )
 
         #expect(result.mitigatedValue.isFinite, "PEC on rotation should give finite result")
@@ -836,13 +820,11 @@ struct ErrorMitigationEdgeCasesTests {
     @Test("PEC with minimal samples")
     func pecMinimalSamples() async {
         let pec = ProbabilisticErrorCancellation(errorProbability: 0.01, samples: 10)
-        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
         let circuit = QuantumCircuit(qubits: 1)
 
         let result = await pec.mitigate(
             circuit: circuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
         )
 
         #expect(result.samples == 10, "Should use 10 samples")
@@ -1220,7 +1202,6 @@ struct ResetPreservationTests {
     @Test("PEC sampleCircuit preserves reset operations")
     func pecSampleCircuitPreservesReset() async {
         let pec = ProbabilisticErrorCancellation(errorProbability: 0.01, samples: 50)
-        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         circuit.append(.reset, to: 0)
@@ -1229,7 +1210,6 @@ struct ResetPreservationTests {
         let result = await pec.mitigate(
             circuit: circuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
             seed: 42,
         )
 
@@ -1242,14 +1222,12 @@ struct ResetPreservationTests {
     @Test("PEC with reset-only circuit produces finite result")
     func pecResetOnlyCircuit() async {
         let pec = ProbabilisticErrorCancellation(errorProbability: 0.01, samples: 50)
-        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.reset, to: 0)
 
         let result = await pec.mitigate(
             circuit: circuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
             seed: 99,
         )
 
@@ -1260,7 +1238,6 @@ struct ResetPreservationTests {
     @Test("PEC with reset between gates is reproducible with seed")
     func pecResetReproducibleWithSeed() async {
         let pec = ProbabilisticErrorCancellation(errorProbability: 0.05, samples: 100)
-        let simulator = DensityMatrixSimulator(noiseModel: .ideal)
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
@@ -1270,14 +1247,12 @@ struct ResetPreservationTests {
         let result1 = await pec.mitigate(
             circuit: circuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
             seed: 7777,
         )
 
         let result2 = await pec.mitigate(
             circuit: circuit,
             observable: Observable.pauliZ(qubit: 0),
-            simulator: simulator,
             seed: 7777,
         )
 

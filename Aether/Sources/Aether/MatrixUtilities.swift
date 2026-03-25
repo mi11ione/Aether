@@ -22,10 +22,13 @@ import Accelerate
 /// let adjoint = MatrixUtilities.hermitianConjugate(composed)
 /// let identity = MatrixUtilities.matrixMultiply(adjoint, composed)  // U† x U = I
 /// ```
+///
+/// - SeeAlso: ``QuantumGate``
+/// - SeeAlso: ``Complex``
 public enum MatrixUtilities {
-    /// Compute matrix product C = A x B using BLAS
+    /// Compute square matrix product C = A x B using BLAS
     ///
-    /// Performs dense complex matrix multiplication computation.
+    /// Performs dense complex square matrix multiplication computation.
     /// Primary use cases: gate composition (fusing sequential gates), unitarity validation (U†U),
     /// and basis transformations (U†OU for operator conjugation).
     ///
@@ -45,7 +48,7 @@ public enum MatrixUtilities {
     @_optimize(speed)
     @inlinable
     @_eagerMove
-    static func matrixMultiply(_ a: [[Complex<Double>]], _ b: [[Complex<Double>]]) -> [[Complex<Double>]] {
+    public static func matrixMultiply(_ a: [[Complex<Double>]], _ b: [[Complex<Double>]]) -> [[Complex<Double>]] {
         ValidationUtilities.validateSquareMatrix(a, name: "Matrix A")
         ValidationUtilities.validateSquareMatrix(b, name: "Matrix B")
         ValidationUtilities.validateSameDimensions(a, b, name1: "Matrix A", name2: "Matrix B")
@@ -139,7 +142,7 @@ public enum MatrixUtilities {
     @_effects(readonly)
     @inlinable
     @_eagerMove
-    static func hermitianConjugate(_ matrix: [[Complex<Double>]]) -> [[Complex<Double>]] {
+    public static func hermitianConjugate(_ matrix: [[Complex<Double>]]) -> [[Complex<Double>]] {
         ValidationUtilities.validateSquareMatrix(matrix, name: "Matrix")
         let n = matrix.count
 
@@ -225,14 +228,12 @@ public enum MatrixUtilities {
     @_effects(readonly)
     @inlinable
     @_eagerMove
-    static func identityMatrix(dimension: Int) -> [[Complex<Double>]] {
+    public static func identityMatrix(dimension: Int) -> [[Complex<Double>]] {
         ValidationUtilities.validateMatrixDimension(dimension)
 
         return (0 ..< dimension).map { i in
             [Complex<Double>](unsafeUninitializedCapacity: dimension) { buffer, count in
-                for j in 0 ..< dimension {
-                    buffer[j] = .zero
-                }
+                buffer.initialize(repeating: .zero)
                 buffer[i] = .one
                 count = dimension
             }
@@ -258,7 +259,7 @@ public enum MatrixUtilities {
     ///   - b: Right matrix (bm x bn)
     /// - Returns: Kronecker product A ⊗ B with dimensions (am*bm x an*bn)
     /// - Complexity: O(am * an * bm * bn)
-    /// - Precondition: Both matrices must be non-empty with consistent row lengths
+    /// - Precondition: Both matrices must be non-empty
     @_optimize(speed)
     @inlinable
     @_eagerMove

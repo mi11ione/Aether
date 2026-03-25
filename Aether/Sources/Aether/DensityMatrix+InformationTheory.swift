@@ -1,7 +1,18 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-import Foundation
+import Accelerate
+
+/// Eigenvalue threshold below which contributions to entropy are treated as zero.
+private let entropyEigenvalueThreshold: Double = 1e-15
+
+/// Precomputed (sigma_y tensor sigma_y) matrix for Wootters concurrence formula.
+private let sigmaYTensorSigmaY: [[Complex<Double>]] = [
+    [.zero, .zero, .zero, Complex(-1, 0)],
+    [.zero, .zero, Complex(1, 0), .zero],
+    [.zero, Complex(1, 0), .zero, .zero],
+    [Complex(-1, 0), .zero, .zero, .zero],
+]
 
 public extension DensityMatrix {
     /// Compute von Neumann entropy S(rho) = -Tr(rho log2 rho) via eigendecomposition.
@@ -27,8 +38,13 @@ public extension DensityMatrix {
     func vonNeumannEntropy() -> Double {
         let matrix = extractMatrix()
         let result = HermitianEigenDecomposition.decompose(matrix: matrix)
-        let clampedEigenvalues = result.eigenvalues.map { max(0.0, $0) }
-        return QuantumInformationTheory.entropyFromProbabilities(clampedEigenvalues)
+        var entropy = 0.0
+        for eigenvalue in result.eigenvalues {
+            let p = max(0.0, eigenvalue)
+            if p < entropyEigenvalueThreshold { continue }
+            entropy -= p * log2(p)
+        }
+        return entropy
     }
 
     /// Compute trace distance D(rho, sigma) = 0.5 * Tr(|rho - sigma|) between two density matrices.
@@ -61,17 +77,15 @@ public extension DensityMatrix {
         let delta: [[Complex<Double>]] = (0 ..< dim).map { i in
             [Complex<Double>](unsafeUninitializedCapacity: dim) { buffer, count in
                 for j in 0 ..< dim {
-                    buffer[j] = element(row: i, col: j) - other.element(row: i, col: j)
+                    buffer[j] = self[row: i, col: j] - other[row: i, col: j]
                 }
                 count = dim
             }
         }
 
         let result = HermitianEigenDecomposition.decompose(matrix: delta)
-        var sum = 0.0
-        for eigenvalue in result.eigenvalues {
-            sum += abs(eigenvalue)
-        }
+        let absEigenvalues = vDSP.absolute(result.eigenvalues)
+        let sum = vDSP.sum(absEigenvalues)
         return 0.5 * sum
     }
 
@@ -108,37 +122,19 @@ public extension DensityMatrix {
             var f = 0.0
             for i in 0 ..< dim {
                 for j in 0 ..< dim {
-                    let prod = element(row: i, col: j) * other.element(row: j, col: i)
+                    let prod = self[row: i, col: j] * other[row: j, col: i]
                     f += prod.real
                 }
             }
             return max(0.0, min(1.0, f))
         }
 
-        let rhoMatrix = extractMatrix()
-        let rhoEigen = HermitianEigenDecomposition.decompose(matrix: rhoMatrix)
-
-        let sqrtDiag: [Double] = rhoEigen.eigenvalues.map { sqrt(max(0.0, $0)) }
-
-        let u = rhoEigen.eigenvectors
-        let uDagger = MatrixUtilities.hermitianConjugate(u)
-
-        let diagSqrt: [[Complex<Double>]] = (0 ..< dim).map { i in
-            [Complex<Double>](unsafeUninitializedCapacity: dim) { buffer, count in
-                for j in 0 ..< dim {
-                    buffer[j] = (i == j) ? Complex(sqrtDiag[i], 0) : .zero
-                }
-                count = dim
-            }
-        }
-
-        let uTimesDiag = MatrixUtilities.matrixMultiply(u, diagSqrt)
-        let sqrtRho = MatrixUtilities.matrixMultiply(uTimesDiag, uDagger)
+        let sqrtRho = squareRootMatrix()
 
         let otherMatrix: [[Complex<Double>]] = (0 ..< dim).map { i in
             [Complex<Double>](unsafeUninitializedCapacity: dim) { buffer, count in
                 for j in 0 ..< dim {
-                    buffer[j] = other.element(row: i, col: j)
+                    buffer[j] = other[row: i, col: j]
                 }
                 count = dim
             }
@@ -149,10 +145,10 @@ public extension DensityMatrix {
 
         let mEigen = HermitianEigenDecomposition.decompose(matrix: m)
 
-        var sumSqrt = 0.0
-        for mu in mEigen.eigenvalues {
-            sumSqrt += sqrt(max(0.0, mu))
-        }
+        let clampedMu = vDSP.clip(mEigen.eigenvalues, to: 0.0 ... .greatestFiniteMagnitude)
+        var sqrtMu = [Double](repeating: 0.0, count: clampedMu.count)
+        vForce.sqrt(clampedMu, result: &sqrtMu)
+        let sumSqrt = vDSP.sum(sqrtMu)
 
         return max(0.0, min(1.0, sumSqrt * sumSqrt))
     }
@@ -170,7 +166,7 @@ public extension DensityMatrix {
     ///     Complex(1/sqrt(2), 0), .zero, .zero, Complex(1/sqrt(2), 0)
     /// ])
     /// let dm = DensityMatrix(pureState: bell)
-    /// dm.mutualInformation(subsystemA: [0], subsystemB: [1])  // 2.0
+    /// dm.mutualInformation(between: [0], and: [1])  // 2.0
     /// ```
     ///
     /// - Parameters:
@@ -182,18 +178,15 @@ public extension DensityMatrix {
     /// - Precondition: All qubit indices must be valid
     @_optimize(speed)
     @_effects(readonly)
-    func mutualInformation(subsystemA: [Int], subsystemB: [Int]) -> Double {
+    func mutualInformation(between subsystemA: [Int], and subsystemB: [Int]) -> Double {
         ValidationUtilities.validateDisjointSubsystems(subsystemA, subsystemB)
         ValidationUtilities.validateNonEmpty(subsystemA, name: "subsystemA")
         ValidationUtilities.validateNonEmpty(subsystemB, name: "subsystemB")
         ValidationUtilities.validateOperationQubits(subsystemA, numQubits: qubits)
         ValidationUtilities.validateOperationQubits(subsystemB, numQubits: qubits)
 
-        let setA = Set(subsystemA)
-        let setB = Set(subsystemB)
-
-        let complementOfA = (0 ..< qubits).filter { !setA.contains($0) }
-        let complementOfB = (0 ..< qubits).filter { !setB.contains($0) }
+        let complementOfA = (0 ..< qubits).filter { !subsystemA.contains($0) }
+        let complementOfB = (0 ..< qubits).filter { !subsystemB.contains($0) }
 
         let sAB = vonNeumannEntropy()
 
@@ -237,30 +230,9 @@ public extension DensityMatrix {
         let dim = dimension
         let rho = extractMatrix()
 
-        let rhoEigen = HermitianEigenDecomposition.decompose(matrix: rho)
-        let sqrtDiag: [Double] = rhoEigen.eigenvalues.map { sqrt(max(0.0, $0)) }
+        let sqrtRho = squareRootMatrix()
 
-        let u = rhoEigen.eigenvectors
-        let uDagger = MatrixUtilities.hermitianConjugate(u)
-
-        let diagSqrt: [[Complex<Double>]] = (0 ..< dim).map { i in
-            [Complex<Double>](unsafeUninitializedCapacity: dim) { buffer, count in
-                for j in 0 ..< dim {
-                    buffer[j] = (i == j) ? Complex(sqrtDiag[i], 0) : .zero
-                }
-                count = dim
-            }
-        }
-
-        let uTimesDiag = MatrixUtilities.matrixMultiply(u, diagSqrt)
-        let sqrtRho = MatrixUtilities.matrixMultiply(uTimesDiag, uDagger)
-
-        let syy: [[Complex<Double>]] = [
-            [.zero, .zero, .zero, Complex(-1, 0)],
-            [.zero, .zero, Complex(1, 0), .zero],
-            [.zero, Complex(1, 0), .zero, .zero],
-            [Complex(-1, 0), .zero, .zero, .zero],
-        ]
+        let syy = sigmaYTensorSigmaY
 
         let rhoConjugate: [[Complex<Double>]] = (0 ..< dim).map { i in
             [Complex<Double>](unsafeUninitializedCapacity: dim) { buffer, count in
@@ -291,19 +263,56 @@ public extension DensityMatrix {
         let c = sqrtLambdas[0] - sqrtLambdas[1] - sqrtLambdas[2] - sqrtLambdas[3]
         return max(0.0, c)
     }
+}
 
-    // MARK: - Private Helpers
+// MARK: - Private Helpers
 
+private extension DensityMatrix {
+    /// Computes the matrix square root via eigendecomposition.
+    @_effects(readonly)
+    func squareRootMatrix() -> [[Complex<Double>]] {
+        let dim = dimension
+        let matrix = extractMatrix()
+        let eigen = HermitianEigenDecomposition.decompose(matrix: matrix)
+
+        let eigenvalues = eigen.eigenvalues
+        let sqrtDiag = [Double](unsafeUninitializedCapacity: eigenvalues.count) { buffer, count in
+            for i in 0 ..< eigenvalues.count {
+                buffer[i] = sqrt(max(0.0, eigenvalues[i]))
+            }
+            count = eigenvalues.count
+        }
+
+        let u = eigen.eigenvectors
+        let uDagger = MatrixUtilities.hermitianConjugate(u)
+
+        let diagSqrt: [[Complex<Double>]] = (0 ..< dim).map { i in
+            [Complex<Double>](unsafeUninitializedCapacity: dim) { buffer, count in
+                buffer.initialize(repeating: .zero)
+                buffer[i] = Complex(sqrtDiag[i], 0)
+                count = dim
+            }
+        }
+
+        let uTimesDiag = MatrixUtilities.matrixMultiply(u, diagSqrt)
+        return MatrixUtilities.matrixMultiply(uTimesDiag, uDagger)
+    }
+}
+
+// MARK: - Internal Helpers
+
+extension DensityMatrix {
     /// Extract density matrix elements into a two-dimensional array via the public accessor.
     ///
     /// - Returns: Two-dimensional array representation of the density matrix
     /// - Complexity: O(d^2) where d = 2^n
-    private func extractMatrix() -> [[Complex<Double>]] {
+    @_effects(readonly)
+    func extractMatrix() -> [[Complex<Double>]] {
         let dim = dimension
         return (0 ..< dim).map { i in
             [Complex<Double>](unsafeUninitializedCapacity: dim) { buffer, count in
                 for j in 0 ..< dim {
-                    buffer[j] = element(row: i, col: j)
+                    buffer[j] = self[row: i, col: j]
                 }
                 count = dim
             }

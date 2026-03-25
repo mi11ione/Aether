@@ -15,7 +15,7 @@
 /// **Example:**
 /// ```swift
 /// let config = DMRGConfiguration(maxSweeps: 30, convergenceThreshold: 1e-10)
-/// let noiseConfig = DMRGConfiguration(subspaceExpansion: true, noiseStrength: 1e-4)
+/// let noiseConfig = DMRGConfiguration(isSubspaceExpansionEnabled: true, noiseStrength: 1e-4)
 /// ```
 ///
 /// - SeeAlso: ``DMRGSweepDirection``
@@ -54,19 +54,19 @@ public struct DMRGConfiguration: Sendable, Equatable {
     ///
     /// **Example:**
     /// ```swift
-    /// let withExpansion = DMRGConfiguration(subspaceExpansion: true, noiseStrength: 1e-5)
+    /// let withExpansion = DMRGConfiguration(isSubspaceExpansionEnabled: true, noiseStrength: 1e-5)
     /// ```
-    public let subspaceExpansion: Bool
+    public let isSubspaceExpansionEnabled: Bool
 
     /// Noise strength for subspace expansion.
     ///
     /// Controls magnitude of random perturbations added during subspace expansion.
-    /// Only effective when ``subspaceExpansion`` is true. Typical values: 1e-3 to 1e-6.
+    /// Only effective when ``isSubspaceExpansionEnabled`` is true. Typical values: 1e-3 to 1e-6.
     /// Set to 0.0 to disable noise while keeping expansion enabled.
     ///
     /// **Example:**
     /// ```swift
-    /// let config = DMRGConfiguration(subspaceExpansion: true, noiseStrength: 1e-4)
+    /// let config = DMRGConfiguration(isSubspaceExpansionEnabled: true, noiseStrength: 1e-4)
     /// ```
     public let noiseStrength: Double
 
@@ -78,20 +78,23 @@ public struct DMRGConfiguration: Sendable, Equatable {
     /// **Example:**
     /// ```swift
     /// let config = DMRGConfiguration(maxSweeps: 30, convergenceThreshold: 1e-10)
-    /// let noiseConfig = DMRGConfiguration(subspaceExpansion: true, noiseStrength: 1e-5)
+    /// let noiseConfig = DMRGConfiguration(isSubspaceExpansionEnabled: true, noiseStrength: 1e-5)
     /// let dmrg = DMRG(hamiltonian: mpo, maxBondDimension: 64, configuration: config)
     /// ```
     ///
     /// - Parameters:
     ///   - maxSweeps: Maximum sweep count (default: 20)
     ///   - convergenceThreshold: Energy convergence threshold (default: 1e-8)
-    ///   - subspaceExpansion: Enable subspace expansion (default: false)
+    ///   - isSubspaceExpansionEnabled: Enable subspace expansion (default: false)
     ///   - noiseStrength: Noise magnitude for expansion (default: 0.0)
     /// - Complexity: O(1)
+    /// - Precondition: maxSweeps must be positive
+    /// - Precondition: convergenceThreshold must be positive
+    /// - Precondition: noiseStrength must be non-negative
     public init(
         maxSweeps: Int = 20,
         convergenceThreshold: Double = 1e-8,
-        subspaceExpansion: Bool = false,
+        isSubspaceExpansionEnabled: Bool = false,
         noiseStrength: Double = 0.0,
     ) {
         ValidationUtilities.validatePositiveInt(maxSweeps, name: "maxSweeps")
@@ -100,7 +103,7 @@ public struct DMRGConfiguration: Sendable, Equatable {
 
         self.maxSweeps = maxSweeps
         self.convergenceThreshold = convergenceThreshold
-        self.subspaceExpansion = subspaceExpansion
+        self.isSubspaceExpansionEnabled = isSubspaceExpansionEnabled
         self.noiseStrength = noiseStrength
     }
 }

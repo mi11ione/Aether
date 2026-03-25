@@ -55,6 +55,32 @@ public struct LCUDecomposition: Sendable {
 
     /// Number of terms L in the LCU decomposition.
     public let termCount: Int
+
+    /// Creates an LCU decomposition result.
+    ///
+    /// - Parameters:
+    ///   - normalizedCoefficients: Normalized coefficients summing to 1
+    ///   - originalCoefficients: Original Hamiltonian coefficients with signs
+    ///   - unitaries: Pauli string unitary operators
+    ///   - oneNorm: 1-norm of original coefficients
+    ///   - ancillaQubits: Number of ancilla qubits for PREPARE
+    ///   - termCount: Number of terms in decomposition
+    /// - Complexity: O(1)
+    public init(
+        normalizedCoefficients: [Double],
+        originalCoefficients: [Double],
+        unitaries: [PauliString],
+        oneNorm: Double,
+        ancillaQubits: Int,
+        termCount: Int,
+    ) {
+        self.normalizedCoefficients = normalizedCoefficients
+        self.originalCoefficients = originalCoefficients
+        self.unitaries = unitaries
+        self.oneNorm = oneNorm
+        self.ancillaQubits = ancillaQubits
+        self.termCount = termCount
+    }
 }
 
 /// Linear Combination of Unitaries for Hamiltonian simulation.
@@ -64,10 +90,10 @@ public struct LCUDecomposition: Sendable {
 /// where the Hamiltonian appears as a subblock of a larger unitary operator, foundational
 /// for Qubitization and optimal quantum simulation algorithms.
 ///
-/// The LCU circuit consists of three components:
-/// - **PREPARE**: Creates superposition |ψ_prep⟩ = Σᵢ √(|αᵢ|/α)|i⟩ encoding coefficient magnitudes
-/// - **SELECT**: Applies |i⟩|ψ⟩ -> |i⟩Pᵢ|ψ⟩ controlled on ancilla state
-/// - **Block Encoding**: U_LCU = PREPARE† · SELECT · PREPARE contains H/α in top-left block
+/// The LCU circuit uses a PREPARE oracle that creates a superposition
+/// |ψ_prep⟩ = Σᵢ √(|αᵢ|/α)|i⟩ encoding coefficient magnitudes, a SELECT oracle that
+/// applies |i⟩|ψ⟩ → |i⟩Pᵢ|ψ⟩ controlled on the ancilla state, and their combination
+/// U_LCU = PREPARE† · SELECT · PREPARE which contains H/α in the top-left block.
 ///
 /// - SeeAlso: ``LCUDecomposition``
 /// - SeeAlso: ``Observable``
@@ -83,6 +109,9 @@ public struct LCUDecomposition: Sendable {
 /// let selectCircuit = LCU.selectCircuit(decomposition: decomposition, systemQubits: 2, ancillaStart: 2)
 /// ```
 public enum LCU {
+    /// Threshold below which coefficients are treated as zero.
+    private static let coefficientEpsilon: Double = 1e-15
+
     /// Decompose Hamiltonian into LCU form H = Σᵢ αᵢPᵢ.
     ///
     /// Extracts Pauli string terms and coefficients from the Hamiltonian observable,
@@ -118,7 +147,7 @@ public enum LCU {
 
         for term in hamiltonian.terms {
             let coeff = term.coefficient
-            if abs(coeff) > 1e-15 {
+            if abs(coeff) > coefficientEpsilon {
                 coefficients.append(coeff)
                 unitaries.append(term.pauliString)
                 oneNorm += abs(coeff)
@@ -128,13 +157,17 @@ public enum LCU {
         let termCount = coefficients.count
         let ancillaQubits = termCount > 1 ? ceilLog2(termCount) : 1
 
-        var normalizedCoefficients: [Double] = []
-        normalizedCoefficients.reserveCapacity(termCount)
-
-        if oneNorm > 1e-15 {
-            for coeff in coefficients {
-                normalizedCoefficients.append(abs(coeff) / oneNorm)
+        let normalizedCoefficients: [Double]
+        if oneNorm > coefficientEpsilon {
+            let reciprocal = 1.0 / oneNorm
+            normalizedCoefficients = [Double](unsafeUninitializedCapacity: termCount) { buffer, count in
+                for i in 0 ..< termCount {
+                    buffer[i] = abs(coefficients[i]) * reciprocal
+                }
+                count = termCount
             }
+        } else {
+            normalizedCoefficients = []
         }
 
         return LCUDecomposition(
@@ -253,7 +286,6 @@ public enum LCU {
                 termIndex: termIndex,
                 numAncilla: numAncilla,
                 ancillaStart: ancillaStart,
-                systemQubits: systemQubits,
                 isNegative: coefficient < 0,
             )
         }
@@ -350,7 +382,7 @@ public enum LCU {
         decomposition: LCUDecomposition,
         expectedEnergy: Double,
     ) -> Double {
-        guard decomposition.oneNorm > 1e-15 else {
+        guard decomposition.oneNorm > coefficientEpsilon else {
             return 0.0
         }
 
@@ -360,18 +392,14 @@ public enum LCU {
         return min(max(probability, 0.0), 1.0)
     }
 
+    /// Computes ceiling of log base 2, minimum 1.
     @_optimize(speed)
     @_effects(readonly)
     private static func ceilLog2(_ n: Int) -> Int {
-        var value = n - 1
-        var bits = 0
-        while value > 0 {
-            bits += 1
-            value >>= 1
-        }
-        return bits
+        max(1, Int.bitWidth - (n - 1).leadingZeroBitCount)
     }
 
+    /// Recursively builds binary tree of controlled-Ry rotations for amplitude encoding.
     @_optimize(speed)
     private static func buildAmplitudeEncodingTree(
         circuit: inout QuantumCircuit,
@@ -399,13 +427,13 @@ public enum LCU {
 
         let totalProb = probLeft + probRight
 
-        if totalProb < 1e-15 {
+        if totalProb < coefficientEpsilon {
             return
         }
 
         let probZero = probLeft / totalProb
 
-        if probZero > 1e-15, probZero < 1.0 - 1e-15 {
+        if probZero > coefficientEpsilon, probZero < 1.0 - coefficientEpsilon {
             let theta = 2.0 * acos(sqrt(probZero))
             let targetQubit = ancillaStart + depth
 
@@ -450,6 +478,7 @@ public enum LCU {
         )
     }
 
+    /// Appends controlled-Ry rotation with multi-qubit control pattern.
     @_optimize(speed)
     private static func appendControlledRy(
         circuit: inout QuantumCircuit,
@@ -478,6 +507,7 @@ public enum LCU {
         }
     }
 
+    /// Appends multi-controlled X gate using CNOT, Toffoli, or Toffoli ladder.
     @_optimize(speed)
     private static func appendMultiControlledX(
         circuit: inout QuantumCircuit,
@@ -491,7 +521,7 @@ public enum LCU {
         } else if n == 2 {
             circuit.append(.toffoli, to: [controls[0], controls[1], target])
         } else {
-            let decomposition = ControlledGateDecomposer.toffoliLadderDecomposition(
+            let decomposition = ControlledGateDecomposer.toffoliLadder(
                 gate: .pauliX,
                 controls: controls,
                 target: target,
@@ -502,6 +532,7 @@ public enum LCU {
         }
     }
 
+    /// Appends ancilla-controlled Pauli string application with binary index encoding.
     @_optimize(speed)
     private static func appendControlledPauliString(
         circuit: inout QuantumCircuit,
@@ -509,7 +540,6 @@ public enum LCU {
         termIndex: Int,
         numAncilla: Int,
         ancillaStart: Int,
-        systemQubits _: Int,
         isNegative: Bool,
     ) {
         var controls: [(qubit: Int, value: Int)] = []
@@ -525,8 +555,9 @@ public enum LCU {
             circuit.append(.pauliX, to: control.qubit)
         }
 
+        let controlQubits = controls.map(\.qubit)
+
         if isNegative {
-            let controlQubits = controls.map(\.qubit)
             appendControlledPhase(
                 circuit: &circuit,
                 controls: controlQubits,
@@ -536,7 +567,6 @@ public enum LCU {
 
         for op in pauliString.operators {
             let targetQubit = op.qubit
-            let controlQubits = controls.map(\.qubit)
 
             switch op.basis {
             case .x:
@@ -553,6 +583,7 @@ public enum LCU {
         }
     }
 
+    /// Appends multi-controlled Y gate decomposed via phase and controlled-X.
     @_optimize(speed)
     private static func appendMultiControlledY(
         circuit: inout QuantumCircuit,
@@ -570,6 +601,7 @@ public enum LCU {
         }
     }
 
+    /// Appends multi-controlled Z gate decomposed via Hadamard-X-Hadamard.
     @_optimize(speed)
     private static func appendMultiControlledZ(
         circuit: inout QuantumCircuit,
@@ -587,6 +619,7 @@ public enum LCU {
         }
     }
 
+    /// Appends multi-controlled phase gate using recursive decomposition.
     @_optimize(speed)
     private static func appendControlledPhase(
         circuit: inout QuantumCircuit,
@@ -599,11 +632,11 @@ public enum LCU {
             circuit.append(.phase(.value(phase)), to: controls[0])
         } else {
             let target = controls[n - 1]
-            let remainingControls = Array(controls.dropLast())
+            let remainingControls = [Int](controls[..<(n - 1)])
 
             circuit.append(.hadamard, to: target)
 
-            let decomposition = ControlledGateDecomposer.toffoliLadderDecomposition(
+            let decomposition = ControlledGateDecomposer.toffoliLadder(
                 gate: .pauliX,
                 controls: remainingControls,
                 target: target,

@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -423,6 +423,126 @@ struct CliffordSimulatorTests {
         #expect(
             abs(p0 - 1.0) < 1e-10,
             "Controlled-S with control in |1> should apply S to target",
+        )
+    }
+
+    @Test("applyGate default branch ignores unhandled Clifford-angle rotationZ")
+    func applyGateDefaultBreak() async {
+        let simulator = CliffordSimulator()
+
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.rotationZ(.value(.pi)), to: 0)
+
+        let tableau = await simulator.execute(circuit)
+        let (p0, p1) = tableau.probability(of: 0, measuring: .z)
+
+        #expect(
+            abs(p0 - 0.5) < 1e-10,
+            "rotationZ hitting default branch should leave superposition unchanged with p0 ~ 0.5",
+        )
+        #expect(
+            abs(p1 - 0.5) < 1e-10,
+            "rotationZ hitting default branch should leave superposition unchanged with p1 ~ 0.5",
+        )
+    }
+
+    @Test("applyCliffordPhase applies pauliZ for pi phase")
+    func applyCliffordPhasePi() async {
+        let simulator = CliffordSimulator()
+
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.phase(.value(Double.pi)), to: 0)
+        circuit.append(.hadamard, to: 0)
+
+        let tableau = await simulator.execute(circuit)
+        let (_, p1) = tableau.probability(of: 0, measuring: .z)
+
+        #expect(
+            abs(p1 - 1.0) < 1e-10,
+            "Phase(pi) equivalent to Z should flip |+> to |-> giving |1> after second H",
+        )
+    }
+
+    @Test("applyCliffordPhase applies S-dagger for 3pi/2 phase")
+    func applyCliffordPhaseThreePiOver2() async {
+        let simulator = CliffordSimulator()
+
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.phase(.value(3.0 * Double.pi / 2.0)), to: 0)
+
+        let tableau = await simulator.execute(circuit)
+        let (_, p1) = tableau.probability(of: 0, measuring: .y)
+
+        #expect(
+            abs(p1 - 1.0) < 1e-10,
+            "Phase(3pi/2) equivalent to S-dagger should create |-i> state with Y measurement giving 1",
+        )
+    }
+
+    @Test("applyControlledClifford decomposes controlled pauliX as CNOT")
+    func controlledPauliXAsCNOT() async {
+        let simulator = CliffordSimulator()
+
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.controlled(gate: .pauliX, controls: [0]), to: [0, 1])
+
+        let tableau = await simulator.execute(circuit)
+        let (p0, _) = tableau.probability(of: 1, measuring: .z)
+
+        #expect(
+            abs(p0 - 1.0) < 1e-10,
+            "Controlled-X with control in |0> should leave target in |0>",
+        )
+    }
+
+    @Test("applyControlledClifford decomposes controlled pauliY")
+    func controlledPauliY() async {
+        let simulator = CliffordSimulator()
+
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.controlled(gate: .pauliY, controls: [0]), to: [0, 1])
+
+        let tableau = await simulator.execute(circuit)
+        let (p0, _) = tableau.probability(of: 1, measuring: .z)
+
+        #expect(
+            abs(p0 - 1.0) < 1e-10,
+            "Controlled-Y with control in |0> should leave target in |0>",
+        )
+    }
+
+    @Test("applyControlledClifford decomposes controlled pauliZ")
+    func controlledPauliZ() async {
+        let simulator = CliffordSimulator()
+
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.controlled(gate: .pauliZ, controls: [0]), to: [0, 1])
+
+        let tableau = await simulator.execute(circuit)
+        let (p0, _) = tableau.probability(of: 1, measuring: .z)
+
+        #expect(
+            abs(p0 - 1.0) < 1e-10,
+            "Controlled-Z with control in |0> should leave target in |0>",
+        )
+    }
+
+    @Test("applyControlledClifford default branch ignores controlled hadamard")
+    func controlledHadamardDefaultBreak() async {
+        let simulator = CliffordSimulator()
+
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.controlled(gate: .hadamard, controls: [0]), to: [0, 1])
+
+        let tableau = await simulator.execute(circuit)
+        let (p0, _) = tableau.probability(of: 1, measuring: .z)
+
+        #expect(
+            abs(p0 - 1.0) < 1e-10,
+            "Controlled-H hitting default branch should leave target in |0>",
         )
     }
 }

@@ -165,7 +165,7 @@ struct FromHoppingsTests {
     @Test("Triangle topology creates three bonds")
     func triangleTopologyThreeBonds() {
         let triangleHoppings = [(0, 1, 1.0), (1, 2, 1.0), (0, 2, 1.0)]
-        let model = HubbardHamiltonian.fromHoppings(hoppings: triangleHoppings, U: 0.0, sites: 3)
+        let model = HubbardHamiltonian.fromHoppings( triangleHoppings, U: 0.0, sites: 3)
         #expect(model.sites == 3, "Triangle should have 3 sites")
         #expect(model.qubits == 6, "Triangle should have 6 qubits")
         #expect(model.observable.terms.count == 12, "Triangle with U=0 should have 12 terms: 3 bonds x 2 spins x 2 Pauli strings")
@@ -174,33 +174,33 @@ struct FromHoppingsTests {
     @Test("Non-uniform hopping strengths preserved in terms")
     func nonUniformHoppingStrengths() {
         let hoppings = [(0, 1, 1.0), (1, 2, 2.0)]
-        let model = HubbardHamiltonian.fromHoppings(hoppings: hoppings, U: 0.0, sites: 3)
+        let model = HubbardHamiltonian.fromHoppings( hoppings, U: 0.0, sites: 3)
         #expect(abs(model.t - 1.5) < 1e-10, "Average hopping should be 1.5")
     }
 
     @Test("Empty hoppings with U=0 gives empty observable")
     func emptyHoppingsNoInteraction() {
-        let model = HubbardHamiltonian.fromHoppings(hoppings: [], U: 0.0, sites: 2)
+        let model = HubbardHamiltonian.fromHoppings( [], U: 0.0, sites: 2)
         #expect(model.observable.terms.isEmpty, "No hoppings and U=0 should give empty observable")
     }
 
     @Test("Empty hoppings with U>0 gives only interaction terms")
     func emptyHoppingsWithInteraction() {
-        let model = HubbardHamiltonian.fromHoppings(hoppings: [], U: 4.0, sites: 2)
+        let model = HubbardHamiltonian.fromHoppings( [], U: 4.0, sites: 2)
         #expect(model.observable.terms.count > 0, "No hoppings but U>0 should give interaction terms")
     }
 
     @Test("Custom graph preserves site count")
     func customGraphPreservesSiteCount() {
         let hoppings = [(0, 1, 1.0)]
-        let model = HubbardHamiltonian.fromHoppings(hoppings: hoppings, U: 4.0, sites: 5)
+        let model = HubbardHamiltonian.fromHoppings( hoppings, U: 4.0, sites: 5)
         #expect(model.sites == 5, "Site count should match input even if not all sites have hoppings")
     }
 
     @Test("Average hopping computed correctly for multiple bonds")
     func averageHoppingComputed() {
         let hoppings = [(0, 1, 2.0), (1, 2, 4.0), (2, 3, 6.0)]
-        let model = HubbardHamiltonian.fromHoppings(hoppings: hoppings, U: 0.0, sites: 4)
+        let model = HubbardHamiltonian.fromHoppings( hoppings, U: 0.0, sites: 4)
         #expect(abs(model.t - 4.0) < 1e-10, "Average hopping should be (2+4+6)/3 = 4.0")
     }
 }

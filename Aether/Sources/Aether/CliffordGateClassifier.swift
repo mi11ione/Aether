@@ -21,8 +21,15 @@
 /// let analysis = CliffordGateClassifier.analyze(circuit)
 /// // (isClifford: true, tCount: 0)
 /// ```
+///
+/// - SeeAlso: ``QuantumGate``, ``QuantumCircuit``
 public enum CliffordGateClassifier {
-    /// Classification result for a quantum gate.
+    /// Standard tolerance for floating-point Clifford classification.
+    private static let tolerance: Double = 1e-10
+    /// Scaled tolerance for pi/8 multiple detection.
+    private static let piEighthTolerance: Double = 1e-8
+
+    /// Classification result for a ``QuantumGate``.
     ///
     /// Clifford gates form a finite group and can be efficiently simulated.
     /// Non-Clifford gates include T-count estimation for resource analysis.
@@ -37,12 +44,15 @@ public enum CliffordGateClassifier {
     ///     print("Requires \(tCount) T gates")
     /// }
     /// ```
+    ///
+    /// - SeeAlso: ``classify(_:)``
+    @frozen
     public enum Classification: Equatable, Sendable {
         case clifford
         case nonClifford(tCount: Int)
     }
 
-    /// Classifies a quantum gate as Clifford or non-Clifford.
+    /// Classifies a ``QuantumGate`` as Clifford or non-Clifford.
     ///
     /// Clifford gates include Pauli gates (X, Y, Z), Hadamard, S gate, phase gates
     /// at multiples of pi/2, CNOT, CZ, CY, SWAP, and iSWAP. Non-Clifford gates
@@ -55,9 +65,10 @@ public enum CliffordGateClassifier {
     /// CliffordGateClassifier.classify(.toffoli)   // .nonClifford(tCount: 7)
     /// ```
     ///
-    /// - Parameter gate: The quantum gate to classify
-    /// - Returns: Classification indicating Clifford status and T-count if non-Clifford
+    /// - Parameter gate: The ``QuantumGate`` to classify
+    /// - Returns: ``Classification`` indicating Clifford status and T-count if non-Clifford
     /// - Complexity: O(1) for most gates, O(n^2) for custom unitary matrices
+    /// - SeeAlso: ``Classification``, ``isClifford(_:)``
     @inlinable
     @_effects(readonly)
     public static func classify(_ gate: QuantumGate) -> Classification {
@@ -81,60 +92,60 @@ public enum CliffordGateClassifier {
             return .nonClifford(tCount: 7)
 
         case let .phase(angle):
-            return classifyPhaseAngle(angle)
+            return classifyAngle(angle)
 
         case let .rotationX(theta):
-            return classifyRotationAngle(theta)
+            return classifyAngle(theta)
 
         case let .rotationY(theta):
-            return classifyRotationAngle(theta)
+            return classifyAngle(theta)
 
         case let .rotationZ(theta):
-            return classifyRotationAngle(theta)
+            return classifyAngle(theta)
 
         case let .globalPhase(phi):
-            return classifyPhaseAngle(phi)
+            return classifyAngle(phi)
 
         case let .u1(lambda):
-            return classifyPhaseAngle(lambda)
+            return classifyAngle(lambda)
 
         case let .u2(phi, lambda):
-            let phiClass = classifyPhaseAngle(phi)
-            let lambdaClass = classifyPhaseAngle(lambda)
+            let phiClass = classifyAngle(phi)
+            let lambdaClass = classifyAngle(lambda)
             return combineClassifications(phiClass, lambdaClass)
 
         case let .u3(theta, phi, lambda):
-            let thetaClass = classifyRotationAngle(theta)
-            let phiClass = classifyPhaseAngle(phi)
-            let lambdaClass = classifyPhaseAngle(lambda)
+            let thetaClass = classifyAngle(theta)
+            let phiClass = classifyAngle(phi)
+            let lambdaClass = classifyAngle(lambda)
             return combineClassifications(combineClassifications(thetaClass, phiClass), lambdaClass)
 
         case let .controlledPhase(theta):
-            return classifyPhaseAngle(theta)
+            return classifyAngle(theta)
 
         case let .controlledRotationX(theta):
-            return classifyRotationAngle(theta)
+            return classifyAngle(theta)
 
         case let .controlledRotationY(theta):
-            return classifyRotationAngle(theta)
+            return classifyAngle(theta)
 
         case let .controlledRotationZ(theta):
-            return classifyRotationAngle(theta)
+            return classifyAngle(theta)
 
         case .sqrtSwap, .sqrtISwap, .fswap:
             return .nonClifford(tCount: 1)
 
         case let .givens(theta):
-            return classifyRotationAngle(theta)
+            return classifyAngle(theta)
 
         case let .xx(theta):
-            return classifyRotationAngle(theta)
+            return classifyAngle(theta)
 
         case let .yy(theta):
-            return classifyRotationAngle(theta)
+            return classifyAngle(theta)
 
         case let .zz(theta):
-            return classifyRotationAngle(theta)
+            return classifyAngle(theta)
 
         case let .diagonal(phases):
             return classifyDiagonalPhases(phases)
@@ -162,7 +173,7 @@ public enum CliffordGateClassifier {
         }
     }
 
-    /// Checks if a quantum gate is a Clifford gate.
+    /// Checks if a ``QuantumGate`` is a Clifford gate.
     ///
     /// Convenience method that returns true if the gate classification is `.clifford`.
     ///
@@ -172,9 +183,10 @@ public enum CliffordGateClassifier {
     /// CliffordGateClassifier.isClifford(.tGate)     // false
     /// ```
     ///
-    /// - Parameter gate: The quantum gate to check
+    /// - Parameter gate: The ``QuantumGate`` to check
     /// - Returns: True if the gate is a Clifford gate
     /// - Complexity: O(1) for most gates
+    /// - SeeAlso: ``classify(_:)``
     @inlinable
     @_effects(readonly)
     public static func isClifford(_ gate: QuantumGate) -> Bool {
@@ -186,7 +198,7 @@ public enum CliffordGateClassifier {
         }
     }
 
-    /// Analyzes a quantum circuit for Clifford structure and T-count.
+    /// Analyzes a ``QuantumCircuit`` for Clifford structure and T-count.
     ///
     /// Examines all gates in the circuit to determine if the entire circuit
     /// consists only of Clifford gates, and counts the total T gates (or
@@ -205,14 +217,15 @@ public enum CliffordGateClassifier {
     /// // (isClifford: false, tCount: 1)
     /// ```
     ///
-    /// - Parameter circuit: The quantum circuit to analyze
+    /// - Parameter circuit: The ``QuantumCircuit`` to analyze
     /// - Returns: Tuple containing Clifford status and total T-count
     /// - Complexity: O(n) where n is the number of operations in the circuit
+    /// - SeeAlso: ``classify(_:)``, ``Classification``
     @inlinable
     @_effects(readonly)
     public static func analyze(_ circuit: QuantumCircuit) -> (isClifford: Bool, tCount: Int) {
         var totalTCount = 0
-        var allClifford = true
+        var isAllClifford = true
 
         for operation in circuit.operations {
             switch operation {
@@ -222,7 +235,7 @@ public enum CliffordGateClassifier {
                 case .clifford:
                     break
                 case let .nonClifford(tCount):
-                    allClifford = false
+                    isAllClifford = false
                     totalTCount += tCount
                 }
             case .reset, .measure:
@@ -230,79 +243,55 @@ public enum CliffordGateClassifier {
             }
         }
 
-        return (isClifford: allClifford, tCount: totalTCount)
+        return (isClifford: isAllClifford, tCount: totalTCount)
     }
 
+    /// Classify a parameter value angle as Clifford or non-Clifford.
     @usableFromInline
     @_effects(readonly)
-    static func classifyPhaseAngle(_ angle: ParameterValue) -> Classification {
+    static func classifyAngle(_ angle: ParameterValue) -> Classification {
         guard case let .value(theta) = angle else {
             return .nonClifford(tCount: 1)
         }
-        return classifyAngleValue(theta, isCliffordAt: isCliffordPhaseAngle)
+        return classifyAngleValue(theta)
     }
 
+    /// Classify a concrete angle value by checking Clifford multiples and estimating T-count.
     @usableFromInline
     @_effects(readonly)
-    static func classifyRotationAngle(_ angle: ParameterValue) -> Classification {
-        guard case let .value(theta) = angle else {
-            return .nonClifford(tCount: 1)
-        }
-        return classifyAngleValue(theta, isCliffordAt: isCliffordRotationAngle)
-    }
-
-    @usableFromInline
-    @_effects(readonly)
-    static func classifyAngleValue(_ theta: Double, isCliffordAt: (Double) -> Bool) -> Classification {
-        if isCliffordAt(theta) {
-            return .clifford
-        }
+    static func classifyAngleValue(_ theta: Double) -> Classification {
+        if isCliffordPhaseAngle(theta) { return .clifford }
         return estimateTCountForAngle(theta)
     }
 
+    /// Check if an angle is a Clifford phase (multiple of pi/2).
+    @inline(__always)
     @usableFromInline
     @_effects(readonly)
     static func isCliffordPhaseAngle(_ theta: Double) -> Bool {
         let normalized = normalizeAngle(theta)
-        let tolerance = 1e-10
-        let cliffordAngles: [Double] = [0.0, .pi / 2.0, .pi, 3.0 * .pi / 2.0]
-        for clifford in cliffordAngles {
-            if abs(normalized - clifford) < tolerance {
-                return true
-            }
-        }
-        return false
+        return abs(normalized) < tolerance
+            || abs(normalized - (.pi * 0.5)) < tolerance
+            || abs(normalized - .pi) < tolerance
+            || abs(normalized - (.pi * 1.5)) < tolerance
     }
 
-    @usableFromInline
-    @_effects(readonly)
-    static func isCliffordRotationAngle(_ theta: Double) -> Bool {
-        let normalized = normalizeAngle(theta)
-        let tolerance = 1e-10
-        let cliffordAngles: [Double] = [0.0, .pi / 2.0, .pi, 3.0 * .pi / 2.0]
-        for clifford in cliffordAngles {
-            if abs(normalized - clifford) < tolerance {
-                return true
-            }
-        }
-        return false
-    }
-
+    /// Normalize an angle to the range [0, 2pi).
+    @inline(__always)
     @usableFromInline
     @_effects(readonly)
     static func normalizeAngle(_ theta: Double) -> Double {
-        var normalized = theta.truncatingRemainder(dividingBy: 2.0 * .pi)
-        if normalized < 0 {
-            normalized += 2.0 * .pi
-        }
+        let twoPi = 2.0 * Double.pi
+        var normalized = theta.truncatingRemainder(dividingBy: twoPi)
+        if normalized < 0 { normalized += twoPi }
         return normalized
     }
 
+    /// Estimate T-gate count needed to synthesize a non-Clifford angle.
     @usableFromInline
     @_effects(readonly)
     static func estimateTCountForAngle(_ theta: Double) -> Classification {
         let normalized = normalizeAngle(theta)
-        let tolerance = 1e-10
         let quarterPi = Double.pi / 4.0
         if abs(normalized - quarterPi) < tolerance ||
             abs(normalized - 3.0 * quarterPi) < tolerance ||
@@ -311,15 +300,16 @@ public enum CliffordGateClassifier {
         {
             return .nonClifford(tCount: 1)
         }
-        let eighthPi = Double.pi / 8.0
-        for k in 1 ... 15 {
-            if abs(normalized - Double(k) * eighthPi) < tolerance {
-                return .nonClifford(tCount: 2)
-            }
+        let inv = normalized / (Double.pi * 0.125)
+        let rounded = inv.rounded()
+        if abs(inv - rounded) < piEighthTolerance {
+            return .nonClifford(tCount: 2)
         }
         return .nonClifford(tCount: 3)
     }
 
+    /// Combine two classifications by summing T-counts.
+    @inline(__always)
     @usableFromInline
     @_effects(readonly)
     static func combineClassifications(_ a: Classification, _ b: Classification) -> Classification {
@@ -335,6 +325,7 @@ public enum CliffordGateClassifier {
         }
     }
 
+    /// Classify a controlled gate based on its target gate classification.
     @usableFromInline
     @_effects(readonly)
     static func classifyControlledClifford(_ innerGate: QuantumGate) -> Classification {
@@ -342,18 +333,19 @@ public enum CliffordGateClassifier {
         case .pauliX, .pauliY, .pauliZ, .hadamard, .sGate:
             .clifford
         case let .phase(angle):
-            classifyPhaseAngle(angle)
+            classifyAngle(angle)
         default:
             .nonClifford(tCount: 1)
         }
     }
 
+    /// Classify a gate defined by diagonal phase angles.
     @usableFromInline
     @_effects(readonly)
     static func classifyDiagonalPhases(_ phases: [Double]) -> Classification {
         var totalTCount = 0
         for phase in phases {
-            let classification = classifyAngleValue(phase, isCliffordAt: isCliffordPhaseAngle)
+            let classification = classifyAngleValue(phase)
             switch classification {
             case .clifford:
                 break
@@ -367,6 +359,7 @@ public enum CliffordGateClassifier {
         return .nonClifford(tCount: totalTCount)
     }
 
+    /// Classify a multiplexed gate by analyzing its sub-unitary blocks.
     @usableFromInline
     @_effects(readonly)
     static func classifyMultiplexor(_ unitaries: [[[Complex<Double>]]]) -> Classification {
@@ -386,6 +379,7 @@ public enum CliffordGateClassifier {
         return .nonClifford(tCount: totalTCount)
     }
 
+    /// Classify a custom gate by inspecting its unitary matrix.
     @usableFromInline
     @_effects(readonly)
     static func classifyCustomMatrix(_ matrix: [[Complex<Double>]]) -> Classification {
@@ -397,43 +391,28 @@ public enum CliffordGateClassifier {
         return .nonClifford(tCount: estimatedTCount)
     }
 
+    /// Check if a unitary matrix represents a Clifford operation.
     @usableFromInline
     @_effects(readonly)
     static func isCliffordMatrix(_ matrix: [[Complex<Double>]]) -> Bool {
-        let allowedMagnitudes: [Double] = [0.0, 0.5, 1.0, 0.5.squareRoot()]
-        let tolerance = 1e-10
+        let toleranceSq = tolerance * tolerance
         for row in matrix {
             for element in row {
-                let magnitude = element.magnitude
-                var found = false
-                for allowed in allowedMagnitudes {
-                    if abs(magnitude - allowed) < tolerance {
-                        found = true
-                        break
-                    }
-                }
-                if !found {
-                    return false
-                }
-            }
-        }
-        let allowedPhases: [Double] = [0.0, .pi / 2.0, .pi, 3.0 * .pi / 2.0]
-        for row in matrix {
-            for element in row {
-                if element.magnitude < tolerance {
-                    continue
-                }
+                let magSq = element.magnitudeSquared
+                guard magSq < toleranceSq
+                    || abs(magSq - 0.25) < tolerance
+                    || abs(magSq - 0.5) < tolerance
+                    || abs(magSq - 1.0) < tolerance
+                else { return false }
+
+                if magSq < toleranceSq { continue }
+
                 let phase = normalizeAngle(element.phase)
-                var found = false
-                for allowed in allowedPhases {
-                    if abs(phase - allowed) < tolerance {
-                        found = true
-                        break
-                    }
-                }
-                if !found {
-                    return false
-                }
+                guard abs(phase) < tolerance
+                    || abs(phase - (.pi * 0.5)) < tolerance
+                    || abs(phase - .pi) < tolerance
+                    || abs(phase - (.pi * 1.5)) < tolerance
+                else { return false }
             }
         }
         return true

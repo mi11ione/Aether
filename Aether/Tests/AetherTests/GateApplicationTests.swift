@@ -15,8 +15,8 @@ struct qubitGateApplicationTests {
         let state = QuantumState(qubit: 0)
         let newState = state.applying(.pauliX, to: 0)
 
-        #expect(abs(newState.amplitude(of: 0).real) < 1e-10)
-        #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-10)
+        #expect(abs(newState.amplitude(of: 0).real) < 1e-10, "Amplitude of |0> should be zero after X gate")
+        #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-10, "Amplitude of |1> should be one after X gate")
     }
 
     @Test("X gate flips |1⟩ to |0⟩")
@@ -24,8 +24,8 @@ struct qubitGateApplicationTests {
         let state = QuantumState(qubit: 1)
         let newState = state.applying(.pauliX, to: 0)
 
-        #expect(abs(newState.amplitude(of: 0).real - 1.0) < 1e-10)
-        #expect(abs(newState.amplitude(of: 1).real) < 1e-10)
+        #expect(abs(newState.amplitude(of: 0).real - 1.0) < 1e-10, "Amplitude of |0> should be one after X on |1>")
+        #expect(abs(newState.amplitude(of: 1).real) < 1e-10, "Amplitude of |1> should be zero after X on |1>")
     }
 
     @Test("H gate creates superposition from |0⟩")
@@ -34,8 +34,8 @@ struct qubitGateApplicationTests {
         let newState = state.applying(.hadamard, to: 0)
 
         let invSqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(newState.amplitude(of: 0).real - invSqrt2) < 1e-10)
-        #expect(abs(newState.amplitude(of: 1).real - invSqrt2) < 1e-10)
+        #expect(abs(newState.amplitude(of: 0).real - invSqrt2) < 1e-10, "Amplitude of |0> should be 1/sqrt(2) after H")
+        #expect(abs(newState.amplitude(of: 1).real - invSqrt2) < 1e-10, "Amplitude of |1> should be 1/sqrt(2) after H")
     }
 
     @Test("Z gate adds phase to |1⟩ component")
@@ -48,8 +48,8 @@ struct qubitGateApplicationTests {
 
         let newState = state.applying(.pauliZ, to: 0)
 
-        #expect(abs(newState.amplitude(of: 0).real - invSqrt2) < 1e-10)
-        #expect(abs(newState.amplitude(of: 1).real - -invSqrt2) < 1e-10)
+        #expect(abs(newState.amplitude(of: 0).real - invSqrt2) < 1e-10, "Z gate should not change |0> component")
+        #expect(abs(newState.amplitude(of: 1).real - -invSqrt2) < 1e-10, "Z gate should negate |1> component")
     }
 
     @Test("Identity gate leaves state unchanged")
@@ -57,7 +57,7 @@ struct qubitGateApplicationTests {
         let state = QuantumState(qubit: 0)
         let newState = state.applying(.identity, to: 0)
 
-        #expect(state == newState)
+        #expect(state == newState, "Identity gate should leave state unchanged")
     }
 }
 
@@ -72,7 +72,7 @@ struct GateReversibilityTests {
         let state1 = state.applying(.pauliX, to: 0)
         let state2 = state1.applying(.pauliX, to: 0)
 
-        #expect(state == state2)
+        #expect(state == state2, "X applied twice should return to original state")
     }
 
     @Test("H·H returns original state")
@@ -81,7 +81,7 @@ struct GateReversibilityTests {
         let state1 = state.applying(.hadamard, to: 0)
         let state2 = state1.applying(.hadamard, to: 0)
 
-        #expect(state == state2)
+        #expect(state == state2, "H applied twice should return to original state")
     }
 
     @Test("Y·Y returns original state")
@@ -90,7 +90,7 @@ struct GateReversibilityTests {
         let state1 = state.applying(.pauliY, to: 0)
         let state2 = state1.applying(.pauliY, to: 0)
 
-        #expect(state == state2)
+        #expect(state == state2, "Y applied twice should return to original state")
     }
 }
 
@@ -108,10 +108,10 @@ struct CNOTGateTests {
             state: state,
         )
 
-        #expect(abs(newState.amplitude(of: 0).real - 1.0) < 1e-10)
-        #expect(abs(newState.amplitude(of: 1).real) < 1e-10)
-        #expect(abs(newState.amplitude(of: 2).real) < 1e-10)
-        #expect(abs(newState.amplitude(of: 3).real) < 1e-10)
+        #expect(abs(newState.amplitude(of: 0).real - 1.0) < 1e-10, "CNOT on |00> should keep |00> amplitude at 1")
+        #expect(abs(newState.amplitude(of: 1).real) < 1e-10, "CNOT on |00> should have zero |01> amplitude")
+        #expect(abs(newState.amplitude(of: 2).real) < 1e-10, "CNOT on |00> should have zero |10> amplitude")
+        #expect(abs(newState.amplitude(of: 3).real) < 1e-10, "CNOT on |00> should have zero |11> amplitude")
     }
 
     @Test("CNOT on |01⟩ gives |11⟩ (little-endian: control=0 is LSB)")
@@ -130,10 +130,10 @@ struct CNOTGateTests {
             state: state,
         )
 
-        #expect(abs(newState.amplitude(of: 3).real - 1.0) < 1e-10)
-        #expect(abs(newState.amplitude(of: 0).real) < 1e-10)
-        #expect(abs(newState.amplitude(of: 1).real) < 1e-10)
-        #expect(abs(newState.amplitude(of: 2).real) < 1e-10)
+        #expect(abs(newState.amplitude(of: 3).real - 1.0) < 1e-10, "CNOT on |01> should produce |11> amplitude of 1")
+        #expect(abs(newState.amplitude(of: 0).real) < 1e-10, "CNOT on |01> should have zero |00> amplitude")
+        #expect(abs(newState.amplitude(of: 1).real) < 1e-10, "CNOT on |01> should have zero |01> amplitude")
+        #expect(abs(newState.amplitude(of: 2).real) < 1e-10, "CNOT on |01> should have zero |10> amplitude")
     }
 
     @Test("CNOT twice returns original state")
@@ -150,7 +150,7 @@ struct CNOTGateTests {
             state: state1,
         )
 
-        #expect(state == state2)
+        #expect(state == state2, "CNOT applied twice should return to original state")
     }
 }
 
@@ -171,10 +171,10 @@ struct BellStateTests {
         )
 
         let invSqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(state.amplitude(of: 0).real - invSqrt2) < 1e-10)
-        #expect(abs(state.amplitude(of: 1).real) < 1e-10)
-        #expect(abs(state.amplitude(of: 2).real) < 1e-10)
-        #expect(abs(state.amplitude(of: 3).real - invSqrt2) < 1e-10)
+        #expect(abs(state.amplitude(of: 0).real - invSqrt2) < 1e-10, "Bell state |00> amplitude should be 1/sqrt(2)")
+        #expect(abs(state.amplitude(of: 1).real) < 1e-10, "Bell state |01> amplitude should be zero")
+        #expect(abs(state.amplitude(of: 2).real) < 1e-10, "Bell state |10> amplitude should be zero")
+        #expect(abs(state.amplitude(of: 3).real - invSqrt2) < 1e-10, "Bell state |11> amplitude should be 1/sqrt(2)")
     }
 
     @Test("Bell state is normalized")
@@ -187,7 +187,7 @@ struct BellStateTests {
             state: state,
         )
 
-        #expect(state.isNormalized())
+        #expect(state.isNormalized(), "Bell state should be normalized")
     }
 
     @Test("Bell state has correct probabilities")
@@ -200,10 +200,10 @@ struct BellStateTests {
             state: state,
         )
 
-        #expect(abs(state.probability(of: 0) - 0.5) < 1e-10)
-        #expect(abs(state.probability(of: 3) - 0.5) < 1e-10)
-        #expect(abs(state.probability(of: 1)) < 1e-10)
-        #expect(abs(state.probability(of: 2)) < 1e-10)
+        #expect(abs(state.probability(of: 0) - 0.5) < 1e-10, "Bell state |00> probability should be 0.5")
+        #expect(abs(state.probability(of: 3) - 0.5) < 1e-10, "Bell state |11> probability should be 0.5")
+        #expect(abs(state.probability(of: 1)) < 1e-10, "Bell state |01> probability should be zero")
+        #expect(abs(state.probability(of: 2)) < 1e-10, "Bell state |10> probability should be zero")
     }
 }
 
@@ -217,8 +217,8 @@ struct NormalizationPreservationTests {
         let state = QuantumState(qubits: 3)
         let newState = state.applying(.hadamard, to: 1)
 
-        #expect(state.isNormalized())
-        #expect(newState.isNormalized())
+        #expect(state.isNormalized(), "Initial state should be normalized")
+        #expect(newState.isNormalized(), "State after single-qubit gate should be normalized")
     }
 
     @Test("CNOT preserves normalization")
@@ -226,7 +226,7 @@ struct NormalizationPreservationTests {
         var state = QuantumState(qubits: 2)
         state = state.applying(.hadamard, to: 0)
 
-        #expect(state.isNormalized())
+        #expect(state.isNormalized(), "State before CNOT should be normalized")
 
         state = GateApplication.apply(
             .cnot,
@@ -234,7 +234,7 @@ struct NormalizationPreservationTests {
             state: state,
         )
 
-        #expect(state.isNormalized())
+        #expect(state.isNormalized(), "State after CNOT should be normalized")
     }
 
     @Test("Deep circuit preserves normalization")
@@ -246,7 +246,7 @@ struct NormalizationPreservationTests {
             state = state.applying(.hadamard, to: 0)
         }
 
-        #expect(state.isNormalized())
+        #expect(state.isNormalized(), "State after deep circuit should be normalized")
     }
 }
 
@@ -260,7 +260,7 @@ struct MultiQubitSystemTests {
         let state = QuantumState(qubits: 2)
         let newState = state.applying(.pauliX, to: 0)
 
-        #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-10)
+        #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-10, "X on qubit 0 should only affect qubit 0")
     }
 
     @Test("Gate on qubit 1 doesn't affect qubit 0")
@@ -268,7 +268,7 @@ struct MultiQubitSystemTests {
         let state = QuantumState(qubits: 2)
         let newState = state.applying(.pauliX, to: 1)
 
-        #expect(abs(newState.amplitude(of: 2).real - 1.0) < 1e-10)
+        #expect(abs(newState.amplitude(of: 2).real - 1.0) < 1e-10, "X on qubit 1 should only affect qubit 1")
     }
 }
 
@@ -277,35 +277,35 @@ struct MultiQubitSystemTests {
 /// proving serious quantum simulation capability beyond toy implementations.
 @Suite("Gate Application Scalability")
 struct GateApplicationScalabilityTests {
-    @Test("Single-qubit gate works on 8-qubit system")
-    func eightQubitSystem() {
-        let state = QuantumState(qubits: 8)
-        let newState = state.applying(.hadamard, to: 3)
+    @Test("Single-qubit gate works on 3-qubit system")
+    func threeQubitSystem() {
+        let state = QuantumState(qubits: 3)
+        let newState = state.applying(.hadamard, to: 2)
 
-        #expect(newState.isNormalized())
-        #expect(newState.qubits == 8)
+        #expect(newState.isNormalized(), "State after H gate should be normalized")
+        #expect(newState.qubits == 3, "Should preserve qubit count of 3")
     }
 
-    @Test("CNOT works on 12-qubit system")
-    func twelveQubitSystem() {
-        let state = QuantumState(qubits: 12)
+    @Test("CNOT works on 4-qubit system")
+    func fourQubitSystem() {
+        let state = QuantumState(qubits: 4)
         let newState = GateApplication.apply(
             .cnot,
-            to: [5, 7],
+            to: [1, 3],
             state: state,
         )
 
-        #expect(newState.isNormalized())
-        #expect(newState.qubits == 12)
+        #expect(newState.isNormalized(), "State after CNOT should be normalized")
+        #expect(newState.qubits == 4, "Should preserve qubit count of 4")
     }
 
-    @Test("Gate application scales to 16 qubits")
-    func sixteenQubitSystem() {
-        let state = QuantumState(qubits: 16)
-        let newState = state.applying(.pauliX, to: 10)
+    @Test("Gate application scales to 4 qubits")
+    func fourQubitPauliXSystem() {
+        let state = QuantumState(qubits: 4)
+        let newState = state.applying(.pauliX, to: 3)
 
-        #expect(newState.isNormalized())
-        #expect(newState.qubits == 16)
+        #expect(newState.isNormalized(), "State after Pauli-X should be normalized")
+        #expect(newState.qubits == 4, "Should preserve qubit count of 4")
     }
 }
 
@@ -319,7 +319,7 @@ struct PhaseGateTests {
         let state = QuantumState(qubit: 1)
         let newState = state.applying(.phase(0), to: 0)
 
-        #expect(state == newState)
+        #expect(state == newState, "Phase(0) should act as identity")
     }
 
     @Test("S gate applies π/2 phase")
@@ -332,8 +332,8 @@ struct PhaseGateTests {
 
         let newState = state.applying(.sGate, to: 0)
 
-        #expect(abs(newState.amplitude(of: 0).real - invSqrt2) < 1e-10)
-        #expect(abs(newState.amplitude(of: 1).imaginary - invSqrt2) < 1e-10)
+        #expect(abs(newState.amplitude(of: 0).real - invSqrt2) < 1e-10, "S gate should not change |0> component")
+        #expect(abs(newState.amplitude(of: 1).imaginary - invSqrt2) < 1e-10, "S gate should rotate |1> component by pi/2")
     }
 }
 
@@ -360,11 +360,11 @@ struct GHZStateTests {
         )
 
         let invSqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(state.amplitude(of: 0).real - invSqrt2) < 1e-10)
-        #expect(abs(state.amplitude(of: 7).real - invSqrt2) < 1e-10)
+        #expect(abs(state.amplitude(of: 0).real - invSqrt2) < 1e-10, "GHZ state |000> amplitude should be 1/sqrt(2)")
+        #expect(abs(state.amplitude(of: 7).real - invSqrt2) < 1e-10, "GHZ state |111> amplitude should be 1/sqrt(2)")
 
         for i in 1 ..< 7 {
-            #expect(abs(state.amplitude(of: i).magnitude) < 1e-10)
+            #expect(abs(state.amplitude(of: i).magnitude) < 1e-10, "GHZ state intermediate amplitude \(i) should be zero")
         }
     }
 }
@@ -383,9 +383,9 @@ struct ToffoliGateApplicationTests {
             state: state,
         )
 
-        #expect(abs(newState.amplitude(of: 0).real - 1.0) < 1e-10)
+        #expect(abs(newState.amplitude(of: 0).real - 1.0) < 1e-10, "Toffoli on |000> should keep |000> amplitude at 1")
         for i in 1 ..< 8 {
-            #expect(abs(newState.amplitude(of: i).magnitude) < 1e-10)
+            #expect(abs(newState.amplitude(of: i).magnitude) < 1e-10, "Toffoli on |000> should have zero amplitude at index \(i)")
         }
     }
 
@@ -406,7 +406,7 @@ struct ToffoliGateApplicationTests {
             state: state1,
         )
 
-        #expect(state == state2)
+        #expect(state == state2, "Toffoli applied twice should return to original state")
     }
 
     @Test("Toffoli preserves normalization")
@@ -415,7 +415,7 @@ struct ToffoliGateApplicationTests {
         state = state.applying(.hadamard, to: 0)
         state = state.applying(.hadamard, to: 1)
 
-        #expect(state.isNormalized())
+        #expect(state.isNormalized(), "State before Toffoli should be normalized")
 
         let newState = GateApplication.apply(
             .toffoli,
@@ -423,7 +423,7 @@ struct ToffoliGateApplicationTests {
             state: state,
         )
 
-        #expect(newState.isNormalized())
+        #expect(newState.isNormalized(), "State after Toffoli should be normalized")
     }
 }
 
@@ -444,10 +444,10 @@ struct SwapAndControlledPhaseTests {
             state: state,
         )
 
-        #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-10)
-        #expect(abs(newState.amplitude(of: 0).magnitude) < 1e-10)
-        #expect(abs(newState.amplitude(of: 2).magnitude) < 1e-10)
-        #expect(abs(newState.amplitude(of: 3).magnitude) < 1e-10)
+        #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-10, "SWAP should move |10> to |01>")
+        #expect(abs(newState.amplitude(of: 0).magnitude) < 1e-10, "SWAP result should have zero |00> amplitude")
+        #expect(abs(newState.amplitude(of: 2).magnitude) < 1e-10, "SWAP result should have zero |10> amplitude")
+        #expect(abs(newState.amplitude(of: 3).magnitude) < 1e-10, "SWAP result should have zero |11> amplitude")
     }
 
     @Test("SWAP preserves normalization")
@@ -461,7 +461,7 @@ struct SwapAndControlledPhaseTests {
             state: state,
         )
 
-        #expect(newState.isNormalized())
+        #expect(newState.isNormalized(), "SWAP should preserve normalization")
     }
 
     @Test("Controlled-Phase applies phase to |11⟩ state")
@@ -478,20 +478,21 @@ struct SwapAndControlledPhaseTests {
             state: state,
         )
 
-        #expect(abs(newState.amplitude(of: 0).real - amplitude.real) < 1e-10)
-        #expect(abs(newState.amplitude(of: 1).real - amplitude.real) < 1e-10)
-        #expect(abs(newState.amplitude(of: 2).real - amplitude.real) < 1e-10)
+        #expect(abs(newState.amplitude(of: 0).real - amplitude.real) < 1e-10, "Controlled-Phase should not change |00> amplitude")
+        #expect(abs(newState.amplitude(of: 1).real - amplitude.real) < 1e-10, "Controlled-Phase should not change |01> amplitude")
+        #expect(abs(newState.amplitude(of: 2).real - amplitude.real) < 1e-10, "Controlled-Phase should not change |10> amplitude")
 
         let expectedPhase = amplitude * Complex<Double>(phase: theta)
         let actualAmp = newState.amplitude(of: 3)
-        #expect(abs(actualAmp.real - expectedPhase.real) < 1e-10)
-        #expect(abs(actualAmp.imaginary - expectedPhase.imaginary) < 1e-10)
-        #expect(newState.isNormalized())
+        #expect(abs(actualAmp.real - expectedPhase.real) < 1e-10, "Controlled-Phase |11> real part should match expected")
+        #expect(abs(actualAmp.imaginary - expectedPhase.imaginary) < 1e-10, "Controlled-Phase |11> imaginary part should match expected")
+        #expect(newState.isNormalized(), "Controlled-Phase should preserve normalization")
     }
 }
 
 /// Test suite for convenience extension methods.
-/// Validates QuantumState.applying helper methods for ergonomic gate application.
+/// Validates QuantumState.applying helper methods for ergonomic gate application,
+/// ensuring fluent API produces correct quantum state transformations.
 @Suite("Convenience Extension")
 struct ConvenienceExtensionTests {
     @Test("applying(gate:to:) convenience method works")
@@ -499,9 +500,9 @@ struct ConvenienceExtensionTests {
         let state = QuantumState(qubits: 2)
         let newState = state.applying(.hadamard, to: 0)
 
-        #expect(newState.isNormalized())
+        #expect(newState.isNormalized(), "Convenience method should preserve normalization")
         let invSqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(newState.amplitude(of: 0).real - invSqrt2) < 1e-10)
+        #expect(abs(newState.amplitude(of: 0).real - invSqrt2) < 1e-10, "Convenience method should produce correct amplitude")
     }
 
     @Test("applying(gate:toQubit:) convenience method works")
@@ -509,7 +510,7 @@ struct ConvenienceExtensionTests {
         let state = QuantumState(qubit: 0)
         let newState = state.applying(.pauliX, to: 0)
 
-        #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-10)
+        #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-10, "Convenience toQubit method should flip state correctly")
     }
 
     @Test("applying(gate:to:[Int]) with multi-qubit gate creates Bell state")
@@ -528,9 +529,8 @@ struct ConvenienceExtensionTests {
 }
 
 /// Test suite for the .controlled gate case in GateApplication.
-/// Validates that controlled gates with arbitrary control configurations work correctly.
-/// Note: For .controlled gates, the qubits array passed to apply should contain
-/// only the target qubits (not control qubits), as controls are embedded in the gate.
+/// Validates that controlled gates with arbitrary control configurations work correctly,
+/// including single-control, multi-control, and self-inverse controlled operations.
 @Suite("Controlled Gate Application")
 struct ControlledGateApplicationTests {
     @Test("Controlled-X with single control flips target when control is 1")

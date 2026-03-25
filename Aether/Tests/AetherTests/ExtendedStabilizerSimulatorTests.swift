@@ -355,4 +355,61 @@ struct ExtendedStabilizerSimulatorTests {
             "All samples should be valid basis states for 2 qubits",
         )
     }
+
+    @Test("execute handles rotation gates")
+    func executeHandlesRotations() async {
+        let simulator = ExtendedStabilizerSimulator(maxRank: 64)
+
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.rotationX(.value(.pi / 4)), to: 0)
+        circuit.append(.rotationY(.value(.pi / 4)), to: 1)
+        circuit.append(.rotationZ(.value(.pi / 4)), to: 0)
+
+        let state = await simulator.execute(circuit)
+
+        #expect(state.qubits == 2, "State should have 2 qubits after rotation gates")
+        #expect(state.rank >= 1, "Rank should be at least 1 after rotations")
+    }
+
+    @Test("execute handles controlled-phase gate")
+    func executeHandlesControlledPhase() async {
+        let simulator = ExtendedStabilizerSimulator(maxRank: 64)
+
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.controlledPhase(.value(.pi / 3)), to: [0, 1])
+
+        let state = await simulator.execute(circuit)
+
+        #expect(state.qubits == 2, "State should have 2 qubits after controlled-phase")
+    }
+
+    @Test("execute handles controlled rotation gates")
+    func executeHandlesControlledRotation() async {
+        let simulator = ExtendedStabilizerSimulator(maxRank: 64)
+
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.controlledRotationX(.value(.pi / 4)), to: [0, 1])
+        circuit.append(.controlledRotationY(.value(.pi / 4)), to: [0, 1])
+        circuit.append(.controlledRotationZ(.value(.pi / 4)), to: [0, 1])
+
+        let state = await simulator.execute(circuit)
+
+        #expect(state.qubits == 2, "State should have 2 qubits after controlled rotations")
+    }
+
+    @Test("execute handles fredkin gate")
+    func executeHandlesFredkin() async {
+        let simulator = ExtendedStabilizerSimulator(maxRank: 1024)
+
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.hadamard, to: 1)
+        circuit.append(.fredkin, to: [0, 1, 2])
+
+        let state = await simulator.execute(circuit)
+
+        #expect(state.qubits == 3, "State should have 3 qubits after Fredkin gate")
+    }
 }

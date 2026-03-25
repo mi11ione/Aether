@@ -45,9 +45,15 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     ///
     /// Element ρ[row, col] is stored at index row * dimension + col.
     /// Total size is dimension² = 4^qubits complex numbers.
-    private var elements: [Complex<Double>]
+    @usableFromInline var elements: [Complex<Double>]
 
     /// Number of qubits in this quantum system.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let dm = DensityMatrix(qubits: 2)
+    /// dm.qubits  // 2
+    /// ```
     public let qubits: Int
 
     /// Hilbert space dimension (2^qubits).
@@ -61,6 +67,12 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     /// - Complexity: O(1)
     @inlinable
     public var dimension: Int { 1 << qubits }
+
+    /// Return type for ``mostProbableState()``, containing the basis state index and its probability.
+    public typealias MostProbableResult = (index: Int, probability: Double)
+
+    /// Probability threshold below which diagonal entries are omitted from ``description``.
+    private static let descriptionProbabilityThreshold: Double = 1e-6
 
     // MARK: - Initialization
 
@@ -106,7 +118,7 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     ///     Complex(1/sqrt(2), 0), Complex(1/sqrt(2), 0)
     /// ])
     /// let dm = DensityMatrix(pureState: plus)
-    /// dm.element(row: 0, col: 1)  // 0.5 (off-diagonal coherence)
+    /// dm[row: 0, col: 1]  // 0.5 (off-diagonal coherence)
     /// ```
     ///
     /// - Parameter pureState: Normalized quantum state |ψ⟩
@@ -120,11 +132,17 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         let size = dim * dim
 
         elements = [Complex<Double>](unsafeUninitializedCapacity: size) { buffer, count in
-            for i in 0 ..< dim {
-                let ci = pureState.amplitudes[i]
-                for j in 0 ..< dim {
-                    let cj = pureState.amplitudes[j]
-                    buffer[i * dim + j] = ci * cj.conjugate
+            buffer.initialize(repeating: .zero)
+            pureState.amplitudes.withUnsafeBufferPointer { ampsBuf in
+                let ampsPtr = UnsafeRawPointer(ampsBuf.baseAddress!).assumingMemoryBound(to: Double.self) // Safety: amplitudes is non-empty (>= 2 elements)
+                let bufPtr = UnsafeMutableRawPointer(buffer.baseAddress!).assumingMemoryBound(to: Double.self) // Safety: buffer has capacity dim*dim where dim >= 2
+                var alpha = (1.0, 0.0)
+                withUnsafePointer(to: &alpha) { alphaPtr in
+                    cblas_zgerc(CblasRowMajor, Int32(dim), Int32(dim),
+                                OpaquePointer(alphaPtr),
+                                OpaquePointer(ampsPtr), Int32(1),
+                                OpaquePointer(ampsPtr), Int32(1),
+                                OpaquePointer(bufPtr), Int32(dim))
                 }
             }
             count = size
@@ -151,7 +169,9 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     ///   - qubits: Number of qubits
     ///   - elements: Flattened row-major elements (dimension² count)
     /// - Complexity: O(4^n)
-    /// - Precondition: elements.count == 4^qubits
+    /// - Precondition: `qubits` must be positive.
+    /// - Precondition: `qubits` must be at most 14.
+    /// - Precondition: `elements.count` must equal `4^qubits`.
     public init(qubits: Int, elements: [Complex<Double>]) {
         ValidationUtilities.validatePositiveQubits(qubits)
         ValidationUtilities.validateDensityMatrixMemoryLimit(qubits)
@@ -242,12 +262,12 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
 
     // MARK: - Element Access
 
-    /// Get density matrix element ρ[row, col].
+    /// Access density matrix element ρ[row, col].
     ///
     /// **Example:**
     /// ```swift
     /// let dm = DensityMatrix(qubits: 1)
-    /// dm.element(row: 0, col: 0)  // 1.0
+    /// dm[row: 0, col: 0]  // 1.0
     /// ```
     ///
     /// - Parameters:
@@ -257,29 +277,20 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     /// - Complexity: O(1)
     /// - Precondition: 0 ≤ row < dimension
     /// - Precondition: 0 ≤ col < dimension
-    @_effects(readonly)
-    public func element(row: Int, col: Int) -> Complex<Double> {
-        let dim = dimension
-        ValidationUtilities.validateIndexInBounds(row, bound: dim, name: "Row index")
-        ValidationUtilities.validateIndexInBounds(col, bound: dim, name: "Column index")
-        return elements[row * dim + col]
-    }
-
-    /// Set density matrix element ρ[row, col].
-    ///
-    /// - Parameters:
-    ///   - row: Row index (0 to dimension-1)
-    ///   - col: Column index (0 to dimension-1)
-    ///   - value: New complex value
-    /// - Complexity: O(1)
-    /// - Precondition: 0 ≤ row < dimension
-    /// - Precondition: 0 ≤ col < dimension
-    /// - Note: May invalidate trace normalization or positive semidefiniteness
-    public mutating func setElement(row: Int, col: Int, to value: Complex<Double>) {
-        let dim = dimension
-        ValidationUtilities.validateIndexInBounds(row, bound: dim, name: "Row index")
-        ValidationUtilities.validateIndexInBounds(col, bound: dim, name: "Column index")
-        elements[row * dim + col] = value
+    /// - Note: Setting may invalidate trace normalization or positive semidefiniteness
+    public subscript(row row: Int, col col: Int) -> Complex<Double> {
+        get {
+            let dim = dimension
+            ValidationUtilities.validateIndexInBounds(row, bound: dim, name: "Row index")
+            ValidationUtilities.validateIndexInBounds(col, bound: dim, name: "Column index")
+            return elements[row * dim + col]
+        }
+        set {
+            let dim = dimension
+            ValidationUtilities.validateIndexInBounds(row, bound: dim, name: "Row index")
+            ValidationUtilities.validateIndexInBounds(col, bound: dim, name: "Column index")
+            elements[row * dim + col] = newValue
+        }
     }
 
     // MARK: - Properties
@@ -301,11 +312,13 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     @_effects(readonly)
     public func trace() -> Double {
         let dim = dimension
-        var sum = 0.0
-        for i in 0 ..< dim {
-            sum += elements[i * dim + i].real
+        return elements.withUnsafeBufferPointer { buf in
+            let base = UnsafeRawPointer(buf.baseAddress!).assumingMemoryBound(to: Double.self) // Safety: elements is non-empty
+            let stride = vDSP_Stride((dim + 1) * 2)
+            var sum = 0.0
+            vDSP_sveD(base, stride, &sum, vDSP_Length(dim))
+            return sum
         }
-        return sum
     }
 
     /// Compute purity Tr(ρ²).
@@ -330,17 +343,13 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     @_effects(readonly)
     public func purity() -> Double {
         let dim = dimension
-        var sum = 0.0
-
-        for i in 0 ..< dim {
-            for k in 0 ..< dim {
-                let rhoIK = elements[i * dim + k]
-                let rhoKI = elements[k * dim + i]
-                sum += (rhoIK * rhoKI).real
-            }
+        return elements.withUnsafeBufferPointer { buf in
+            let base = UnsafeRawPointer(buf.baseAddress!).assumingMemoryBound(to: Double.self) // Safety: elements is non-empty
+            let totalDoubles = dim * dim * 2
+            var sum = 0.0
+            vDSP_svesqD(base, 1, &sum, vDSP_Length(totalDoubles))
+            return sum
         }
-
-        return sum
     }
 
     /// Check if state is pure (Tr(ρ²) ≈ 1).
@@ -354,6 +363,7 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     /// - Parameter tolerance: Numerical tolerance (default 1e-10)
     /// - Returns: True if purity is within tolerance of 1.0
     /// - Complexity: O(4^n)
+    @inlinable
     @_effects(readonly)
     public func isPure(tolerance: Double = 1e-10) -> Bool {
         abs(purity() - 1.0) < tolerance
@@ -361,9 +371,16 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
 
     /// Check if trace equals 1.0 (probability conservation).
     ///
+    /// **Example:**
+    /// ```swift
+    /// let dm = DensityMatrix(qubits: 1)
+    /// dm.isTraceNormalized()  // true
+    /// ```
+    ///
     /// - Parameter tolerance: Numerical tolerance (default 1e-10)
     /// - Returns: True if trace is within tolerance of 1.0
     /// - Complexity: O(2^n)
+    @inlinable
     @_effects(readonly)
     public func isTraceNormalized(tolerance: Double = 1e-10) -> Bool {
         abs(trace() - 1.0) < tolerance
@@ -373,6 +390,12 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     ///
     /// All valid density matrices must be Hermitian, guaranteeing real eigenvalues
     /// (probabilities) and self-adjoint measurement operators.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let dm = DensityMatrix(qubits: 1)
+    /// dm.isHermitian()  // true
+    /// ```
     ///
     /// - Parameter tolerance: Numerical tolerance (default 1e-10)
     /// - Returns: True if ρ[i,j] = ρ[j,i]* within tolerance
@@ -409,6 +432,7 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     /// - Returns: Probability P(i) = ρ[i,i] ∈ [0, 1]
     /// - Complexity: O(1)
     /// - Precondition: 0 ≤ stateIndex < dimension
+    @inlinable
     @_effects(readonly)
     public func probability(of stateIndex: Int) -> Double {
         let dim = dimension
@@ -432,8 +456,10 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     public func probabilities() -> [Double] {
         let dim = dimension
         return [Double](unsafeUninitializedCapacity: dim) { buffer, count in
-            for i in 0 ..< dim {
-                buffer[i] = elements[i * dim + i].real
+            elements.withUnsafeBufferPointer { elBuf in
+                let base = UnsafeRawPointer(elBuf.baseAddress!).assumingMemoryBound(to: Double.self) // Safety: elements is non-empty
+                let srcStride = Int32((dim + 1) * 2)
+                cblas_dcopy(Int32(dim), base, srcStride, buffer.baseAddress!, 1) // Safety: buffer has capacity dim >= 2
             }
             count = dim
         }
@@ -441,24 +467,27 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
 
     /// Find basis state with highest probability.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let dm = DensityMatrix(qubits: 1)
+    /// let result = dm.mostProbableState()
+    /// result.index  // 0
+    /// ```
+    ///
     /// - Returns: Tuple of (basisStateIndex, probability)
     /// - Complexity: O(2^n)
     @_optimize(speed)
     @_effects(readonly)
-    public func mostProbableState() -> (index: Int, probability: Double) {
+    public func mostProbableState() -> MostProbableResult {
         let dim = dimension
-        var maxIndex = 0
-        var maxProb = elements[0].real
-
-        for i in 1 ..< dim {
-            let prob = elements[i * dim + i].real
-            if prob > maxProb {
-                maxProb = prob
-                maxIndex = i
-            }
+        return elements.withUnsafeBufferPointer { buf in
+            let base = UnsafeRawPointer(buf.baseAddress!).assumingMemoryBound(to: Double.self) // Safety: elements is non-empty
+            let stride = vDSP_Stride((dim + 1) * 2)
+            var maxVal = 0.0
+            var maxIdx: vDSP_Length = 0
+            vDSP_maxviD(base, stride, &maxVal, &maxIdx, vDSP_Length(dim))
+            return (Int(maxIdx) / ((dim + 1) * 2), maxVal)
         }
-
-        return (maxIndex, maxProb)
     }
 
     // MARK: - Expectation Values
@@ -501,14 +530,18 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         }
 
         let dim = dimension
-        var sum = Complex<Double>.zero
+        var sumReal = 0.0
+        var sumImag = 0.0
 
         for i in 0 ..< dim {
             let (col, phase) = pauliString.applyToRow(row: i)
-            sum = sum + phase * elements[col * dim + i]
+            let elem = elements[col * dim + i]
+            let product = phase * elem
+            sumReal += product.real
+            sumImag += product.imaginary
         }
 
-        return sum.real
+        return sumReal
     }
 
     // MARK: - Partial Trace
@@ -537,6 +570,7 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     /// - Precondition: No duplicate indices
     /// - Precondition: qubitsToTrace.count < qubits (at least one qubit must remain)
     @_optimize(speed)
+    @_effects(readonly)
     @_eagerMove
     public func partialTrace(over qubitsToTrace: [Int]) -> DensityMatrix {
         ValidationUtilities.validateNonEmpty(qubitsToTrace, name: "Qubits to trace")
@@ -546,35 +580,35 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         let remainingQubits = qubits - qubitsToTrace.count
         ValidationUtilities.validatePositiveInt(remainingQubits, name: "Remaining qubits after partial trace")
 
-        let tracedSet = Set(qubitsToTrace)
-        let keptQubits = (0 ..< qubits).filter { !tracedSet.contains($0) }
+        var tracedMask = 0
+        for q in qubitsToTrace {
+            tracedMask |= (1 << q)
+        }
+        let keptQubits = (0 ..< qubits).filter { (tracedMask >> $0) & 1 == 0 }
 
         let newDim = 1 << remainingQubits
         let oldDim = dimension
         let newSize = newDim * newDim
 
-        var newElements = [Complex<Double>](repeating: .zero, count: newSize)
+        let keptMasks = keptQubits.map { 1 << $0 }
+
+        var newElements = [Complex<Double>](unsafeUninitializedCapacity: newSize) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = newSize
+        }
 
         for oldRow in 0 ..< oldDim {
             for oldCol in 0 ..< oldDim {
-                var tracedBitsMatch = true
-                for q in qubitsToTrace {
-                    if BitUtilities.bit(oldRow, qubit: q) != BitUtilities.bit(oldCol, qubit: q) {
-                        tracedBitsMatch = false
-                        break
-                    }
-                }
+                let tracedBitsMatch = (oldRow ^ oldCol) & tracedMask == 0
 
                 if tracedBitsMatch {
                     var newRow = 0
                     var newCol = 0
-                    for (newIdx, oldIdx) in keptQubits.enumerated() {
-                        if BitUtilities.bit(oldRow, qubit: oldIdx) == 1 {
-                            newRow |= (1 << newIdx)
-                        }
-                        if BitUtilities.bit(oldCol, qubit: oldIdx) == 1 {
-                            newCol |= (1 << newIdx)
-                        }
+                    for newIdx in 0 ..< keptQubits.count {
+                        let oldMask = keptMasks[newIdx]
+                        let newBit = 1 << newIdx
+                        if oldRow & oldMask != 0 { newRow |= newBit }
+                        if oldCol & oldMask != 0 { newCol |= newBit }
                     }
                     newElements[newRow * newDim + newCol] =
                         newElements[newRow * newDim + newCol] + elements[oldRow * oldDim + oldCol]
@@ -675,6 +709,7 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
 
     /// Apply single-qubit gate ρ -> UρU† via 2*2 block processing.
     @_optimize(speed)
+    @_effects(readonly)
     @_eagerMove
     private func applySingleQubitGate(gate: QuantumGate, qubit: Int) -> DensityMatrix {
         let gateMatrix = gate.matrix()
@@ -684,12 +719,14 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         let u00d = u00.conjugate, u01d = u01.conjugate
         let u10d = u10.conjugate, u11d = u11.conjugate
 
+        let uRows = [(u00, u01), (u10, u11)]
+        let uColsD = [(u00d, u01d), (u10d, u11d)]
+
         let dim = dimension
         let size = dim * dim
         let mask = 1 << qubit
 
-        var newElements = [Complex<Double>](unsafeUninitializedCapacity: size) { buffer, count in
-            buffer.initialize(repeating: .zero)
+        var newElements = [Complex<Double>](unsafeUninitializedCapacity: size) { _, count in
             count = size
         }
 
@@ -708,10 +745,8 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
                 let rho10 = elements[row1 * dim + col0]
                 let rho11 = elements[row1 * dim + col1]
 
-                let uRow0 = rowBit == 0 ? u00 : u10
-                let uRow1 = rowBit == 0 ? u01 : u11
-                let uCol0d = colBit == 0 ? u00d : u10d
-                let uCol1d = colBit == 0 ? u01d : u11d
+                let (uRow0, uRow1) = uRows[rowBit]
+                let (uCol0d, uCol1d) = uColsD[colBit]
 
                 let newVal = uRow0 * rho00 * uCol0d +
                     uRow0 * rho01 * uCol1d +
@@ -725,24 +760,7 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         return DensityMatrix(qubits: qubits, elements: newElements)
     }
 
-    /// Apply reset operation via Kraus operators: rho' = K0 * rho * K0_dag + K1 * rho * K1_dag.
-    ///
-    /// Uses Kraus representation of the reset channel with operators K0 = |0><0| and K1 = |0><1|.
-    /// K0 projects the |0> component and K1 maps the |1> component to |0>, implementing
-    /// deterministic reset to |0> in the density matrix formalism. This is the non-unitary
-    /// analog of ``GateApplication/applyReset(qubit:state:)`` for mixed states.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// var dm = DensityMatrix(qubits: 1)
-    /// dm = dm.applying(.pauliX, to: 0)
-    /// dm = dm.applyReset(qubit: 0)
-    /// dm.probability(of: 0)  // 1.0
-    /// ```
-    ///
-    /// - Parameter qubit: Target qubit index to reset
-    /// - Returns: Density matrix with target qubit reset to |0>
-    /// - Complexity: O(4^n)
+    /// Apply reset channel on the specified qubit by tracing out and replacing with |0⟩.
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
@@ -756,13 +774,11 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
             count = size
         }
 
-        for row in 0 ..< dim {
+        for row in 0 ..< dim where row & mask == 0 {
             let row0 = row & ~mask
-            if (row & mask) != 0 { continue }
 
-            for col in 0 ..< dim {
+            for col in 0 ..< dim where col & mask == 0 {
                 let col0 = col & ~mask
-                if (col & mask) != 0 { continue }
 
                 let rho00 = elements[row0 * dim + col0]
                 let rho11 = elements[(row0 | mask) * dim + (col0 | mask)]
@@ -776,6 +792,7 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
 
     /// Optimized two-qubit gate application.
     @_optimize(speed)
+    @_effects(readonly)
     @_eagerMove
     private func applyTwoQubitGate(gate: QuantumGate, qubit0: Int, qubit1: Int) -> DensityMatrix {
         let gateMatrix = gate.matrix()
@@ -784,7 +801,10 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         let mask0 = 1 << qubit0
         let mask1 = 1 << qubit1
 
-        var newElements = [Complex<Double>](repeating: .zero, count: size)
+        var newElements = [Complex<Double>](unsafeUninitializedCapacity: size) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = size
+        }
 
         for row in 0 ..< dim {
             for col in 0 ..< dim {
@@ -818,63 +838,111 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         return DensityMatrix(qubits: qubits, elements: newElements)
     }
 
-    /// General gate application using full matrix expansion.
+    /// Apply general multi-qubit gate via full matrix expansion with flat BLAS multiply.
     @_optimize(speed)
+    @_effects(readonly)
     @_eagerMove
     private func applyGeneralGate(gate: QuantumGate, targetQubits: [Int]) -> DensityMatrix {
-        let fullU = expandGateToFullSpace(gate: gate, targetQubits: targetQubits)
-        let fullUDagger = MatrixUtilities.hermitianConjugate(fullU)
-
         let dim = dimension
+        let nn = dim * dim
 
-        var rho2D = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: dim), count: dim)
-        for i in 0 ..< dim {
-            for j in 0 ..< dim {
-                rho2D[i][j] = elements[i * dim + j]
+        var fullU = expandGateToFullSpaceFlat(gate: gate, targetQubits: targetQubits)
+
+        var fullUDagger = [Complex<Double>](unsafeUninitializedCapacity: nn) { buffer, count in
+            for i in 0 ..< dim {
+                for j in 0 ..< dim {
+                    buffer[i * dim + j] = fullU[j * dim + i].conjugate
+                }
+            }
+            count = nn
+        }
+
+        var alpha = (1.0, 0.0)
+        var beta = (0.0, 0.0)
+
+        var temp = [Complex<Double>](unsafeUninitializedCapacity: nn) { _, count in
+            count = nn
+        }
+
+        fullU.withUnsafeMutableBufferPointer { uPtr in
+            elements.withUnsafeBufferPointer { rhoPtr in
+                temp.withUnsafeMutableBufferPointer { tPtr in
+                    withUnsafeMutablePointer(to: &alpha) { alphaPtr in
+                        withUnsafeMutablePointer(to: &beta) { betaPtr in
+                            cblas_zgemm(
+                                CblasRowMajor,
+                                CblasNoTrans,
+                                CblasNoTrans,
+                                Int32(dim), Int32(dim), Int32(dim),
+                                OpaquePointer(alphaPtr),
+                                OpaquePointer(uPtr.baseAddress), Int32(dim),
+                                OpaquePointer(rhoPtr.baseAddress), Int32(dim),
+                                OpaquePointer(betaPtr),
+                                OpaquePointer(tPtr.baseAddress), Int32(dim),
+                            )
+                        }
+                    }
+                }
             }
         }
 
-        let uRho = MatrixUtilities.matrixMultiply(fullU, rho2D)
-        let result2D = MatrixUtilities.matrixMultiply(uRho, fullUDagger)
+        var newElements = [Complex<Double>](unsafeUninitializedCapacity: nn) { _, count in
+            count = nn
+        }
 
-        let size = dim * dim
-        let newElements = [Complex<Double>](unsafeUninitializedCapacity: size) { buffer, count in
-            for i in 0 ..< dim {
-                for j in 0 ..< dim {
-                    buffer[i * dim + j] = result2D[i][j]
+        temp.withUnsafeMutableBufferPointer { tPtr in
+            fullUDagger.withUnsafeMutableBufferPointer { udPtr in
+                newElements.withUnsafeMutableBufferPointer { rPtr in
+                    withUnsafeMutablePointer(to: &alpha) { alphaPtr in
+                        withUnsafeMutablePointer(to: &beta) { betaPtr in
+                            cblas_zgemm(
+                                CblasRowMajor,
+                                CblasNoTrans,
+                                CblasNoTrans,
+                                Int32(dim), Int32(dim), Int32(dim),
+                                OpaquePointer(alphaPtr),
+                                OpaquePointer(tPtr.baseAddress), Int32(dim),
+                                OpaquePointer(udPtr.baseAddress), Int32(dim),
+                                OpaquePointer(betaPtr),
+                                OpaquePointer(rPtr.baseAddress), Int32(dim),
+                            )
+                        }
+                    }
                 }
             }
-            count = size
         }
 
         return DensityMatrix(qubits: qubits, elements: newElements)
     }
 
-    /// Expand gate matrix to full Hilbert space.
-    private func expandGateToFullSpace(gate: QuantumGate, targetQubits: [Int]) -> [[Complex<Double>]] {
+    /// Expand gate matrix to full Hilbert space as flat row-major array.
+    @_optimize(speed)
+    @_effects(readonly)
+    private func expandGateToFullSpaceFlat(gate: QuantumGate, targetQubits: [Int]) -> [Complex<Double>] {
         let gateMatrix = gate.matrix()
         let gateDim = gateMatrix.count
         let fullDim = dimension
 
-        var fullMatrix = [[Complex<Double>]](
-            repeating: [Complex<Double>](repeating: .zero, count: fullDim),
-            count: fullDim,
-        )
+        var targetMask = 0
+        for q in targetQubits {
+            targetMask |= (1 << q)
+        }
+        let nonTargetMask = ((1 << qubits) - 1) & ~targetMask
+
+        var flatMatrix = [Complex<Double>](unsafeUninitializedCapacity: fullDim * fullDim) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = fullDim * fullDim
+        }
 
         for i in 0 ..< fullDim {
             for j in 0 ..< fullDim {
-                var nonTargetMatch = true
-                for q in 0 ..< qubits where !targetQubits.contains(q) {
-                    if BitUtilities.bit(i, qubit: q) != BitUtilities.bit(j, qubit: q) {
-                        nonTargetMatch = false
-                        break
-                    }
-                }
+                let nonTargetMatch = (i ^ j) & nonTargetMask == 0
 
                 if nonTargetMatch {
                     var gateRow = 0
                     var gateCol = 0
-                    for (idx, q) in targetQubits.enumerated() {
+                    for idx in 0 ..< targetQubits.count {
+                        let q = targetQubits[idx]
                         if BitUtilities.bit(i, qubit: q) == 1 {
                             gateRow |= (1 << idx)
                         }
@@ -883,13 +951,13 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
                         }
                     }
                     if gateRow < gateDim, gateCol < gateDim {
-                        fullMatrix[i][j] = gateMatrix[gateRow][gateCol]
+                        flatMatrix[i * fullDim + j] = gateMatrix[gateRow][gateCol]
                     }
                 }
             }
         }
 
-        return fullMatrix
+        return flatMatrix
     }
 
     // MARK: - State Conversion
@@ -899,29 +967,53 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     /// Returns the eigenvector corresponding to eigenvalue 1 (the pure state).
     /// For mixed states, returns the dominant eigenvector.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let dm = DensityMatrix(pureState: QuantumState(qubits: 1))
+    /// let state = dm.toQuantumState()
+    /// ```
+    ///
     /// - Returns: QuantumState representing the pure state
     /// - Complexity: O(d^3) where d = 2^n for eigendecomposition
+    @_optimize(speed)
+    @_effects(readonly)
+    @_eagerMove
     public func toQuantumState() -> QuantumState {
         let dim = dimension
-        let matrix: [[Complex<Double>]] = (0 ..< dim).map { i in
-            (0 ..< dim).map { j in elements[i * dim + j] }
-        }
+        let matrix = extractMatrix()
         let eigen = HermitianEigenDecomposition.decompose(matrix: matrix)
-        let maxIdx = eigen.eigenvalues.enumerated().max(by: { $0.element < $1.element })!.offset
-        let amplitudes = eigen.eigenvectors.map { $0[maxIdx] }
+        var maxVal: Double = 0
+        var maxIdx: vDSP_Length = 0
+        eigen.eigenvalues.withUnsafeBufferPointer { buf in
+            vDSP_maxviD(buf.baseAddress!, 1, &maxVal, &maxIdx, vDSP_Length(buf.count)) // Safety: eigenvalues is non-empty
+        }
+        let dominantIdx = Int(maxIdx)
+        let amplitudes = eigen.eigenvectors.map { $0[dominantIdx] }
         return QuantumState(qubits: qubits, amplitudes: amplitudes)
     }
 
     // MARK: - CustomStringConvertible
 
     /// String representation showing significant diagonal probabilities.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let dm = DensityMatrix(qubits: 1)
+    /// print(dm.description)
+    /// ```
+    ///
+    /// - Complexity: O(2^n) where n is the number of qubits.
     public var description: String {
         let dim = dimension
-        let threshold = 1e-6
+        let threshold = Self.descriptionProbabilityThreshold
         var terms: [String] = []
         terms.reserveCapacity(min(dim, 16))
 
         for i in 0 ..< dim {
+            guard terms.count < 32 else {
+                terms.append("...")
+                break
+            }
             let prob = elements[i * dim + i].real
             if prob > threshold {
                 let probStr = String(format: "%.4f", prob)

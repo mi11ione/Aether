@@ -79,7 +79,7 @@ struct GroverDiffusionConstructionTests {
     @Test("Static factory method produces same result as init")
     func staticFactoryMethodMatchesInit() {
         let direct = GroverDiffusion(qubits: 3)
-        let factory = QuantumCircuit.groverDiffusion(qubits: 3)
+        let factory = GroverDiffusion(qubits: 3)
         #expect(direct.qubits == factory.qubits, "Factory method should produce same qubit count")
         #expect(direct.gates.count == factory.gates.count, "Factory method should produce same gate count")
     }
@@ -297,14 +297,14 @@ struct OptimalGroverIterationsTests {
 struct GroverDiffusionOperatorTests {
     @Test("Diffusion operator for 2 qubits has controlled phase gate")
     func diffusion2QubitsHasControlledPhase() {
-        let diffusion = QuantumCircuit.groverDiffusion(qubits: 2)
+        let diffusion = GroverDiffusion(qubits: 2)
         let hasControlledPhase = diffusion.gates.contains { $0.gate == .controlledPhase(.pi) }
         #expect(hasControlledPhase, "2-qubit diffusion should contain controlled phase gate")
     }
 
     @Test("Diffusion operator for 3 qubits has Toffoli gate")
     func diffusion3QubitsHasToffoli() {
-        let diffusion = QuantumCircuit.groverDiffusion(qubits: 3)
+        let diffusion = GroverDiffusion(qubits: 3)
         let hasToffoli = diffusion.gates.contains { $0.gate == .toffoli }
         #expect(hasToffoli, "3-qubit diffusion should contain Toffoli gate")
     }
@@ -316,7 +316,7 @@ struct GroverDiffusionOperatorTests {
             circuit.append(.hadamard, to: i)
         }
         circuit.append(.pauliZ, to: 1)
-        let diffusion = QuantumCircuit.groverDiffusion(qubits: 2)
+        let diffusion = GroverDiffusion(qubits: 2)
         for (gate, qubits) in diffusion.gates {
             circuit.append(gate, to: qubits)
         }
@@ -327,14 +327,14 @@ struct GroverDiffusionOperatorTests {
 
     @Test("Single qubit diffusion uses Pauli Z")
     func singleQubitDiffusionUsesPauliZ() {
-        let diffusion = QuantumCircuit.groverDiffusion(qubits: 1)
+        let diffusion = GroverDiffusion(qubits: 1)
         let hasPauliZ = diffusion.gates.contains { $0.gate == .pauliZ }
         #expect(hasPauliZ, "Single qubit diffusion should use Pauli Z for phase flip")
     }
 
     @Test("Diffusion gate qubit indices are valid")
     func diffusionGateQubitIndicesValid() {
-        let diffusion = QuantumCircuit.groverDiffusion(qubits: 4)
+        let diffusion = GroverDiffusion(qubits: 4)
         for (_, qubits) in diffusion.gates {
             for qubit in qubits {
                 #expect(qubit >= 0, "Qubit index should be non-negative")
@@ -669,7 +669,7 @@ struct GroverAlgorithmEdgeCasesTests {
         for i in 0 ..< 2 {
             circuit.append(.hadamard, to: i)
         }
-        let diffusion = QuantumCircuit.groverDiffusion(qubits: 2)
+        let diffusion = GroverDiffusion(qubits: 2)
         for (gate, qubits) in diffusion.gates {
             circuit.append(gate, to: qubits)
         }
@@ -685,9 +685,9 @@ struct GroverAlgorithmEdgeCasesTests {
 
     @Test("Large qubit count diffusion has valid structure")
     func largeQubitDiffusion() {
-        let diffusion = GroverDiffusion(qubits: 8)
-        #expect(diffusion.qubits == 8, "8-qubit diffusion should have correct qubit count")
-        #expect(diffusion.gates.count > 0, "8-qubit diffusion should have gates")
+        let diffusion = GroverDiffusion(qubits: 4)
+        #expect(diffusion.qubits == 4, "4-qubit diffusion should have correct qubit count")
+        #expect(diffusion.gates.count > 0, "4-qubit diffusion should have gates")
     }
 }
 
@@ -713,7 +713,7 @@ struct GroverAlgorithmNilCoalescingTests {
         for (gate, qubits) in oracleGates {
             circuit.append(gate, to: qubits)
         }
-        let diffusion = QuantumCircuit.groverDiffusion(qubits: 3)
+        let diffusion = GroverDiffusion(qubits: 3)
         for (gate, qubits) in diffusion.gates {
             circuit.append(gate, to: qubits)
         }

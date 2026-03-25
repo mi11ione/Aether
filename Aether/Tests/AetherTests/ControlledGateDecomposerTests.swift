@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under Apache 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -317,14 +317,14 @@ struct SingleControlledDecompositionTests {
     }
 }
 
-/// Test suite for toffoliLadderDecomposition() multi-control logic.
+/// Test suite for toffoliLadder() multi-control logic.
 /// Validates ancilla allocation, ladder structure with forward and reverse
 /// Toffoli sequences, and correct basis transformations for non-X gates.
 @Suite("Toffoli Ladder Decomposition")
 struct ToffoliLadderDecompositionTests {
     @Test("Zero controls in ladder returns direct gate")
     func zeroControlsInLadderReturnsDirectGate() {
-        let result = ControlledGateDecomposer.toffoliLadderDecomposition(
+        let result = ControlledGateDecomposer.toffoliLadder(
             gate: .pauliX,
             controls: [],
             target: 0,
@@ -336,7 +336,7 @@ struct ToffoliLadderDecompositionTests {
 
     @Test("Single control in ladder delegates to single controlled")
     func singleControlInLadderDelegatesToSingleControlled() {
-        let result = ControlledGateDecomposer.toffoliLadderDecomposition(
+        let result = ControlledGateDecomposer.toffoliLadder(
             gate: .pauliX,
             controls: [0],
             target: 1,
@@ -348,7 +348,7 @@ struct ToffoliLadderDecompositionTests {
 
     @Test("Two controls applies Toffoli with basis change")
     func twoControlsAppliesToffoliWithBasisChange() {
-        let result = ControlledGateDecomposer.toffoliLadderDecomposition(
+        let result = ControlledGateDecomposer.toffoliLadder(
             gate: .pauliZ,
             controls: [0, 1],
             target: 2,
@@ -365,7 +365,7 @@ struct ToffoliLadderDecompositionTests {
 
     @Test("Three controls allocates correct ancilla")
     func threeControlsAllocatesCorrectAncilla() {
-        let result = ControlledGateDecomposer.toffoliLadderDecomposition(
+        let result = ControlledGateDecomposer.toffoliLadder(
             gate: .pauliX,
             controls: [0, 1, 2],
             target: 3,
@@ -379,7 +379,7 @@ struct ToffoliLadderDecompositionTests {
 
     @Test("Three controls produces correct ladder structure")
     func threeControlsProducesCorrectLadderStructure() {
-        let result = ControlledGateDecomposer.toffoliLadderDecomposition(
+        let result = ControlledGateDecomposer.toffoliLadder(
             gate: .pauliX,
             controls: [0, 1, 2],
             target: 3,
@@ -395,7 +395,7 @@ struct ToffoliLadderDecompositionTests {
 
     @Test("Four controls allocates two ancillas")
     func fourControlsAllocatesTwoAncillas() {
-        let result = ControlledGateDecomposer.toffoliLadderDecomposition(
+        let result = ControlledGateDecomposer.toffoliLadder(
             gate: .pauliX,
             controls: [0, 1, 2, 3],
             target: 4,
@@ -410,7 +410,7 @@ struct ToffoliLadderDecompositionTests {
 
     @Test("Ladder with non-X gate includes basis transformation")
     func ladderWithNonXGateIncludesBasisTransformation() {
-        let result = ControlledGateDecomposer.toffoliLadderDecomposition(
+        let result = ControlledGateDecomposer.toffoliLadder(
             gate: .pauliZ,
             controls: [0, 1, 2],
             target: 3,
@@ -424,7 +424,7 @@ struct ToffoliLadderDecompositionTests {
 
     @Test("Ladder preserves symmetry in Toffoli sequence")
     func ladderPreservesSymmetryInToffoliSequence() {
-        let result = ControlledGateDecomposer.toffoliLadderDecomposition(
+        let result = ControlledGateDecomposer.toffoliLadder(
             gate: .pauliX,
             controls: [0, 1, 2, 3],
             target: 4,
@@ -546,14 +546,14 @@ struct ControlledPowerOperationsTests {
     }
 }
 
-/// Test suite for basisChangeForGate() conjugation sequences.
+/// Test suite for basisChange(for:) conjugation sequences.
 /// Validates correct prefix/suffix pairs for Z (H,H), Y (S-dagger,S),
 /// X (empty), and arbitrary gates requiring inverse transformation.
 @Suite("Basis Change For Gate")
 struct BasisChangeForGateTests {
     @Test("PauliX returns empty sequences")
     func pauliXReturnsEmptySequences() {
-        let (prefix, suffix) = ControlledGateDecomposer.basisChangeForGate(.pauliX, target: 0)
+        let (prefix, suffix) = ControlledGateDecomposer.basisChange(for: .pauliX, target: 0)
 
         #expect(prefix.isEmpty, "X prefix should be empty")
         #expect(suffix.isEmpty, "X suffix should be empty")
@@ -561,7 +561,7 @@ struct BasisChangeForGateTests {
 
     @Test("PauliZ returns Hadamard pair")
     func pauliZReturnsHadamardPair() {
-        let (prefix, suffix) = ControlledGateDecomposer.basisChangeForGate(.pauliZ, target: 0)
+        let (prefix, suffix) = ControlledGateDecomposer.basisChange(for: .pauliZ, target: 0)
 
         #expect(prefix.count == 1, "Z prefix should have one gate")
         #expect(suffix.count == 1, "Z suffix should have one gate")
@@ -573,7 +573,7 @@ struct BasisChangeForGateTests {
 
     @Test("PauliY returns S-dagger and S pair")
     func pauliYReturnsSDaggerSPair() {
-        let (prefix, suffix) = ControlledGateDecomposer.basisChangeForGate(.pauliY, target: 0)
+        let (prefix, suffix) = ControlledGateDecomposer.basisChange(for: .pauliY, target: 0)
 
         #expect(prefix.count == 1, "Y prefix should have one gate")
         #expect(suffix.count == 1, "Y suffix should have one gate")
@@ -589,7 +589,7 @@ struct BasisChangeForGateTests {
 
     @Test("Hadamard returns rotation Y pair")
     func hadamardReturnsRotationYPair() {
-        let (prefix, suffix) = ControlledGateDecomposer.basisChangeForGate(.hadamard, target: 0)
+        let (prefix, suffix) = ControlledGateDecomposer.basisChange(for: .hadamard, target: 0)
 
         #expect(prefix.count == 1, "H prefix should have one gate")
         #expect(suffix.count == 1, "H suffix should have one gate")
@@ -610,7 +610,7 @@ struct BasisChangeForGateTests {
     @Test("RotationZ returns half-angle pair")
     func rotationZReturnsHalfAnglePair() {
         let angle = Double.pi / 3
-        let (prefix, suffix) = ControlledGateDecomposer.basisChangeForGate(.rotationZ(angle), target: 0)
+        let (prefix, suffix) = ControlledGateDecomposer.basisChange(for: .rotationZ(angle), target: 0)
 
         #expect(prefix.count == 1, "Rz prefix should have one gate")
         #expect(suffix.count == 1, "Rz suffix should have one gate")
@@ -631,7 +631,7 @@ struct BasisChangeForGateTests {
     @Test("Phase gate returns half-angle phase pair")
     func phaseGateReturnsHalfAnglePhasePair() {
         let angle = Double.pi / 5
-        let (prefix, suffix) = ControlledGateDecomposer.basisChangeForGate(.phase(angle), target: 0)
+        let (prefix, suffix) = ControlledGateDecomposer.basisChange(for: .phase(angle), target: 0)
 
         #expect(prefix.count == 1, "Phase prefix should have one gate")
         #expect(suffix.count == 1, "Phase suffix should have one gate")
@@ -651,7 +651,7 @@ struct BasisChangeForGateTests {
 
     @Test("S gate returns pi/4 phase pair")
     func sGateReturnsPi4PhasePair() {
-        let (prefix, suffix) = ControlledGateDecomposer.basisChangeForGate(.sGate, target: 0)
+        let (prefix, suffix) = ControlledGateDecomposer.basisChange(for: .sGate, target: 0)
 
         #expect(prefix.count == 1, "S prefix should have one gate")
         #expect(suffix.count == 1, "S suffix should have one gate")
@@ -671,7 +671,7 @@ struct BasisChangeForGateTests {
 
     @Test("T gate returns pi/8 phase pair")
     func tGateReturnsPi8PhasePair() {
-        let (prefix, suffix) = ControlledGateDecomposer.basisChangeForGate(.tGate, target: 0)
+        let (prefix, suffix) = ControlledGateDecomposer.basisChange(for: .tGate, target: 0)
 
         #expect(prefix.count == 1, "T prefix should have one gate")
         #expect(suffix.count == 1, "T suffix should have one gate")
@@ -691,7 +691,7 @@ struct BasisChangeForGateTests {
 
     @Test("Identity returns empty sequences")
     func identityReturnsEmptySequences() {
-        let (prefix, suffix) = ControlledGateDecomposer.basisChangeForGate(.identity, target: 0)
+        let (prefix, suffix) = ControlledGateDecomposer.basisChange(for: .identity, target: 0)
 
         #expect(prefix.isEmpty, "Identity prefix should be empty")
         #expect(suffix.isEmpty, "Identity suffix should be empty")
@@ -699,7 +699,7 @@ struct BasisChangeForGateTests {
 
     @Test("Arbitrary gate returns inverse and gate pair")
     func arbitraryGateReturnsInverseAndGatePair() {
-        let (prefix, suffix) = ControlledGateDecomposer.basisChangeForGate(.sx, target: 0)
+        let (prefix, suffix) = ControlledGateDecomposer.basisChange(for: .sx, target: 0)
 
         #expect(prefix.count == 1, "SX prefix should have one gate (inverse)")
         #expect(suffix.count == 1, "SX suffix should have one gate (original)")
@@ -974,7 +974,7 @@ struct UnitarityPreservationTests {
 
     @Test("Ladder decomposition preserves unitarity")
     func ladderDecompositionPreservesUnitarity() {
-        let result = ControlledGateDecomposer.toffoliLadderDecomposition(
+        let result = ControlledGateDecomposer.toffoliLadder(
             gate: .pauliX,
             controls: [0, 1, 2],
             target: 3,
@@ -1654,5 +1654,64 @@ struct DecomposerUncoveredEdgeCasesTests {
         )
 
         #expect(result.count == 7, "Controlled U3 with negated phi and parameter lambda should have 7 gates")
+    }
+
+    @Test("Halved negated parameter produces negatedParameter with half suffix - line 502")
+    func halvedNegatedParameterProducesNegatedParameterWithHalfSuffix() {
+        let theta = Parameter(name: "theta")
+        let result = ControlledGateDecomposer.decompose(
+            gate: .rotationZ(.negatedParameter(theta)),
+            controls: [0, 1],
+            target: 2,
+        )
+
+        #expect(!result.isEmpty, "Decomposition of rotationZ with negatedParameter and two controls should produce gates")
+
+        let rzGates = result.filter {
+            if case .rotationZ = $0.gate { return true }
+            return false
+        }
+        #expect(rzGates.count >= 1, "Decomposition should contain at least one Rz gate from basis change")
+    }
+
+    @Test("Combine expression with non-expression evaluates expression first - line 539")
+    func combineExpressionWithNonExpressionEvaluatesExpressionFirst() {
+        let result = ControlledGateDecomposer.decomposeSingleControlled(
+            gate: .u3(
+                theta: .value(1.0),
+                phi: .expression(ParameterExpression(0.5)),
+                lambda: .value(2.0),
+            ),
+            control: 0,
+            target: 1,
+        )
+
+        #expect(result.count == 7, "Controlled U3 with expression phi and value lambda should produce 7 gates")
+    }
+
+    @Test("Combine non-expression with expression evaluates expression first - line 543")
+    func combineNonExpressionWithExpressionEvaluatesExpressionFirst() {
+        let result = ControlledGateDecomposer.decomposeSingleControlled(
+            gate: .u3(
+                theta: .value(1.0),
+                phi: .value(2.0),
+                lambda: .expression(ParameterExpression(0.5)),
+            ),
+            control: 0,
+            target: 1,
+        )
+
+        #expect(result.count == 7, "Controlled U3 with value phi and expression lambda should produce 7 gates")
+    }
+
+    @Test("Halved expression parameter evaluates and halves constant expression - line 503")
+    func halvedExpressionParameterEvaluatesAndHalvesConstantExpression() {
+        let result = ControlledGateDecomposer.decompose(
+            gate: .rotationZ(.expression(ParameterExpression(Double.pi / 4.0))),
+            controls: [0, 1],
+            target: 2,
+        )
+
+        #expect(!result.isEmpty, "Decomposition of rotationZ with expression parameter and two controls should produce gates")
     }
 }

@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -198,7 +198,6 @@ struct LanczosHermitianMatrixTests {
 
     @Test("findLowest on diagonal 6x6 matrix returns lowest eigenvalue")
     func findLowestDiagonal6x6() async {
-        // Use a 6x6 diagonal matrix for proper Lanczos testing (small matrices use limited Krylov dimension)
         let dimension = 6
         let diagonalValues = [3.0, -1.0, 4.0, 1.0, 5.0, 2.0]
 
@@ -672,5 +671,53 @@ struct LanczosDirectComparisonTests {
             eigenvalueDiff < 1e-10,
             "Lanczos should match direct on 20x20 matrix. Lanczos: \(lanczosResult.eigenvalues[0]), Direct: \(directResult.eigenvalues[0]).",
         )
+    }
+}
+
+/// Test suite for Lanczos edge cases and special code paths.
+/// Validates invariant subspace breakdown, max restart exhaustion,
+/// and uniform eigenvalue matrices.
+@Suite("LanczosEigensolver - Edge Cases")
+struct LanczosEdgeCasesTests {
+    @Test("Uniform diagonal matrix triggers invariant subspace breakdown")
+    func invariantSubspaceBreakdown() async {
+        let dimension = 35
+        let eigenvalue = 2.0
+
+        let result = await LanczosEigensolver.findLowest(
+            applying: { vector in
+                var output = [Complex<Double>](repeating: .zero, count: dimension)
+                for i in 0 ..< dimension {
+                    output[i] = Complex(eigenvalue, 0) * vector[i]
+                }
+                return output
+            },
+            dimension: dimension,
+            tolerance: 1e-10,
+        )
+
+        let eigenvalueDiff = abs(result.eigenvalues[0] - eigenvalue)
+        #expect(eigenvalueDiff < 1e-10, "Uniform diagonal should find eigenvalue \(eigenvalue), got \(result.eigenvalues[0])")
+    }
+
+    @Test("Max restarts exhaustion with impossibly tight tolerance")
+    func maxRestartsExhaustion() async {
+        let dimension = 35
+        let diagonalValues = (0 ..< dimension).map { Double($0) + 1.0 }
+
+        let result = await LanczosEigensolver.findLowest(
+            applying: { vector in
+                var output = [Complex<Double>](repeating: .zero, count: dimension)
+                for i in 0 ..< dimension {
+                    output[i] = Complex(diagonalValues[i], 0) * vector[i]
+                }
+                return output
+            },
+            dimension: dimension,
+            tolerance: Double.leastNonzeroMagnitude,
+        )
+
+        #expect(result.eigenvalues[0].isFinite, "Should return finite eigenvalue after exhausting restarts")
+        #expect(abs(result.eigenvalues[0] - 1.0) < 0.1, "Should approximate lowest eigenvalue 1.0, got \(result.eigenvalues[0])")
     }
 }

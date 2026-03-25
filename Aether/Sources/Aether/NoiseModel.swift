@@ -390,20 +390,6 @@ public struct NoiseModel: Sendable {
     /// Create noise model from hardware profile.
     ///
     /// Uses average parameters from the hardware profile to create a uniform noise model.
-    /// For per-qubit noise, use the hardware profile directly with a custom simulator.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let model = NoiseModel.from(profile: HardwareNoiseProfile.ibmManila)
-    /// ```
-    ///
-    /// - Parameter profile: Hardware noise profile
-    /// - Returns: NoiseModel based on profile averages
-    @_effects(readonly)
-    public static func from(profile: HardwareNoiseProfile) -> NoiseModel {
-        profile.toNoiseModel()
-    }
-
     /// Create noise model from hardware profile with idle noise.
     ///
     /// **Example:**
@@ -415,7 +401,7 @@ public struct NoiseModel: Sendable {
     /// - Returns: NoiseModel with idle noise based on profile T₁/T₂
     @_effects(readonly)
     public static func fromWithIdle(profile: HardwareNoiseProfile) -> NoiseModel {
-        let base = profile.toNoiseModel()
+        let base = profile.noiseModel()
         let idleConfig = IdleNoiseConfig(
             t1: profile.averageT1,
             t2: profile.averageT2,
@@ -705,7 +691,7 @@ public struct TimingAwareNoiseModel: Sendable {
     @_effects(readonly)
     @_eagerMove
     public func applyTwoQubitNoise(qubits: [Int], to matrix: DensityMatrix) -> DensityMatrix {
-        let channel = profile.twoQubitChannel(for: qubits[0], qubits[1])
+        let channel = profile.twoQubitChannel(q1: qubits[0], q2: qubits[1])
         return channel.apply(to: matrix, qubits: qubits)
     }
 

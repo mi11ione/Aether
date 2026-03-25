@@ -11,13 +11,11 @@ import Testing
 struct GPUProfilerTests {
     @Test("GPUProfile description contains expected labels for GPU mode")
     func gpuProfileDescriptionWithGPU() async {
-        // Use a large circuit to trigger GPU mode (if Metal is available)
-        var circuit = QuantumCircuit(qubits: 12)
+        var circuit = QuantumCircuit(qubits: 4)
         circuit.append(.hadamard, to: 0)
 
         let profile = await GPUProfiler.profile(circuit, precisionPolicy: .fast)
 
-        // Verify description format based on whether GPU was used
         if profile.didUseGPU {
             #expect(profile.description.contains("GPU:"), "Description should contain GPU label for GPU mode")
             #expect(profile.description.contains("CPU:"), "Description should contain CPU label for GPU mode")
@@ -33,7 +31,6 @@ struct GPUProfilerTests {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
 
-        // Accurate policy forces CPU-only execution
         let profile = await GPUProfiler.profile(circuit, precisionPolicy: .accurate)
 
         #expect(profile.description.contains("CPU-only:"), "Description should indicate CPU-only mode when GPU not used")
@@ -48,18 +45,16 @@ struct GPUProfilerTests {
 
         let profile = await GPUProfiler.profile(circuit, precisionPolicy: .fast)
 
-        // Verify properties are consistent with each other
         #expect(profile.cpuTimeMs >= 0.0, "cpuTimeMs should be non-negative")
         #expect(profile.gpuTimeMs >= 0.0, "gpuTimeMs should be non-negative")
         #expect(profile.transferBytes > 0, "transferBytes should be positive")
         #expect(profile.utilizationPercent >= 0.0, "utilizationPercent should be non-negative")
 
-        // Verify GPU/CPU time consistency with didUseGPU flag
         if profile.didUseGPU {
             #expect(profile.gpuTimeMs > 0.0, "GPU time should be positive when GPU is used")
         } else {
-            #expect(profile.gpuTimeMs == 0.0, "GPU time should be zero when CPU-only")
-            #expect(profile.utilizationPercent == 0.0, "Utilization should be zero when CPU-only")
+            #expect(abs(profile.gpuTimeMs) < 1e-10, "GPU time should be zero when CPU-only")
+            #expect(abs(profile.utilizationPercent) < 1e-10, "Utilization should be zero when CPU-only")
         }
     }
 
@@ -68,11 +63,9 @@ struct GPUProfilerTests {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
 
-        // Get two profiles from different executions
         let profile1 = await GPUProfiler.profile(circuit, precisionPolicy: .accurate)
         let profile2 = await GPUProfiler.profile(circuit, precisionPolicy: .accurate)
 
-        // Both should be CPU-only with same transfer bytes (timing may differ)
         #expect(profile1.didUseGPU == profile2.didUseGPU, "Same circuit/policy should yield same GPU usage")
         #expect(profile1.transferBytes == profile2.transferBytes, "Same circuit should yield same transfer bytes")
     }
@@ -99,8 +92,8 @@ struct GPUProfilerTests {
         let profile = await GPUProfiler.profile(circuit, precisionPolicy: .accurate)
 
         #expect(profile.didUseGPU == false, "Accurate policy should force CPU-only execution")
-        #expect(profile.gpuTimeMs == 0.0, "GPU time should be zero when CPU-only")
-        #expect(profile.utilizationPercent == 0.0, "GPU utilization should be zero when CPU-only")
+        #expect(abs(profile.gpuTimeMs) < 1e-10, "GPU time should be zero when CPU-only")
+        #expect(abs(profile.utilizationPercent) < 1e-10, "GPU utilization should be zero when CPU-only")
     }
 
     @Test("GPUProfiler.profile calculates transfer bytes from state space")

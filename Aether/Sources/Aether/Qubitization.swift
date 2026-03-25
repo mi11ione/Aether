@@ -918,7 +918,7 @@ public struct QubitizedWalkOperator: Sendable {
 
             circuit.append(.hadamard, to: target)
 
-            let decomposition = ControlledGateDecomposer.toffoliLadderDecomposition(
+            let decomposition = ControlledGateDecomposer.toffoliLadder(
                 gate: .pauliX,
                 controls: controls,
                 target: target,

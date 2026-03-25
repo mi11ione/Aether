@@ -11,12 +11,11 @@ import Foundation
 ///
 /// **Example:**
 /// ```swift
-/// let diffusion = QuantumCircuit.groverDiffusion(qubits: 3)
+/// let diffusion = GroverDiffusion(qubits: 3)
 /// print(diffusion.qubits)  // 3
 /// print(diffusion.gates.count)  // Gates implementing the diffusion
 /// ```
 ///
-/// - SeeAlso: ``QuantumCircuit/groverDiffusion(qubits:)``
 /// - SeeAlso: ``GroverOracle``
 @frozen
 public struct GroverDiffusion: Sendable {
@@ -82,10 +81,10 @@ public struct GroverDiffusion: Sendable {
         } else {
             let target = qubits - 1
             var gates: [(gate: QuantumGate, qubits: [Int])] = []
-            gates.append((.hadamard, [target]))
-
             let controls = Array(0 ..< qubits - 1)
             let mcxGates = buildMultiControlledXGates(controls: controls, target: target)
+            gates.reserveCapacity(2 + mcxGates.count)
+            gates.append((.hadamard, [target]))
             gates.append(contentsOf: mcxGates)
 
             gates.append((.hadamard, [target]))
@@ -114,6 +113,7 @@ public struct GroverDiffusion: Sendable {
         let numAncilla = n - 2
 
         var gates: [(gate: QuantumGate, qubits: [Int])] = []
+        gates.reserveCapacity(2 * numAncilla + 1)
 
         gates.append((.toffoli, [controls[0], controls[1], firstAncilla]))
 
@@ -254,7 +254,16 @@ public struct GroverResult: Sendable, CustomStringConvertible {
         self.isTarget = isTarget
     }
 
-    /// String representation of Grover result
+    /// Human-readable summary of Grover search outcome and metrics.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let result = GroverResult(
+    ///     measuredState: 7, successProbability: 0.95,
+    ///     iterations: 3, optimalIterations: 3, isTarget: true
+    /// )
+    /// print(result.description)
+    /// ```
     @inlinable
     public var description: String {
         let status = isTarget ? "SUCCESS" : "FAILURE"
@@ -264,36 +273,7 @@ public struct GroverResult: Sendable, CustomStringConvertible {
     }
 }
 
-// MARK: - QuantumCircuit Extensions
-
 public extension QuantumCircuit {
-    /// Creates Grover diffusion operator (2|s><s| - I).
-    ///
-    /// The diffusion operator reflects the state about the uniform superposition |s> = H^n|0>.
-    /// It is implemented as H^n * (2|0><0| - I) * H^n where the middle term is a phase flip
-    /// on the |0...0> state.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let diffusion = QuantumCircuit.groverDiffusion(qubits: 3)
-    /// var circuit = QuantumCircuit(qubits: 3)
-    /// for (gate, qubits) in diffusion.gates {
-    ///     circuit.append(gate, to: qubits)
-    /// }
-    /// ```
-    ///
-    /// - Parameter qubits: Number of qubits (minimum 1)
-    /// - Returns: GroverDiffusion containing the gate sequence
-    /// - Precondition: qubits >= 1
-    /// - Complexity: O(n) gates where n = qubits
-    ///
-    /// - SeeAlso: ``GroverDiffusion``
-    /// - SeeAlso: ``groverOracle(qubits:oracle:)``
-    @_effects(readonly)
-    static func groverDiffusion(qubits: Int) -> GroverDiffusion {
-        GroverDiffusion(qubits: qubits)
-    }
-
     /// Creates oracle circuit for phase flip on target states.
     ///
     /// Implements the oracle I - 2|targets><targets| which applies a pi phase
@@ -322,7 +302,7 @@ public extension QuantumCircuit {
     /// - Complexity: O(n * M) where n = qubits, M = marked states
     ///
     /// - SeeAlso: ``GroverOracle``
-    /// - SeeAlso: ``groverDiffusion(qubits:)``
+    /// - SeeAlso: ``GroverDiffusion``
     @_optimize(speed)
     @_effects(readonly)
     static func groverOracle(qubits: Int, oracle: GroverOracle) -> [(gate: QuantumGate, qubits: [Int])] {
@@ -376,6 +356,7 @@ public extension QuantumCircuit {
     @_effects(readonly)
     private static func buildMultipleTargetsOracle(qubits: Int, targets: [Int]) -> [(gate: QuantumGate, qubits: [Int])] {
         var gates: [(gate: QuantumGate, qubits: [Int])] = []
+        gates.reserveCapacity(targets.count * 4 * qubits)
 
         for target in targets {
             let singleOracle = buildSingleTargetOracle(qubits: qubits, target: target)
@@ -407,6 +388,7 @@ public extension QuantumCircuit {
     /// - Complexity: O(1)
     ///
     /// - SeeAlso: ``groverSearch(qubits:oracle:iterations:)``
+    @inlinable
     @_effects(readonly)
     static func optimalGroverIterations(qubits: Int, markedItems: Int = 1) -> Int {
         ValidationUtilities.validatePositiveQubits(qubits)
@@ -448,7 +430,7 @@ public extension QuantumCircuit {
     /// - Complexity: O(k * n) gates where k = iterations, n = qubits
     ///
     /// - SeeAlso: ``optimalGroverIterations(qubits:markedItems:)``
-    /// - SeeAlso: ``groverDiffusion(qubits:)``
+    /// - SeeAlso: ``GroverDiffusion``
     /// - SeeAlso: ``groverOracle(qubits:oracle:)``
     @_optimize(speed)
     @_eagerMove
@@ -466,23 +448,21 @@ public extension QuantumCircuit {
         }
 
         let oracleGates = groverOracle(qubits: qubits, oracle: oracle)
-        let diffusion = groverDiffusion(qubits: qubits)
+        let diffusion = GroverDiffusion(qubits: qubits)
 
         for _ in 0 ..< numIterations {
-            for (gate, qubits) in oracleGates {
-                circuit.append(gate, to: qubits)
+            for (gate, targetQubits) in oracleGates {
+                circuit.append(gate, to: targetQubits)
             }
 
-            for (gate, qubits) in diffusion.gates {
-                circuit.append(gate, to: qubits)
+            for (gate, targetQubits) in diffusion.gates {
+                circuit.append(gate, to: targetQubits)
             }
         }
 
         return circuit
     }
 }
-
-// MARK: - QuantumState Extensions
 
 public extension QuantumState {
     /// Extracts Grover search result with analysis metrics.
@@ -531,7 +511,7 @@ public extension QuantumState {
             }
         }
 
-        if oracle.targetStates.isEmpty {
+        if targets.isEmpty {
             successProbability = probability
         }
 
@@ -560,12 +540,6 @@ public extension QuantumState {
         if maxTarget == 0 {
             return 1
         }
-        var bitsNeeded = 0
-        var value = maxTarget
-        while value > 0 {
-            bitsNeeded += 1
-            value >>= 1
-        }
-        return bitsNeeded
+        return Int.bitWidth - maxTarget.leadingZeroBitCount
     }
 }

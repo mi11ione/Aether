@@ -184,7 +184,7 @@ public struct AmplitudeEstimationResult: Sendable, CustomStringConvertible {
 /// ```
 ///
 /// - SeeAlso: ``AmplitudeEstimation``
-/// - SeeAlso: ``IPEConfiguration``
+/// - SeeAlso: ``IterativePhaseEstimation``
 @frozen
 public struct AmplitudeEstimationConfiguration: Sendable {
     /// Number of qubits in the precision register.

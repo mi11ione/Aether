@@ -359,8 +359,8 @@ struct AmplitudeDampingChannelTests {
         let dm = DensityMatrix(pureState: plus)
         let result = channel.apply(to: dm, qubit: 0)
 
-        let originalCoherence = dm.element(row: 0, col: 1).magnitude
-        let resultCoherence = result.element(row: 0, col: 1).magnitude
+        let originalCoherence = dm[row: 0, col: 1].magnitude
+        let resultCoherence = result[row: 0, col: 1].magnitude
 
         #expect(resultCoherence < originalCoherence, "Coherences should decay")
     }
@@ -401,8 +401,8 @@ struct PhaseDampingChannelTests {
         let dm = DensityMatrix(pureState: plus)
         let result = channel.apply(to: dm, qubit: 0)
 
-        #expect(result.element(row: 0, col: 1).magnitude < 1e-10, "Off-diagonal should be zero")
-        #expect(result.element(row: 1, col: 0).magnitude < 1e-10, "Off-diagonal should be zero")
+        #expect(result[row: 0, col: 1].magnitude < 1e-10, "Off-diagonal should be zero")
+        #expect(result[row: 1, col: 0].magnitude < 1e-10, "Off-diagonal should be zero")
     }
 
     @Test("Phase damping preserves populations")
@@ -845,7 +845,7 @@ struct NoiseModelTests {
     @Test("From hardware profile creates noise model")
     func fromHardwareProfile() {
         let profile = HardwareNoiseProfile.ibmManila
-        let model = NoiseModel.from(profile: profile)
+        let model = profile.noiseModel()
 
         #expect(model.hasNoise, "Profile-derived model should have noise")
         #expect(model.singleQubitNoise != nil, "Should have single-qubit noise")
@@ -1077,7 +1077,7 @@ struct HardwareNoiseProfileTests {
     @Test("Create two-qubit channel from profile")
     func twoQubitChannelFromProfile() {
         let profile = HardwareNoiseProfile.ibmManila
-        let channel = profile.twoQubitChannel(for: 0, 1)
+        let channel = profile.twoQubitChannel(q1: 0, q2: 1)
 
         #expect(channel.errorProbability > 0, "Should have non-zero error probability")
     }
@@ -1184,10 +1184,10 @@ struct HardwareNoiseProfileTests {
     func twoQubitChannelFallback() {
         let profile = HardwareNoiseProfile.ibmManila
 
-        let connectedChannel = profile.twoQubitChannel(for: 0, 1)
+        let connectedChannel = profile.twoQubitChannel(q1: 0, q2: 1)
         #expect(connectedChannel.errorProbability > 0, "Connected edge should have specific error")
 
-        let unconnectedChannel = profile.twoQubitChannel(for: 0, 3)
+        let unconnectedChannel = profile.twoQubitChannel(q1: 0, q2: 3)
         #expect(unconnectedChannel.errorProbability == profile.averageTwoQubitError,
                 "Unconnected qubits should use average error rate")
     }
@@ -1301,7 +1301,8 @@ struct EdgeNoiseParametersTests {
         let edge1 = EdgeNoiseParameters(qubit1: 0, qubit2: 3, twoQubitErrorRate: 0.01)
         let edge2 = EdgeNoiseParameters(qubit1: 3, qubit2: 0, twoQubitErrorRate: 0.01)
 
-        #expect(edge1.edgeKey == edge2.edgeKey, "Edge keys should be canonical")
+        #expect(edge1.qubit1 == edge2.qubit1, "Canonical qubit1 should match")
+        #expect(edge1.qubit2 == edge2.qubit2, "Canonical qubit2 should match")
     }
 }
 
@@ -1504,7 +1505,7 @@ struct DensityMatrixSimulatorTests {
 
         #expect(progress.executed == 2, "Should have executed 2 gates")
         #expect(progress.total == 2, "Should have 2 total gates")
-        #expect(progress.percentage == 100.0, "Should be 100% complete")
+        #expect(progress.percentage == 1.0, "Should be 100% complete")
     }
 
     @Test("Execute from pure state")
@@ -1579,7 +1580,7 @@ struct DensityMatrixSimulatorTests {
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
 
-        let fidelity = simulator.estimatedDecoherenceFidelity(
+        let fidelity = simulator.estimateDecoherenceFidelity(
             circuit,
             t1: 100_000,
             t2: 80000,
@@ -1599,7 +1600,7 @@ struct DensityMatrixSimulatorTests {
 
         #expect(progress.total == 0, "Empty circuit should have 0 total gates")
         #expect(progress.executed == 0, "Empty circuit should have 0 executed gates")
-        #expect(progress.percentage == 100.0, "Empty circuit should be 100% complete")
+        #expect(progress.percentage == 0.0, "Empty circuit should report 0% progress")
     }
 }
 

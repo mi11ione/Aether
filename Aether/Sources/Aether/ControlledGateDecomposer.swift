@@ -9,11 +9,10 @@ import Foundation
 /// gates, CNOT, Toffoli) suitable for hardware execution. Essential for Phase Estimation which
 /// requires controlled-U^(2^k) operations where control qubit j applies C-U^(2^j) to the target.
 ///
-/// The decomposition strategy depends on control count:
-/// - 0 controls: Direct gate application
-/// - 1 control: Native controlled gates (CNOT, CZ, CY, CH, controlled rotations)
-/// - 2 controls + X: Toffoli gate
-/// - n >= 3 controls: Toffoli ladder decomposition with (n-2) ancilla qubits
+/// For zero controls, the gate is applied directly. A single control uses native
+/// controlled gates (CNOT, CZ, CY, CH, controlled rotations). Two controls with
+/// a Pauli-X inner gate produce a Toffoli. Three or more controls use a Toffoli
+/// ladder decomposition requiring (n-2) ancilla qubits.
 ///
 /// For non-X target gates with multiple controls, basis transformation converts C^n(U) to
 /// C^n(X) via conjugation: C^n(Z) = H * C^n(X) * H, C^n(Y) = S^dagger * C^n(X) * S.
@@ -25,9 +24,6 @@ import Foundation
 ///     controls: [0, 1, 2],
 ///     target: 3
 /// )
-/// for (gate, qubits) in gates {
-///     circuit.append(gate, to: qubits)
-/// }
 /// ```
 ///
 /// - Complexity: O(n) gates for n controls using Toffoli ladder decomposition
@@ -36,7 +32,8 @@ import Foundation
 /// - SeeAlso: ``CircuitOptimizer``
 public enum ControlledGateDecomposer {
     private static let halfPi = Double.pi / 2.0
-    private static let negHalfPi = -Double.pi / 2.0
+    private static let quarterPi = Double.pi / 4.0
+    private static let eighthPi = Double.pi / 8.0
 
     /// Decompose controlled gate into basis gate sequence.
     ///
@@ -75,23 +72,23 @@ public enum ControlledGateDecomposer {
         ValidationUtilities.validateNonNegativeQubits(controls)
         ValidationUtilities.validateNonNegativeInt(target, name: "target")
 
-        let n = controls.count
+        let controlCount = controls.count
 
-        if n == 0 {
+        if controlCount == 0 {
             return [(gate, [target])]
         }
 
-        if n == 1 {
+        if controlCount == 1 {
             return decomposeSingleControlled(gate: gate, control: controls[0], target: target)
         }
 
-        if n == 2 {
+        if controlCount == 2 {
             if case .pauliX = gate {
                 return [(.toffoli, [controls[0], controls[1], target])]
             }
         }
 
-        return toffoliLadderDecomposition(gate: gate, controls: controls, target: target)
+        return toffoliLadder(gate: gate, controls: controls, target: target)
     }
 
     /// Decompose single-controlled gate to native gates.
@@ -156,7 +153,7 @@ public enum ControlledGateDecomposer {
             return [(.controlledPhase(.value(halfPi)), [control, target])]
 
         case .tGate:
-            return [(.controlledPhase(.value(Double.pi / 4.0)), [control, target])]
+            return [(.controlledPhase(.value(quarterPi)), [control, target])]
 
         case let .u1(lambda):
             return [(.controlledPhase(lambda), [control, target])]
@@ -178,17 +175,15 @@ public enum ControlledGateDecomposer {
     /// Decompose multi-controlled gate using Toffoli ladder.
     ///
     /// Implements C^n(U) for n >= 3 controls using a ladder of Toffoli gates with
-    /// (n-2) ancilla qubits. The ancillas are allocated starting at max(controls, target) + 1.
+    /// (n-2) ancilla qubits. Ancilla qubits are allocated automatically beyond the highest used qubit index.
     /// For non-X gates, applies basis transformation before and after the ladder.
     ///
-    /// The decomposition computes controls progressively: first Toffoli combines c[0] AND c[1]
-    /// into ancilla[0], subsequent Toffolis combine ancilla[i-1] AND c[i+1] into ancilla[i].
-    /// Final Toffoli applies X to target when all controls are satisfied. Ladder is then
-    /// uncomputed in reverse order.
+    /// Uses a cascade of Toffoli gates with temporary ancilla qubits to implement
+    /// multi-controlled operations efficiently.
     ///
     /// **Example:**
     /// ```swift
-    /// let gates = ControlledGateDecomposer.toffoliLadderDecomposition(
+    /// let gates = ControlledGateDecomposer.toffoliLadder(
     ///     gate: .pauliX,
     ///     controls: [0, 1, 2, 3],
     ///     target: 4
@@ -205,36 +200,36 @@ public enum ControlledGateDecomposer {
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
-    public static func toffoliLadderDecomposition(
+    public static func toffoliLadder(
         gate: QuantumGate,
         controls: [Int],
         target: Int,
     ) -> [(gate: QuantumGate, qubits: [Int])] {
-        let n = controls.count
+        let controlCount = controls.count
 
-        if n == 0 {
+        if controlCount == 0 {
             return [(gate, [target])]
         }
 
-        if n == 1 {
+        if controlCount == 1 {
             return decomposeSingleControlled(gate: gate, control: controls[0], target: target)
         }
 
-        if n == 2 {
-            let (prefix, suffix) = basisChangeForGate(gate, target: target)
+        if controlCount == 2 {
+            let (prefix, suffix) = basisChange(for: gate, target: target)
             var result = prefix
             result.append((.toffoli, [controls[0], controls[1], target]))
             result.append(contentsOf: suffix)
             return result
         }
 
-        let (prefix, suffix) = basisChangeForGate(gate, target: target)
+        let (prefix, suffix) = basisChange(for: gate, target: target)
 
-        // Safety: Controls always non-empty when n≥3 path reached
+        // Safety: Controls always non-empty when controlCount≥3 path reached
         let maxControlQubit = controls.max()!
         let maxUsedQubit = max(maxControlQubit, target)
         let firstAncilla = maxUsedQubit + 1
-        let numAncilla = n - 2
+        let numAncilla = controlCount - 2
 
         var result: [(gate: QuantumGate, qubits: [Int])] = []
         result.reserveCapacity(prefix.count + suffix.count + 2 * (numAncilla + 1))
@@ -247,7 +242,7 @@ public enum ControlledGateDecomposer {
             result.append((.toffoli, [firstAncilla + i - 1, controls[i + 1], firstAncilla + i]))
         }
 
-        result.append((.toffoli, [firstAncilla + numAncilla - 1, controls[n - 1], target]))
+        result.append((.toffoli, [firstAncilla + numAncilla - 1, controls[controlCount - 1], target]))
 
         for i in (1 ..< numAncilla).reversed() {
             result.append((.toffoli, [firstAncilla + i - 1, controls[i + 1], firstAncilla + i]))
@@ -269,10 +264,8 @@ public enum ControlledGateDecomposer {
     /// **Example:**
     /// ```swift
     /// let gates = ControlledGateDecomposer.controlledPower(
-    ///     of: .rotationZ(.pi / 4),
-    ///     power: 3,
-    ///     control: 0,
-    ///     targetQubits: [4]
+    ///     of: .rotationZ(.pi / 4), power: 3,
+    ///     control: 0, targetQubits: [4]
     /// )
     /// ```
     ///
@@ -309,7 +302,9 @@ public enum ControlledGateDecomposer {
         let controlledMatrix = buildControlledMatrixFromNxN(poweredMatrix)
         let controlledGate = QuantumGate.customTwoQubit(matrix: controlledMatrix)
 
-        var allQubits = [control]
+        var allQubits: [Int] = []
+        allQubits.reserveCapacity(1 + targetQubits.count)
+        allQubits.append(control)
         allQubits.append(contentsOf: targetQubits)
 
         return [(controlledGate, allQubits)]
@@ -318,16 +313,15 @@ public enum ControlledGateDecomposer {
     /// Generate basis change gates for converting C^n(X) to C^n(U).
     ///
     /// Returns prefix and suffix gate sequences that transform C^n(X) to C^n(U) via
-    /// conjugation: C^n(U) = prefix * C^n(X) * suffix. Standard basis changes:
-    /// - Z: (H, H) since HXH = Z
-    /// - Y: (S^dagger, S) since S^dagger X S = Y
-    /// - X: empty (no change needed)
-    /// - Arbitrary U: (U^dagger, U) decomposed to basis gates
+    /// conjugation: C^n(U) = prefix * C^n(X) * suffix. For Z gates, Hadamard
+    /// conjugation is used since HXH = Z. For Y gates, S-dagger/S conjugation is
+    /// used since S-dagger X S = Y. X gates require no basis change. Arbitrary
+    /// unitaries use their own inverse for conjugation.
     ///
     /// **Example:**
     /// ```swift
-    /// let (prefix, suffix) = ControlledGateDecomposer.basisChangeForGate(
-    ///     .pauliZ,
+    /// let (prefix, suffix) = ControlledGateDecomposer.basisChange(
+    ///     for: .pauliZ,
     ///     target: 2
     /// )
     /// ```
@@ -340,8 +334,8 @@ public enum ControlledGateDecomposer {
     /// - Complexity: O(1) for standard gates, O(1) for custom gates
     @_optimize(speed)
     @_effects(readonly)
-    public static func basisChangeForGate(
-        _ gate: QuantumGate,
+    public static func basisChange(
+        for gate: QuantumGate,
         target: Int,
     ) -> (prefix: [(gate: QuantumGate, qubits: [Int])], suffix: [(gate: QuantumGate, qubits: [Int])]) {
         switch gate {
@@ -356,25 +350,25 @@ public enum ControlledGateDecomposer {
 
         case .pauliY:
             return (
-                [(.phase(.value(negHalfPi)), [target])],
+                [(.phase(.value(-halfPi)), [target])],
                 [(.sGate, [target])],
             )
 
         case .hadamard:
             return (
-                [(.rotationY(negHalfPi), [target])],
+                [(.rotationY(-halfPi), [target])],
                 [(.rotationY(halfPi), [target])],
             )
 
         case let .rotationZ(theta):
-            let halfTheta = extractHalfAngle(theta)
+            let halfTheta = halved(theta)
             return (
                 [(.rotationZ(halfTheta.negated), [target])],
                 [(.rotationZ(halfTheta), [target])],
             )
 
         case let .phase(theta):
-            let halfTheta = extractHalfAngle(theta)
+            let halfTheta = halved(theta)
             return (
                 [(.phase(halfTheta.negated), [target])],
                 [(.phase(halfTheta), [target])],
@@ -382,14 +376,14 @@ public enum ControlledGateDecomposer {
 
         case .sGate:
             return (
-                [(.phase(.value(-Double.pi / 4.0)), [target])],
-                [(.phase(.value(Double.pi / 4.0)), [target])],
+                [(.phase(.value(-quarterPi)), [target])],
+                [(.phase(.value(quarterPi)), [target])],
             )
 
         case .tGate:
             return (
-                [(.phase(.value(-Double.pi / 8.0)), [target])],
-                [(.phase(.value(Double.pi / 8.0)), [target])],
+                [(.phase(.value(-eighthPi)), [target])],
+                [(.phase(.value(eighthPi)), [target])],
             )
 
         case .identity:
@@ -422,18 +416,18 @@ public enum ControlledGateDecomposer {
     @_eagerMove
     @_effects(readonly)
     private static func buildControlledMatrixFromNxN(_ matrix: [[Complex<Double>]]) -> [[Complex<Double>]] {
-        let n = matrix.count
+        let dimension = matrix.count
 
-        let dimension = 2 * n
-        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: dimension), count: dimension)
+        let totalDimension = 2 * dimension
+        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: totalDimension), count: totalDimension)
 
-        for i in 0 ..< n {
+        for i in 0 ..< dimension {
             result[i][i] = .one
         }
 
-        for i in 0 ..< n {
-            for j in 0 ..< n {
-                result[n + i][n + j] = matrix[i][j]
+        for i in 0 ..< dimension {
+            for j in 0 ..< dimension {
+                result[dimension + i][dimension + j] = matrix[i][j]
             }
         }
 
@@ -451,14 +445,14 @@ public enum ControlledGateDecomposer {
         control: Int,
         target: Int,
     ) -> [(gate: QuantumGate, qubits: [Int])] {
-        let halfTheta = extractHalfAngle(theta)
-        let sumPhiLambda = addParameterValues(phi, lambda)
-        let diffPhiLambda = subtractParameterValues(phi, lambda)
-        let halfSumPhiLambda = extractHalfAngle(sumPhiLambda)
-        let halfDiffPhiLambda = extractHalfAngle(diffPhiLambda)
+        let halfTheta = halved(theta)
+        let sumPhiLambda = combine(phi, lambda, adding: true)
+        let diffPhiLambda = combine(phi, lambda, adding: false)
+        let halfSumPhiLambda = halved(sumPhiLambda)
+        let halfDiffPhiLambda = halved(diffPhiLambda)
 
         var result: [(gate: QuantumGate, qubits: [Int])] = []
-        result.reserveCapacity(8)
+        result.reserveCapacity(7)
 
         result.append((.rotationZ(halfSumPhiLambda), [target]))
         result.append((.cnot, [control, target]))
@@ -476,9 +470,9 @@ public enum ControlledGateDecomposer {
     @_eagerMove
     @_effects(readonly)
     private static func matrixPower(_ matrix: [[Complex<Double>]], exponent: Int) -> [[Complex<Double>]] {
-        let n = matrix.count
+        let dimension = matrix.count
 
-        var result = MatrixUtilities.identityMatrix(dimension: n)
+        var result = MatrixUtilities.identityMatrix(dimension: dimension)
         var base = matrix
         var exp = exponent
 
@@ -494,86 +488,62 @@ public enum ControlledGateDecomposer {
     }
 
     /// Extract half of a parameter value.
+    @inline(__always)
     @_optimize(speed)
     @_effects(readonly)
-    private static func extractHalfAngle(_ value: ParameterValue) -> ParameterValue {
+    private static func halved(_ value: ParameterValue) -> ParameterValue {
         switch value {
         case let .value(v):
             return .value(v / 2.0)
         case let .parameter(p):
-            return .parameter(Parameter(name: "\(p.name)_half"))
+            return .parameter(Parameter(name: p.name + "_half"))
         case let .negatedParameter(p):
-            return .negatedParameter(Parameter(name: "\(p.name)_half"))
+            return .negatedParameter(Parameter(name: p.name + "_half"))
         case let .expression(expr):
             let evaluated = expr.evaluate(using: [:])
-            precondition(!evaluated.isNaN, "Cannot decompose symbolic expression without bindings")
+            ValidationUtilities.validateEvaluatedExpression(evaluated)
             return .value(evaluated / 2.0)
         }
     }
 
-    /// Add two parameter values.
+    /// Combine two parameter values by addition or subtraction.
+    @inline(__always)
     @_optimize(speed)
     @_effects(readonly)
-    private static func addParameterValues(_ a: ParameterValue, _ b: ParameterValue) -> ParameterValue {
-        switch (a, b) {
-        case let (.value(v1), .value(v2)):
-            return .value(v1 + v2)
-        case let (.parameter(p1), .parameter(p2)):
-            return .parameter(Parameter(name: "\(p1.name)_plus_\(p2.name)"))
-        case let (.value(v), .parameter(p)), let (.parameter(p), .value(v)):
-            return .parameter(Parameter(name: "\(p.name)_plus_\(v)"))
-        case let (.negatedParameter(p1), .negatedParameter(p2)):
-            return .parameter(Parameter(name: "-\(p1.name)_plus_-\(p2.name)"))
-        case let (.negatedParameter(p), .value(v)):
-            return .parameter(Parameter(name: "-\(p.name)_plus_\(v)"))
-        case let (.value(v), .negatedParameter(p)):
-            return .parameter(Parameter(name: "\(v)_plus_-\(p.name)"))
-        case let (.parameter(p1), .negatedParameter(p2)):
-            return .parameter(Parameter(name: "\(p1.name)_plus_-\(p2.name)"))
-        case let (.negatedParameter(p1), .parameter(p2)):
-            return .parameter(Parameter(name: "-\(p1.name)_plus_\(p2.name)"))
-        case let (.expression(expr), other):
-            let evaluated = expr.evaluate(using: [:])
-            precondition(!evaluated.isNaN, "Cannot decompose symbolic expression without bindings")
-            return addParameterValues(.value(evaluated), other)
-        case let (other, .expression(expr)):
-            let evaluated = expr.evaluate(using: [:])
-            precondition(!evaluated.isNaN, "Cannot decompose symbolic expression without bindings")
-            return addParameterValues(other, .value(evaluated))
-        }
-    }
+    private static func combine(_ a: ParameterValue, _ b: ParameterValue, adding: Bool) -> ParameterValue {
+        let op: (Double, Double) -> Double = adding ? { $0 + $1 } : { $0 - $1 }
+        let sep = adding ? "_plus_" : "_minus_"
 
-    /// Subtract two parameter values.
-    @_optimize(speed)
-    @_effects(readonly)
-    private static func subtractParameterValues(_ a: ParameterValue, _ b: ParameterValue) -> ParameterValue {
         switch (a, b) {
         case let (.value(v1), .value(v2)):
-            return .value(v1 - v2)
+            return .value(op(v1, v2))
         case let (.parameter(p1), .parameter(p2)):
-            return .parameter(Parameter(name: "\(p1.name)_minus_\(p2.name)"))
-        case let (.parameter(p), .value(v)):
-            return .parameter(Parameter(name: "\(p.name)_minus_\(v)"))
+            return .parameter(Parameter(name: p1.name + sep + p2.name))
         case let (.value(v), .parameter(p)):
-            return .parameter(Parameter(name: "\(v)_minus_\(p.name)"))
+            if adding {
+                return .parameter(Parameter(name: p.name + sep + String(v)))
+            }
+            return .parameter(Parameter(name: String(v) + sep + p.name))
+        case let (.parameter(p), .value(v)):
+            return .parameter(Parameter(name: p.name + sep + String(v)))
         case let (.negatedParameter(p1), .negatedParameter(p2)):
-            return .parameter(Parameter(name: "-\(p1.name)_minus_-\(p2.name)"))
+            return .parameter(Parameter(name: "-" + p1.name + sep + "-" + p2.name))
         case let (.negatedParameter(p), .value(v)):
-            return .parameter(Parameter(name: "-\(p.name)_minus_\(v)"))
+            return .parameter(Parameter(name: "-" + p.name + sep + String(v)))
         case let (.value(v), .negatedParameter(p)):
-            return .parameter(Parameter(name: "\(v)_minus_-\(p.name)"))
+            return .parameter(Parameter(name: String(v) + sep + "-" + p.name))
         case let (.parameter(p1), .negatedParameter(p2)):
-            return .parameter(Parameter(name: "\(p1.name)_minus_-\(p2.name)"))
+            return .parameter(Parameter(name: p1.name + sep + "-" + p2.name))
         case let (.negatedParameter(p1), .parameter(p2)):
-            return .parameter(Parameter(name: "-\(p1.name)_minus_\(p2.name)"))
+            return .parameter(Parameter(name: "-" + p1.name + sep + p2.name))
         case let (.expression(expr), other):
             let evaluated = expr.evaluate(using: [:])
-            precondition(!evaluated.isNaN, "Cannot decompose symbolic expression without bindings")
-            return subtractParameterValues(.value(evaluated), other)
+            ValidationUtilities.validateEvaluatedExpression(evaluated)
+            return combine(.value(evaluated), other, adding: adding)
         case let (other, .expression(expr)):
             let evaluated = expr.evaluate(using: [:])
-            precondition(!evaluated.isNaN, "Cannot decompose symbolic expression without bindings")
-            return subtractParameterValues(other, .value(evaluated))
+            ValidationUtilities.validateEvaluatedExpression(evaluated)
+            return combine(other, .value(evaluated), adding: adding)
         }
     }
 }

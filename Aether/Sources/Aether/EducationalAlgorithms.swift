@@ -13,13 +13,6 @@ public extension QuantumCircuit {
     /// Oracle function that appends gates implementing a black-box function f.
     typealias Oracle = (_ inputQubits: [Int], _ outputQubit: Int, _ circuit: inout QuantumCircuit) -> Void
 
-    /// Result of Deutsch-Jozsa algorithm: constant (f(x) same for all x) or balanced (f(x)=0 for exactly half).
-    @frozen
-    enum DeutschJozsaResult: Equatable, Sendable {
-        case constant
-        case balanced
-    }
-
     /// Constructs a Deutsch-Jozsa circuit to determine if f is constant or balanced.
     ///
     /// Classically requires 2^(n-1)+1 queries in worst case; quantum requires exactly 1.
@@ -27,7 +20,7 @@ public extension QuantumCircuit {
     ///
     /// **Example:**
     /// ```swift
-    /// let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: .balancedParityOracle())
+    /// let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: .balancedParityOracle)
     /// let state = circuit.execute()
     /// let isConstant = state.allQubitsAreZero([0, 1, 2])
     /// ```
@@ -39,6 +32,7 @@ public extension QuantumCircuit {
     /// - Precondition: qubits >= 1
     /// - Precondition: qubits <= 20
     /// - Complexity: O(n) gates where n = qubits
+    @_optimize(speed)
     @_effects(readonly)
     @inlinable
     @_eagerMove
@@ -89,6 +83,7 @@ public extension QuantumCircuit {
     /// - Precondition: qubits >= 1
     /// - Precondition: qubits <= 20
     /// - Complexity: O(n) gates where n = qubits
+    @_optimize(speed)
     @_effects(readonly)
     @inlinable
     @_eagerMove
@@ -139,6 +134,7 @@ public extension QuantumCircuit {
     /// - Precondition: qubits >= 1
     /// - Precondition: qubits <= 15
     /// - Complexity: O(n) gates where n = qubits
+    @_optimize(speed)
     @_effects(readonly)
     @inlinable
     @_eagerMove
@@ -172,11 +168,10 @@ public extension QuantumCircuit {
     ///
     /// **Example:**
     /// ```swift
-    /// let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: .constantZeroOracle())
+    /// let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: .constantZeroOracle)
     /// ```
-    @_effects(readonly)
     @inlinable
-    static func constantZeroOracle() -> Oracle {
+    static var constantZeroOracle: Oracle {
         { _, _, _ in }
     }
 
@@ -184,11 +179,10 @@ public extension QuantumCircuit {
     ///
     /// **Example:**
     /// ```swift
-    /// let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: .constantOneOracle())
+    /// let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: .constantOneOracle)
     /// ```
-    @_effects(readonly)
     @inlinable
-    static func constantOneOracle() -> Oracle {
+    static var constantOneOracle: Oracle {
         { _, outputQubit, circuit in
             circuit.append(.pauliX, to: outputQubit)
         }
@@ -198,11 +192,10 @@ public extension QuantumCircuit {
     ///
     /// **Example:**
     /// ```swift
-    /// let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: .balancedParityOracle())
+    /// let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: .balancedParityOracle)
     /// ```
-    @_effects(readonly)
     @inlinable
-    static func balancedParityOracle() -> Oracle {
+    static var balancedParityOracle: Oracle {
         { inputQubits, outputQubit, circuit in
             for input in inputQubits {
                 circuit.append(.cnot, to: [input, outputQubit])
@@ -214,11 +207,10 @@ public extension QuantumCircuit {
     ///
     /// **Example:**
     /// ```swift
-    /// let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: .balancedFirstBitOracle())
+    /// let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: .balancedFirstBitOracle)
     /// ```
-    @_effects(readonly)
     @inlinable
-    static func balancedFirstBitOracle() -> Oracle {
+    static var balancedFirstBitOracle: Oracle {
         { inputQubits, outputQubit, circuit in
             guard let firstQubit = inputQubits.first else { return }
             circuit.append(.cnot, to: [firstQubit, outputQubit])
@@ -235,6 +227,7 @@ public extension QuantumCircuit {
     ///
     /// - Parameter hiddenString: Binary array representing hidden string a
     /// - Precondition: All elements of hiddenString must be 0 or 1
+    /// - Complexity: O(n) where n = hiddenString.count
     @_effects(readonly)
     @inlinable
     static func bernsteinVaziraniOracle(hiddenString: [Int]) -> Oracle {
@@ -243,7 +236,8 @@ public extension QuantumCircuit {
         return { inputQubits, outputQubit, circuit in
             ValidationUtilities.validateEqualCounts(inputQubits, hiddenString, name1: "input qubits", name2: "hidden string")
 
-            for (i, bit) in hiddenString.enumerated() where bit == 1 {
+            for i in 0 ..< hiddenString.count {
+                guard hiddenString[i] == 1 else { continue }
                 circuit.append(.cnot, to: [inputQubits[i], outputQubit])
             }
         }
@@ -260,6 +254,7 @@ public extension QuantumCircuit {
     /// - Parameter period: Binary array representing hidden period s (must be non-zero)
     /// - Precondition: All elements of period must be 0 or 1
     /// - Precondition: period must contain at least one 1
+    /// - Complexity: O(n) where n = period.count
     @_effects(readonly)
     @inlinable
     static func simonOracle(period: [Int]) -> Oracle {
@@ -269,7 +264,8 @@ public extension QuantumCircuit {
         return { inputQubits, outputQubit, circuit in
             ValidationUtilities.validateEqualCounts(inputQubits, period, name1: "input qubits", name2: "period")
 
-            for (i, bit) in period.enumerated() where bit == 0 {
+            for i in 0 ..< period.count {
+                guard period[i] == 0 else { continue }
                 circuit.append(.cnot, to: [inputQubits[i], outputQubit])
             }
         }
@@ -289,7 +285,7 @@ public extension QuantumState {
     /// let bits = state.measureQubits([0, 1])  // [0, 0] or [1, 1]
     /// ```
     ///
-    /// - Parameter qubits: Indices of qubits to measure
+    /// - Parameter indices: Indices of qubits to measure
     /// - Returns: Array of bit values (0 or 1) for each qubit
     /// - Precondition: All qubit indices must be in range [0, state.qubits)
     /// - Complexity: O(2^n) where n = state.qubits
@@ -297,17 +293,17 @@ public extension QuantumState {
     @_effects(readonly)
     @inlinable
     @_eagerMove
-    func measureQubits(_ qubits: [Int]) -> [Int] {
-        ValidationUtilities.validateOperationQubits(qubits, numQubits: self.qubits)
-        guard !qubits.isEmpty else { return [] }
+    func measureQubits(_ indices: [Int]) -> [Int] {
+        ValidationUtilities.validateOperationQubits(indices, numQubits: qubits)
+        guard !indices.isEmpty else { return [] }
 
         let (maxIndex, _) = mostProbableState()
 
-        return [Int](unsafeUninitializedCapacity: qubits.count) { buffer, count in
-            for i in 0 ..< qubits.count {
-                buffer[i] = BitUtilities.bit(maxIndex, qubit: qubits[i])
+        return [Int](unsafeUninitializedCapacity: indices.count) { buffer, count in
+            for i in 0 ..< indices.count {
+                buffer[i] = BitUtilities.bit(maxIndex, qubit: indices[i])
             }
-            count = qubits.count
+            count = indices.count
         }
     }
 
@@ -317,23 +313,23 @@ public extension QuantumState {
     ///
     /// **Example:**
     /// ```swift
-    /// let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: .constantZeroOracle())
+    /// let circuit = QuantumCircuit.deutschJozsa(qubits: 3, oracle: .constantZeroOracle)
     /// let isConstant = circuit.execute().allQubitsAreZero([0, 1, 2])  // true
     /// ```
     ///
-    /// - Parameter qubits: Indices of qubits to check
+    /// - Parameter indices: Indices of qubits to check
     /// - Returns: True if all specified qubits are zero
     /// - Precondition: All qubit indices must be in range [0, state.qubits)
     /// - Complexity: O(2^n) where n = state.qubits
     @_optimize(speed)
     @_effects(readonly)
     @inlinable
-    func allQubitsAreZero(_ qubits: [Int]) -> Bool {
-        ValidationUtilities.validateOperationQubits(qubits, numQubits: self.qubits)
+    func allQubitsAreZero(_ indices: [Int]) -> Bool {
+        ValidationUtilities.validateOperationQubits(indices, numQubits: qubits)
         let (maxIndex, _) = mostProbableState()
 
-        for qubit in qubits {
-            if BitUtilities.bit(maxIndex, qubit: qubit) != 0 { return false }
+        for index in indices {
+            if BitUtilities.bit(maxIndex, qubit: index) != 0 { return false }
         }
         return true
     }

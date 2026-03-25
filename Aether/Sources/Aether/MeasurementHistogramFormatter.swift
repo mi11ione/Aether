@@ -15,6 +15,7 @@ import Foundation
 /// ```swift
 /// let counts = [512, 0, 0, 488]
 /// let text = MeasurementHistogramFormatter.render(counts, qubits: 2)
+/// print(text)
 /// ```
 ///
 /// - SeeAlso: ``Measurement/histogram(outcomes:qubits:)``
@@ -27,7 +28,10 @@ public enum MeasurementHistogramFormatter: Sendable {
     ///
     /// - SeeAlso: ``MeasurementHistogramFormatter/render(_:qubits:sort:barWidth:threshold:expected:)``
     @frozen public enum SortOrder: Sendable {
+        /// Sort rows in ascending basis-state index order.
         case byState
+
+        /// Sort rows in descending measurement count order.
         case byCount
     }
 
@@ -43,6 +47,7 @@ public enum MeasurementHistogramFormatter: Sendable {
     /// ```swift
     /// let counts = [512, 0, 0, 488]
     /// let histogram = MeasurementHistogramFormatter.render(counts, qubits: 2, sort: .byCount)
+    /// print(histogram)
     /// ```
     ///
     /// - Parameters:
@@ -84,8 +89,9 @@ public enum MeasurementHistogramFormatter: Sendable {
 
         for index in indices {
             let ket = formatKet(index, qubits: qubits)
-            let bar = formatBar(counts[index], maxCount: maxCount, barWidth: barWidth)
-            let padding = formatPadding(counts[index], maxCount: maxCount, barWidth: barWidth)
+            let length = barLength(counts[index], maxCount: maxCount, barWidth: barWidth)
+            let bar = formatBar(length: length)
+            let padding = formatPadding(length: length, barWidth: barWidth)
             let percentage = formatPercentage(counts[index], totalShots: totalShots)
 
             result += "|"
@@ -183,31 +189,18 @@ public enum MeasurementHistogramFormatter: Sendable {
         return ket
     }
 
-    /// Format a bar string of full-block characters proportional to count.
+    /// Format a bar string of full-block characters for a given length.
     @_effects(readonly)
     @inlinable
-    static func formatBar(_ count: Int, maxCount: Int, barWidth: Int) -> String {
-        let length = barLength(count, maxCount: maxCount, barWidth: barWidth)
-        var bar = String()
-        bar.reserveCapacity(length * 3)
-        for _ in 0 ..< length {
-            bar += "\u{2588}"
-        }
-        return bar
+    static func formatBar(length: Int) -> String {
+        String(repeating: "\u{2588}", count: length)
     }
 
     /// Format padding spaces to align bars to the right edge.
     @_effects(readonly)
     @inlinable
-    static func formatPadding(_ count: Int, maxCount: Int, barWidth: Int) -> String {
-        let length = barLength(count, maxCount: maxCount, barWidth: barWidth)
-        let paddingCount = barWidth - length
-        var padding = String()
-        padding.reserveCapacity(paddingCount)
-        for _ in 0 ..< paddingCount {
-            padding += " "
-        }
-        return padding
+    static func formatPadding(length: Int, barWidth: Int) -> String {
+        String(repeating: " ", count: barWidth - length)
     }
 
     /// Compute the scaled bar length for a given count.
@@ -224,7 +217,11 @@ public enum MeasurementHistogramFormatter: Sendable {
     static func formatPercentage(_ count: Int, totalShots: Int) -> String {
         guard totalShots > 0 else { return "0.00" }
         let pct = Double(count) / Double(totalShots) * 100.0
-        return String(format: "%.2f", pct)
+        let hundredths = Int((pct * 100.0).rounded())
+        let intPart = hundredths / 100
+        let fracPart = hundredths % 100
+        let fracStr = fracPart < 10 ? "0" + String(fracPart) : String(fracPart)
+        return String(intPart) + "." + fracStr
     }
 
     /// Format chi-squared summary line from observed counts and expected probabilities.
@@ -243,6 +240,17 @@ public enum MeasurementHistogramFormatter: Sendable {
         }
 
         let df = max(testedBins - 1, 0)
-        return "χ² = " + String(format: "%.3f", chiSq) + ", df = " + String(df)
+        let thousandths = Int((chiSq * 1000.0).rounded())
+        let chiIntPart = thousandths / 1000
+        let chiFracPart = thousandths % 1000
+        let chiFracStr: String
+        if chiFracPart < 10 {
+            chiFracStr = "00" + String(chiFracPart)
+        } else if chiFracPart < 100 {
+            chiFracStr = "0" + String(chiFracPart)
+        } else {
+            chiFracStr = String(chiFracPart)
+        }
+        return "χ² = " + String(chiIntPart) + "." + chiFracStr + ", df = " + String(df)
     }
 }

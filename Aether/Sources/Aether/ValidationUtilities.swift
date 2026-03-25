@@ -594,6 +594,21 @@ public enum ValidationUtilities {
 
     // MARK: - Circuit Validations
 
+    /// Validate that a circuit contains only Clifford gates.
+    ///
+    /// Uses ``CliffordGateClassifier`` to analyze the circuit and ensures no non-Clifford
+    /// gates (T, arbitrary rotations) are present. Required for ``CliffordSimulator`` which
+    /// uses stabilizer formalism that only supports Clifford operations.
+    ///
+    /// - Parameter circuit: Quantum circuit to validate
+    /// - Precondition: Circuit must contain only Clifford gates
+    /// - Complexity: O(g) where g = gate count
+    @inline(__always)
+    public static func validateCliffordCircuit(_ circuit: QuantumCircuit) {
+        let analysis = CliffordGateClassifier.analyze(circuit)
+        precondition(analysis.isClifford, "CliffordSimulator requires Clifford-only circuits (found \(analysis.tCount) T-equivalent gates)")
+    }
+
     /// Validates that a circuit contains only unitary operations.
     ///
     /// - Precondition: Circuit must not contain non-unitary operations such as reset.
@@ -1518,5 +1533,20 @@ public enum ValidationUtilities {
         let namePrefix = name.map { "\($0): " } ?? ""
         let missingParams = parameters.filter { bindings[$0.name] == nil }.map(\.name)
         precondition(missingParams.isEmpty, "\(namePrefix)Missing bindings for parameters: \(missingParams.joined(separator: ", "))")
+    }
+
+    /// Validate that an evaluated expression result is not NaN
+    ///
+    /// Used during controlled gate decomposition to ensure symbolic expressions
+    /// have been fully evaluated before proceeding with numeric operations.
+    ///
+    /// - Parameter value: Evaluated expression result to validate
+    /// - Precondition: !value.isNaN
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    public static func validateEvaluatedExpression(_ value: Double) {
+        precondition(!value.isNaN, "Cannot decompose symbolic expression without bindings")
     }
 }

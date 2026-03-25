@@ -124,6 +124,7 @@ public struct CustomBasisMeasurementResult: Equatable, CustomStringConvertible {
 /// ```
 ///
 /// - SeeAlso: ``Measurement``
+@frozen
 public enum PauliBasis: String, CaseIterable, Sendable {
     /// X (bit-flip) basis with eigenstates |+⟩ and |-⟩
     case x
@@ -190,6 +191,15 @@ public struct PauliOperator: Equatable, Hashable, Sendable {
     /// Pauli basis selector (X, Y, or Z)
     public let basis: PauliBasis
 
+    /// Creates a Pauli operator acting on a specific qubit.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let zOp = PauliOperator(qubit: 0, basis: .z)
+    /// ```
+    ///
+    /// - Parameter qubit: Target qubit index (0 to n-1)
+    /// - Parameter basis: Pauli basis selector (.x, .y, or .z)
     @inlinable
     public init(qubit: Int, basis: PauliBasis) {
         self.qubit = qubit
@@ -507,7 +517,8 @@ public enum Measurement {
     ///   - seed: Optional seed for reproducible results
     /// - Returns: Partial measurement result with single outcome
     /// - Complexity: O(2^n) time, O(2^n) space
-    /// - Precondition: State normalized, qubit index in bounds
+    /// - Precondition: State must be normalized
+    /// - Precondition: Qubit index must be in range [0, n-1]
     /// - SeeAlso: ``measure(_:in:seed:)`` for multi-qubit partial measurement
     @_eagerMove
     public static func measure(_ qubit: Int, in state: QuantumState, seed: UInt64? = nil) -> PartialMeasurementResult {
@@ -535,7 +546,10 @@ public enum Measurement {
     ///   - seed: Optional seed for reproducible results
     /// - Returns: Partial measurement result with multiple outcomes
     /// - Complexity: O(2^n) time, O(2^n) space
-    /// - Precondition: Qubits non-empty, unique, in bounds, state normalized
+    /// - Precondition: Qubits array must be non-empty
+    /// - Precondition: Qubit indices must be unique
+    /// - Precondition: All qubit indices must be in range [0, n-1]
+    /// - Precondition: State must be normalized
     /// - SeeAlso: ``measure(_:in:seed:)-swift.type.method`` for single-qubit convenience
     @_eagerMove
     public static func measure(_ qubits: [Int], in state: QuantumState, seed: UInt64? = nil) -> PartialMeasurementResult {
@@ -603,7 +617,8 @@ public enum Measurement {
     ///   - seed: Optional seed for reproducible results
     /// - Returns: Pauli measurement result with eigenvalue ±1
     /// - Complexity: O(2^n) time, O(2^n) space
-    /// - Precondition: Qubit in bounds, state normalized
+    /// - Precondition: Qubit index must be in range [0, n-1]
+    /// - Precondition: State must be normalized
     /// - SeeAlso: ``PauliBasis``
     @_eagerMove
     public static func measure(_ qubit: Int, basis: PauliBasis, in state: QuantumState, seed: UInt64? = nil) -> PauliMeasurementResult {
@@ -612,7 +627,7 @@ public enum Measurement {
 
         let rotatedState = rotateToPauliBasis(qubit: qubit, basis: basis, state: state)
         let partialResult = measure(qubit, in: rotatedState, seed: seed)
-        let eigenvalue = (partialResult.outcome == 0) ? 1 : -1
+        let eigenvalue = 1 - 2 * partialResult.outcome
         let finalState = rotateFromPauliBasis(qubit: qubit, basis: basis, state: partialResult.collapsedState)
 
         return PauliMeasurementResult(eigenvalue: eigenvalue, collapsedState: finalState)
@@ -640,7 +655,9 @@ public enum Measurement {
     ///   - seed: Optional seed for reproducible results
     /// - Returns: Measurement result with overall eigenvalue and individual outcomes
     /// - Complexity: O(k·2^n) time where k is number of operators, O(2^n) space
-    /// - Precondition: State normalized, qubits in bounds, qubits unique
+    /// - Precondition: State must be normalized
+    /// - Precondition: All qubit indices must be in range [0, n-1]
+    /// - Precondition: Qubit indices must be unique
     /// - SeeAlso: ``PauliString``
     @_eagerMove
     public static func measure(_ pauliString: PauliString, in state: QuantumState, seed: UInt64? = nil) -> PauliStringMeasurementResult {
@@ -672,7 +689,7 @@ public enum Measurement {
         let individualOutcomes = [MeasurementOutcome](unsafeUninitializedCapacity: pauliString.operators.count) { buffer, count in
             for (index, op) in pauliString.operators.enumerated() {
                 let outcome = partialResult.outcomes[index]
-                let eigenvalue = (outcome == 0) ? 1 : -1
+                let eigenvalue = 1 - 2 * outcome
                 productEigenvalue *= eigenvalue
                 buffer[index] = MeasurementOutcome(qubit: op.qubit, outcome: outcome)
             }
@@ -715,7 +732,10 @@ public enum Measurement {
     ///   - seed: Optional seed for reproducible results
     /// - Returns: Custom basis measurement result with outcome and collapsed state
     /// - Complexity: O(2^n) time, O(2^n) space
-    /// - Precondition: Qubit in bounds, basis 2-element and normalized, state normalized
+    /// - Precondition: Qubit index must be in range [0, n-1]
+    /// - Precondition: Basis state must have exactly 2 components
+    /// - Precondition: Basis state must be normalized
+    /// - Precondition: State must be normalized
     /// - SeeAlso: ``PauliBasis`` for standard Pauli bases
     @_eagerMove
     public static func measure(
@@ -771,7 +791,6 @@ public enum Measurement {
     /// - Returns: Snapshot containing state copy, label, and timestamp
     /// - Complexity: O(2^n) space for state copy, O(1) time
     /// - SeeAlso: ``StateSnapshot``
-    @_effects(readonly)
     @_eagerMove
     public static func snapshot(of state: QuantumState, label: String? = nil) -> StateSnapshot {
         StateSnapshot(
@@ -811,11 +830,11 @@ public enum Measurement {
         ValidationUtilities.validatePositiveInt(shots, name: "shots")
 
         var rng = createRNG(seed: seed)
+        let finalState = circuit.execute()
+        let probabilities = finalState.probabilities()
 
         let outcomes = [Int](unsafeUninitializedCapacity: shots) { buffer, count in
             for i in 0 ..< shots {
-                let finalState = circuit.execute()
-                let probabilities = finalState.probabilities()
                 buffer[i] = sampleOutcome(probabilities: probabilities, rng: &rng)
             }
             count = shots
@@ -922,8 +941,10 @@ public enum Measurement {
     ///   - totalShots: Total number of measurements
     /// - Returns: Maximum relative error across all outcomes
     /// - Complexity: O(n) time where n = observed.count, O(1) space
-    /// - Precondition: observed.count == expected.count, totalShots > 0
+    /// - Precondition: `observed.count` must equal `expected.count`
+    /// - Precondition: `totalShots` must be > 0
     /// - SeeAlso: ``chiSquared(observed:expected:totalShots:)`` for statistical hypothesis testing
+    @_effects(readonly)
     public static func relativeError(
         observed: [Int],
         expected: [Double],
@@ -932,15 +953,16 @@ public enum Measurement {
         ValidationUtilities.validateEqualCounts(observed, expected, name1: "observed", name2: "expected")
         ValidationUtilities.validatePositiveInt(totalShots, name: "totalShots")
 
+        let totalShotsD = Double(totalShots)
         var maxError = 0.0
 
         for i in 0 ..< observed.count {
-            let observedFreq = Double(observed[i]) / Double(totalShots)
+            let observedFreq = Double(observed[i]) / totalShotsD
             let expectedFreq = expected[i]
 
             if expectedFreq > 0 {
-                let relativeError = abs(observedFreq - expectedFreq) / expectedFreq
-                maxError = max(maxError, relativeError)
+                let error = abs(observedFreq - expectedFreq) / expectedFreq
+                maxError = max(maxError, error)
             } else if observedFreq > 0 {
                 maxError = max(maxError, observedFreq)
             }
@@ -976,10 +998,12 @@ public enum Measurement {
     ///   - totalShots: Total number of measurements
     /// - Returns: Chi-squared result with statistic, degrees of freedom, and bin counts
     /// - Complexity: O(n) time where n = observed.count, O(1) space
-    /// - Precondition: observed.count == expected.count, totalShots > 0
+    /// - Precondition: `observed.count` must equal `expected.count`
+    /// - Precondition: `totalShots` must be > 0
     /// - Note: Bins with expected count < 5 are skipped (standard chi-squared practice)
     /// - SeeAlso: ``ChiSquaredResult``
     /// - SeeAlso: ``relativeError(observed:expected:totalShots:)``
+    @_effects(readonly)
     public static func chiSquared(
         observed: [Int],
         expected: [Double],
@@ -988,12 +1012,13 @@ public enum Measurement {
         ValidationUtilities.validateEqualCounts(observed, expected, name1: "observed", name2: "expected")
         ValidationUtilities.validatePositiveInt(totalShots, name: "totalShots")
 
+        let totalShotsD = Double(totalShots)
         var chiSq = 0.0
         var testedBins = 0
         var skippedBins = 0
 
         for i in 0 ..< observed.count {
-            let expectedCount = expected[i] * Double(totalShots)
+            let expectedCount = expected[i] * totalShotsD
 
             if expectedCount < 5 {
                 skippedBins += 1
@@ -1021,6 +1046,7 @@ public enum Measurement {
     @_effects(readonly)
     @inlinable
     @_eagerMove
+    /// Constructs deterministic basis state |outcome⟩ for given qubit count.
     static func collapseToOutcome(_ outcome: Int, qubits: Int) -> QuantumState {
         let stateSpaceSize = 1 << qubits
         let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
@@ -1035,6 +1061,7 @@ public enum Measurement {
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
+    /// Collapses state by zeroing incompatible amplitudes and renormalizing.
     static func multiQubitCollapse(
         qubits: [Int],
         outcomes: [Int],
@@ -1064,6 +1091,7 @@ public enum Measurement {
     @_effects(readonly)
     @inlinable
     @_eagerMove
+    /// Rotates qubit from Pauli eigenbasis to computational basis for measurement.
     static func rotateToPauliBasis(qubit: Int, basis: PauliBasis, state: QuantumState) -> QuantumState {
         switch basis {
         case .x:
@@ -1080,6 +1108,7 @@ public enum Measurement {
     @_effects(readonly)
     @inlinable
     @_eagerMove
+    /// Rotates qubit back from computational basis to original Pauli eigenbasis.
     static func rotateFromPauliBasis(qubit: Int, basis: PauliBasis, state: QuantumState) -> QuantumState {
         switch basis {
         case .x:
@@ -1094,22 +1123,24 @@ public enum Measurement {
     }
 
     @usableFromInline
+    /// Samples a single outcome from probability distribution using optional seed.
     static func sampleOutcome(probabilities: [Double], seed: UInt64?) -> Int {
         var rng = createRNG(seed: seed)
         return sampleOutcome(probabilities: probabilities, rng: &rng)
     }
 
     @usableFromInline
+    /// Samples a single outcome via roulette wheel selection over probabilities.
     static func sampleOutcome(probabilities: [Double], rng: inout any RandomNumberGenerator) -> Int {
         ValidationUtilities.validateProbabilityDistribution(probabilities)
 
         let random = Double.random(in: 0 ..< 1, using: &rng)
 
         var accumulated = 0.0
-        for (index, probability) in probabilities.enumerated() {
-            accumulated += probability
+        for i in 0 ..< probabilities.count - 1 {
+            accumulated += probabilities[i]
             if accumulated >= random {
-                return index
+                return i
             }
         }
 
@@ -1117,6 +1148,7 @@ public enum Measurement {
     }
 
     @usableFromInline
+    /// Creates a seeded Mersenne Twister RNG or system random generator.
     static func createRNG(seed: UInt64?) -> any RandomNumberGenerator {
         if let seed {
             let source = GKMersenneTwisterRandomSource(seed: seed)
@@ -1127,6 +1159,7 @@ public enum Measurement {
     }
 
     @usableFromInline
+    /// Wraps GKMersenneTwisterRandomSource as Swift RandomNumberGenerator.
     struct RandomNumberGeneratorWrapper: RandomNumberGenerator {
         let source: GKMersenneTwisterRandomSource
 

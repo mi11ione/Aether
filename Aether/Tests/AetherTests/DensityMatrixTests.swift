@@ -16,10 +16,10 @@ struct DensityMatrixInitializationTests {
 
         #expect(dm.qubits == 1, "Should have 1 qubit")
         #expect(dm.dimension == 2, "Dimension should be 2^1 = 2")
-        #expect(dm.element(row: 0, col: 0) == .one, "ρ[0,0] should be 1")
-        #expect(dm.element(row: 0, col: 1) == .zero, "ρ[0,1] should be 0")
-        #expect(dm.element(row: 1, col: 0) == .zero, "ρ[1,0] should be 0")
-        #expect(dm.element(row: 1, col: 1) == .zero, "ρ[1,1] should be 0")
+        #expect(dm[row: 0, col: 0] == .one, "ρ[0,0] should be 1")
+        #expect(dm[row: 0, col: 1] == .zero, "ρ[0,1] should be 0")
+        #expect(dm[row: 1, col: 0] == .zero, "ρ[1,0] should be 0")
+        #expect(dm[row: 1, col: 1] == .zero, "ρ[1,1] should be 0")
     }
 
     @Test("Initialize 2-qubit ground state |00⟩⟨00|")
@@ -28,11 +28,11 @@ struct DensityMatrixInitializationTests {
 
         #expect(dm.qubits == 2, "Should have 2 qubits")
         #expect(dm.dimension == 4, "Dimension should be 2^2 = 4")
-        #expect(dm.element(row: 0, col: 0) == .one, "ρ[0,0] should be 1")
+        #expect(dm[row: 0, col: 0] == .one, "ρ[0,0] should be 1")
 
         for i in 0 ..< 4 {
             for j in 0 ..< 4 where !(i == 0 && j == 0) {
-                #expect(dm.element(row: i, col: j) == .zero, "Off-diagonal and non-|00⟩ elements should be zero")
+                #expect(dm[row: i, col: j] == .zero, "Off-diagonal and non-|00⟩ elements should be zero")
             }
         }
     }
@@ -46,10 +46,10 @@ struct DensityMatrixInitializationTests {
         let dm = DensityMatrix(pureState: plus)
 
         #expect(dm.qubits == 1, "Should have 1 qubit")
-        #expect(abs(dm.element(row: 0, col: 0).real - 0.5) < 1e-10, "ρ[0,0] should be 0.5")
-        #expect(abs(dm.element(row: 0, col: 1).real - 0.5) < 1e-10, "ρ[0,1] should be 0.5 (coherence)")
-        #expect(abs(dm.element(row: 1, col: 0).real - 0.5) < 1e-10, "ρ[1,0] should be 0.5 (coherence)")
-        #expect(abs(dm.element(row: 1, col: 1).real - 0.5) < 1e-10, "ρ[1,1] should be 0.5")
+        #expect(abs(dm[row: 0, col: 0].real - 0.5) < 1e-10, "ρ[0,0] should be 0.5")
+        #expect(abs(dm[row: 0, col: 1].real - 0.5) < 1e-10, "ρ[0,1] should be 0.5 (coherence)")
+        #expect(abs(dm[row: 1, col: 0].real - 0.5) < 1e-10, "ρ[1,0] should be 0.5 (coherence)")
+        #expect(abs(dm[row: 1, col: 1].real - 0.5) < 1e-10, "ρ[1,1] should be 0.5")
     }
 
     @Test("Initialize from Bell state creates entangled density matrix")
@@ -61,10 +61,10 @@ struct DensityMatrixInitializationTests {
         let dm = DensityMatrix(pureState: bell)
 
         #expect(dm.qubits == 2, "Should have 2 qubits")
-        #expect(abs(dm.element(row: 0, col: 0).real - 0.5) < 1e-10, "ρ[00,00] should be 0.5")
-        #expect(abs(dm.element(row: 0, col: 3).real - 0.5) < 1e-10, "ρ[00,11] should be 0.5 (entanglement)")
-        #expect(abs(dm.element(row: 3, col: 0).real - 0.5) < 1e-10, "ρ[11,00] should be 0.5 (entanglement)")
-        #expect(abs(dm.element(row: 3, col: 3).real - 0.5) < 1e-10, "ρ[11,11] should be 0.5")
+        #expect(abs(dm[row: 0, col: 0].real - 0.5) < 1e-10, "ρ[00,00] should be 0.5")
+        #expect(abs(dm[row: 0, col: 3].real - 0.5) < 1e-10, "ρ[00,11] should be 0.5 (entanglement)")
+        #expect(abs(dm[row: 3, col: 0].real - 0.5) < 1e-10, "ρ[11,00] should be 0.5 (entanglement)")
+        #expect(abs(dm[row: 3, col: 3].real - 0.5) < 1e-10, "ρ[11,11] should be 0.5")
     }
 
     @Test("Initialize from explicit elements")
@@ -75,8 +75,8 @@ struct DensityMatrixInitializationTests {
         ]
         let dm = DensityMatrix(qubits: 1, elements: elements)
 
-        #expect(dm.element(row: 0, col: 0) == Complex(0.5, 0), "Should preserve explicit elements")
-        #expect(dm.element(row: 0, col: 1) == Complex(0.3, 0.1), "Should preserve explicit elements")
+        #expect(dm[row: 0, col: 0] == Complex(0.5, 0), "Should preserve explicit elements")
+        #expect(dm[row: 0, col: 1] == Complex(0.3, 0.1), "Should preserve explicit elements")
     }
 
     @Test("Dimension scales as 2^n")
@@ -99,7 +99,7 @@ struct DensityMatrixFactoryTests {
         let expectedDiag = 0.25
 
         for i in 0 ..< 4 {
-            #expect(abs(dm.element(row: i, col: i).real - expectedDiag) < 1e-10,
+            #expect(abs(dm[row: i, col: i].real - expectedDiag) < 1e-10,
                     "Diagonal element ρ[\(i),\(i)] should be 1/4")
         }
     }
@@ -110,7 +110,7 @@ struct DensityMatrixFactoryTests {
 
         for i in 0 ..< 4 {
             for j in 0 ..< 4 where i != j {
-                #expect(dm.element(row: i, col: j) == .zero,
+                #expect(dm[row: i, col: j] == .zero,
                         "Off-diagonal ρ[\(i),\(j)] should be zero")
             }
         }
@@ -130,11 +130,11 @@ struct DensityMatrixFactoryTests {
     func basisStateStructure() {
         let dm = DensityMatrix.basis(qubits: 2, state: 0b10)
 
-        #expect(dm.element(row: 2, col: 2) == .one, "ρ[2,2] should be 1 for |10⟩⟨10|")
+        #expect(dm[row: 2, col: 2] == .one, "ρ[2,2] should be 1 for |10⟩⟨10|")
 
         for i in 0 ..< 4 {
             for j in 0 ..< 4 where !(i == 2 && j == 2) {
-                #expect(dm.element(row: i, col: j) == .zero,
+                #expect(dm[row: i, col: j] == .zero,
                         "All elements except ρ[2,2] should be zero")
             }
         }
@@ -259,8 +259,8 @@ struct DensityMatrixPropertyTests {
 
         for i in 0 ..< 4 {
             for j in 0 ..< 4 {
-                let rhoIJ = dm.element(row: i, col: j)
-                let rhoJI = dm.element(row: j, col: i)
+                let rhoIJ = dm[row: i, col: j]
+                let rhoJI = dm[row: j, col: i]
                 let diff = rhoIJ - rhoJI.conjugate
                 #expect(diff.magnitudeSquared < 1e-20,
                         "ρ[\(i),\(j)] should equal ρ[\(j),\(i)]* for Hermitian matrix")
@@ -280,8 +280,8 @@ struct DensityMatrixPropertyTests {
     @Test("Non-Hermitian matrix detected by isHermitian")
     func nonHermitianDetected() {
         var dm = DensityMatrix(qubits: 1)
-        dm.setElement(row: 0, col: 1, to: Complex(0.3, 0.2))
-        dm.setElement(row: 1, col: 0, to: Complex(0.3, 0.2))
+        dm[row: 0, col: 1] = Complex(0.3, 0.2)
+        dm[row: 1, col: 0] = Complex(0.3, 0.2)
 
         #expect(!dm.isHermitian(), "Matrix with ρ[0,1] ≠ ρ[1,0]* should not be Hermitian")
     }
@@ -368,10 +368,10 @@ struct DensityMatrixElementAccessTests {
     func getElement() {
         let dm = DensityMatrix(qubits: 1)
 
-        #expect(dm.element(row: 0, col: 0) == .one, "ρ[0,0] should be 1")
-        #expect(dm.element(row: 0, col: 1) == .zero, "ρ[0,1] should be 0")
-        #expect(dm.element(row: 1, col: 0) == .zero, "ρ[1,0] should be 0")
-        #expect(dm.element(row: 1, col: 1) == .zero, "ρ[1,1] should be 0")
+        #expect(dm[row: 0, col: 0] == .one, "ρ[0,0] should be 1")
+        #expect(dm[row: 0, col: 1] == .zero, "ρ[0,1] should be 0")
+        #expect(dm[row: 1, col: 0] == .zero, "ρ[1,0] should be 0")
+        #expect(dm[row: 1, col: 1] == .zero, "ρ[1,1] should be 0")
     }
 
     @Test("Set element modifies correct value")
@@ -379,10 +379,10 @@ struct DensityMatrixElementAccessTests {
         var dm = DensityMatrix(qubits: 1)
         let newValue = Complex(0.3, 0.4)
 
-        dm.setElement(row: 0, col: 1, to: newValue)
+        dm[row: 0, col: 1] = newValue
 
-        #expect(dm.element(row: 0, col: 1) == newValue, "Modified element should match")
-        #expect(dm.element(row: 0, col: 0) == .one, "Other elements should be unchanged")
+        #expect(dm[row: 0, col: 1] == newValue, "Modified element should match")
+        #expect(dm[row: 0, col: 0] == .one, "Other elements should be unchanged")
     }
 
     @Test("Row-major storage order")
@@ -393,10 +393,10 @@ struct DensityMatrixElementAccessTests {
         ]
         let dm = DensityMatrix(qubits: 1, elements: elements)
 
-        #expect(dm.element(row: 0, col: 0) == Complex(1, 0), "ρ[0,0] = element[0]")
-        #expect(dm.element(row: 0, col: 1) == Complex(2, 0), "ρ[0,1] = element[1]")
-        #expect(dm.element(row: 1, col: 0) == Complex(3, 0), "ρ[1,0] = element[2]")
-        #expect(dm.element(row: 1, col: 1) == Complex(4, 0), "ρ[1,1] = element[3]")
+        #expect(dm[row: 0, col: 0] == Complex(1, 0), "ρ[0,0] = element[0]")
+        #expect(dm[row: 0, col: 1] == Complex(2, 0), "ρ[0,1] = element[1]")
+        #expect(dm[row: 1, col: 0] == Complex(3, 0), "ρ[1,0] = element[2]")
+        #expect(dm[row: 1, col: 1] == Complex(4, 0), "ρ[1,1] = element[3]")
     }
 }
 
@@ -500,10 +500,10 @@ struct DensityMatrixGateApplicationTests {
         let dm = DensityMatrix(qubits: 1)
         let result = dm.applying(.hadamard, to: 0)
 
-        #expect(abs(result.element(row: 0, col: 0).real - 0.5) < 1e-10, "ρ[0,0] should be 0.5")
-        #expect(abs(result.element(row: 0, col: 1).real - 0.5) < 1e-10, "ρ[0,1] should be 0.5")
-        #expect(abs(result.element(row: 1, col: 0).real - 0.5) < 1e-10, "ρ[1,0] should be 0.5")
-        #expect(abs(result.element(row: 1, col: 1).real - 0.5) < 1e-10, "ρ[1,1] should be 0.5")
+        #expect(abs(result[row: 0, col: 0].real - 0.5) < 1e-10, "ρ[0,0] should be 0.5")
+        #expect(abs(result[row: 0, col: 1].real - 0.5) < 1e-10, "ρ[0,1] should be 0.5")
+        #expect(abs(result[row: 1, col: 0].real - 0.5) < 1e-10, "ρ[1,0] should be 0.5")
+        #expect(abs(result[row: 1, col: 1].real - 0.5) < 1e-10, "ρ[1,1] should be 0.5")
     }
 
     @Test("Pauli X flips |0⟩⟨0| to |1⟩⟨1|")
@@ -511,8 +511,8 @@ struct DensityMatrixGateApplicationTests {
         let dm = DensityMatrix(qubits: 1)
         let result = dm.applying(.pauliX, to: 0)
 
-        #expect(result.element(row: 0, col: 0) == .zero, "ρ[0,0] should be 0")
-        #expect(result.element(row: 1, col: 1) == .one, "ρ[1,1] should be 1")
+        #expect(result[row: 0, col: 0] == .zero, "ρ[0,0] should be 0")
+        #expect(result[row: 1, col: 1] == .one, "ρ[1,1] should be 1")
     }
 
     @Test("Pauli Z preserves |0⟩⟨0|")
@@ -520,8 +520,8 @@ struct DensityMatrixGateApplicationTests {
         let dm = DensityMatrix(qubits: 1)
         let result = dm.applying(.pauliZ, to: 0)
 
-        #expect(result.element(row: 0, col: 0) == .one, "ρ[0,0] should be 1")
-        #expect(result.element(row: 1, col: 1) == .zero, "ρ[1,1] should be 0")
+        #expect(result[row: 0, col: 0] == .one, "ρ[0,0] should be 1")
+        #expect(result[row: 1, col: 1] == .zero, "ρ[1,1] should be 0")
     }
 
     @Test("Gate application preserves trace")
@@ -760,6 +760,15 @@ struct DensityMatrixEqualityTests {
         #expect(dm.description.contains("near-zero"),
                 "Description should show 'near-zero' when all diagonals below threshold")
     }
+
+    @Test("Description truncates with ellipsis for 64 or more basis states")
+    func descriptionTruncatesLargeState() {
+        let dm = DensityMatrix.maximallyMixed(qubits: 6)
+        let desc = dm.description
+
+        #expect(desc.contains("..."),
+                "Description should contain '...' when 64 or more basis states exceed the probability threshold")
+    }
 }
 
 /// Test suite for edge cases and boundary conditions.
@@ -798,15 +807,15 @@ struct DensityMatrixEdgeCaseTests {
         #expect(dm.isPure(), "State with complex phases should still be pure")
         #expect(dm.isHermitian(), "Should be Hermitian despite complex phases")
 
-        #expect(abs(dm.element(row: 0, col: 1).imaginary + 0.5) < 1e-10,
+        #expect(abs(dm[row: 0, col: 1].imaginary + 0.5) < 1e-10,
                 "Off-diagonal should have imaginary part")
     }
 
     @Test("Nearly zero coherences")
     func nearlyZeroCoherences() {
         var dm = DensityMatrix.maximallyMixed(qubits: 1)
-        dm.setElement(row: 0, col: 1, to: Complex(1e-15, 0))
-        dm.setElement(row: 1, col: 0, to: Complex(1e-15, 0))
+        dm[row: 0, col: 1] = Complex(1e-15, 0)
+        dm[row: 1, col: 0] = Complex(1e-15, 0)
 
         #expect(dm.isHermitian(tolerance: 1e-10), "Should be Hermitian within tolerance")
     }

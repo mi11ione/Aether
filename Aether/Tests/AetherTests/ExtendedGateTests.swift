@@ -985,16 +985,16 @@ struct ResetDensityMatrixTests {
         let result = dm.applying(CircuitOperation.reset(qubit: 0))
         #expect(abs(result.probability(of: 0) - 1.0) < 1e-10, "Reset on |+><+| density matrix must project to |0><0| with probability 1.0 for |0>")
         #expect(abs(result.probability(of: 1)) < 1e-10, "Reset on |+><+| density matrix must yield probability 0.0 for |1> after projection to ground state")
-        let rho00 = result.element(row: 0, col: 0)
+        let rho00 = result[row: 0, col: 0]
         #expect(abs(rho00.real - 1.0) < 1e-10, "Reset on |+><+| must produce rho[0,0] = 1.0 corresponding to pure |0><0|")
         #expect(abs(rho00.imaginary) < 1e-10, "Reset on |+><+| must produce real-valued rho[0,0]")
-        let rho01 = result.element(row: 0, col: 1)
+        let rho01 = result[row: 0, col: 1]
         #expect(abs(rho01.real) < 1e-10, "Reset on |+><+| must zero out off-diagonal element rho[0,1] real part")
         #expect(abs(rho01.imaginary) < 1e-10, "Reset on |+><+| must zero out off-diagonal element rho[0,1] imaginary part")
-        let rho10 = result.element(row: 1, col: 0)
+        let rho10 = result[row: 1, col: 0]
         #expect(abs(rho10.real) < 1e-10, "Reset on |+><+| must zero out off-diagonal element rho[1,0] real part")
         #expect(abs(rho10.imaginary) < 1e-10, "Reset on |+><+| must zero out off-diagonal element rho[1,0] imaginary part")
-        let rho11 = result.element(row: 1, col: 1)
+        let rho11 = result[row: 1, col: 1]
         #expect(abs(rho11.real) < 1e-10, "Reset on |+><+| must produce rho[1,1] = 0.0 corresponding to zero population in |1>")
         #expect(abs(rho11.imaginary) < 1e-10, "Reset on |+><+| must produce real-valued rho[1,1]")
         #expect(abs(result.trace() - 1.0) < 1e-10, "Reset on |+><+| must preserve trace normalization Tr(rho) = 1")

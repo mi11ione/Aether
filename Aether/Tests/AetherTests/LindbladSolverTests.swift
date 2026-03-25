@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -77,7 +77,7 @@ struct PositivityMethodTests {
 }
 
 /// Test suite for IntegrationMethod enum cases.
-/// Validates RK45, TR-BDF2, and adaptive integration methods
+/// Validates RK45 and TR-BDF2 integration methods
 /// used for solving the Lindblad master equation.
 @Suite("IntegrationMethod Enum Cases")
 struct IntegrationMethodTests {
@@ -91,12 +91,6 @@ struct IntegrationMethodTests {
     func trBdf2Method() {
         let method = IntegrationMethod.trBdf2
         #expect(method == .trBdf2, "TR-BDF2 integration method should exist")
-    }
-
-    @Test("Adaptive method exists")
-    func adaptiveMethod() {
-        let method = IntegrationMethod.adaptive
-        #expect(method == .adaptive, "Adaptive integration method should exist")
     }
 }
 
@@ -369,7 +363,7 @@ struct LindbladResultTests {
             time: 0.1,
         )
 
-        let validMethods: [IntegrationMethod] = [.rk45, .trBdf2, .adaptive]
+        let validMethods: [IntegrationMethod] = [.rk45, .trBdf2]
         let isValidMethod = validMethods.contains(result.finalMethod)
         #expect(isValidMethod, "Final method should be one of the valid integration methods")
     }
@@ -531,6 +525,9 @@ struct LindbladDissipativeDynamicsTests {
     }
 }
 
+/// Test suite for LindbladSolver coverage edge cases.
+/// Validates step rejection, stiffness detection, TR-BDF2 switching,
+/// and positivity enforcement paths for complete branch coverage.
 @Suite("LindbladSolver Coverage Tests")
 struct LindbladSolverCoverageTests {
     @Test("RK45 step rejection with tight tolerance")

@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-import Accelerate
+import Foundation
 
 /// Statistics tracking truncation errors accumulated during MPS operations.
 ///
@@ -165,6 +165,7 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
     ///   - maxBondDimension: Maximum bond dimension limit (default: 64)
     /// - Complexity: O(n) where n = qubits
     /// - Precondition: 1 <= qubits <= 1000
+    /// - Precondition: maxBondDimension > 0
     public init(qubits: Int, maxBondDimension: Int = 64) {
         ValidationUtilities.validateMPSQubitCount(qubits)
         ValidationUtilities.validatePositiveInt(maxBondDimension, name: "Max bond dimension")
@@ -199,6 +200,7 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
     ///   - maxBondDimension: Maximum bond dimension limit (default: 64)
     /// - Complexity: O(n) where n = qubits
     /// - Precondition: 1 <= qubits <= 1000, 0 <= basisState < 2^qubits
+    /// - Precondition: maxBondDimension > 0
     public init(qubits: Int, basisState: Int, maxBondDimension: Int = 64) {
         ValidationUtilities.validateMPSQubitCount(qubits)
         ValidationUtilities.validatePositiveInt(maxBondDimension, name: "Max bond dimension")
@@ -234,6 +236,7 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
     ///   - maxBondDimension: Maximum bond dimension (default: 64)
     /// - Complexity: O(n * chi^3) where chi = min(2^n, maxBondDimension)
     /// - Precondition: state.qubits <= 20 (memory limit for intermediate computations)
+    /// - Precondition: maxBondDimension > 0
     public init(from state: QuantumState, maxBondDimension: Int = 64) {
         ValidationUtilities.validateMPSToStatevectorLimit(state.qubits)
         ValidationUtilities.validatePositiveInt(maxBondDimension, name: "Max bond dimension")
@@ -338,7 +341,7 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
     /// - Parameter basisState: Integer encoding the basis state (little-endian)
     /// - Returns: Complex amplitude <basisState|psi>
     /// - Complexity: O(n * chi^2) where n = qubits, chi = max bond dimension
-    /// - Precondition: 0 <= basisState < 2^qubits
+    /// - Precondition: basisState >= 0
     @_optimize(speed)
     @_effects(readonly)
     public func amplitude(of basisState: Int) -> Complex<Double> {
@@ -348,18 +351,20 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
 
         for site in 0 ..< qubits {
             let bit = (basisState >> site) & 1
-            let matrix = tensors[site].matrixForPhysicalIndex(bit)
+            let tensor = tensors[site]
+            let leftDim = tensor.leftBondDimension
+            let rightDim = tensor.rightBondDimension
+            let elems = tensor.elements
 
-            let newDim = matrix[0].count
-            let newVector = [Complex<Double>](unsafeUninitializedCapacity: newDim) { buffer, count in
-                for beta in 0 ..< newDim {
+            let newVector = [Complex<Double>](unsafeUninitializedCapacity: rightDim) { buffer, count in
+                for beta in 0 ..< rightDim {
                     var sum: Complex<Double> = .zero
-                    for alpha in 0 ..< vector.count {
-                        sum = sum + vector[alpha] * matrix[alpha][beta]
+                    for alpha in 0 ..< leftDim {
+                        sum = sum + vector[alpha] * elems[alpha * (2 * rightDim) + bit * rightDim + beta]
                     }
                     buffer[beta] = sum
                 }
-                count = newDim
+                count = rightDim
             }
 
             vector = newVector
@@ -379,6 +384,7 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
     /// - Parameter basisState: Integer encoding the basis state
     /// - Returns: Probability in [0, 1]
     /// - Complexity: O(n * chi^2)
+    /// - Precondition: basisState >= 0
     @_optimize(speed)
     @_effects(readonly)
     @inlinable
@@ -418,38 +424,45 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
     @_optimize(speed)
     @_effects(readonly)
     public func normSquared() -> Double {
-        var transfer: [[Complex<Double>]] = [[.one]]
+        var transfer: [Complex<Double>] = [.one]
 
         for site in 0 ..< qubits {
             let tensor = tensors[site]
             let leftDim = tensor.leftBondDimension
             let rightDim = tensor.rightBondDimension
+            let elems = tensor.elements
+            let physStride = rightDim
 
-            var newTransfer = [[Complex<Double>]](
-                repeating: [Complex<Double>](repeating: .zero, count: rightDim),
-                count: rightDim,
-            )
+            var tmp = [Complex<Double>](repeating: .zero, count: leftDim * 2 * rightDim)
+            for betaPrime in 0 ..< leftDim {
+                for physical in 0 ..< 2 {
+                    for alpha in 0 ..< rightDim {
+                        var sum: Complex<Double> = .zero
+                        for beta in 0 ..< leftDim {
+                            sum = sum + transfer[beta * leftDim + betaPrime] * elems[beta * 2 * physStride + physical * physStride + alpha].conjugate
+                        }
+                        tmp[betaPrime * 2 * rightDim + physical * rightDim + alpha] = sum
+                    }
+                }
+            }
 
-            for alphaPrime in 0 ..< rightDim {
-                for alpha in 0 ..< rightDim {
+            var newTransfer = [Complex<Double>](repeating: .zero, count: rightDim * rightDim)
+            for alpha in 0 ..< rightDim {
+                for alphaPrime in 0 ..< rightDim {
                     var sum: Complex<Double> = .zero
                     for betaPrime in 0 ..< leftDim {
-                        for beta in 0 ..< leftDim {
-                            for physical in 0 ..< 2 {
-                                let aConj = tensor[beta, physical, alpha].conjugate
-                                let a = tensor[betaPrime, physical, alphaPrime]
-                                sum = sum + transfer[beta][betaPrime] * aConj * a
-                            }
+                        for physical in 0 ..< 2 {
+                            sum = sum + tmp[betaPrime * 2 * rightDim + physical * rightDim + alpha] * elems[betaPrime * 2 * physStride + physical * physStride + alphaPrime]
                         }
                     }
-                    newTransfer[alpha][alphaPrime] = sum
+                    newTransfer[alpha * rightDim + alphaPrime] = sum
                 }
             }
 
             transfer = newTransfer
         }
 
-        return transfer[0][0].real
+        return transfer[0].real
     }
 
     /// Normalizes the MPS to have unit norm.
@@ -464,6 +477,7 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
     /// ```
     ///
     /// - Complexity: O(n * chi^3) for norm computation + O(chi^2) for rescaling
+    /// - Precondition: MPS norm must be non-zero
     public mutating func normalize() {
         let norm = normSquared()
         ValidationUtilities.validatePositiveDouble(norm, name: "MPS norm squared")
@@ -505,10 +519,43 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
     public func toQuantumState() -> QuantumState {
         ValidationUtilities.validateMPSToStatevectorLimit(qubits)
 
+        var stateMatrix: [Complex<Double>] = [.one]
+        var numBasisStates = 1
+        var currentBondDim = 1
+
+        for site in 0 ..< qubits {
+            let tensor = tensors[site]
+            let leftDim = tensor.leftBondDimension
+            let rightDim = tensor.rightBondDimension
+            let elems = tensor.elements
+            let newNumBasisStates = numBasisStates * 2
+
+            let newState = [Complex<Double>](unsafeUninitializedCapacity: newNumBasisStates * rightDim) { buffer, count in
+                buffer.initialize(repeating: .zero)
+                for basis in 0 ..< numBasisStates {
+                    for physical in 0 ..< 2 {
+                        let newBasis = basis + physical * numBasisStates
+                        for beta in 0 ..< rightDim {
+                            var sum: Complex<Double> = .zero
+                            for alpha in 0 ..< leftDim {
+                                sum = sum + stateMatrix[basis * currentBondDim + alpha] * elems[alpha * (2 * rightDim) + physical * rightDim + beta]
+                            }
+                            buffer[newBasis * rightDim + beta] = sum
+                        }
+                    }
+                }
+                count = newNumBasisStates * rightDim
+            }
+
+            stateMatrix = newState
+            numBasisStates = newNumBasisStates
+            currentBondDim = rightDim
+        }
+
         let stateSpaceSize = 1 << qubits
         let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
-            for basisState in 0 ..< stateSpaceSize {
-                buffer[basisState] = amplitude(of: basisState)
+            for i in 0 ..< stateSpaceSize {
+                buffer[i] = stateMatrix[i]
             }
             count = stateSpaceSize
         }
@@ -535,50 +582,65 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
     @_optimize(speed)
     @_effects(readonly)
     public func expectationValue(of pauliString: PauliString) -> Double {
-        var pauliMap = [Int: PauliBasis]()
-        for op in pauliString.operators {
-            ValidationUtilities.validateMPSSiteIndex(op.qubit, qubits: qubits)
-            pauliMap[op.qubit] = op.basis
-        }
+        let pauliMap = Dictionary(uniqueKeysWithValues: pauliString.operators.map {
+            ValidationUtilities.validateMPSSiteIndex($0.qubit, qubits: qubits)
+            return ($0.qubit, $0.basis)
+        })
 
-        var transfer: [[Complex<Double>]] = [[.one]]
+        var transfer: [Complex<Double>] = [.one]
 
         for site in 0 ..< qubits {
             let tensor = tensors[site]
             let leftDim = tensor.leftBondDimension
             let rightDim = tensor.rightBondDimension
+            let elems = tensor.elements
+            let physStride = rightDim
 
-            let pauliAtSite = pauliMap[site]
-            let pauliMatrix = Self.pauliMatrix(pauliAtSite)
+            let pauli = Self.pauliMatrixFlat(pauliMap[site])
 
-            var newTransfer = [[Complex<Double>]](
-                repeating: [Complex<Double>](repeating: .zero, count: rightDim),
-                count: rightDim,
-            )
+            var tmp = [Complex<Double>](repeating: .zero, count: leftDim * 2 * rightDim)
+            for betaPrime in 0 ..< leftDim {
+                for i in 0 ..< 2 {
+                    for alpha in 0 ..< rightDim {
+                        var sum: Complex<Double> = .zero
+                        for beta in 0 ..< leftDim {
+                            sum = sum + transfer[beta * leftDim + betaPrime] * elems[beta * 2 * physStride + i * physStride + alpha].conjugate
+                        }
+                        tmp[betaPrime * 2 * rightDim + i * rightDim + alpha] = sum
+                    }
+                }
+            }
 
-            for alphaPrime in 0 ..< rightDim {
-                for alpha in 0 ..< rightDim {
+            var tmp2 = [Complex<Double>](repeating: .zero, count: leftDim * 2 * rightDim)
+            for betaPrime in 0 ..< leftDim {
+                for j in 0 ..< 2 {
+                    for alpha in 0 ..< rightDim {
+                        var sum: Complex<Double> = .zero
+                        for i in 0 ..< 2 {
+                            sum = sum + pauli[i * 2 + j] * tmp[betaPrime * 2 * rightDim + i * rightDim + alpha]
+                        }
+                        tmp2[betaPrime * 2 * rightDim + j * rightDim + alpha] = sum
+                    }
+                }
+            }
+
+            var newTransfer = [Complex<Double>](repeating: .zero, count: rightDim * rightDim)
+            for alpha in 0 ..< rightDim {
+                for alphaPrime in 0 ..< rightDim {
                     var sum: Complex<Double> = .zero
                     for betaPrime in 0 ..< leftDim {
-                        for beta in 0 ..< leftDim {
-                            for i in 0 ..< 2 {
-                                for j in 0 ..< 2 {
-                                    let aConj = tensor[beta, i, alpha].conjugate
-                                    let a = tensor[betaPrime, j, alphaPrime]
-                                    let pauli = pauliMatrix[i][j]
-                                    sum = sum + transfer[beta][betaPrime] * aConj * pauli * a
-                                }
-                            }
+                        for j in 0 ..< 2 {
+                            sum = sum + tmp2[betaPrime * 2 * rightDim + j * rightDim + alpha] * elems[betaPrime * 2 * physStride + j * physStride + alphaPrime]
                         }
                     }
-                    newTransfer[alpha][alphaPrime] = sum
+                    newTransfer[alpha * rightDim + alphaPrime] = sum
                 }
             }
 
             transfer = newTransfer
         }
 
-        return transfer[0][0].real
+        return transfer[0].real
     }
 
     /// Computes expectation value <psi|O|psi> for a general observable.
@@ -671,6 +733,7 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
         return "MatrixProductState(qubits=\(qubits), maxBond=\(maxBondDimension), currentMaxBond=\(currentMaxBondDimension), bonds=[\(bonds)])"
     }
 
+    /// Delegates to SVDDecomposition with bond dimension truncation.
     @_optimize(speed)
     private static func truncatedSVD(
         matrix: [[Complex<Double>]],
@@ -680,29 +743,34 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
         return (result.u, result.singularValues, result.vDagger, result.truncationError)
     }
 
-    @_effects(readonly)
-    private static func pauliMatrix(_ basis: PauliBasis?) -> [[Complex<Double>]] {
-        guard let basis else {
-            return [[.one, .zero], [.zero, .one]]
-        }
+    /// 2x2 identity matrix (flat row-major).
+    private static let pauliI: [Complex<Double>] = [.one, .zero, .zero, .one]
+    /// 2x2 Pauli-X matrix (flat row-major).
+    private static let pauliX: [Complex<Double>] = [.zero, .one, .one, .zero]
+    /// 2x2 Pauli-Y matrix (flat row-major).
+    private static let pauliY: [Complex<Double>] = [.zero, Complex(0, -1), Complex(0, 1), .zero]
+    /// 2x2 Pauli-Z matrix (flat row-major).
+    private static let pauliZ: [Complex<Double>] = [.one, .zero, .zero, Complex(-1, 0)]
 
+    /// Returns flat 4-element Pauli matrix for given basis.
+    @inline(__always)
+    @_effects(readonly)
+    private static func pauliMatrixFlat(_ basis: PauliBasis?) -> [Complex<Double>] {
+        guard let basis else { return pauliI }
         switch basis {
-        case .x:
-            return [[.zero, .one], [.one, .zero]]
-        case .y:
-            return [[.zero, Complex(0, -1)], [Complex(0, 1), .zero]]
-        case .z:
-            return [[.one, .zero], [.zero, Complex(-1, 0)]]
+        case .x: return pauliX
+        case .y: return pauliY
+        case .z: return pauliZ
         }
     }
 
     /// Updates tensor at specified site.
-    mutating func updateTensor(at site: Int, with tensor: MPSTensor) {
+    internal mutating func updateTensor(at site: Int, with tensor: MPSTensor) {
         tensors[site] = tensor
     }
 
     /// Adds truncation error to statistics.
-    mutating func addTruncationError(_ error: Double) {
+    internal mutating func addTruncationError(_ error: Double) {
         truncationStatistics = truncationStatistics.adding(error: error)
     }
 }

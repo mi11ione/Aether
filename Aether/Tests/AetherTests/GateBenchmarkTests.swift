@@ -9,7 +9,7 @@ import Testing
 /// Verifies GateBenchmarkResult properties and description formatting.
 @Suite("GateBenchmark")
 struct GateBenchmarkTests {
-    @Test
+    @Test("Initialization stores provided parameters")
     func initializationStoresParameters() {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 2)
 
@@ -18,7 +18,7 @@ struct GateBenchmarkTests {
         #expect(benchmark.warmupIterations == 2, "warmupIterations should be stored as 2")
     }
 
-    @Test
+    @Test("Initialization uses default values")
     func initializationWithDefaults() {
         let benchmark = GateBenchmark(qubits: 3)
 
@@ -27,14 +27,14 @@ struct GateBenchmarkTests {
         #expect(benchmark.warmupIterations == 3, "warmupIterations should default to 3")
     }
 
-    @Test
+    @Test("Initialization allows zero warmup iterations")
     func initializationAllowsZeroWarmup() {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 0)
 
         #expect(benchmark.warmupIterations == 0, "warmupIterations of 0 should be allowed")
     }
 
-    @Test
+    @Test("Measure single-qubit gate returns result")
     func measureSingleQubitGateReturnsResult() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.hadamard)
@@ -43,7 +43,7 @@ struct GateBenchmarkTests {
         #expect(result.iterations == 5, "result iterations should match benchmark iterations")
     }
 
-    @Test
+    @Test("Measure two-qubit gate returns result")
     func measureTwoQubitGateReturnsResult() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.cnot)
@@ -52,7 +52,7 @@ struct GateBenchmarkTests {
         #expect(result.iterations == 5, "result iterations should match benchmark iterations")
     }
 
-    @Test
+    @Test("Measure three-qubit gate returns result")
     func measureThreeQubitGateReturnsResult() async {
         let benchmark = GateBenchmark(qubits: 3, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.toffoli)
@@ -61,7 +61,7 @@ struct GateBenchmarkTests {
         #expect(result.iterations == 5, "result iterations should match benchmark iterations")
     }
 
-    @Test
+    @Test("Measure returns non-negative timings")
     func measureReturnsNonNegativeTimings() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.pauliX)
@@ -72,7 +72,7 @@ struct GateBenchmarkTests {
         #expect(result.stdDevNs >= 0, "standard deviation should be non-negative")
     }
 
-    @Test
+    @Test("Measure min not greater than mean")
     func measureMinNotGreaterThanMean() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.pauliY)
@@ -80,7 +80,7 @@ struct GateBenchmarkTests {
         #expect(result.minNs <= result.meanNs, "min should not exceed mean")
     }
 
-    @Test
+    @Test("Measure max not less than mean")
     func measureMaxNotLessThanMean() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.pauliZ)
@@ -88,7 +88,7 @@ struct GateBenchmarkTests {
         #expect(result.maxNs >= result.meanNs, "max should not be less than mean")
     }
 
-    @Test
+    @Test("Measure min not greater than max")
     func measureMinNotGreaterThanMax() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.sGate)
@@ -96,28 +96,28 @@ struct GateBenchmarkTests {
         #expect(result.minNs <= result.maxNs, "min should not exceed max")
     }
 
-    @Test
+    @Test("Measure empty array returns empty results")
     func compareEmptyArrayReturnsEmptyResults() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
-        let results = await benchmark.compare([])
+        let results = await benchmark.measure([])
 
         #expect(results.isEmpty, "comparing empty array should return empty results")
     }
 
-    @Test
+    @Test("Measure single gate array returns single result")
     func compareSingleGateReturnsSingleResult() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
-        let results = await benchmark.compare([.tGate])
+        let results = await benchmark.measure([.tGate])
 
         #expect(results.count == 1, "comparing single gate should return one result")
         #expect(results[0].gate == .tGate, "result gate should match input gate")
     }
 
-    @Test
+    @Test("Measure multiple gates returns results in order")
     func compareMultipleGatesReturnsResultsInOrder() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let gates: [QuantumGate] = [.hadamard, .pauliX, .pauliZ]
-        let results = await benchmark.compare(gates)
+        let results = await benchmark.measure(gates)
 
         #expect(results.count == 3, "comparing three gates should return three results")
         #expect(results[0].gate == .hadamard, "first result should be hadamard")
@@ -125,11 +125,11 @@ struct GateBenchmarkTests {
         #expect(results[2].gate == .pauliZ, "third result should be pauliZ")
     }
 
-    @Test
+    @Test("Measure mixed qubit gates returns correct results")
     func compareWithMixedQubitGates() async {
         let benchmark = GateBenchmark(qubits: 3, iterations: 5, warmupIterations: 1)
         let gates: [QuantumGate] = [.hadamard, .cnot, .toffoli]
-        let results = await benchmark.compare(gates)
+        let results = await benchmark.measure(gates)
 
         #expect(results.count == 3, "comparing mixed qubit gates should return three results")
         #expect(results[0].gate == .hadamard, "first result should be single-qubit hadamard")
@@ -137,7 +137,7 @@ struct GateBenchmarkTests {
         #expect(results[2].gate == .toffoli, "third result should be three-qubit toffoli")
     }
 
-    @Test
+    @Test("Result description contains gate name")
     func resultDescriptionContainsGateName() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.hadamard)
@@ -145,7 +145,7 @@ struct GateBenchmarkTests {
         #expect(result.description.contains("hadamard"), "description should contain gate name")
     }
 
-    @Test
+    @Test("Result description contains mean")
     func resultDescriptionContainsMean() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.identity)
@@ -153,7 +153,7 @@ struct GateBenchmarkTests {
         #expect(result.description.contains("mean="), "description should contain mean label")
     }
 
-    @Test
+    @Test("Result description contains min")
     func resultDescriptionContainsMin() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.identity)
@@ -161,7 +161,7 @@ struct GateBenchmarkTests {
         #expect(result.description.contains("min="), "description should contain min label")
     }
 
-    @Test
+    @Test("Result description contains max")
     func resultDescriptionContainsMax() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.identity)
@@ -169,7 +169,7 @@ struct GateBenchmarkTests {
         #expect(result.description.contains("max="), "description should contain max label")
     }
 
-    @Test
+    @Test("Result description contains stddev")
     func resultDescriptionContainsStddev() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.identity)
@@ -177,7 +177,7 @@ struct GateBenchmarkTests {
         #expect(result.description.contains("stddev="), "description should contain stddev label")
     }
 
-    @Test
+    @Test("Result description contains iteration count")
     func resultDescriptionContainsIterationCount() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.identity)
@@ -185,7 +185,7 @@ struct GateBenchmarkTests {
         #expect(result.description.contains("5 iterations"), "description should contain iteration count")
     }
 
-    @Test
+    @Test("Result description contains nanosecond units")
     func resultDescriptionContainsNsUnits() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.identity)
@@ -193,7 +193,7 @@ struct GateBenchmarkTests {
         #expect(result.description.contains("ns"), "description should contain nanosecond units")
     }
 
-    @Test
+    @Test("Result equatable with same values")
     func resultEquatableWithSameValues() {
         let result1 = GateBenchmarkResult(
             gate: .hadamard,
@@ -215,7 +215,7 @@ struct GateBenchmarkTests {
         #expect(result1 == result2, "results with same values should be equal")
     }
 
-    @Test
+    @Test("Result not equatable with different gate")
     func resultNotEquatableWithDifferentGate() {
         let result1 = GateBenchmarkResult(
             gate: .hadamard,
@@ -237,7 +237,7 @@ struct GateBenchmarkTests {
         #expect(result1 != result2, "results with different gates should not be equal")
     }
 
-    @Test
+    @Test("Result not equatable with different mean")
     func resultNotEquatableWithDifferentMean() {
         let result1 = GateBenchmarkResult(
             gate: .hadamard,
@@ -259,7 +259,7 @@ struct GateBenchmarkTests {
         #expect(result1 != result2, "results with different meanNs should not be equal")
     }
 
-    @Test
+    @Test("Result not equatable with different iterations")
     func resultNotEquatableWithDifferentIterations() {
         let result1 = GateBenchmarkResult(
             gate: .hadamard,
@@ -281,7 +281,7 @@ struct GateBenchmarkTests {
         #expect(result1 != result2, "results with different iterations should not be equal")
     }
 
-    @Test
+    @Test("Measure with parameterized gate")
     func measureWithParameterizedGate() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.rotationZ(.pi / 4))
@@ -290,25 +290,25 @@ struct GateBenchmarkTests {
         #expect(result.iterations == 5, "result iterations should match benchmark iterations")
     }
 
-    @Test
+    @Test("Measure with single iteration")
     func measureWithSingleIteration() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 1, warmupIterations: 0)
         let result = await benchmark.measure(.hadamard)
 
         #expect(result.iterations == 1, "single iteration benchmark should work")
-        #expect(result.stdDevNs == 0, "single iteration should have zero standard deviation")
+        #expect(abs(result.stdDevNs) < 1e-10, "single iteration should have zero standard deviation")
     }
 
-    @Test
+    @Test("Measure min equals max with single iteration")
     func measureMinEqualsMaxWithSingleIteration() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 1, warmupIterations: 0)
         let result = await benchmark.measure(.pauliX)
 
-        #expect(result.minNs == result.maxNs, "single iteration min and max should be equal")
-        #expect(result.minNs == result.meanNs, "single iteration min should equal mean")
+        #expect(abs(result.minNs - result.maxNs) < 1e-10, "single iteration min and max should be equal")
+        #expect(abs(result.minNs - result.meanNs) < 1e-10, "single iteration min should equal mean")
     }
 
-    @Test
+    @Test("Measure returns valid min-mean-max ordering")
     func measureReturnsValidMinMeanMaxOrdering() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let result = await benchmark.measure(.hadamard)
@@ -317,11 +317,11 @@ struct GateBenchmarkTests {
         #expect(result.meanNs <= result.maxNs, "mean should be less than or equal to max")
     }
 
-    @Test
+    @Test("Measure array returns results with valid timings")
     func compareReturnsArrayOfResultsWithValidTimings() async {
         let benchmark = GateBenchmark(qubits: 2, iterations: 5, warmupIterations: 1)
         let gates: [QuantumGate] = [.hadamard, .pauliX]
-        let results = await benchmark.compare(gates)
+        let results = await benchmark.measure(gates)
 
         #expect(results.count == gates.count, "compare should return same number of results as input gates")
         for (index, result) in results.enumerated() {
@@ -330,7 +330,7 @@ struct GateBenchmarkTests {
         }
     }
 
-    @Test
+    @Test("Result description formats correctly")
     func resultDescriptionFormatsCorrectly() {
         let result = GateBenchmarkResult(
             gate: .hadamard,
@@ -350,7 +350,7 @@ struct GateBenchmarkTests {
         #expect(desc.contains("10 iterations"), "description should contain iteration count")
     }
 
-    @Test
+    @Test("Result description formats double with small fraction")
     func resultDescriptionFormatDoubleWithSmallFraction() {
         let result = GateBenchmarkResult(
             gate: .pauliX,
@@ -367,7 +367,7 @@ struct GateBenchmarkTests {
         #expect(desc.contains("stddev=25.03ns"), "description should format small fraction with leading zero")
     }
 
-    @Test
+    @Test("Result description formats double with large fraction")
     func resultDescriptionFormatDoubleWithLargeFraction() {
         let result = GateBenchmarkResult(
             gate: .pauliZ,

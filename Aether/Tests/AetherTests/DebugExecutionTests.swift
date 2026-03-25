@@ -68,7 +68,7 @@ struct QubitAmplitudeBreakdownTests {
         let circuit = QuantumCircuit(qubits: 1)
         let debug = DebugExecution(circuit: circuit)
 
-        let breakdown = debug.amplitudes(qubit: 0)
+        let breakdown = debug.amplitudeBreakdown(for: 0)
         #expect(breakdown.qubit == 0, "Breakdown should report correct qubit index")
         #expect(abs(breakdown.p0 - 1.0) < 1e-10, "Ground state p0 should be 1.0")
         #expect(abs(breakdown.p1) < 1e-10, "Ground state p1 should be 0.0")
@@ -84,7 +84,7 @@ struct QubitAmplitudeBreakdownTests {
         var debug = DebugExecution(circuit: circuit)
         _ = debug.step()
 
-        let breakdown = debug.amplitudes(qubit: 0)
+        let breakdown = debug.amplitudeBreakdown(for: 0)
         #expect(abs(breakdown.p0) < 1e-10, "Excited state p0 should be 0.0")
         #expect(abs(breakdown.p1 - 1.0) < 1e-10, "Excited state p1 should be 1.0")
         #expect(abs(breakdown.blochVector.z + 1.0) < 1e-10, "Excited state Bloch z should be -1.0")
@@ -97,7 +97,7 @@ struct QubitAmplitudeBreakdownTests {
         var debug = DebugExecution(circuit: circuit)
         _ = debug.step()
 
-        let breakdown = debug.amplitudes(qubit: 0)
+        let breakdown = debug.amplitudeBreakdown(for: 0)
         #expect(abs(breakdown.p0 - 0.5) < 1e-10, "Hadamard state p0 should be 0.5")
         #expect(abs(breakdown.p1 - 0.5) < 1e-10, "Hadamard state p1 should be 0.5")
         #expect(abs(breakdown.blochVector.x - 1.0) < 1e-10, "Hadamard state Bloch x should be 1.0")
@@ -112,7 +112,7 @@ struct QubitAmplitudeBreakdownTests {
         var debug = DebugExecution(circuit: circuit)
         _ = debug.step(count: 2)
 
-        let breakdown = debug.amplitudes(qubit: 0)
+        let breakdown = debug.amplitudeBreakdown(for: 0)
         #expect(abs(breakdown.p0 - 0.5) < 1e-10, "|+i⟩ state p0 should be 0.5")
         #expect(abs(breakdown.p1 - 0.5) < 1e-10, "|+i⟩ state p1 should be 0.5")
         #expect(abs(breakdown.blochVector.y - 1.0) < 1e-10, "|+i⟩ state Bloch y should be 1.0")
@@ -126,8 +126,8 @@ struct QubitAmplitudeBreakdownTests {
         var debug = DebugExecution(circuit: circuit)
         _ = debug.step(count: 2)
 
-        let breakdown0 = debug.amplitudes(qubit: 0)
-        let breakdown1 = debug.amplitudes(qubit: 1)
+        let breakdown0 = debug.amplitudeBreakdown(for: 0)
+        let breakdown1 = debug.amplitudeBreakdown(for: 1)
         #expect(abs(breakdown0.p0 - 0.5) < 1e-10, "Entangled qubit 0 p0 should be 0.5")
         #expect(abs(breakdown0.p1 - 0.5) < 1e-10, "Entangled qubit 0 p1 should be 0.5")
         #expect(abs(breakdown1.p0 - 0.5) < 1e-10, "Entangled qubit 1 p0 should be 0.5")
@@ -141,7 +141,7 @@ struct QubitAmplitudeBreakdownTests {
         var debug = DebugExecution(circuit: circuit)
         _ = debug.step()
 
-        let breakdown = debug.amplitudes(qubit: 1)
+        let breakdown = debug.amplitudeBreakdown(for: 1)
         #expect(breakdown.qubit == 1, "Breakdown should report qubit index 1")
         #expect(abs(breakdown.p0 + breakdown.p1 - 1.0) < 1e-10, "Breakdown probabilities should sum to 1.0")
         let blochMagnitude = breakdown.blochVector.x * breakdown.blochVector.x + breakdown.blochVector.y * breakdown.blochVector.y + breakdown.blochVector.z * breakdown.blochVector.z

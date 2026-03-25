@@ -5,21 +5,15 @@ import Darwin
 
 /// Per-gate timing benchmarks with warmup runs and statistical aggregation.
 ///
-/// Measures execution time of individual quantum gates with nanosecond precision using
-/// `mach_absolute_time()`. Performs warmup iterations before measurement to eliminate
-/// cold-start effects, then collects timing samples using online Welford algorithm for
-/// numerically stable mean and variance computation without storing all samples.
+/// Measures execution time of individual quantum gates with nanosecond precision.
+/// Performs warmup iterations before measurement to eliminate cold-start effects,
+/// then collects timing samples with numerically stable mean and variance computation.
 ///
 /// **Example:**
 /// ```swift
 /// let benchmark = GateBenchmark(qubits: 8, iterations: 100, warmupIterations: 5)
 /// let result = await benchmark.measure(.hadamard)
-/// print(result.meanNs)  // Average execution time in nanoseconds
-///
-/// let comparison = await benchmark.compare([.hadamard, .cnot, .toffoli])
-/// for r in comparison {
-///     print(r)  // Formatted gate timing results
-/// }
+/// let results = await benchmark.measure([.hadamard, .cnot, .toffoli])
 /// ```
 ///
 /// - SeeAlso: ``GateBenchmarkResult``
@@ -66,8 +60,8 @@ public struct GateBenchmark: Sendable {
     /// Measures execution time of a single quantum gate.
     ///
     /// Performs warmup iterations to prime caches, then measures gate application time
-    /// across the specified number of iterations. Uses Welford's online algorithm for
-    /// numerically stable computation of mean and variance without storing all samples.
+    /// across the specified number of iterations with numerically stable statistical
+    /// aggregation.
     ///
     /// **Example:**
     /// ```swift
@@ -78,7 +72,9 @@ public struct GateBenchmark: Sendable {
     ///
     /// - Parameter gate: The quantum gate to benchmark
     /// - Returns: Benchmark result with timing statistics
+    /// - Precondition: qubits >= gate.qubitsRequired
     /// - Complexity: O(iterations * 2^qubits)
+    @_optimize(speed)
     public func measure(_ gate: QuantumGate) async -> GateBenchmarkResult {
         let targetQubits = generateTargetQubits(for: gate)
         var state = QuantumState(qubits: qubits)
@@ -89,8 +85,7 @@ public struct GateBenchmark: Sendable {
 
         var timebaseInfo = mach_timebase_info_data_t()
         mach_timebase_info(&timebaseInfo)
-        let timebaseNumer = Double(timebaseInfo.numer)
-        let timebaseDenom = Double(timebaseInfo.denom)
+        let timebaseRatio = Double(timebaseInfo.numer) / Double(timebaseInfo.denom)
 
         var welfordCount = 0
         var welfordMean = 0.0
@@ -104,16 +99,16 @@ public struct GateBenchmark: Sendable {
             let endTime = mach_absolute_time()
 
             let elapsedMach = Double(endTime - startTime)
-            let elapsedNs = elapsedMach * timebaseNumer / timebaseDenom
+            let elapsedNs = elapsedMach * timebaseRatio
 
             welfordCount += 1
             let delta = elapsedNs - welfordMean
             welfordMean += delta / Double(welfordCount)
             let delta2 = elapsedNs - welfordMean
-            welfordM2 += delta * delta2
+            welfordM2 = welfordM2.addingProduct(delta, delta2)
 
-            if elapsedNs < minNs { minNs = elapsedNs }
-            if elapsedNs > maxNs { maxNs = elapsedNs }
+            minNs = min(minNs, elapsedNs)
+            maxNs = max(maxNs, elapsedNs)
         }
 
         let variance = welfordCount > 1 ? welfordM2 / Double(welfordCount - 1) : 0.0
@@ -129,7 +124,7 @@ public struct GateBenchmark: Sendable {
         )
     }
 
-    /// Compares execution times of multiple quantum gates.
+    /// Measures execution times of multiple quantum gates.
     ///
     /// Measures each gate independently and returns results in the same order as input.
     /// Useful for comparing performance characteristics of different gate types.
@@ -137,7 +132,7 @@ public struct GateBenchmark: Sendable {
     /// **Example:**
     /// ```swift
     /// let benchmark = GateBenchmark(qubits: 8)
-    /// let results = await benchmark.compare([.hadamard, .pauliX, .rotationZ(.pi/4)])
+    /// let results = await benchmark.measure([.hadamard, .pauliX, .rotationZ(.pi/4)])
     /// for result in results {
     ///     print(result)
     /// }
@@ -145,8 +140,10 @@ public struct GateBenchmark: Sendable {
     ///
     /// - Parameter gates: Array of quantum gates to benchmark
     /// - Returns: Array of benchmark results in same order as input gates
+    /// - Precondition: qubits >= gate.qubitsRequired for each gate
     /// - Complexity: O(gates.count * iterations * 2^qubits)
-    public func compare(_ gates: [QuantumGate]) async -> [GateBenchmarkResult] {
+    public func measure(_ gates: [QuantumGate]) async -> [GateBenchmarkResult] {
+        guard !gates.isEmpty else { return [] }
         var results = [GateBenchmarkResult]()
         results.reserveCapacity(gates.count)
 
@@ -159,10 +156,11 @@ public struct GateBenchmark: Sendable {
     }
 
     /// Generates target qubit indices based on the gate's qubit requirements.
+    @_effects(readonly)
     @inline(__always)
     private func generateTargetQubits(for gate: QuantumGate) -> [Int] {
         let required = gate.qubitsRequired
-        precondition(qubits >= required, "Benchmark requires at least \(required) qubits (got \(qubits))")
+        ValidationUtilities.validateMinimumQubits(qubits, min: required, algorithmName: "Gate benchmark")
         return Array(0 ..< required)
     }
 }
@@ -170,41 +168,35 @@ public struct GateBenchmark: Sendable {
 /// Result of a gate benchmark containing timing statistics.
 ///
 /// Contains nanosecond-precision timing measurements for quantum gate execution including
-/// mean, minimum, maximum, and standard deviation computed using Welford's online algorithm.
+/// mean, minimum, maximum, and standard deviation.
 ///
 /// **Example:**
 /// ```swift
+/// let benchmark = GateBenchmark(qubits: 8)
 /// let result = await benchmark.measure(.hadamard)
-/// print(result.meanNs)      // Average time in nanoseconds
-/// print(result.stdDevNs)    // Standard deviation
-/// print(result)             // Human-readable summary
+/// print(result.meanNs)
+/// print(result)
 /// ```
 ///
 /// - SeeAlso: ``GateBenchmark``
 @frozen
 public struct GateBenchmarkResult: Sendable, Equatable, CustomStringConvertible {
     /// The gate that was benchmarked.
-    /// - Returns: The ``QuantumGate`` instance that was measured.
     public let gate: QuantumGate
 
     /// Mean execution time in nanoseconds.
-    /// - Returns: Average gate execution time across all iterations.
     public let meanNs: Double
 
     /// Minimum execution time in nanoseconds.
-    /// - Returns: Fastest recorded gate execution time.
     public let minNs: Double
 
     /// Maximum execution time in nanoseconds.
-    /// - Returns: Slowest recorded gate execution time.
     public let maxNs: Double
 
     /// Standard deviation of execution time in nanoseconds.
-    /// - Returns: Statistical spread of timing measurements.
     public let stdDevNs: Double
 
-    /// Number of iterations used for measurement.
-    /// - Returns: Count of timed gate applications (excludes warmup).
+    /// Number of iterations used for measurement (excludes warmup).
     public let iterations: Int
 
     /// Human-readable description of benchmark results.
@@ -213,9 +205,9 @@ public struct GateBenchmarkResult: Sendable, Equatable, CustomStringConvertible 
     ///
     /// **Example:**
     /// ```swift
+    /// let benchmark = GateBenchmark(qubits: 8)
     /// let result = await benchmark.measure(.hadamard)
     /// print(result.description)
-    /// // "hadamard: mean=1234.56ns, min=1100.00ns, max=1500.00ns, stddev=89.12ns (100 iterations)"
     /// ```
     public var description: String {
         let gateName = gate.fullName
@@ -226,8 +218,13 @@ public struct GateBenchmarkResult: Sendable, Equatable, CustomStringConvertible 
         return "\(gateName): mean=\(meanStr)ns, min=\(minStr)ns, max=\(maxStr)ns, stddev=\(stdDevStr)ns (\(iterations) iterations)"
     }
 
+}
+
+private extension GateBenchmarkResult {
+    /// Formats a double to two decimal places without Foundation dependency.
+    @_effects(readonly)
     @inline(__always)
-    private func formatDouble(_ value: Double) -> String {
+    func formatDouble(_ value: Double) -> String {
         let rounded = (value * 100).rounded() / 100
         let intPart = Int(rounded)
         let fracPart = Int(((rounded - Double(intPart)) * 100).rounded())

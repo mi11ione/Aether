@@ -107,7 +107,7 @@ public enum HubbardHamiltonian {
             hoppings.append((sites - 1, 0, t))
         }
 
-        return fromHoppings(hoppings: hoppings, U: U, sites: sites)
+        return fromHoppings(hoppings, U: U, sites: sites)
     }
 
     /// Create 2D Hubbard lattice on rectangular grid.
@@ -180,7 +180,7 @@ public enum HubbardHamiltonian {
             }
         }
 
-        return fromHoppings(hoppings: hoppings, U: U, sites: sites)
+        return fromHoppings(hoppings, U: U, sites: sites)
     }
 
     /// Create Hubbard model from explicit hopping specification.
@@ -197,7 +197,7 @@ public enum HubbardHamiltonian {
     /// ```swift
     /// let triangleHoppings = [(0, 1, 1.0), (1, 2, 1.0), (0, 2, 1.0)]
     /// let model = HubbardHamiltonian.fromHoppings(
-    ///     hoppings: triangleHoppings,
+    ///     triangleHoppings,
     ///     U: 4.0,
     ///     sites: 3
     /// )
@@ -216,7 +216,7 @@ public enum HubbardHamiltonian {
     @_eagerMove
     @_effects(readonly)
     public static func fromHoppings(
-        hoppings: [(Int, Int, Double)],
+        _ hoppings: [(Int, Int, Double)],
         U: Double,
         sites: Int,
     ) -> HubbardModel {
@@ -257,8 +257,8 @@ public enum HubbardHamiltonian {
             }
         }
 
-        let nonZeroTerms = terms.filter { abs($0.0) > 1e-15 }
-        let observable = Observable(terms: nonZeroTerms)
+        terms.removeAll { abs($0.0) <= 1e-15 }
+        let observable = Observable(terms: terms)
         let avgT = hoppings.isEmpty ? 0.0 : hoppings.reduce(0.0) { $0 + $1.2 } / Double(hoppings.count)
 
         return HubbardModel(

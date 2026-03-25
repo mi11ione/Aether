@@ -239,7 +239,7 @@ struct CoefficientScalingTests {
 struct CompleteQAOAWorkflowsTests {
     @Test("Triangle MaxCut ansatz binds successfully")
     func triangleMaxCut() {
-        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.triangle())
+        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.triangle)
         let mixer = MixerHamiltonian.x(qubits: 3)
 
         let ansatz = QuantumCircuit.qaoa(
@@ -257,7 +257,7 @@ struct CompleteQAOAWorkflowsTests {
 
     @Test("Square MaxCut ansatz binds successfully")
     func squareMaxCut() {
-        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.square())
+        let cost = MaxCut.hamiltonian(edges: MaxCut.Examples.square)
         let mixer = MixerHamiltonian.x(qubits: 4)
 
         let ansatz = QuantumCircuit.qaoa(

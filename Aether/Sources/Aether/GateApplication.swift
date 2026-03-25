@@ -33,6 +33,9 @@ import Foundation
 /// - SeeAlso: ``QuantumSimulator``
 /// - SeeAlso: ``QuantumCircuit``
 public enum GateApplication {
+    /// Minimum probability to avoid division by zero in reset operations.
+    @usableFromInline static let probabilityFloor: Double = 1e-300
+
     // MARK: - Main Application Function
 
     /// Apply gate to quantum state at specified qubits
@@ -232,6 +235,7 @@ public enum GateApplication {
     ///   - phi: Phase angle in radians
     ///   - state: Input quantum state
     /// - Returns: Transformed state with all amplitudes multiplied by e^(i*phi)
+    /// - Precondition: phi must be a finite value
     /// - Complexity: O(2^n) - single pass, one complex multiply per amplitude
     @_optimize(speed)
     @_effects(readonly)
@@ -656,14 +660,15 @@ public enum GateApplication {
         qubits: [Int],
         state: QuantumState,
     ) -> QuantumState {
+        ValidationUtilities.validateArrayCount(phases, expected: 1 << qubits.count, name: "diagonal phases")
         let stateSize = state.stateSpaceSize
+
+        let phaseFactors = phases.map { Complex<Double>(Foundation.cos($0), Foundation.sin($0)) }
 
         let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
             for i in 0 ..< stateSize {
                 let phaseIndex = BitUtilities.bits(i, qubits: qubits)
-                let phase = phases[phaseIndex]
-                let phaseFactor = Complex<Double>(Foundation.cos(phase), Foundation.sin(phase))
-                buffer[i] = state.amplitudes[i] * phaseFactor
+                buffer[i] = state.amplitudes[i] * phaseFactors[phaseIndex]
             }
             count = stateSize
         }
@@ -705,6 +710,7 @@ public enum GateApplication {
     ///   - state: Input quantum state
     /// - Returns: Quantum state with target qubit projected to |0⟩ and remaining qubits
     ///   renormalized within the projected subspace
+    /// - Precondition: qubit must be a valid index for state
     /// - Complexity: O(2^n) time, O(2^n) space
     @_optimize(speed)
     @_effects(readonly)
@@ -724,7 +730,7 @@ public enum GateApplication {
         }
 
         if prob0 >= 1.0 - prob0 {
-            let scale = 1.0 / max(prob0, 1e-300).squareRoot()
+            let scale = 1.0 / max(prob0, probabilityFloor).squareRoot()
 
             let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
                 for i in 0 ..< stateSize {
@@ -740,7 +746,7 @@ public enum GateApplication {
             return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
         } else {
             let prob1 = 1.0 - prob0
-            let scale = 1.0 / max(prob1, 1e-300).squareRoot()
+            let scale = 1.0 / max(prob1, probabilityFloor).squareRoot()
 
             let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
                 for i in 0 ..< stateSize {
@@ -760,6 +766,7 @@ public enum GateApplication {
 
     // MARK: - Controlled Gate Application
 
+    /// Applies a multi-controlled gate using precomputed target masks.
     @_optimize(speed)
     @_effects(readonly)
     @inlinable
@@ -770,6 +777,7 @@ public enum GateApplication {
         targetQubits: [Int],
         state: QuantumState,
     ) -> QuantumState {
+        ValidationUtilities.validateMinimumQubits(targetQubits.count, min: gate.qubitsRequired, algorithmName: "controlled gate")
         let stateSize = state.stateSpaceSize
         var controlMask = 0
         for control in controls {
@@ -780,35 +788,37 @@ public enum GateApplication {
         let gateSize = gateMatrix.count
         let targetCount = gate.qubitsRequired
 
+        let targetMasks = [Int](unsafeUninitializedCapacity: targetCount) { buffer, count in
+            for idx in 0 ..< targetCount { buffer[idx] = BitUtilities.bitMask(qubit: targetQubits[idx]) }
+            count = targetCount
+        }
+
         let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
-            for i in 0 ..< stateSize {
-                buffer[i] = .zero
-            }
+            buffer.initialize(repeating: .zero)
 
             for i in 0 ..< stateSize {
                 if (i & controlMask) == controlMask {
                     var targetBits = 0
-                    for (idx, qubit) in targetQubits.enumerated() where idx < targetCount {
-                        if (i & BitUtilities.bitMask(qubit: qubit)) != 0 {
+                    for idx in 0 ..< targetCount {
+                        if (i & targetMasks[idx]) != 0 {
                             targetBits |= (1 << idx)
                         }
                     }
 
                     for col in 0 ..< gateSize {
                         var newIndex = i
-                        for (idx, qubit) in targetQubits.enumerated() where idx < targetCount {
+                        for idx in 0 ..< targetCount {
                             let colBit = (col >> idx) & 1
-                            let mask = BitUtilities.bitMask(qubit: qubit)
                             if colBit == 1 {
-                                newIndex |= mask
+                                newIndex |= targetMasks[idx]
                             } else {
-                                newIndex &= ~mask
+                                newIndex &= ~targetMasks[idx]
                             }
                         }
-                        buffer[i] = buffer[i] + gateMatrix[targetBits][col] * state.amplitudes[newIndex]
+                        buffer[i] += gateMatrix[targetBits][col] * state.amplitudes[newIndex]
                     }
                 } else {
-                    buffer[i] = buffer[i] + state.amplitudes[i]
+                    buffer[i] = state.amplitudes[i]
                 }
             }
             count = stateSize
@@ -819,6 +829,7 @@ public enum GateApplication {
 
     // MARK: - Multi-Qubit Gate Application
 
+    /// Applies an arbitrary multi-qubit gate via full matrix multiplication.
     @_optimize(speed)
     @_effects(readonly)
     @inlinable
@@ -832,15 +843,19 @@ public enum GateApplication {
         let gateSize = gateMatrix.count
         let stateSize = state.stateSpaceSize
 
+        let qubitCount = qubits.count
+        let masks = [Int](unsafeUninitializedCapacity: qubitCount) { buffer, count in
+            for idx in 0 ..< qubitCount { buffer[idx] = BitUtilities.bitMask(qubit: qubits[idx]) }
+            count = qubitCount
+        }
+
         let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
-            for i in 0 ..< stateSize {
-                buffer[i] = .zero
-            }
+            buffer.initialize(repeating: .zero)
 
             for i in 0 ..< stateSize {
                 var rowBits = 0
-                for (idx, qubit) in qubits.enumerated() {
-                    if (i & BitUtilities.bitMask(qubit: qubit)) != 0 {
+                for idx in 0 ..< qubitCount {
+                    if (i & masks[idx]) != 0 {
                         rowBits |= (1 << idx)
                     }
                 }
@@ -852,16 +867,15 @@ public enum GateApplication {
                     }
 
                     var sourceIndex = i
-                    for (idx, qubit) in qubits.enumerated() {
+                    for idx in 0 ..< qubitCount {
                         let colBit = (col >> idx) & 1
-                        let mask = BitUtilities.bitMask(qubit: qubit)
                         if colBit == 1 {
-                            sourceIndex |= mask
+                            sourceIndex |= masks[idx]
                         } else {
-                            sourceIndex &= ~mask
+                            sourceIndex &= ~masks[idx]
                         }
                     }
-                    buffer[i] = buffer[i] + matrixElement * state.amplitudes[sourceIndex]
+                    buffer[i] += matrixElement * state.amplitudes[sourceIndex]
                 }
             }
             count = stateSize
@@ -892,6 +906,7 @@ public extension QuantumState {
     ///   - qubits: Target qubit indices
     /// - Returns: New transformed state
     /// - Complexity: O(2^n)
+    @_optimize(speed)
     @_effects(readonly)
     @inlinable
     @_eagerMove
@@ -916,6 +931,7 @@ public extension QuantumState {
     ///   - qubit: Target qubit index
     /// - Returns: New transformed state
     /// - Complexity: O(2^n)
+    @_optimize(speed)
     @_effects(readonly)
     @inlinable
     @_eagerMove

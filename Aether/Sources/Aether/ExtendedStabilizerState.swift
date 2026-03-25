@@ -24,6 +24,11 @@ import GameplayKit
 /// - SeeAlso: ``StabilizerTableau``
 /// - SeeAlso: ``QuantumGate``
 @frozen public struct ExtendedStabilizerState: Sendable, Equatable, CustomStringConvertible {
+    @usableFromInline static let epsilon: Double = 1e-15
+    @usableFromInline static let tPhase = Complex<Double>(phase: .pi / 4.0)
+    @usableFromInline static let tCoeff1 = (Complex<Double>.one + tPhase) * 0.5
+    @usableFromInline static let tCoeff2 = (Complex<Double>.one - tPhase) * 0.5
+
     @usableFromInline var terms: ContiguousArray<(coefficient: Complex<Double>, tableau: StabilizerTableau)>
 
     /// Number of qubits in this extended stabilizer state.
@@ -75,9 +80,10 @@ import GameplayKit
     /// ```
     @inlinable
     public var memoryUsage: Int {
+        let coeffSize = MemoryLayout<Complex<Double>>.size
         var total = 0
         for term in terms {
-            total += term.tableau.memoryUsage + MemoryLayout<Complex<Double>>.size
+            total += term.tableau.memoryUsage + coeffSize
         }
         return total
     }
@@ -133,8 +139,6 @@ import GameplayKit
         switch gate {
         case .tGate:
             applyTGate(to: qubit)
-        case .identity, .pauliX, .pauliY, .pauliZ, .hadamard, .sGate, .sx, .sy:
-            applyCliffordSingleQubit(gate, to: qubit)
         default:
             applyCliffordSingleQubit(gate, to: qubit)
         }
@@ -160,6 +164,8 @@ import GameplayKit
     @inlinable
     @_optimize(speed)
     public mutating func apply(_ gate: QuantumGate, to qubits: [Int]) {
+        ValidationUtilities.validateOperationQubits(qubits, numQubits: self.qubits)
+
         for i in 0 ..< terms.count {
             var tableau = terms[i].tableau
             tableau.apply(gate, to: qubits)
@@ -279,6 +285,7 @@ import GameplayKit
         "ExtendedStabilizerState(\(qubits) qubits, rank=\(rank), maxRank=\(maxRank))"
     }
 
+    @inlinable
     public static func == (lhs: ExtendedStabilizerState, rhs: ExtendedStabilizerState) -> Bool {
         guard lhs.qubits == rhs.qubits else { return false }
         guard lhs.maxRank == rhs.maxRank else { return false }
@@ -292,6 +299,7 @@ import GameplayKit
         return true
     }
 
+    /// Applies a Clifford gate to all stabilizer terms without rank growth.
     @inlinable
     @_optimize(speed)
     mutating func applyCliffordSingleQubit(_ gate: QuantumGate, to qubit: Int) {
@@ -302,6 +310,7 @@ import GameplayKit
         }
     }
 
+    /// Doubles stabilizer rank via T-gate decomposition: T|ψ⟩ = (|ψ⟩ + e^{iπ/4} Z|ψ⟩)/√2.
     @inlinable
     @_optimize(speed)
     mutating func applyTGate(to qubit: Int) {
@@ -317,41 +326,40 @@ import GameplayKit
             return
         }
 
-        let tPhase = Complex<Double>(phase: .pi / 4.0)
-        let coeff1 = (Complex<Double>.one + tPhase) * 0.5
-        let coeff2 = (Complex<Double>.one - tPhase) * 0.5
-
         var newTerms = ContiguousArray<(coefficient: Complex<Double>, tableau: StabilizerTableau)>()
         newTerms.reserveCapacity(newCount)
 
         for term in terms {
-            newTerms.append((coefficient: term.coefficient * coeff1, tableau: term.tableau))
+            newTerms.append((coefficient: term.coefficient * Self.tCoeff1, tableau: term.tableau))
 
             var zTableau = term.tableau
             zTableau.apply(.pauliZ, to: qubit)
-            newTerms.append((coefficient: term.coefficient * coeff2, tableau: zTableau))
+            newTerms.append((coefficient: term.coefficient * Self.tCoeff2, tableau: zTableau))
         }
 
         terms = newTerms
     }
 
+    /// Computes probability of a specific measurement outcome on one qubit.
     @inlinable
     @_effects(readonly)
     func computeMeasurementProbability(qubit: Int, outcome: Int) -> Double {
-        let dimension = 1 << qubits
+        let halfDimension = 1 << (qubits - 1)
         var totalProb = 0.0
 
-        for basisState in 0 ..< dimension {
-            let bit = (basisState >> qubit) & 1
-            if bit == outcome {
-                let amp = amplitude(of: basisState)
-                totalProb += amp.magnitudeSquared
+        for i in 0 ..< halfDimension {
+            var basisState = BitUtilities.insertZeroBit(i, at: qubit)
+            if outcome == 1 {
+                basisState |= (1 << qubit)
             }
+            let amp = amplitude(of: basisState)
+            totalProb += amp.magnitudeSquared
         }
 
         return totalProb
     }
 
+    /// Collapses state by filtering and renormalizing terms after measurement.
     @inlinable
     @_optimize(speed)
     mutating func collapseOnMeasurement(qubit: Int, outcome: Int) {
@@ -382,7 +390,7 @@ import GameplayKit
             normSq += amp.magnitudeSquared
         }
 
-        if normSq > 1e-15 {
+        if normSq > Self.epsilon {
             let normFactor = 1.0 / normSq.squareRoot()
             for i in 0 ..< terms.count {
                 let scaledCoeff = terms[i].coefficient * normFactor

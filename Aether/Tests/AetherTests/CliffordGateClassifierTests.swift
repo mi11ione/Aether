@@ -208,6 +208,9 @@ struct CliffordGateClassifierAnalyzeTests {
     }
 }
 
+/// Validates extended gate coverage for Clifford classification.
+/// Tests Fredkin, CCZ, parametric rotation, U-series, controlled rotation,
+/// swap variants, Ising coupling, diagonal, multiplexor, and custom matrix gates.
 @Suite("Clifford Gate Classifier - Extended Gate Coverage")
 struct CliffordGateClassifierExtendedTests {
     @Test("Fredkin gate classifies as non-Clifford with tCount 7")
@@ -462,5 +465,118 @@ struct CliffordGateClassifierExtendedTests {
         ]
         let classification = CliffordGateClassifier.classify(.customTwoQubit(matrix: nonClifford))
         #expect(classification == .nonClifford(tCount: 4), "Custom 4x4 non-Clifford matrix should be non-Clifford")
+    }
+}
+
+/// Validates uncovered classify() paths for global phase, custom unitary,
+/// symbolic parameters, pi/8 multiples, mixed U2 classifications,
+/// controlled phase/default branches, and matrix phase detection.
+@Suite("Clifford Gate Classifier - Uncovered Paths")
+struct CliffordGateClassifierUncoveredPathsTests {
+    @Test("GlobalPhase with Clifford angle classifies as Clifford")
+    func classifyGlobalPhaseClifford() {
+        let result = CliffordGateClassifier.classify(.globalPhase(.value(.pi / 2)))
+        #expect(result == .clifford, "GlobalPhase(pi/2) should be classified as Clifford")
+    }
+
+    @Test("GlobalPhase with non-Clifford angle classifies as non-Clifford")
+    func classifyGlobalPhaseNonClifford() {
+        let result = CliffordGateClassifier.classify(.globalPhase(.value(.pi / 5)))
+        #expect(result == .nonClifford(tCount: 3), "GlobalPhase(pi/5) should be classified as non-Clifford with tCount 3")
+    }
+
+    @Test("CustomUnitary with Clifford matrix classifies as Clifford")
+    func classifyCustomUnitaryClifford() {
+        let hadamard: [[Complex<Double>]] = [
+            [Complex(1.0 / 2.0.squareRoot(), 0), Complex(1.0 / 2.0.squareRoot(), 0)],
+            [Complex(1.0 / 2.0.squareRoot(), 0), Complex(-1.0 / 2.0.squareRoot(), 0)],
+        ]
+        let result = CliffordGateClassifier.classify(.customUnitary(matrix: hadamard))
+        #expect(result == .clifford, "CustomUnitary with Hadamard matrix should be classified as Clifford")
+    }
+
+    @Test("CustomUnitary with non-Clifford matrix classifies as non-Clifford")
+    func classifyCustomUnitaryNonClifford() {
+        let nonClifford: [[Complex<Double>]] = [
+            [Complex(0.9, 0), Complex(0.1, 0.2)],
+            [Complex(0.1, -0.2), Complex(0.9, 0)],
+        ]
+        let result = CliffordGateClassifier.classify(.customUnitary(matrix: nonClifford))
+        #expect(result != .clifford, "CustomUnitary with non-Clifford matrix should not be classified as Clifford")
+    }
+
+    @Test("Symbolic parameter angle classifies as non-Clifford")
+    func classifySymbolicParameterAngle() {
+        let theta = Parameter(name: "theta")
+        let result = CliffordGateClassifier.classify(.rotationZ(.parameter(theta)))
+        #expect(result == .nonClifford(tCount: 1), "Rotation with symbolic parameter should be non-Clifford with tCount 1")
+    }
+
+    @Test("Expression parameter angle classifies as non-Clifford")
+    func classifyExpressionParameterAngle() {
+        let theta = Parameter(name: "theta")
+        let expr = ParameterExpression(node: .parameter(theta))
+        let result = CliffordGateClassifier.classify(.phase(.expression(expr)))
+        #expect(result == .nonClifford(tCount: 1), "Phase with expression parameter should be non-Clifford with tCount 1")
+    }
+
+    @Test("Angle at pi/8 multiple classifies as non-Clifford with tCount 2")
+    func classifyPiOverEightMultiple() {
+        let result = CliffordGateClassifier.classify(.phase(.value(.pi / 8)))
+        #expect(result == .nonClifford(tCount: 2), "Phase(pi/8) should be non-Clifford with tCount 2")
+    }
+
+    @Test("U2 with one Clifford and one non-Clifford angle classifies as non-Clifford")
+    func classifyU2MixedAngles() {
+        let result = CliffordGateClassifier.classify(.u2(phi: .value(.pi / 2), lambda: .value(.pi / 5)))
+        #expect(result == .nonClifford(tCount: 3), "U2 with Clifford phi and non-Clifford lambda should be non-Clifford with tCount 3")
+    }
+
+    @Test("ControlledPhase with non-Clifford non-pi/4-multiple angle classifies as non-Clifford")
+    func classifyControlledPhaseNonCliffordGeneral() {
+        let result = CliffordGateClassifier.classify(.controlledPhase(.value(.pi / 3)))
+        #expect(result == .nonClifford(tCount: 3), "ControlledPhase(pi/3) should be non-Clifford with tCount 3")
+    }
+
+    @Test("Controlled custom gate falls through to default non-Clifford classification")
+    func classifyControlledCustomGateDefault() {
+        let identityMatrix: [[Complex<Double>]] = [
+            [.one, .zero],
+            [.zero, .one],
+        ]
+        let result = CliffordGateClassifier.classify(.controlled(gate: .customSingleQubit(matrix: identityMatrix), controls: [0]))
+        #expect(result == .nonClifford(tCount: 1), "Controlled custom gate should fall through to default non-Clifford with tCount 1")
+    }
+
+    @Test("Matrix with 3pi/2 phase element classifies as Clifford")
+    func classifyMatrixWithThreePiOverTwoPhase() {
+        let matrix: [[Complex<Double>]] = [
+            [.one, .zero],
+            [.zero, Complex(0, -1)],
+        ]
+        let result = CliffordGateClassifier.classify(.customSingleQubit(matrix: matrix))
+        #expect(result == .clifford, "Matrix with 3pi/2 phase element (0,-1) should be classified as Clifford")
+    }
+
+    @Test("Matrix with non-Clifford phase element classifies as non-Clifford")
+    func classifyMatrixWithNonCliffordPhase() {
+        let matrix: [[Complex<Double>]] = [
+            [.one, .zero],
+            [.zero, Complex(phase: .pi / 5)],
+        ]
+        let result = CliffordGateClassifier.classify(.customSingleQubit(matrix: matrix))
+        #expect(result == .nonClifford(tCount: 1), "Matrix with non-Clifford phase element should be non-Clifford")
+    }
+
+    @Test("U2 with non-Clifford phi and Clifford lambda hits nonClifford-first combine branch")
+    func classifyU2NonCliffordPhiCliffordLambda() {
+        let result = CliffordGateClassifier.classify(.u2(phi: .value(0.3), lambda: .value(.pi)))
+        #expect(result == .nonClifford(tCount: 3), "U2 with non-Clifford phi and Clifford lambda should be non-Clifford with tCount 3")
+    }
+
+    @Test("Controlled Clifford phase gate classifies via controlledClifford phase branch")
+    func classifyControlledCliffordPhaseGate() {
+        let result = CliffordGateClassifier.classify(.controlled(gate: .phase(.value(.pi / 2)), controls: [0]))
+        #expect(result == .clifford, "Controlled phase gate with Clifford angle pi/2 should be classified as Clifford")
     }
 }

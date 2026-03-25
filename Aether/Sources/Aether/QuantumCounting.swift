@@ -247,7 +247,7 @@ public extension QuantumCircuit {
         }
 
         let oracleGates = groverOracle(qubits: config.searchQubits, oracle: oracle)
-        let diffusionGates = groverDiffusion(qubits: config.searchQubits).gates
+        let diffusionGates = GroverDiffusion(qubits: config.searchQubits).gates
 
         for k in 0 ..< config.precisionQubits {
             let controlQubit = config.precisionQubits - 1 - k

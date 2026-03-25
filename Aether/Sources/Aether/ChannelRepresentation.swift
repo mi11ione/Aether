@@ -197,7 +197,7 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
         var vec = [Complex<Double>](repeating: .zero, count: d2)
         for i in 0 ..< d {
             for j in 0 ..< d {
-                vec[i * d + j] = densityMatrix.element(row: i, col: j)
+                vec[i * d + j] = densityMatrix[row: i, col: j]
             }
         }
 

@@ -3,228 +3,6 @@
 
 import Foundation
 
-/// Configuration for iterative phase estimation algorithm.
-///
-/// Controls precision, adaptive strategy, and optional initial estimate for NISQ-friendly
-/// phase extraction. Iterative PE uses a single ancilla qubit and extracts phase bit-by-bit,
-/// reducing qubit count compared to standard QPE at the cost of sequential measurements.
-///
-/// **Example:**
-/// ```swift
-/// let config = IPEConfiguration(precisionBits: 8, adaptiveStrategy: .semiclassical)
-/// let ipe = IterativePhaseEstimation(unitary: .pauliZ, eigenstateQubits: 1, configuration: config)
-/// let result = await ipe.run()
-/// print("Estimated phase: \(result.estimatedPhase)")
-/// ```
-///
-/// - SeeAlso: ``IterativePhaseEstimation``
-/// - SeeAlso: ``IPEAdaptiveStrategy``
-/// - SeeAlso: ``IPEResult``
-@frozen
-public struct IPEConfiguration: Sendable {
-    /// Number of precision bits for phase estimation.
-    ///
-    /// Determines accuracy as 2^(-precisionBits). Higher values yield more accurate
-    /// phase estimates but require more iterations and measurements.
-    public let precisionBits: Int
-
-    /// Adaptive strategy for phase correction between iterations.
-    ///
-    /// Standard strategy extracts bits independently; semiclassical applies
-    /// corrections based on previously measured bits for improved coherence.
-    public let adaptiveStrategy: IPEAdaptiveStrategy
-
-    /// Optional initial phase estimate for warm-start.
-    ///
-    /// When provided, enables faster convergence by biasing early measurements
-    /// toward expected phase value. Value should be in [0, 1).
-    public let initialEstimate: Double?
-
-    /// Creates IPE configuration with specified parameters.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let basicConfig = IPEConfiguration(precisionBits: 4)
-    /// let advancedConfig = IPEConfiguration(
-    ///     precisionBits: 10,
-    ///     adaptiveStrategy: .semiclassical,
-    ///     initialEstimate: 0.25
-    /// )
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - precisionBits: Number of bits for phase precision (must be positive)
-    ///   - adaptiveStrategy: Phase correction strategy (default: .standard)
-    ///   - initialEstimate: Optional initial phase estimate in [0, 1)
-    /// - Precondition: precisionBits > 0
-    /// - Precondition: initialEstimate, if provided, must be in [0, 1)
-    /// - Complexity: O(1)
-    public init(
-        precisionBits: Int,
-        adaptiveStrategy: IPEAdaptiveStrategy = .standard,
-        initialEstimate: Double? = nil,
-    ) {
-        ValidationUtilities.validatePositiveInt(precisionBits, name: "precisionBits")
-        if let estimate = initialEstimate {
-            ValidationUtilities.validateHalfOpenRange(estimate, min: 0.0, max: 1.0, name: "initialEstimate")
-        }
-        self.precisionBits = precisionBits
-        self.adaptiveStrategy = adaptiveStrategy
-        self.initialEstimate = initialEstimate
-    }
-}
-
-/// Adaptive strategy for iterative phase estimation.
-///
-/// Controls how phase information from previous iterations affects subsequent measurements.
-/// Standard mode treats each bit independently; semiclassical mode applies phase corrections
-/// based on measured bits to improve measurement fidelity on NISQ hardware.
-///
-/// **Example:**
-/// ```swift
-/// let standardConfig = IPEConfiguration(precisionBits: 8, adaptiveStrategy: .standard)
-/// let semiclassicalConfig = IPEConfiguration(precisionBits: 8, adaptiveStrategy: .semiclassical)
-/// ```
-///
-/// - SeeAlso: ``IPEConfiguration``
-@frozen
-public enum IPEAdaptiveStrategy: Sendable {
-    /// Bit-by-bit extraction without adaptation.
-    ///
-    /// Each iteration extracts one phase bit independently. Simpler but may
-    /// accumulate errors on noisy hardware.
-    case standard
-
-    /// Semiclassical phase correction based on previous bits.
-    ///
-    /// Applies Rz rotation corrections computed from previously measured bits
-    /// to align measurement basis with expected phase. Improves accuracy on
-    /// NISQ devices by reducing dependence on long coherence times.
-    case semiclassical
-}
-
-/// Result of a single IPE iteration.
-///
-/// Contains the measured bit, control parameters, and running phase estimate
-/// for one iteration of the iterative phase estimation algorithm.
-///
-/// **Example:**
-/// ```swift
-/// let result = await ipe.run()
-/// for iteration in result.iterations {
-///     print("Bit \(iteration.bitIndex): \(iteration.measuredBit), phase: \(iteration.phaseEstimate)")
-/// }
-/// ```
-///
-/// - SeeAlso: ``IPEResult``
-/// - SeeAlso: ``IterativePhaseEstimation``
-@frozen
-public struct IPEIterationResult: Sendable {
-    /// Index of the bit being estimated (0 = MSB).
-    public let bitIndex: Int
-
-    /// Measured bit value (0 or 1).
-    public let measuredBit: Int
-
-    /// Control rotation angle applied for phase correction.
-    public let controlAngle: Double
-
-    /// Running phase estimate after this iteration.
-    public let phaseEstimate: Double
-
-    /// Creates an iteration result.
-    ///
-    /// - Parameters:
-    ///   - bitIndex: Index of the bit (0 = MSB)
-    ///   - measuredBit: Measured value (0 or 1)
-    ///   - controlAngle: Phase correction angle applied
-    ///   - phaseEstimate: Running phase estimate
-    /// - Complexity: O(1)
-    @inlinable
-    public init(bitIndex: Int, measuredBit: Int, controlAngle: Double, phaseEstimate: Double) {
-        self.bitIndex = bitIndex
-        self.measuredBit = measuredBit
-        self.controlAngle = controlAngle
-        self.phaseEstimate = phaseEstimate
-    }
-}
-
-/// Complete result of iterative phase estimation.
-///
-/// Contains the final estimated phase, detailed iteration history, and circuit
-/// metrics. Provides equivalent precision information for comparison with
-/// standard quantum phase estimation.
-///
-/// **Example:**
-/// ```swift
-/// let ipe = IterativePhaseEstimation(unitary: .rotationZ(.pi / 4), eigenstateQubits: 1, configuration: config)
-/// let result = await ipe.run()
-/// print(result)
-/// print("Equivalent to \(result.equivalentQPEQubits)-qubit QPE")
-/// ```
-///
-/// - SeeAlso: ``IterativePhaseEstimation``
-/// - SeeAlso: ``IPEIterationResult``
-@frozen
-public struct IPEResult: Sendable, CustomStringConvertible {
-    /// Estimated eigenvalue phase in [0, 1).
-    ///
-    /// The phase φ such that U|ψ⟩ = e^(2πiφ)|ψ⟩. Multiply by 2π to get
-    /// the actual phase angle in radians.
-    public let estimatedPhase: Double
-
-    /// Results from each iteration in order.
-    public let iterations: [IPEIterationResult]
-
-    /// Total circuit depth across all iterations.
-    public let totalDepth: Int
-
-    /// Equivalent number of qubits for standard QPE with same precision.
-    ///
-    /// Standard QPE achieving the same precision would require this many
-    /// qubits in the precision register, demonstrating the qubit savings
-    /// from iterative approach.
-    public let equivalentQPEQubits: Int
-
-    /// Creates an IPE result.
-    ///
-    /// - Parameters:
-    ///   - estimatedPhase: Final phase estimate
-    ///   - iterations: Results from each iteration
-    ///   - totalDepth: Cumulative circuit depth
-    ///   - equivalentQPEQubits: Equivalent standard QPE qubit count
-    /// - Complexity: O(1)
-    @inlinable
-    public init(
-        estimatedPhase: Double,
-        iterations: [IPEIterationResult],
-        totalDepth: Int,
-        equivalentQPEQubits: Int,
-    ) {
-        self.estimatedPhase = estimatedPhase
-        self.iterations = iterations
-        self.totalDepth = totalDepth
-        self.equivalentQPEQubits = equivalentQPEQubits
-    }
-
-    /// Multi-line formatted summary of phase estimation results.
-    @inlinable
-    public var description: String {
-        let phaseStr = String(format: "%.8f", estimatedPhase)
-        let angleStr = String(format: "%.6f", estimatedPhase * 2.0 * .pi)
-        let binaryStr = iterations.map { String($0.measuredBit) }.joined()
-
-        return """
-        IPE Result:
-          Estimated Phase: \(phaseStr) (= \(angleStr) rad / 2π)
-          Binary: 0.\(binaryStr)
-          Iterations: \(iterations.count)
-          Total Depth: \(totalDepth)
-          Equivalent QPE Qubits: \(equivalentQPEQubits)
-        """
-    }
-}
-
 /// NISQ-friendly iterative phase estimation using single ancilla qubit.
 ///
 /// Extracts the eigenvalue phase φ from U|ψ⟩ = e^(2πiφ)|ψ⟩ one bit at a time,
@@ -242,11 +20,11 @@ public struct IPEResult: Sendable, CustomStringConvertible {
 ///
 /// **Example:**
 /// ```swift
-/// let config = IPEConfiguration(precisionBits: 8, adaptiveStrategy: .semiclassical)
 /// let ipe = IterativePhaseEstimation(
 ///     unitary: .rotationZ(.pi / 4),
 ///     eigenstateQubits: 1,
-///     configuration: config
+///     precisionBits: 8,
+///     adaptiveStrategy: .semiclassical
 /// )
 ///
 /// let result = await ipe.run(progress: { bit, phase in
@@ -256,18 +34,197 @@ public struct IPEResult: Sendable, CustomStringConvertible {
 /// ```
 ///
 /// - Complexity: O(n) iterations where n = precisionBits
-/// - SeeAlso: ``IPEConfiguration``
-/// - SeeAlso: ``IPEResult``
-/// - SeeAlso: ``QuantumCircuit/phaseEstimation(unitary:precisionQubits:eigenstateQubits:)``
+/// - SeeAlso: ``AdaptiveStrategy``
+/// - SeeAlso: ``Result``
+/// - SeeAlso: ``QuantumCircuit/iterativePhaseEstimationStep(unitary:power:phaseCorrection:eigenstateQubits:)``
 public actor IterativePhaseEstimation {
+    /// Adaptive strategy for iterative phase estimation.
+    ///
+    /// Controls how phase information from previous iterations affects subsequent measurements.
+    /// Standard mode treats each bit independently; semiclassical mode applies phase corrections
+    /// based on measured bits to improve measurement fidelity on NISQ hardware.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let ipe = IterativePhaseEstimation(
+    ///     unitary: .pauliZ, eigenstateQubits: 1, precisionBits: 8, adaptiveStrategy: .semiclassical
+    /// )
+    /// ```
+    ///
+    /// - SeeAlso: ``IterativePhaseEstimation``
+    @frozen
+    public enum AdaptiveStrategy: Sendable {
+        /// Bit-by-bit extraction without adaptation.
+        ///
+        /// Each iteration extracts one phase bit independently. Simpler but may
+        /// accumulate errors on noisy hardware.
+        case standard
+
+        /// Semiclassical phase correction based on previous bits.
+        ///
+        /// Applies Rz rotation corrections computed from previously measured bits
+        /// to align measurement basis with expected phase. Improves accuracy on
+        /// NISQ devices by reducing dependence on long coherence times.
+        case semiclassical
+    }
+
+    /// Result of a single iteration.
+    ///
+    /// Contains the measured bit, control parameters, and running phase estimate
+    /// for one iteration of the iterative phase estimation algorithm.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let result = await ipe.run()
+    /// for iteration in result.iterations {
+    ///     print("Bit \(iteration.bitIndex): \(iteration.measuredBit), phase: \(iteration.phaseEstimate)")
+    /// }
+    /// ```
+    ///
+    /// - SeeAlso: ``Result``
+    /// - SeeAlso: ``IterativePhaseEstimation``
+    @frozen
+    public struct IterationResult: Sendable {
+        /// Index of the bit being estimated (0 = MSB).
+        public let bitIndex: Int
+
+        /// Measured bit value (0 or 1).
+        public let measuredBit: Int
+
+        /// Control rotation angle applied for phase correction.
+        public let controlAngle: Double
+
+        /// Running phase estimate after this iteration.
+        public let phaseEstimate: Double
+
+        /// Creates an iteration result.
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let iteration = IterativePhaseEstimation.IterationResult(
+        ///     bitIndex: 0, measuredBit: 1, controlAngle: 0.0, phaseEstimate: 0.5
+        /// )
+        /// ```
+        ///
+        /// - Parameters:
+        ///   - bitIndex: Index of the bit (0 = MSB)
+        ///   - measuredBit: Measured value (0 or 1)
+        ///   - controlAngle: Phase correction angle applied
+        ///   - phaseEstimate: Running phase estimate
+        /// - Complexity: O(1)
+        @inlinable
+        public init(bitIndex: Int, measuredBit: Int, controlAngle: Double, phaseEstimate: Double) {
+            self.bitIndex = bitIndex
+            self.measuredBit = measuredBit
+            self.controlAngle = controlAngle
+            self.phaseEstimate = phaseEstimate
+        }
+    }
+
+    /// Complete result of iterative phase estimation.
+    ///
+    /// Contains the final estimated phase, detailed iteration history, and circuit
+    /// metrics. Provides equivalent precision information for comparison with
+    /// standard quantum phase estimation.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let ipe = IterativePhaseEstimation(
+    ///     unitary: .rotationZ(.pi / 4), eigenstateQubits: 1, precisionBits: 4
+    /// )
+    /// let result = await ipe.run()
+    /// print(result)
+    /// print("Equivalent to \(result.equivalentQPEQubits)-qubit QPE")
+    /// ```
+    ///
+    /// - SeeAlso: ``IterativePhaseEstimation``
+    /// - SeeAlso: ``IterationResult``
+    @frozen
+    public struct Result: Sendable, CustomStringConvertible {
+        /// Estimated eigenvalue phase in [0, 1).
+        ///
+        /// The phase φ such that U|ψ⟩ = e^(2πiφ)|ψ⟩. Multiply by 2π to get
+        /// the actual phase angle in radians.
+        public let estimatedPhase: Double
+
+        /// Results from each iteration in order.
+        public let iterations: [IterationResult]
+
+        /// Total circuit depth across all iterations.
+        public let totalDepth: Int
+
+        /// Equivalent number of qubits for standard QPE with same precision.
+        ///
+        /// Standard QPE achieving the same precision would require this many
+        /// qubits in the precision register, demonstrating the qubit savings
+        /// from iterative approach.
+        public let equivalentQPEQubits: Int
+
+        /// Creates a phase estimation result.
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let iteration = IterativePhaseEstimation.IterationResult(
+        ///     bitIndex: 0, measuredBit: 1, controlAngle: 0.0, phaseEstimate: 0.5
+        /// )
+        /// let result = IterativePhaseEstimation.Result(
+        ///     estimatedPhase: 0.5, iterations: [iteration], totalDepth: 5, equivalentQPEQubits: 1
+        /// )
+        /// ```
+        ///
+        /// - Parameters:
+        ///   - estimatedPhase: Final phase estimate
+        ///   - iterations: Results from each iteration
+        ///   - totalDepth: Cumulative circuit depth
+        ///   - equivalentQPEQubits: Equivalent standard QPE qubit count
+        /// - Complexity: O(1)
+        @inlinable
+        public init(
+            estimatedPhase: Double,
+            iterations: [IterationResult],
+            totalDepth: Int,
+            equivalentQPEQubits: Int,
+        ) {
+            self.estimatedPhase = estimatedPhase
+            self.iterations = iterations
+            self.totalDepth = totalDepth
+            self.equivalentQPEQubits = equivalentQPEQubits
+        }
+
+        /// Multi-line formatted summary of phase estimation results.
+        ///
+        /// - Complexity: O(n) where n is the number of iterations
+        @inlinable
+        public var description: String {
+            let phaseStr = String(format: "%.8f", estimatedPhase)
+            let angleStr = String(format: "%.6f", estimatedPhase * 2.0 * .pi)
+            let binaryStr = iterations.map { String($0.measuredBit) }.joined()
+
+            return """
+            IPE Result:
+              Estimated Phase: \(phaseStr) (= \(angleStr) rad / 2π)
+              Binary: 0.\(binaryStr)
+              Iterations: \(iterations.count)
+              Total Depth: \(totalDepth)
+              Equivalent QPE Qubits: \(equivalentQPEQubits)
+            """
+        }
+    }
+
     /// Target unitary operator whose eigenvalue phase to estimate.
     private let unitary: QuantumGate
 
     /// Number of qubits in the eigenstate register.
     private let eigenstateQubits: Int
 
-    /// Algorithm configuration (precision, strategy, initial estimate).
-    private let configuration: IPEConfiguration
+    /// Number of precision bits for phase estimation.
+    private let precisionBits: Int
+
+    /// Adaptive strategy for phase correction between iterations.
+    private let adaptiveStrategy: AdaptiveStrategy
+
+    /// Optional initial phase estimate for warm-start.
+    private let initialEstimate: Double?
 
     /// Quantum simulator for circuit execution.
     private let simulator: QuantumSimulator
@@ -279,28 +236,41 @@ public actor IterativePhaseEstimation {
     /// let ipe = IterativePhaseEstimation(
     ///     unitary: .pauliZ,
     ///     eigenstateQubits: 1,
-    ///     configuration: IPEConfiguration(precisionBits: 10)
+    ///     precisionBits: 10,
+    ///     adaptiveStrategy: .semiclassical
     /// )
     /// ```
     ///
     /// - Parameters:
     ///   - unitary: Single-qubit unitary gate U
     ///   - eigenstateQubits: Number of qubits for eigenstate (must be positive)
-    ///   - configuration: IPE algorithm configuration
+    ///   - precisionBits: Number of bits for phase precision (must be positive)
+    ///   - adaptiveStrategy: Phase correction strategy (default: .standard)
+    ///   - initialEstimate: Optional initial phase estimate in [0, 1)
     /// - Precondition: unitary must be single-qubit gate
-    /// - Precondition: eigenstateQubits > 0
+    /// - Precondition: `eigenstateQubits` > 0
+    /// - Precondition: `precisionBits` > 0
+    /// - Precondition: `initialEstimate`, if provided, must be in [0, 1)
     /// - Complexity: O(1)
     public init(
         unitary: QuantumGate,
         eigenstateQubits: Int,
-        configuration: IPEConfiguration,
+        precisionBits: Int,
+        adaptiveStrategy: AdaptiveStrategy = .standard,
+        initialEstimate: Double? = nil,
     ) {
         ValidationUtilities.validateControlledGateIsSingleQubit(unitary.qubitsRequired)
         ValidationUtilities.validatePositiveInt(eigenstateQubits, name: "eigenstateQubits")
+        ValidationUtilities.validatePositiveInt(precisionBits, name: "precisionBits")
+        if let estimate = initialEstimate {
+            ValidationUtilities.validateHalfOpenRange(estimate, min: 0.0, max: 1.0, name: "initialEstimate")
+        }
 
         self.unitary = unitary
         self.eigenstateQubits = eigenstateQubits
-        self.configuration = configuration
+        self.precisionBits = precisionBits
+        self.adaptiveStrategy = adaptiveStrategy
+        self.initialEstimate = initialEstimate
         simulator = QuantumSimulator()
     }
 
@@ -315,6 +285,7 @@ public actor IterativePhaseEstimation {
     ///
     /// **Example:**
     /// ```swift
+    /// let ipe = IterativePhaseEstimation(unitary: .pauliZ, eigenstateQubits: 1, precisionBits: 4)
     /// let result = await ipe.run(progress: { bitIndex, currentPhase in
     ///     print("Completed bit \(bitIndex), estimate: \(currentPhase)")
     /// })
@@ -323,43 +294,45 @@ public actor IterativePhaseEstimation {
     /// - Parameters:
     ///   - initialState: Optional initial eigenstate (default: computational basis |0...0⟩)
     ///   - progress: Optional callback receiving (bitIndex, currentPhaseEstimate) after each iteration
-    /// - Returns: Complete IPE result with estimated phase and iteration details
+    /// - Returns: Complete result with estimated phase and iteration details
     /// - Complexity: O(n * (circuit_depth * 2^q)) where n = precisionBits, q = eigenstateQubits + 1
     @_optimize(speed)
     @_eagerMove
     public func run(
         initialState: QuantumState? = nil,
         progress: (@Sendable (Int, Double) async -> Void)? = nil,
-    ) async -> IPEResult {
-        let n = configuration.precisionBits
+    ) async -> Result {
+        let n = precisionBits
 
         var measuredBits: [Int] = []
         measuredBits.reserveCapacity(n)
 
-        var iterationResults: [IPEIterationResult] = []
+        var iterationResults: [IterationResult] = []
         iterationResults.reserveCapacity(n)
 
         var totalDepth = 0
-        var currentPhase = configuration.initialEstimate ?? 0.0
+        var currentPhase = initialEstimate ?? 0.0
+
+        let totalQubits = 1 + eigenstateQubits
+        let templateState: QuantumState = if let initial = initialState {
+            prepareInitialState(eigenstate: initial, totalQubits: totalQubits)
+        } else {
+            QuantumState(qubits: totalQubits)
+        }
 
         for k in 0 ..< n {
             let power = n - 1 - k
 
             let correction = computePhaseCorrection(measuredBits: measuredBits, bitIndex: k)
 
-            let circuit = QuantumCircuit.ipeIteration(
+            let circuit = QuantumCircuit.iterativePhaseEstimationStep(
                 unitary: unitary,
                 power: power,
                 phaseCorrection: correction,
                 eigenstateQubits: eigenstateQubits,
             )
 
-            let totalQubits = 1 + eigenstateQubits
-            var state: QuantumState = if let initial = initialState {
-                prepareInitialState(eigenstate: initial, totalQubits: totalQubits)
-            } else {
-                QuantumState(qubits: totalQubits)
-            }
+            var state = templateState
 
             state = await simulator.execute(circuit, from: state)
 
@@ -370,7 +343,7 @@ public actor IterativePhaseEstimation {
 
             totalDepth += circuit.depth
 
-            let iterationResult = IPEIterationResult(
+            let iterationResult = IterationResult(
                 bitIndex: k,
                 measuredBit: measuredBit,
                 controlAngle: correction,
@@ -381,7 +354,7 @@ public actor IterativePhaseEstimation {
             await progress?(k, currentPhase)
         }
 
-        return IPEResult(
+        return Result(
             estimatedPhase: currentPhase,
             iterations: iterationResults,
             totalDepth: totalDepth,
@@ -393,16 +366,14 @@ public actor IterativePhaseEstimation {
     @_optimize(speed)
     @_effects(readonly)
     private func computePhaseCorrection(measuredBits: [Int], bitIndex: Int) -> Double {
-        guard configuration.adaptiveStrategy == .semiclassical else {
+        guard adaptiveStrategy == .semiclassical else {
             return 0.0
         }
 
         var correction = 0.0
         for (j, bit) in measuredBits.enumerated() {
-            if bit == 1 {
-                let exponent = bitIndex - j
-                correction += .pi / Double(1 << exponent)
-            }
+            let exponent = bitIndex - j
+            correction += Double(bit) * (.pi / Double(1 << exponent))
         }
 
         return correction
@@ -414,9 +385,7 @@ public actor IterativePhaseEstimation {
     private func reconstructPhase(measuredBits: [Int]) -> Double {
         var phase = 0.0
         for (k, bit) in measuredBits.enumerated() {
-            if bit == 1 {
-                phase += 1.0 / Double(1 << (k + 1))
-            }
+            phase += Double(bit) / Double(1 << (k + 1))
         }
         return phase
     }
@@ -444,20 +413,20 @@ public actor IterativePhaseEstimation {
         let totalSize = 1 << totalQubits
         let eigenstateSize = eigenstate.stateSpaceSize
 
-        var amplitudes = [Complex<Double>](repeating: .zero, count: totalSize)
-
-        for i in 0 ..< eigenstateSize {
-            amplitudes[i << 1] = eigenstate.amplitudes[i]
+        let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: totalSize) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = totalSize
+            for i in 0 ..< eigenstateSize {
+                buffer[i << 1] = eigenstate.amplitudes[i]
+            }
         }
 
         return QuantumState(qubits: totalQubits, amplitudes: amplitudes)
     }
 }
 
-// MARK: - QuantumCircuit Extension
-
 public extension QuantumCircuit {
-    /// Builds single IPE iteration circuit.
+    /// Builds single iterative phase estimation iteration circuit.
     ///
     /// Constructs circuit for extracting one phase bit in iterative phase estimation.
     /// Ancilla qubit is index 0; eigenstate occupies qubits 1..<(1+eigenstateQubits).
@@ -470,7 +439,7 @@ public extension QuantumCircuit {
     ///
     /// **Example:**
     /// ```swift
-    /// let circuit = QuantumCircuit.ipeIteration(
+    /// let circuit = QuantumCircuit.iterativePhaseEstimationStep(
     ///     unitary: .pauliZ,
     ///     power: 3,
     ///     phaseCorrection: .pi / 4,
@@ -486,15 +455,15 @@ public extension QuantumCircuit {
     ///   - eigenstateQubits: Number of qubits in eigenstate register
     /// - Returns: Circuit implementing one IPE iteration
     /// - Precondition: unitary must be single-qubit
-    /// - Precondition: power >= 0
-    /// - Precondition: eigenstateQubits > 0
+    /// - Precondition: `power` >= 0
+    /// - Precondition: `eigenstateQubits` > 0
     /// - Complexity: O(power) for controlled power decomposition
     ///
     /// - SeeAlso: ``IterativePhaseEstimation``
     /// - SeeAlso: ``ControlledGateDecomposer/controlledPower(of:power:control:targetQubits:)``
     @_optimize(speed)
     @_eagerMove
-    static func ipeIteration(
+    static func iterativePhaseEstimationStep(
         unitary: QuantumGate,
         power: Int,
         phaseCorrection: Double,
@@ -522,7 +491,8 @@ public extension QuantumCircuit {
             circuit.append(gate, to: qubits)
         }
 
-        if abs(phaseCorrection) > 1e-12 {
+        let phaseCorrectionEpsilon: Double = 1e-12
+        if abs(phaseCorrection) > phaseCorrectionEpsilon {
             circuit.append(.rotationZ(-phaseCorrection), to: ancillaQubit)
         }
 

@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -682,7 +682,8 @@ struct MPSTruncationTrackingTests {
     @Test("Truncation statistics is Sendable")
     func truncationStatisticsIsSendable() {
         let stats = MPSTruncationStatistics.zero
-        _ = stats as Sendable
+        let copy: any Sendable = stats
+        #expect(copy is MPSTruncationStatistics, "MPSTruncationStatistics should conform to Sendable")
     }
 }
 
@@ -751,7 +752,8 @@ struct MPSSendableTests {
     @Test("MPS is Sendable")
     func mpsIsSendable() {
         let mps = MatrixProductState(qubits: 4)
-        _ = mps as Sendable
+        let copy: any Sendable = mps
+        #expect(copy is MatrixProductState, "MatrixProductState should conform to Sendable")
     }
 }
 
