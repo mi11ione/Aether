@@ -2103,7 +2103,7 @@ struct QASM3ImporterTargetedCoverageTests {
         h() q[0];
         """
         let result = QASM3Importer.parse(source)
-        #expect(result.circuit.count >= 0, "empty parameter list returns immediately")
+        #expect(result.circuit.count == 1, "gate with empty parameter list must still produce one operation")
     }
 
     @Test("Gate definition with parameterized body and multiple expression bindings")
@@ -2297,5 +2297,273 @@ struct QASM3FinalParserGapTests {
         let source = "   \n\n   "
         let result = QASM3Importer.parse(source)
         #expect(result.circuit.count == 0, "whitespace-only source must produce circuit with no operations")
+    }
+}
+
+/// Validates QASM3Importer remaining uncovered parser paths
+/// for arrow fallback, indexed gate calls, modifier loop exit,
+/// non-finite pow, gate body non-identifier tokens, and bound parameters.
+@Suite("QASM3Importer Residual Coverage")
+struct QASM3ImporterResidualCoverageTests {
+    @Test("Subroutine with non-arrow dash resets parser position")
+    func nonArrowDashInSubroutine() {
+        let source = """
+            OPENQASM 3.0;
+            include "stdgates.inc";
+            qubit[1] q;
+            def foo() -x { }
+            h q[0];
+            """
+        let result = QASM3Importer.parse(source)
+        #expect(result.circuit.count >= 1, "parser must recover from malformed return-type arrow and parse subsequent gates")
+    }
+
+    @Test("Indexed qubit without assignment falls through to gate call")
+    func indexedQubitGateCall() {
+        let source = """
+            OPENQASM 3.0;
+            include "stdgates.inc";
+            qubit[2] q;
+            h q[0];
+            cx q[0], q[1];
+            """
+        let result = QASM3Importer.parse(source)
+        #expect(result.circuit.count == 2, "indexed qubit gate calls must parse as gate operations")
+    }
+
+    @Test("Modifier loop exits on gate name identifier")
+    func modifierLoopExitOnGateName() {
+        let source = """
+            OPENQASM 3.0;
+            include "stdgates.inc";
+            qubit[2] q;
+            ctrl @ cx q[0], q[1];
+            """
+        let result = QASM3Importer.parse(source)
+        #expect(result.circuit.count == 1, "modifier loop must exit when encountering gate name identifier")
+    }
+
+    @Test("Non-finite pow exponent produces warning")
+    func nonFinitePowExponent() {
+        let source = """
+            OPENQASM 3.0;
+            include "stdgates.inc";
+            qubit[1] q;
+            pow(1e308*1e308) @ x q[0];
+            """
+        let result = QASM3Importer.parse(source)
+        let hasWarning = result.diagnostics.contains { $0.message.contains("non-finite") }
+        #expect(hasWarning, "non-finite pow exponent must produce a warning diagnostic")
+    }
+
+    @Test("Gate body with non-identifier token in qubit position")
+    func gateBodyNonIdentifierQubit() {
+        let source = """
+            OPENQASM 3.0;
+            include "stdgates.inc";
+            qubit[1] q;
+            gate mygate a { x 0; }
+            mygate q[0];
+            """
+        let result = QASM3Importer.parse(source)
+        #expect(result.diagnostics.isEmpty || result.circuit.count <= 1, "gate body with non-identifier qubit token must parse without crashing")
+    }
+
+    @Test("Gate definition with bound parameters expands correctly")
+    func boundParameterExpansion() {
+        let source = """
+            OPENQASM 3.0;
+            include "stdgates.inc";
+            qubit[1] q;
+            gate myrot(theta) a { rz(theta) a; }
+            myrot(1.57) q[0];
+            """
+        let result = QASM3Importer.parse(source)
+        #expect(result.circuit.count == 1, "parameterized gate definition must expand with bound parameter values")
+    }
+
+    @Test("Indexed identifier without assignment resets parser position")
+    func indexedIdentifierNoAssignment() {
+        let source = """
+            OPENQASM 3.0;
+            include "stdgates.inc";
+            qubit[2] q;
+            q[0];
+            """
+        let result = QASM3Importer.parse(source)
+        #expect(!result.diagnostics.isEmpty, "bare indexed identifier must produce diagnostic when no matching gate found")
+    }
+
+    @Test("Gate body with unbound identifier falls through to expression parser")
+    func unboundIdentifierInGateBody() {
+        let source = """
+            OPENQASM 3.0;
+            include "stdgates.inc";
+            qubit[1] q;
+            gate myrot(theta) a { rz(theta+pi) a; }
+            myrot(0.5) q[0];
+            """
+        let result = QASM3Importer.parse(source)
+        #expect(result.circuit.count == 1, "gate body with unbound identifier must fall through to expression parser")
+    }
+}
+
+/// Validates QASM3Exporter coverage for multi-control modifiers,
+/// expression parameters, and all ExpressionNode formatting branches
+/// including arithmetic, unary, and transcendental function nodes.
+@Suite("QASM3 Exporter Expression Coverage")
+struct QASM3ExporterExpressionCoverageTests {
+    @Test("Multi-control gate uses ctrl(N) modifier")
+    func multiControlModifier() {
+        var circuit = QuantumCircuit(qubits: 3)
+        circuit.append(.controlled(gate: .pauliX, controls: [0, 1]), to: [0, 1, 2])
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("ctrl(2)"), "Double-controlled gate should use ctrl(2) modifier")
+    }
+
+    @Test("Expression parameter formats as QASM expression")
+    func expressionParameter() {
+        let theta = Parameter(name: "theta")
+        let expr = ParameterExpression(theta) * ParameterExpression(2.0)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("theta"), "Expression with parameter should contain parameter name")
+    }
+
+    @Test("Constant expression node formats as double")
+    func constantExpressionNode() {
+        let expr = ParameterExpression(3.14)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("3.14"), "Constant expression should format as decimal")
+    }
+
+    @Test("Add expression formats with plus operator")
+    func addExpression() {
+        let a = ParameterExpression(Parameter(name: "a"))
+        let b = ParameterExpression(Parameter(name: "b"))
+        let expr = a + b
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("+"), "Add expression should contain + operator")
+    }
+
+    @Test("Subtract expression formats with minus operator")
+    func subtractExpression() {
+        let a = ParameterExpression(Parameter(name: "a"))
+        let b = ParameterExpression(Parameter(name: "b"))
+        let expr = a - b
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("-"), "Subtract expression should contain - operator")
+    }
+
+    @Test("Multiply expression formats with star operator")
+    func multiplyExpression() {
+        let a = ParameterExpression(Parameter(name: "a"))
+        let b = ParameterExpression(Parameter(name: "b"))
+        let expr = a * b
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("*"), "Multiply expression should contain * operator")
+    }
+
+    @Test("Negate expression formats with minus prefix")
+    func negateExpression() {
+        let a = ParameterExpression(Parameter(name: "a"))
+        let expr = -a
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("(-"), "Negate expression should contain (- prefix")
+    }
+
+    @Test("Sin expression formats as sin function call")
+    func sinExpression() {
+        let node = ExpressionNode.sin(.constant(1.0))
+        let expr = ParameterExpression(node: node)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("sin("), "Sin expression should format as sin function call")
+    }
+
+    @Test("Cos expression formats as cos function call")
+    func cosExpression() {
+        let node = ExpressionNode.cos(.constant(1.0))
+        let expr = ParameterExpression(node: node)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("cos("), "Cos expression should format as cos function call")
+    }
+
+    @Test("Tan expression formats as tan function call")
+    func tanExpression() {
+        let node = ExpressionNode.tan(.constant(1.0))
+        let expr = ParameterExpression(node: node)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("tan("), "Tan expression should format as tan function call")
+    }
+
+    @Test("Exp expression formats as exp function call")
+    func expExpression() {
+        let node = ExpressionNode.exp(.constant(1.0))
+        let expr = ParameterExpression(node: node)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("exp("), "Exp expression should format as exp function call")
+    }
+
+    @Test("Log expression formats as ln function call")
+    func logExpression() {
+        let node = ExpressionNode.log(.constant(1.0))
+        let expr = ParameterExpression(node: node)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("ln("), "Log expression should format as ln function call")
+    }
+
+    @Test("Arctan expression formats as arctan function call")
+    func arctanExpression() {
+        let node = ExpressionNode.arctan(.constant(1.0))
+        let expr = ParameterExpression(node: node)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("arctan("), "Arctan expression should format as arctan function call")
+    }
+
+    @Test("Divide expression formats with slash operator")
+    func divideExpression() {
+        let node = ExpressionNode.divide(.constant(1.0), .constant(2.0))
+        let expr = ParameterExpression(node: node)
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM3Exporter.export(circuit)
+
+        #expect(qasm.contains("/"), "Divide expression should contain / operator")
     }
 }

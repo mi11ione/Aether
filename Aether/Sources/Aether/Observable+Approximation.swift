@@ -41,12 +41,15 @@ public extension Observable {
     ///
     /// **Example:**
     /// ```swift
-    /// let approxH = hamiltonian.filtering(coefficientThreshold: 0.1)
-    /// let energy = approxH.expectationValue(state: state)
+    /// let H = Observable(terms: [(1.0, PauliString(.z(0))), (0.01, PauliString(.x(1)))])
+    /// let approxH = H.filtering(coefficientThreshold: 0.1)
+    /// let energy = approxH.expectationValue(of: QuantumState(qubits: 2))
     /// ```
     @_eagerMove
     @_effects(readonly)
     func filtering(coefficientThreshold threshold: Double) -> Observable {
+        guard !terms.isEmpty else { return Observable(terms: []) }
+
         var significantTerms: PauliTerms = []
         significantTerms.reserveCapacity(terms.count)
 
@@ -83,19 +86,22 @@ public extension Observable {
     ///
     /// **Example:**
     /// ```swift
-    /// let approxH = hamiltonian.keepingLargest(100)
-    /// print("Reduced from \(hamiltonian.terms.count) to \(approxH.terms.count)")
+    /// let H = Observable(terms: [(1.0, PauliString(.z(0))), (0.5, PauliString(.x(1)))])
+    /// let approxH = H.keepingLargest(1)
+    /// let energy = approxH.expectationValue(of: QuantumState(qubits: 2))
     /// ```
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
     func keepingLargest(_ count: Int) -> Observable {
+        guard !terms.isEmpty else { return Observable(terms: []) }
         guard count > 0 else {
             if let largest = terms.max(by: { abs($0.coefficient) < abs($1.coefficient) }) {
                 return Observable(terms: [largest])
             }
             return Observable(terms: [])
         }
+        guard count < terms.count else { return Observable(terms: terms) }
 
         let sortedTerms = terms.sorted { abs($0.coefficient) > abs($1.coefficient) }
 
@@ -121,8 +127,9 @@ public extension Observable {
     ///
     /// **Example:**
     /// ```swift
-    /// let approx = hamiltonian.filtering(coefficientThreshold: 0.1)
-    /// let err = hamiltonian.error(of: approx, state: state)
+    /// let H = Observable(terms: [(1.0, PauliString(.z(0))), (0.01, PauliString(.x(1)))])
+    /// let approx = H.filtering(coefficientThreshold: 0.1)
+    /// let err = H.error(of: approx, state: QuantumState(qubits: 2))
     /// ```
     @_effects(readonly)
     func error(of approximate: Observable, state: QuantumState) -> Double {
@@ -144,8 +151,9 @@ public extension Observable {
     ///
     /// **Example:**
     /// ```swift
-    /// let approx = hamiltonian.filtering(coefficientThreshold: 0.1)
-    /// let relErr = hamiltonian.relativeError(of: approx, state: state)
+    /// let H = Observable(terms: [(1.0, PauliString(.z(0))), (0.01, PauliString(.x(1)))])
+    /// let approx = H.filtering(coefficientThreshold: 0.1)
+    /// let relErr = H.relativeError(of: approx, state: QuantumState(qubits: 2))
     /// ```
     @_effects(readonly)
     func relativeError(of approximate: Observable, state: QuantumState) -> Double {
@@ -164,6 +172,12 @@ public extension Observable {
     /// to a final threshold (accurate convergence). Typical usage involves starting with high
     /// threshold values to accelerate early exploration, then gradually reducing the threshold
     /// as optimization progresses toward convergence.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let schedule = Observable.AdaptiveSchedule.moderate
+    /// let threshold = schedule.threshold(at: 10)
+    /// ```
     @frozen
     struct AdaptiveSchedule: Sendable {
         /// Initial threshold for early iterations (largest truncation).
@@ -175,10 +189,37 @@ public extension Observable {
         /// Exponential decay rate controlling convergence speed.
         public let decayRate: Double
 
+        /// Create custom adaptive schedule.
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let schedule = Observable.AdaptiveSchedule(
+        ///     initialThreshold: 0.2, finalThreshold: 0.0, decayRate: 0.08
+        /// )
+        /// ```
+        ///
+        /// - Parameters:
+        ///   - initialThreshold: Starting threshold for early iterations
+        ///   - finalThreshold: Target threshold for late iterations
+        ///   - decayRate: Exponential decay rate
+        /// - Complexity: O(1)
+        public init(initialThreshold: Double, finalThreshold: Double, decayRate: Double) {
+            self.initialThreshold = initialThreshold
+            self.finalThreshold = finalThreshold
+            self.decayRate = decayRate
+        }
+
         /// Compute threshold for a given optimization iteration.
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let schedule = Observable.AdaptiveSchedule.moderate
+        /// let t = schedule.threshold(at: 50)
+        /// ```
         ///
         /// - Parameter iteration: Current iteration number
         /// - Returns: Threshold value following exponential decay
+        /// - Complexity: O(1)
         @_effects(readonly)
         @inlinable
         public func threshold(at iteration: Int) -> Double {
@@ -187,6 +228,11 @@ public extension Observable {
         }
 
         /// Aggressive schedule: fast decay from 0.5 to 0.0.
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let threshold = Observable.AdaptiveSchedule.aggressive.threshold(at: 10)
+        /// ```
         public static let aggressive = AdaptiveSchedule(
             initialThreshold: 0.5,
             finalThreshold: 0.0,
@@ -194,6 +240,11 @@ public extension Observable {
         )
 
         /// Moderate schedule: balanced decay from 0.1 to 0.0.
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let threshold = Observable.AdaptiveSchedule.moderate.threshold(at: 10)
+        /// ```
         public static let moderate = AdaptiveSchedule(
             initialThreshold: 0.1,
             finalThreshold: 0.0,
@@ -201,6 +252,11 @@ public extension Observable {
         )
 
         /// Conservative schedule: slow decay from 0.01 to 0.0.
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let threshold = Observable.AdaptiveSchedule.conservative.threshold(at: 10)
+        /// ```
         public static let conservative = AdaptiveSchedule(
             initialThreshold: 0.01,
             finalThreshold: 0.0,
@@ -218,11 +274,13 @@ public extension Observable {
     ///
     /// **Example:**
     /// ```swift
-    /// let approxH = hamiltonian.applying(schedule: .moderate, iteration: iteration)
+    /// let H = Observable(terms: [(1.0, PauliString(.z(0))), (0.01, PauliString(.x(1)))])
+    /// let approxH = H.filtering(schedule: .moderate, iteration: 5)
+    /// let energy = approxH.expectationValue(of: QuantumState(qubits: 2))
     /// ```
     @_eagerMove
     @_effects(readonly)
-    func applying(schedule: AdaptiveSchedule, iteration: Int) -> Observable {
+    func filtering(schedule: AdaptiveSchedule, iteration: Int) -> Observable {
         let threshold: Double = schedule.threshold(at: iteration)
         return filtering(coefficientThreshold: threshold)
     }
@@ -230,6 +288,13 @@ public extension Observable {
     // MARK: - Approximation Statistics
 
     /// Statistics describing the quality of a Hamiltonian approximation.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let H = Observable(terms: [(1.0, PauliString(.z(0))), (0.01, PauliString(.x(1)))])
+    /// let approx = H.filtering(coefficientThreshold: 0.1)
+    /// let stats = H.approximationStatistics(of: approx)
+    /// ```
     @frozen
     struct ApproximationStats: Sendable, CustomStringConvertible {
         /// Number of terms in original observable.
@@ -250,13 +315,14 @@ public extension Observable {
         /// Fraction of coefficient magnitude retained by approximation.
         public let coefficientRetention: Double
 
+        /// Human-readable summary of approximation quality metrics.
         public var description: String {
             """
             Approximation Statistics:
             - Original terms: \(originalTerms)
             - Approximate terms: \(approximateTerms)
-            - Reduction: \(String(format: "%.1f", reductionFactor))x
-            - Coefficient retention: \(String(format: "%.1f%%", coefficientRetention * 100))
+            - Reduction: \(Double(Int(reductionFactor * 10)) / 10.0)x
+            - Coefficient retention: \(Double(Int(coefficientRetention * 1000)) / 10.0)%
             """
         }
     }
@@ -288,7 +354,7 @@ public extension Observable {
             approximateSum += abs(approximate.terms[i].coefficient)
         }
 
-        let reductionFactor = originalTerms > 0 ? Double(originalTerms) / Double(approximateTerms) : 1.0
+        let reductionFactor = originalTerms > 0 && approximateTerms > 0 ? Double(originalTerms) / Double(approximateTerms) : 1.0
         let retention = originalSum > 0 ? approximateSum / originalSum : 0.0
 
         return ApproximationStats(
@@ -316,13 +382,13 @@ public extension Observable {
     /// **Example:**
     /// ```swift
     /// let approx = hamiltonian.filtering(coefficientThreshold: 0.1)
-    /// if hamiltonian.meetsAccuracy(approx, state: state, tolerance: 0.01) {
+    /// if hamiltonian.meetsAccuracy(of: approx, state: state, tolerance: 0.01) {
     ///     print("Approximation is accurate enough")
     /// }
     /// ```
     @_effects(readonly)
     func meetsAccuracy(
-        _ approximate: Observable,
+        of approximate: Observable,
         state: QuantumState,
         tolerance: Double,
     ) -> Bool {
@@ -346,20 +412,20 @@ public extension Observable {
     ///
     /// **Example:**
     /// ```swift
-    /// let threshold = hamiltonian.findOptimalThreshold(state: state, maxError: 0.01)
-    /// let approx = hamiltonian.filtering(coefficientThreshold: threshold)
+    /// let H = Observable(terms: [(1.0, PauliString(.z(0))), (0.01, PauliString(.x(1)))])
+    /// let state = QuantumState(qubits: 2)
+    /// let threshold = H.optimalThreshold(for: state, maxError: 0.01)
     /// ```
     @_optimize(speed)
     @_effects(readonly)
-    func findOptimalThreshold(
-        state: QuantumState,
+    func optimalThreshold(
+        for state: QuantumState,
         maxError: Double,
         searchSteps: Int = 20,
     ) -> Double {
         var high = 0.0
         for i in 0 ..< terms.count {
-            let coeff = abs(terms[i].coefficient)
-            if coeff > high { high = coeff }
+            high = max(high, abs(terms[i].coefficient))
         }
         if high == 0.0 { high = 1.0 }
 
@@ -368,7 +434,7 @@ public extension Observable {
         var low = 0.0
 
         for _ in 0 ..< searchSteps {
-            let mid = (low + high) / 2.0
+            let mid = low + (high - low) * 0.5
             let approx = filtering(coefficientThreshold: mid)
             let approxValue = approx.expectationValue(of: state)
             let errorValue = abs(exactValue - approxValue)

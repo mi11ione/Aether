@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Testing
 
 /// Test suite for Parameter type.
@@ -12,21 +12,21 @@ struct ParameterTests {
     @Test("Create parameter with valid name")
     func createParameterValidName() {
         let param = Parameter(name: "theta")
-        #expect(param.name == "theta")
+        #expect(param.name == "theta", "Parameter name should match constructor argument")
     }
 
     @Test("Parameters with same name are equal")
     func parametersWithSameNameEqual() {
         let param1 = Parameter(name: "theta")
         let param2 = Parameter(name: "theta")
-        #expect(param1 == param2)
+        #expect(param1 == param2, "Parameters with same name should be equal")
     }
 
     @Test("Parameters with different names are not equal")
     func parametersWithDifferentNamesNotEqual() {
         let param1 = Parameter(name: "theta")
         let param2 = Parameter(name: "phi")
-        #expect(param1 != param2)
+        #expect(param1 != param2, "Parameters with different names should not be equal")
     }
 
     @Test("Parameters are hashable")
@@ -40,15 +40,15 @@ struct ParameterTests {
         set.insert(param2)
         set.insert(param3)
 
-        #expect(set.count == 2)
-        #expect(set.contains(param1))
-        #expect(set.contains(param3))
+        #expect(set.count == 2, "Set should deduplicate parameters with same name")
+        #expect(set.contains(param1), "Set should contain theta parameter")
+        #expect(set.contains(param3), "Set should contain phi parameter")
     }
 
     @Test("Parameter description returns name")
     func parameterDescription() {
         let param = Parameter(name: "theta_0")
-        #expect(param.description == "theta_0")
+        #expect(param.description == "theta_0", "Description should return parameter name")
     }
 
     @Test("Greek letter parameter names")
@@ -57,9 +57,9 @@ struct ParameterTests {
         let phi = Parameter(name: "φ")
         let gamma = Parameter(name: "γ")
 
-        #expect(theta.name == "θ")
-        #expect(phi.name == "φ")
-        #expect(gamma.name == "γ")
+        #expect(theta.name == "θ", "Should support Unicode theta")
+        #expect(phi.name == "φ", "Should support Unicode phi")
+        #expect(gamma.name == "γ", "Should support Unicode gamma")
     }
 
     @Test("Numbered parameter names")
@@ -68,8 +68,8 @@ struct ParameterTests {
         let param1 = Parameter(name: "theta_1")
         let param2 = Parameter(name: "theta_2")
 
-        #expect(param0 != param1)
-        #expect(param1 != param2)
+        #expect(param0 != param1, "Differently numbered parameters should not be equal")
+        #expect(param1 != param2, "Differently numbered parameters should not be equal")
     }
 }
 
@@ -83,14 +83,14 @@ struct ParameterValueTests {
         let param = Parameter(name: "theta")
         let expr = ParameterValue.parameter(param)
 
-        #expect(expr.isSymbolic)
+        #expect(expr.isSymbolic, "Parameter-based value should be symbolic")
     }
 
     @Test("Create concrete value expression")
     func createConcreteExpression() {
         let expr = ParameterValue.value(Double.pi / 4.0)
 
-        #expect(!expr.isSymbolic)
+        #expect(!expr.isSymbolic, "Concrete value should not be symbolic")
     }
 
     @Test("Evaluate concrete expression")
@@ -98,7 +98,7 @@ struct ParameterValueTests {
         let expr = ParameterValue.value(1.5)
         let result = expr.evaluate(using: [:])
 
-        #expect(abs(result - 1.5) < 1e-10)
+        #expect(abs(result - 1.5) < 1e-10, "Concrete value should evaluate to stored number")
     }
 
     @Test("Evaluate symbolic expression with binding")
@@ -108,7 +108,7 @@ struct ParameterValueTests {
         let bindings = ["theta": 0.5]
 
         let result = expr.evaluate(using: bindings)
-        #expect(abs(result - 0.5) < 1e-10)
+        #expect(abs(result - 0.5) < 1e-10, "Symbolic parameter should evaluate to bound value")
     }
 
     @Test("Extract parameter from symbolic expression")
@@ -117,7 +117,7 @@ struct ParameterValueTests {
         let expr = ParameterValue.parameter(param)
 
         let extracted = expr.parameter
-        #expect(extracted == param)
+        #expect(extracted == param, "Should extract original parameter from symbolic value")
     }
 
     @Test("Extract parameter from concrete expression returns nil")
@@ -125,7 +125,7 @@ struct ParameterValueTests {
         let expr = ParameterValue.value(1.5)
         let extracted = expr.parameter
 
-        #expect(extracted == nil)
+        #expect(extracted == nil, "Concrete value should not contain a parameter")
     }
 
     @Test("Symbolic expression description shows parameter name")
@@ -133,13 +133,13 @@ struct ParameterValueTests {
         let param = Parameter(name: "theta")
         let expr = ParameterValue.parameter(param)
 
-        #expect(expr.description == "theta")
+        #expect(expr.description == "theta", "Symbolic description should show parameter name")
     }
 
     @Test("Concrete expression description shows formatted value")
     func concreteExpressionDescription() {
         let expr = ParameterValue.value(1.234)
-        #expect(expr.description == "1.234")
+        #expect(expr.description == "1.234", "Concrete description should show formatted value")
     }
 
     @Test("ParameterValue equality")
@@ -154,10 +154,10 @@ struct ParameterValueTests {
         let expr4 = ParameterValue.value(1.0)
         let expr5 = ParameterValue.value(1.0)
 
-        #expect(expr1 == expr2)
-        #expect(expr1 != expr3)
-        #expect(expr1 != expr4)
-        #expect(expr4 == expr5)
+        #expect(expr1 == expr2, "Same-name parameters should produce equal values")
+        #expect(expr1 != expr3, "Different-name parameters should produce unequal values")
+        #expect(expr1 != expr4, "Symbolic and concrete values should not be equal")
+        #expect(expr4 == expr5, "Same concrete values should be equal")
     }
 
     @Test("ParameterValue hashability")
@@ -170,7 +170,7 @@ struct ParameterValueTests {
         set.insert(expr1)
         set.insert(expr2)
 
-        #expect(set.count == 2)
+        #expect(set.count == 2, "Set should contain both distinct parameter values")
     }
 
     @Test("Convenience initializer from Parameter")
@@ -222,10 +222,9 @@ struct ParameterValueTests {
     func negatingConcreteValue() {
         let expr = ParameterValue.value(1.5)
         let negated = expr.negated
+        let result = negated.evaluate(using: [:])
 
-        if case let .value(v) = negated {
-            #expect(abs(v - -1.5) < 1e-10, "Negated value should be -1.5")
-        }
+        #expect(abs(result - -1.5) < 1e-10, "Negated value should be -1.5")
     }
 
     @Test("Negating symbolic parameter returns negated parameter")
@@ -250,10 +249,9 @@ struct ParameterValueTests {
     func doubleNegationOfConcreteValue() {
         let expr = ParameterValue.value(3.14)
         let doubleNegated = expr.negated.negated
+        let result = doubleNegated.evaluate(using: [:])
 
-        if case let .value(v) = doubleNegated {
-            #expect(abs(v - 3.14) < 1e-10, "Double negation should return original value")
-        }
+        #expect(abs(result - 3.14) < 1e-10, "Double negation should return original value")
     }
 
     @Test("Negated parameter equality")
@@ -270,6 +268,18 @@ struct ParameterValueTests {
         #expect(expr1 == expr2, "Same negated parameters should be equal")
         #expect(expr1 != expr3, "Different negated parameters should not be equal")
         #expect(expr1 != expr4, "Negated parameter should not equal non-negated parameter")
+    }
+
+    @Test("Negated expression parameter value")
+    func negatedExpressionParameterValue() {
+        let theta = Parameter(name: "theta")
+        let expr = ParameterExpression(theta)
+        let exprValue = ParameterValue.expression(expr)
+
+        let negated = exprValue.negated
+        let bindings = ["theta": 2.0]
+        let result = negated.evaluate(using: bindings)
+        #expect(abs(result - (-2.0)) < 1e-10, "Negated expression should evaluate to negated value")
     }
 
     @Test("Negated parameter hashability")

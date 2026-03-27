@@ -245,6 +245,22 @@ public enum ValidationUtilities {
         precondition(value > min && value <= max, "\(name) must be in (\(min), \(max)] (got \(value))")
     }
 
+    /// Validate that double value is within open range (min, max).
+    ///
+    /// - Parameters:
+    ///   - value: Value to validate
+    ///   - min: Minimum allowed value (exclusive)
+    ///   - max: Maximum allowed value (exclusive)
+    ///   - name: Parameter name for error message
+    /// - Precondition: min < value < max
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateOpenRange(_ value: Double, min: Double, max: Double, name: String) {
+        precondition(value > min && value < max, "\(name) must be in (\(min), \(max)) (got \(value))")
+    }
+
     // MARK: - Array Validations
 
     /// Validate that array is not empty
@@ -1321,6 +1337,25 @@ public enum ValidationUtilities {
         )
     }
 
+    /// Validate MPO rank-4 tensor element count matches bond and physical dimensions.
+    ///
+    /// - Parameters:
+    ///   - elements: Flattened tensor elements
+    ///   - leftBond: Left bond dimension
+    ///   - rightBond: Right bond dimension
+    /// - Precondition: elements.count == leftBond * 2 * 2 * rightBond
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateMPOTensorElementCount(_ elements: [Complex<Double>], leftBond: Int, rightBond: Int) {
+        let expectedCount = leftBond * 4 * rightBond
+        precondition(
+            elements.count == expectedCount,
+            "MPO tensor element count must be \(leftBond) * 4 * \(rightBond) = \(expectedCount) (got \(elements.count))",
+        )
+    }
+
     /// Validate that qubit count is within MPS limits.
     ///
     /// MPS supports up to 1000 qubits efficiently due to O(n * chi^2) memory scaling.
@@ -1407,6 +1442,23 @@ public enum ValidationUtilities {
         precondition(
             leftRight == rightLeft,
             "Adjacent tensor bond dimensions must match (got \(leftRight) and \(rightLeft))",
+        )
+    }
+
+    /// Validate matrix inner dimensions match for multiplication.
+    ///
+    /// - Parameters:
+    ///   - aColumns: Column count of left matrix
+    ///   - bRows: Row count of right matrix
+    /// - Precondition: aColumns == bRows
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateMatrixMultiplyDimensions(_ aColumns: Int, _ bRows: Int) {
+        precondition(
+            aColumns == bRows,
+            "Matrix inner dimensions must match for multiplication (A columns: \(aColumns), B rows: \(bRows))",
         )
     }
 

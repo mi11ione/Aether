@@ -241,8 +241,8 @@ struct QuantumSimulatorTests {
 }
 
 /// Test suite for PrecisionPolicy enum.
-/// Validates tolerance values, description
-/// formatting, and default policy.
+/// Validates tolerance values, description formatting,
+/// GPU threshold logic, and backend selection.
 @Suite("Precision Policy")
 struct PrecisionPolicyTests {
     @Test("Tolerance returns correct values for each policy")
@@ -285,14 +285,6 @@ struct PrecisionPolicyTests {
         #expect(accurateDesc.contains("Accurate"), "Accurate description should contain policy name")
     }
 
-    @Test("Default policy returns fast")
-    func defaultPolicy() {
-        #expect(
-            PrecisionPolicy.default == .fast,
-            "Default precision policy should be .fast",
-        )
-    }
-
     @Test("GPU qubit threshold values are correct")
     func gpuQubitThreshold() {
         #expect(PrecisionPolicy.fast.gpuQubitThreshold == 10, "Fast should use 10 qubits")
@@ -309,14 +301,14 @@ struct PrecisionPolicyTests {
 
     @Test("shouldUseGPU respects policy and qubit count")
     func shouldUseGPU() {
-        #expect(!PrecisionPolicy.shouldUseGPU(qubits: 9, policy: .fast), "9 qubits below fast threshold")
-        #expect(PrecisionPolicy.shouldUseGPU(qubits: 10, policy: .fast), "10 qubits meets fast threshold")
-        #expect(PrecisionPolicy.shouldUseGPU(qubits: 15, policy: .fast), "15 qubits above fast threshold")
+        #expect(!PrecisionPolicy.fast.shouldUseGPU(forQubitCount: 9), "9 qubits below fast threshold")
+        #expect(PrecisionPolicy.fast.shouldUseGPU(forQubitCount: 10), "10 qubits meets fast threshold")
+        #expect(PrecisionPolicy.fast.shouldUseGPU(forQubitCount: 15), "15 qubits above fast threshold")
 
-        #expect(!PrecisionPolicy.shouldUseGPU(qubits: 11, policy: .balanced), "11 qubits below balanced threshold")
-        #expect(PrecisionPolicy.shouldUseGPU(qubits: 12, policy: .balanced), "12 qubits meets balanced threshold")
+        #expect(!PrecisionPolicy.balanced.shouldUseGPU(forQubitCount: 11), "11 qubits below balanced threshold")
+        #expect(PrecisionPolicy.balanced.shouldUseGPU(forQubitCount: 12), "12 qubits meets balanced threshold")
 
-        #expect(!PrecisionPolicy.shouldUseGPU(qubits: 20, policy: .accurate), "Accurate never uses GPU")
-        #expect(!PrecisionPolicy.shouldUseGPU(qubits: 100, policy: .accurate), "Accurate never uses GPU regardless of size")
+        #expect(!PrecisionPolicy.accurate.shouldUseGPU(forQubitCount: 20), "Accurate never uses GPU")
+        #expect(!PrecisionPolicy.accurate.shouldUseGPU(forQubitCount: 100), "Accurate never uses GPU regardless of size")
     }
 }

@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-import Darwin
+import Foundation
 
 /// Memory profiling utilities for tracking memory usage during quantum circuit execution.
 ///
@@ -16,6 +16,9 @@ import Darwin
 /// let profile = MemoryProfiler.profile(circuit)
 /// print(profile.peakBytes, profile.amplitudeBytes)
 /// ```
+///
+/// - SeeAlso: ``MemoryProfile``
+/// - SeeAlso: ``MemoryEstimate``
 public enum MemoryProfiler {
     /// Profiles memory usage during quantum circuit execution.
     ///
@@ -34,7 +37,8 @@ public enum MemoryProfiler {
     /// - Parameter circuit: Quantum circuit to profile
     /// - Returns: Memory profile containing peak, amplitude, and unitary byte counts
     /// - Complexity: O(n x 2^q) where n = operation count, q = qubit count
-    @inlinable
+    /// - SeeAlso: ``MemoryProfile``
+    /// - SeeAlso: ``estimate(qubits:)``
     public static func profile(_ circuit: QuantumCircuit) -> MemoryProfile {
         let qubits = circuit.qubits
         let stateSpaceSize = 1 << qubits
@@ -42,9 +46,9 @@ public enum MemoryProfiler {
         let unitaryBytes = stateSpaceSize * stateSpaceSize * 16
 
         let memoryBefore = measurePeakMemory()
-        let _ = circuit.execute()
+        _ = circuit.execute()
         let memoryAfter = measurePeakMemory()
-        let heapStats = getHeapStatistics()
+        let heapStats = heapStatistics()
 
         return MemoryProfile(
             peakBytes: max(memoryBefore.resident, memoryAfter.resident),
@@ -70,9 +74,10 @@ public enum MemoryProfiler {
     ///
     /// - Parameter qubits: Number of qubits to estimate for
     /// - Returns: Memory estimate with state vector size, unitary size, and recommendation
-    /// - Precondition: qubits > 0
+    /// - Precondition: `qubits` > 0
     /// - Complexity: O(1)
-    @_effects(readonly)
+    /// - SeeAlso: ``MemoryEstimate``
+    /// - SeeAlso: ``profile(_:)``
     @inlinable
     public static func estimate(qubits: Int) -> MemoryEstimate {
         ValidationUtilities.validatePositiveQubits(qubits)
@@ -81,7 +86,7 @@ public enum MemoryProfiler {
         let stateBytes = stateSpaceSize * 16
         let unitaryBytes = stateSpaceSize * stateSpaceSize * 16
 
-        let availableMemory = getAvailableMemory()
+        let availableMemory = availableMemory()
         let recommended = stateBytes < availableMemory / 2
 
         return MemoryEstimate(
@@ -91,8 +96,9 @@ public enum MemoryProfiler {
         )
     }
 
+    /// Queries Darwin task_info for current resident and virtual memory sizes.
     @usableFromInline
-    @inline(__always)
+    @_effects(readonly)
     static func measurePeakMemory() -> (resident: Int, virtual: Int) {
         var info = task_basic_info()
         var count = mach_msg_type_number_t(MemoryLayout<task_basic_info>.size) / 4
@@ -115,46 +121,23 @@ public enum MemoryProfiler {
         return (Int(info.resident_size), Int(info.virtual_size))
     }
 
+    /// Queries malloc_zone_statistics for current heap allocation and usage.
     @usableFromInline
-    @inline(__always)
-    static func getHeapStatistics() -> (allocated: Int, used: Int) {
+    @_effects(readonly)
+    static func heapStatistics() -> (allocated: Int, used: Int) {
         var stats = malloc_statistics_t()
         malloc_zone_statistics(nil, &stats)
         return (Int(stats.size_allocated), Int(stats.size_in_use))
     }
 
+    /// Computes available memory as physical minus resident minus heap used.
     @usableFromInline
-    @inline(__always)
-    static func getAvailableMemory() -> Int {
-        let heapStats = getHeapStatistics()
-
-        var info = task_basic_info()
-        var count = mach_msg_type_number_t(MemoryLayout<task_basic_info>.size) / 4
-
-        let result = withUnsafeMutablePointer(to: &info) { infoPtr in
-            infoPtr.withMemoryRebound(to: Int32.self, capacity: Int(count)) { ptr in
-                task_info(
-                    mach_task_self_,
-                    task_flavor_t(TASK_BASIC_INFO),
-                    ptr,
-                    &count,
-                )
-            }
-        }
-
-        if result != KERN_SUCCESS {
-            return 8 * 1024 * 1024 * 1024 - heapStats.used
-        }
-
-        var hostInfo = host_basic_info()
-        var hostCount = mach_msg_type_number_t(MemoryLayout<host_basic_info>.size / MemoryLayout<Int32>.size)
-        let hostResult = withUnsafeMutablePointer(to: &hostInfo) { hostPtr in
-            hostPtr.withMemoryRebound(to: Int32.self, capacity: Int(hostCount)) { ptr in
-                host_info(mach_host_self(), HOST_BASIC_INFO, ptr, &hostCount)
-            }
-        }
-        let physicalMemory = hostResult == KERN_SUCCESS ? UInt64(hostInfo.max_mem) : 8 * 1024 * 1024 * 1024
-        return Int(physicalMemory) - Int(info.resident_size) - heapStats.used
+    @_effects(readonly)
+    static func availableMemory() -> Int {
+        let physicalMemory = Int(ProcessInfo.processInfo.physicalMemory)
+        let memInfo = measurePeakMemory()
+        let heapStats = heapStatistics()
+        return physicalMemory - memInfo.resident - heapStats.used
     }
 }
 
@@ -172,6 +155,9 @@ public enum MemoryProfiler {
 /// print(profile.virtualBytes)
 /// print(profile.heapAllocated)
 /// ```
+///
+/// - SeeAlso: ``MemoryProfiler``
+/// - SeeAlso: ``MemoryEstimate``
 @frozen
 public struct MemoryProfile: Sendable, Equatable, CustomStringConvertible {
     /// Peak resident memory in bytes observed during circuit execution.
@@ -192,17 +178,13 @@ public struct MemoryProfile: Sendable, Equatable, CustomStringConvertible {
     /// Heap memory currently in use in bytes from malloc_zone_statistics.
     public let heapUsed: Int
 
-    /// Human-readable description of the memory profile.
-    ///
-    /// - Returns: Formatted string with all memory statistics in human-readable units
-    /// - Complexity: O(1)
+    /// Human-readable description with all memory statistics in human-readable units.
     @inlinable
     public var description: String {
         "MemoryProfile(peak: \(formatBytes(peakBytes)), virtual: \(formatBytes(virtualBytes)), amplitudes: \(formatBytes(amplitudeBytes)), unitary: \(formatBytes(unitaryBytes)), heapAllocated: \(formatBytes(heapAllocated)), heapUsed: \(formatBytes(heapUsed)))"
     }
 
     @usableFromInline
-    @inline(__always)
     init(peakBytes: Int, virtualBytes: Int, amplitudeBytes: Int, unitaryBytes: Int, heapAllocated: Int, heapUsed: Int) {
         self.peakBytes = peakBytes
         self.virtualBytes = virtualBytes
@@ -213,12 +195,7 @@ public struct MemoryProfile: Sendable, Equatable, CustomStringConvertible {
     }
 
     /// Formats a byte count into a human-readable string with appropriate units.
-    ///
-    /// - Parameter bytes: Number of bytes to format
-    /// - Returns: Formatted string with GB, MB, KB, or B suffix
-    /// - Complexity: O(1)
     @usableFromInline
-    @inline(__always)
     func formatBytes(_ bytes: Int) -> String {
         if bytes >= 1_073_741_824 {
             String(format: "%.2f GB", Double(bytes) / 1_073_741_824.0)
@@ -244,6 +221,9 @@ public struct MemoryProfile: Sendable, Equatable, CustomStringConvertible {
 ///     print("Safe to proceed with \(estimate.stateBytes) bytes for state vector")
 /// }
 /// ```
+///
+/// - SeeAlso: ``MemoryProfiler``
+/// - SeeAlso: ``MemoryProfile``
 @frozen
 public struct MemoryEstimate: Sendable, Equatable {
     /// Theoretical state vector size in bytes (16 x 2^n for n qubits).
@@ -259,7 +239,6 @@ public struct MemoryEstimate: Sendable, Equatable {
     public let isRecommended: Bool
 
     @usableFromInline
-    @inline(__always)
     init(stateBytes: Int, unitaryBytes: Int, isRecommended: Bool) {
         self.stateBytes = stateBytes
         self.unitaryBytes = unitaryBytes

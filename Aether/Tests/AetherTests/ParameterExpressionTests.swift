@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -160,6 +160,13 @@ struct ParameterExpressionIsSymbolicTests {
     func expressionOfConstantsNotSymbolic() {
         let expr = ParameterExpression(2.0) + ParameterExpression(3.0)
         #expect(expr.isSymbolic == false, "Expression of constants only should not be symbolic")
+    }
+
+    @Test("Unary expression with parameter is symbolic")
+    func unaryExpressionWithParameterIsSymbolic() {
+        let theta = Parameter(name: "theta")
+        let expr = ParameterExpression.sin(ParameterExpression(theta))
+        #expect(expr.isSymbolic == true, "sin(theta) should be symbolic")
     }
 }
 

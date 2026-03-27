@@ -31,6 +31,8 @@ public enum MixerHamiltonian {
     /// **Example:**
     /// ```swift
     /// let mixer = MixerHamiltonian.x(qubits: 4)
+    /// let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2), (2, 0)])
+    /// let qaoa = await QAOA(cost: cost, mixer: mixer, qubits: 4, depth: 2)
     /// ```
     ///
     /// - Parameter qubits: Number of qubits in system (1-30)

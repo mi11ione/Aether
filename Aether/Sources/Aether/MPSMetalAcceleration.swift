@@ -16,8 +16,8 @@ import MetalPerformanceShaders
 /// **Example:**
 /// ```swift
 /// let accelerator = MPSMetalAcceleration()
-/// let contracted = await accelerator.contractAdjacentTensors(leftTensor, rightTensor)
-/// let chainResult = await accelerator.chainContraction(matrices: matrixChain)
+/// let contracted = await accelerator.contract(leftTensor, rightTensor)
+/// let chainResult = await accelerator.multiply(chain: matrixChain)
 /// ```
 ///
 /// - SeeAlso: ``MPSTensor``
@@ -31,14 +31,18 @@ public actor MPSMetalAcceleration {
     ///
     /// **Example:**
     /// ```swift
-    /// if tensor.leftBondDimension >= MPSMetalAcceleration.gpuThreshold {
-    ///     // Use GPU path
-    /// }
+    /// let useGPU = tensor.leftBondDimension >= MPSMetalAcceleration.gpuThreshold
     /// ```
     public static let gpuThreshold = 32
 
     private let device: MTLDevice?
     private let commandQueue: MTLCommandQueue?
+    private var cachedM = 0
+    private var cachedK = 0
+    private var cachedN = 0
+    private var cachedMatMulInit: MPSMatrixMultiplication?
+    private var cachedMatMulSubtract: MPSMatrixMultiplication?
+    private var cachedMatMulAdd: MPSMatrixMultiplication?
 
     /// Whether Metal GPU acceleration is available on this system.
     ///
@@ -62,7 +66,7 @@ public actor MPSMetalAcceleration {
     /// ```swift
     /// let accelerator = MPSMetalAcceleration()
     /// if accelerator.isAvailable {
-    ///     let result = await accelerator.matrixMultiply(a, b)
+    ///     let product = await accelerator.multiply(a, b)
     /// }
     /// ```
     public init() {
@@ -81,8 +85,7 @@ public actor MPSMetalAcceleration {
     /// let accelerator = MPSMetalAcceleration()
     /// let leftTensor = MPSTensor.groundState(site: 0, qubits: 4, maxBondDimension: 64)
     /// let rightTensor = MPSTensor.groundState(site: 1, qubits: 4, maxBondDimension: 64)
-    /// let contracted = await accelerator.contractAdjacentTensors(leftTensor, rightTensor)
-    /// // contracted[alpha][i][j][gamma] contains the 4D result tensor
+    /// let contracted = await accelerator.contract(leftTensor, rightTensor)
     /// ```
     ///
     /// - Parameters:
@@ -93,60 +96,43 @@ public actor MPSMetalAcceleration {
     /// - Precondition: left.rightBondDimension == right.leftBondDimension
     @_optimize(speed)
     @_eagerMove
-    public func contractAdjacentTensors(
+    public func contract(
         _ left: MPSTensor,
         _ right: MPSTensor,
     ) -> [[[[Complex<Double>]]]] {
         let alpha = left.leftBondDimension
-        let gamma = right.rightBondDimension
 
         ValidationUtilities.validateBondDimensionMatch(left.rightBondDimension, right.leftBondDimension)
 
-        var result = [[[[Complex<Double>]]]](
-            repeating: [[[Complex<Double>]]](
-                repeating: [[Complex<Double>]](
-                    repeating: [Complex<Double>](repeating: .zero, count: gamma),
-                    count: 2,
-                ),
-                count: 2,
-            ),
-            count: alpha,
-        )
+        let leftMatrix0 = left.matrix(forPhysical:0)
+        let leftMatrix1 = left.matrix(forPhysical:1)
+        let rightMatrix0 = right.matrix(forPhysical:0)
+        let rightMatrix1 = right.matrix(forPhysical:1)
 
-        let leftMatrix0 = left.matrixForPhysicalIndex(0)
-        let leftMatrix1 = left.matrixForPhysicalIndex(1)
-        let rightMatrix0 = right.matrixForPhysicalIndex(0)
-        let rightMatrix1 = right.matrixForPhysicalIndex(1)
+        let c00 = multiply(leftMatrix0, rightMatrix0)
+        let c01 = multiply(leftMatrix0, rightMatrix1)
+        let c10 = multiply(leftMatrix1, rightMatrix0)
+        let c11 = multiply(leftMatrix1, rightMatrix1)
 
-        let c00 = matrixMultiply(leftMatrix0, rightMatrix0)
-        let c01 = matrixMultiply(leftMatrix0, rightMatrix1)
-        let c10 = matrixMultiply(leftMatrix1, rightMatrix0)
-        let c11 = matrixMultiply(leftMatrix1, rightMatrix1)
-
-        for a in 0 ..< alpha {
-            for g in 0 ..< gamma {
-                result[a][0][0][g] = c00[a][g]
-                result[a][0][1][g] = c01[a][g]
-                result[a][1][0][g] = c10[a][g]
-                result[a][1][1][g] = c11[a][g]
-            }
+        return (0 ..< alpha).map { a in
+            [
+                [c00[a], c01[a]],
+                [c10[a], c11[a]],
+            ]
         }
-
-        return result
     }
 
-    /// Batched matrix multiplication for MPS chain contraction.
+    /// Multiply a chain of complex matrices sequentially.
     ///
-    /// Multiplies sequence of matrices: M0 * M1 * M2 * ... * Mn. Uses GPU for large matrices
-    /// (dimension >= 32), CPU BLAS for small ones. Sequential multiplication from left to right
-    /// maintains numerical stability for MPS contractions.
+    /// Computes M0 * M1 * M2 * ... * Mn from left to right. Uses GPU for large matrices
+    /// (dimension >= 32), CPU BLAS for small ones. Sequential multiplication maintains
+    /// numerical stability for MPS contractions.
     ///
     /// **Example:**
     /// ```swift
     /// let accelerator = MPSMetalAcceleration()
-    /// let matrices: [[[Complex<Double>]]] = tensors.map { $0.matrixForPhysicalIndex(0) }
-    /// let chainResult = await accelerator.chainContraction(matrices: matrices)
-    /// // chainResult is the product of all matrices
+    /// let matrices: [[[Complex<Double>]]] = tensors.map { $0.matrix(forPhysical:0) }
+    /// let chainResult = await accelerator.multiply(chain: matrices)
     /// ```
     ///
     /// - Parameter matrices: Sequence of complex matrices to multiply
@@ -155,8 +141,8 @@ public actor MPSMetalAcceleration {
     /// - Precondition: All matrices must be square with compatible dimensions
     @_optimize(speed)
     @_eagerMove
-    public func chainContraction(
-        matrices: [[[Complex<Double>]]],
+    public func multiply(
+        chain matrices: [[[Complex<Double>]]],
     ) -> [[Complex<Double>]] {
         guard !matrices.isEmpty else {
             return [[.one]]
@@ -168,36 +154,34 @@ public actor MPSMetalAcceleration {
 
         var result = matrices[0]
         for i in 1 ..< matrices.count {
-            result = matrixMultiply(result, matrices[i])
+            result = multiply(result, matrices[i])
         }
 
         return result
     }
 
-    /// Matrix multiply two complex matrices using GPU or CPU.
+    /// Multiply two complex matrices using GPU or CPU.
     ///
-    /// Computes result = A * B using Metal Performance Shaders for large matrices
-    /// (dimension >= 32) or CPU BLAS for small matrices. Complex multiplication is
-    /// decomposed into real/imaginary parts for GPU: result_real = A_real * B_real - A_imag * B_imag,
-    /// result_imag = A_real * B_imag + A_imag * B_real.
+    /// Computes the matrix product C = A * B for complex-valued matrices. Uses Metal
+    /// Performance Shaders for large matrices (dimension >= 32) or CPU BLAS for small ones.
     ///
     /// **Example:**
     /// ```swift
     /// let accelerator = MPSMetalAcceleration()
     /// let a: [[Complex<Double>]] = [[.one, .zero], [.zero, .one]]
     /// let b: [[Complex<Double>]] = [[.one, .i], [.i, .one]]
-    /// let product = await accelerator.matrixMultiply(a, b)
+    /// let result = await accelerator.multiply(a, b)
     /// ```
     ///
     /// - Parameters:
     ///   - a: Left matrix (m x k)
     ///   - b: Right matrix (k x n)
-    /// - Returns: Product matrix (m x n), or empty matrix on failure
+    /// - Returns: Product matrix (m x n), or empty matrix for empty input
     /// - Complexity: O(m * k * n), GPU-accelerated for large matrices
-    /// - Precondition: a column count must equal b row count
+    /// - Precondition: a column count == b row count
     @_optimize(speed)
     @_eagerMove
-    public func matrixMultiply(
+    public func multiply(
         _ a: [[Complex<Double>]],
         _ b: [[Complex<Double>]],
     ) -> [[Complex<Double>]] {
@@ -209,23 +193,22 @@ public actor MPSMetalAcceleration {
         let k = a[0].count
         let n = b[0].count
 
-        guard b.count == k else {
-            return []
-        }
+        ValidationUtilities.validateMatrixMultiplyDimensions(k, b.count)
 
         let minDimension = min(m, k, n)
         let useGPU = minDimension >= Self.gpuThreshold && device != nil && commandQueue != nil
 
         if useGPU {
-            return matrixMultiplyGPU(a, b, m: m, k: k, n: n)
+            return multiplyGPU(a, b, m: m, k: k, n: n)
         }
 
-        return matrixMultiplyCPU(a, b, m: m, k: k, n: n)
+        return multiplyCPU(a, b, m: m, k: k, n: n)
     }
 
+    /// GPU path for complex matrix multiplication via Metal Performance Shaders.
     @_optimize(speed)
     @_eagerMove
-    private func matrixMultiplyGPU(
+    private func multiplyGPU(
         _ a: [[Complex<Double>]],
         _ b: [[Complex<Double>]],
         m: Int,
@@ -233,7 +216,7 @@ public actor MPSMetalAcceleration {
         n: Int,
     ) -> [[Complex<Double>]] {
         guard let device, let commandQueue else {
-            return matrixMultiplyCPU(a, b, m: m, k: k, n: n)
+            return multiplyCPU(a, b, m: m, k: k, n: n)
         }
 
         var aReal = [Float](unsafeUninitializedCapacity: m * k) { buffer, count in
@@ -283,7 +266,7 @@ public actor MPSMetalAcceleration {
               let cRealBuffer = device.makeBuffer(length: m * n * MemoryLayout<Float>.stride, options: .storageModeShared),
               let cImagBuffer = device.makeBuffer(length: m * n * MemoryLayout<Float>.stride, options: .storageModeShared)
         else {
-            return matrixMultiplyCPU(a, b, m: m, k: k, n: n)
+            return multiplyCPU(a, b, m: m, k: k, n: n)
         }
 
         let aRealDesc = MPSMatrixDescriptor(rows: m, columns: k, rowBytes: aRealRowBytes, dataType: .float32)
@@ -298,12 +281,21 @@ public actor MPSMetalAcceleration {
         let cImagMatrix = MPSMatrix(buffer: cImagBuffer, descriptor: cRealDesc)
 
         guard let commandBuffer = commandQueue.makeCommandBuffer() else {
-            return matrixMultiplyCPU(a, b, m: m, k: k, n: n)
+            return multiplyCPU(a, b, m: m, k: k, n: n)
         }
 
-        let matMulInit = MPSMatrixMultiplication(device: device, transposeLeft: false, transposeRight: false, resultRows: m, resultColumns: n, interiorColumns: k, alpha: 1.0, beta: 0.0)
-        let matMulSubtract = MPSMatrixMultiplication(device: device, transposeLeft: false, transposeRight: false, resultRows: m, resultColumns: n, interiorColumns: k, alpha: -1.0, beta: 1.0)
-        let matMulAdd = MPSMatrixMultiplication(device: device, transposeLeft: false, transposeRight: false, resultRows: m, resultColumns: n, interiorColumns: k, alpha: 1.0, beta: 1.0)
+        if cachedM != m || cachedK != k || cachedN != n {
+            cachedM = m; cachedK = k; cachedN = n
+            cachedMatMulInit = MPSMatrixMultiplication(device: device, transposeLeft: false, transposeRight: false, resultRows: m, resultColumns: n, interiorColumns: k, alpha: 1.0, beta: 0.0)
+            cachedMatMulSubtract = MPSMatrixMultiplication(device: device, transposeLeft: false, transposeRight: false, resultRows: m, resultColumns: n, interiorColumns: k, alpha: -1.0, beta: 1.0)
+            cachedMatMulAdd = MPSMatrixMultiplication(device: device, transposeLeft: false, transposeRight: false, resultRows: m, resultColumns: n, interiorColumns: k, alpha: 1.0, beta: 1.0)
+        }
+
+        guard let matMulInit = cachedMatMulInit,
+              let matMulSubtract = cachedMatMulSubtract,
+              let matMulAdd = cachedMatMulAdd else {
+            return multiplyCPU(a, b, m: m, k: k, n: n)
+        }
 
         matMulInit.encode(commandBuffer: commandBuffer, leftMatrix: aRealMatrix, rightMatrix: bRealMatrix, resultMatrix: cRealMatrix)
         matMulSubtract.encode(commandBuffer: commandBuffer, leftMatrix: aImagMatrix, rightMatrix: bImagMatrix, resultMatrix: cRealMatrix)
@@ -317,26 +309,39 @@ public actor MPSMetalAcceleration {
         let cRealPtr = cRealBuffer.contents().bindMemory(to: Float.self, capacity: m * n)
         let cImagPtr = cImagBuffer.contents().bindMemory(to: Float.self, capacity: m * n)
 
+        let mn = m * n
+        let cRealD = [Double](unsafeUninitializedCapacity: mn) { buffer, count in
+            // Safe: baseAddress non-nil for non-zero capacity, mn > 0 guaranteed by empty-input guard
+            vDSP_vspdp(cRealPtr, 1, buffer.baseAddress!, 1, vDSP_Length(mn))
+            count = mn
+        }
+        let cImagD = [Double](unsafeUninitializedCapacity: mn) { buffer, count in
+            // Safe: baseAddress non-nil for non-zero capacity, mn > 0 guaranteed by empty-input guard
+            vDSP_vspdp(cImagPtr, 1, buffer.baseAddress!, 1, vDSP_Length(mn))
+            count = mn
+        }
+
         let result = (0 ..< m).map { i in
             [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
                 for j in 0 ..< n {
                     let idx = i * n + j
-                    buffer[j] = Complex(Double(cRealPtr[idx]), Double(cImagPtr[idx]))
+                    buffer[j] = Complex(cRealD[idx], cImagD[idx])
                 }
                 count = n
             }
         }
 
         guard result.allSatisfy({ row in row.allSatisfy(\.isFinite) }) else {
-            return matrixMultiplyCPU(a, b, m: m, k: k, n: n)
+            return multiplyCPU(a, b, m: m, k: k, n: n)
         }
 
         return result
     }
 
+    /// CPU path for complex matrix multiplication via BLAS zgemm.
     @_optimize(speed)
     @_eagerMove
-    private func matrixMultiplyCPU(
+    private func multiplyCPU(
         _ a: [[Complex<Double>]],
         _ b: [[Complex<Double>]],
         m: Int,

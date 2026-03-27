@@ -653,7 +653,7 @@ struct MeasurementErrorModelMitigationTests {
         let model = MeasurementErrorModel(p0Given1: 0.1, p1Given0: 0.05)
 
         let original = (p0: 0.7, p1: 0.3)
-        let noisy = model.applyError(to: original)
+        let noisy = model.apply(to: original)
         let mitigated = model.mitigate(probabilities: noisy)
 
         #expect(abs(mitigated.0 - original.p0) < 0.1, "Mitigation should approximately recover P(0)")

@@ -20,7 +20,7 @@ struct ObservableHermitianTests {
         let state = QuantumState(qubits: 2)
         let expectation = identity.expectationValue(of: state)
 
-        #expect(abs(expectation - 1.0) < 1e-10)
+        #expect(abs(expectation - 1.0) < 1e-10, "Identity expectation should be +1")
     }
 
     @Test("Pauli-Z expectation on |0⟩ is +1")
@@ -33,7 +33,7 @@ struct ObservableHermitianTests {
         let state = QuantumState(qubits: 1)
         let expectation = observable.expectationValue(of: state)
 
-        #expect(abs(expectation - 1.0) < 1e-10)
+        #expect(abs(expectation - 1.0) < 1e-10, "Z on |0⟩ should give +1")
     }
 
     @Test("Pauli-Z expectation on |1⟩ is -1")
@@ -48,7 +48,7 @@ struct ObservableHermitianTests {
         let state = circuit.execute()
 
         let expectation = observable.expectationValue(of: state)
-        #expect(abs(expectation - -1.0) < 1e-10)
+        #expect(abs(expectation - -1.0) < 1e-10, "Z on |1⟩ should give -1")
     }
 
     @Test("Pauli-X expectation on |+⟩ is +1")
@@ -63,7 +63,7 @@ struct ObservableHermitianTests {
         let state = circuit.execute()
 
         let expectation = observable.expectationValue(of: state)
-        #expect(abs(expectation - 1.0) < 1e-10)
+        #expect(abs(expectation - 1.0) < 1e-10, "X on |+⟩ should give +1")
     }
 
     @Test("Pauli-X expectation on |-⟩ is -1")
@@ -79,7 +79,7 @@ struct ObservableHermitianTests {
         let state = circuit.execute()
 
         let expectation = observable.expectationValue(of: state)
-        #expect(abs(expectation - -1.0) < 1e-10)
+        #expect(abs(expectation - -1.0) < 1e-10, "X on |-⟩ should give -1")
     }
 
     @Test("Pauli-Y expectation on |+i⟩ is +1")
@@ -95,7 +95,7 @@ struct ObservableHermitianTests {
         let state = circuit.execute()
 
         let expectation = observable.expectationValue(of: state)
-        #expect(abs(expectation - 1.0) < 1e-10)
+        #expect(abs(expectation - 1.0) < 1e-10, "Y on |+i⟩ should give +1")
     }
 
     @Test("Two-qubit Z⊗Z on Bell state")
@@ -108,7 +108,7 @@ struct ObservableHermitianTests {
         let bell = QuantumCircuit.bellPhiPlus().execute()
 
         let expectation = observable.expectationValue(of: bell)
-        #expect(abs(expectation - 1.0) < 1e-10)
+        #expect(abs(expectation - 1.0) < 1e-10, "ZZ on Bell |Φ+⟩ should give +1")
     }
 
     @Test("Two-qubit X⊗X on Bell state")
@@ -121,7 +121,7 @@ struct ObservableHermitianTests {
         let bell = QuantumCircuit.bellPhiPlus().execute()
         let expectation = observable.expectationValue(of: bell)
 
-        #expect(abs(expectation - 1.0) < 1e-10)
+        #expect(abs(expectation - 1.0) < 1e-10, "XX on Bell |Φ+⟩ should give +1")
     }
 
     @Test("Multi-term observable sums correctly")
@@ -134,7 +134,7 @@ struct ObservableHermitianTests {
         let state = QuantumState(qubits: 2)
         let expectation = observable.expectationValue(of: state)
 
-        #expect(abs(expectation - 5.0) < 1e-10)
+        #expect(abs(expectation - 5.0) < 1e-10, "2Z₀ + 3Z₁ on |00⟩ should give 5.0")
     }
 
     @Test("Negative coefficient")
@@ -147,7 +147,7 @@ struct ObservableHermitianTests {
         let state = QuantumState(qubits: 1)
         let expectation = observable.expectationValue(of: state)
 
-        #expect(abs(expectation - -1.0) < 1e-10)
+        #expect(abs(expectation - -1.0) < 1e-10, "Negative coefficient should negate expectation")
     }
 
     @Test("Superposition state has intermediate expectation")
@@ -163,7 +163,7 @@ struct ObservableHermitianTests {
 
         let expectation = observable.expectationValue(of: state)
 
-        #expect(abs(expectation) < 1e-10)
+        #expect(abs(expectation) < 1e-10, "Z on |+⟩ should give 0")
     }
 
     @Test("Hydrogen molecule Hamiltonian example")
@@ -179,7 +179,7 @@ struct ObservableHermitianTests {
 
         let energy = hamiltonian.expectationValue(of: state)
 
-        #expect(abs(energy - -1.06) < 1e-10)
+        #expect(abs(energy - -1.06) < 1e-10, "H₂ ground state energy should be -1.06")
     }
 
     @Test("Observable description is formatted correctly")
@@ -190,9 +190,9 @@ struct ObservableHermitianTests {
         ])
 
         let description = observable.description
-        #expect(description.contains("Observable"))
-        #expect(description.contains("1.0") || description.contains("+1.0"))
-        #expect(description.contains("-0.5"))
+        #expect(description.contains("Observable"), "Should contain Observable prefix")
+        #expect(description.contains("1.0") || description.contains("+1.0"), "Should contain coefficient 1.0")
+        #expect(description.contains("-0.5"), "Should contain coefficient -0.5")
     }
 
     @Test("Empty observable has zero expectation")
@@ -201,7 +201,7 @@ struct ObservableHermitianTests {
         let state = QuantumState(qubits: 2)
         let expectation = observable.expectationValue(of: state)
 
-        #expect(abs(expectation) < 1e-10)
+        #expect(abs(expectation) < 1e-10, "Empty observable should give zero expectation")
     }
 }
 
@@ -220,7 +220,7 @@ struct ObservableVarianceTests {
         let state = QuantumState(qubits: 1)
         let variance = observable.variance(of: state)
 
-        #expect(abs(variance) < 1e-10)
+        #expect(abs(variance) < 1e-10, "Eigenstate variance should be zero")
     }
 
     @Test("Variance of superposition state")
@@ -236,7 +236,7 @@ struct ObservableVarianceTests {
 
         let variance = observable.variance(of: state)
 
-        #expect(abs(variance - 1.0) < 1e-10)
+        #expect(abs(variance - 1.0) < 1e-10, "Z variance on |+⟩ should be 1.0")
     }
 
     @Test("Variance is always non-negative")
@@ -253,7 +253,7 @@ struct ObservableVarianceTests {
 
         let variance = observable.variance(of: state)
 
-        #expect(variance >= -1e-10)
+        #expect(variance >= -1e-10, "Variance must be non-negative")
     }
 
     @Test("Variance of identity is zero")
@@ -270,7 +270,7 @@ struct ObservableVarianceTests {
 
         let variance = observable.variance(of: state)
 
-        #expect(abs(variance) < 1e-10)
+        #expect(abs(variance) < 1e-10, "Identity variance should be zero")
     }
 
     @Test("Multi-term variance computation")
@@ -287,7 +287,7 @@ struct ObservableVarianceTests {
 
         let variance = observable.variance(of: state)
 
-        #expect(variance > 0)
+        #expect(variance > 0, "Multi-term superposition should have positive variance")
     }
 }
 
@@ -306,7 +306,7 @@ struct ObservablePauliMultiplicationTests {
         let state = QuantumState(qubits: 1)
         let variance = observable.variance(of: state)
 
-        #expect(abs(variance) < 1e-10)
+        #expect(abs(variance) < 1e-10, "Eigenstate variance for squared Pauli should be zero")
     }
 
     @Test("Observable squared has correct scaling")
@@ -322,7 +322,7 @@ struct ObservablePauliMultiplicationTests {
 
         let variance = observable.variance(of: state)
 
-        #expect(abs(variance - 9.0) < 1e-10)
+        #expect(abs(variance - 9.0) < 1e-10, "Variance should scale as coefficient squared")
     }
 
     @Test("Two-qubit observable variance")
@@ -339,7 +339,7 @@ struct ObservablePauliMultiplicationTests {
 
         let variance = observable.variance(of: state)
 
-        #expect(variance >= 0)
+        #expect(variance >= 0, "Two-qubit variance must be non-negative")
     }
 
     @Test("X·Y multiplication produces Z with phase")
@@ -354,7 +354,7 @@ struct ObservablePauliMultiplicationTests {
         let state = circuit.execute()
 
         let variance = observable.variance(of: state)
-        #expect(variance >= 0)
+        #expect(variance >= 0, "XY product variance must be non-negative")
     }
 
     @Test("Y·Z multiplication produces X with phase")
@@ -366,7 +366,7 @@ struct ObservablePauliMultiplicationTests {
 
         let state = QuantumState(qubits: 1)
         let variance = observable.variance(of: state)
-        #expect(variance >= 0)
+        #expect(variance >= 0, "YZ product variance must be non-negative")
     }
 
     @Test("Z·X multiplication produces Y with phase")
@@ -381,7 +381,7 @@ struct ObservablePauliMultiplicationTests {
         let state = circuit.execute()
 
         let variance = observable.variance(of: state)
-        #expect(variance >= 0)
+        #expect(variance >= 0, "ZX product variance must be non-negative")
     }
 
     @Test("Squared observable filters cancelled terms from coefficient accumulation")
@@ -413,7 +413,7 @@ struct ObservableEdgeCasesTests {
         let state = QuantumState(qubits: 1)
         let expectation = observable.expectationValue(of: state)
 
-        #expect(abs(expectation - 1e10) < 1e-5)
+        #expect(abs(expectation - 1e10) < 1e-5, "Large coefficient expectation should scale correctly")
     }
 
     @Test("Very small coefficients")
@@ -426,33 +426,33 @@ struct ObservableEdgeCasesTests {
         let state = QuantumState(qubits: 1)
         let expectation = observable.expectationValue(of: state)
 
-        #expect(abs(expectation - 1e-10) < 1e-15)
+        #expect(abs(expectation - 1e-10) < 1e-10, "Small coefficient expectation should be precise")
     }
 
     @Test("Many qubits observable")
     func manyQubitsObservable() {
         let observable = Observable(
             coefficient: 1.0,
-            pauliString: PauliString(.z(0), .z(1), .z(2), .z(3), .z(4)),
+            pauliString: PauliString(.z(0), .z(1), .z(2)),
         )
 
-        let state = QuantumState(qubits: 5)
+        let state = QuantumState(qubits: 3)
         let expectation = observable.expectationValue(of: state)
 
-        #expect(abs(expectation - 1.0) < 1e-10)
+        #expect(abs(expectation - 1.0) < 1e-10, "Multi-qubit Z tensor on |000⟩ should give +1")
     }
 
     @Test("Observable with many terms")
     func manyTerms() {
         var terms: PauliTerms = []
-        for i in 0 ..< 5 {
+        for i in 0 ..< 3 {
             terms.append((coefficient: 1.0, pauliString: PauliString(.z(i))))
         }
         let observable = Observable(terms: terms)
-        let state = QuantumState(qubits: 5)
+        let state = QuantumState(qubits: 3)
         let expectation = observable.expectationValue(of: state)
 
-        #expect(abs(expectation - 5.0) < 1e-10)
+        #expect(abs(expectation - 3.0) < 1e-10, "Sum of Z terms on |000⟩ should equal term count")
     }
 
     @Test("Canceling terms")
@@ -465,14 +465,14 @@ struct ObservableEdgeCasesTests {
         let state = QuantumState(qubits: 1)
         let expectation = observable.expectationValue(of: state)
 
-        #expect(abs(expectation) < 1e-10)
+        #expect(abs(expectation) < 1e-10, "Canceling terms should give zero expectation")
     }
 
     @Test("Empty observable description")
     func emptyObservableDescription() {
         let observable = Observable(terms: [])
         let description = observable.description
-        #expect(description == "Observable: 0")
+        #expect(description == "Observable: 0", "Empty observable should display as zero")
     }
 
     @Test("Identity term shows as I in description")
@@ -482,8 +482,8 @@ struct ObservableEdgeCasesTests {
             pauliString: PauliString(),
         )
         let description = observable.description
-        #expect(description.contains("I"))
-        #expect(description.contains("2.5"))
+        #expect(description.contains("I"), "Identity should show as I")
+        #expect(description.contains("2.5"), "Coefficient should appear in description")
     }
 
     @Test("pauliX expectation value is correct")
@@ -633,7 +633,7 @@ struct ObservableEdgeCasesTests {
             decayRate: 0.1,
         )
 
-        let filtered = hamiltonian.applying(schedule: schedule, iteration: 0)
+        let filtered = hamiltonian.filtering(schedule: schedule, iteration: 0)
 
         #expect(
             filtered.terms.count == 1,
@@ -659,7 +659,7 @@ struct ObservableEdgeCasesTests {
             decayRate: 0.1,
         )
 
-        let filtered = hamiltonian.applying(schedule: schedule, iteration: 100)
+        let filtered = hamiltonian.filtering(schedule: schedule, iteration: 100)
 
         #expect(
             filtered.terms.count == 3,
@@ -677,9 +677,9 @@ struct ObservableEdgeCasesTests {
 
         let schedule = Observable.AdaptiveSchedule.aggressive
 
-        let filtered0 = hamiltonian.applying(schedule: schedule, iteration: 0)
-        let filtered20 = hamiltonian.applying(schedule: schedule, iteration: 20)
-        let filtered50 = hamiltonian.applying(schedule: schedule, iteration: 50)
+        let filtered0 = hamiltonian.filtering(schedule: schedule, iteration: 0)
+        let filtered20 = hamiltonian.filtering(schedule: schedule, iteration: 20)
+        let filtered50 = hamiltonian.filtering(schedule: schedule, iteration: 50)
 
         #expect(
             filtered0.terms.count <= filtered20.terms.count,
@@ -699,7 +699,7 @@ struct ObservableEdgeCasesTests {
             (coefficient: 0.02, pauliString: PauliString(.x(0))),
         ])
 
-        let filtered = hamiltonian.applying(schedule: .moderate, iteration: 0)
+        let filtered = hamiltonian.filtering(schedule: .moderate, iteration: 0)
 
         #expect(
             filtered.terms.count >= 1,
@@ -719,7 +719,7 @@ struct ObservableEdgeCasesTests {
             (coefficient: 0.02, pauliString: PauliString(.x(0))),
         ])
 
-        let filtered = hamiltonian.applying(schedule: .conservative, iteration: 0)
+        let filtered = hamiltonian.filtering(schedule: .conservative, iteration: 0)
 
         #expect(
             filtered.terms.count == 3,

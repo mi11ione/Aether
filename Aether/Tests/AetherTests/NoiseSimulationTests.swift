@@ -693,7 +693,7 @@ struct MeasurementErrorModelTests {
     @Test("Apply error transforms probabilities")
     func applyErrorTransforms() {
         let model = MeasurementErrorModel(p0Given1: 0.1, p1Given0: 0.05)
-        let (noisyP0, noisyP1) = model.applyError(to: (1.0, 0.0))
+        let (noisyP0, noisyP1) = model.apply(to: (1.0, 0.0))
 
         #expect(abs(noisyP0 - 0.95) < 1e-10, "P(0) should be 1 - p1Given0 = 0.95")
         #expect(abs(noisyP1 - 0.05) < 1e-10, "P(1) should be p1Given0 = 0.05")
@@ -790,10 +790,10 @@ struct NoiseModelTests {
         let model = NoiseModel.depolarizing(singleQubitError: 0.1, twoQubitError: 0.2)
         let dm = DensityMatrix(qubits: 2)
 
-        let afterSingle = model.applyNoise(after: .hadamard, targetQubits: [0], to: dm)
+        let afterSingle = model.applyNoise(after: .hadamard, targetQubits: [0], to: dm, totalQubits: 2)
         #expect(afterSingle.purity() < 1.0, "Single-qubit noise should reduce purity")
 
-        let afterTwo = model.applyNoise(after: .cnot, targetQubits: [0, 1], to: dm)
+        let afterTwo = model.applyNoise(after: .cnot, targetQubits: [0, 1], to: dm, totalQubits: 2)
         #expect(afterTwo.purity() < 1.0, "Two-qubit noise should reduce purity")
     }
 
@@ -802,7 +802,7 @@ struct NoiseModelTests {
         let model = NoiseModel(twoQubitNoise: TwoQubitDepolarizingChannel(errorProbability: 0.1))
         let dm = DensityMatrix(qubits: 2)
 
-        let result = model.applyNoise(after: .hadamard, targetQubits: [0], to: dm)
+        let result = model.applyNoise(after: .hadamard, targetQubits: [0], to: dm, totalQubits: 2)
 
         #expect(result == dm, "Matrix should be unchanged when no single-qubit noise")
         #expect(result.isPure(), "Purity should be preserved")
@@ -813,7 +813,7 @@ struct NoiseModelTests {
         let model = NoiseModel(singleQubitNoise: DepolarizingChannel(errorProbability: 0.1))
         let dm = DensityMatrix(qubits: 2)
 
-        let result = model.applyNoise(after: .cnot, targetQubits: [0, 1], to: dm)
+        let result = model.applyNoise(after: .cnot, targetQubits: [0, 1], to: dm, totalQubits: 2)
 
         #expect(result == dm, "Matrix should be unchanged when no two-qubit noise")
         #expect(result.isPure(), "Purity should be preserved")
@@ -824,22 +824,21 @@ struct NoiseModelTests {
         let model = NoiseModel.depolarizing(singleQubitError: 0.1, twoQubitError: 0.2)
         let dm = DensityMatrix(qubits: 3)
 
-        let result = model.applyNoise(after: .toffoli, targetQubits: [0, 1, 2], to: dm)
+        let result = model.applyNoise(after: .toffoli, targetQubits: [0, 1, 2], to: dm, totalQubits: 3)
 
         #expect(result == dm, "Matrix should be unchanged for 3-qubit gate (no 3-qubit noise)")
         #expect(result.isPure(), "Purity should be preserved")
     }
 
-    @Test("Apply noise with idle returns result without idle processing when no idle config")
-    func applyNoiseWithIdleNoConfig() {
+    @Test("Apply noise without idle config applies only gate noise")
+    func applyNoiseWithoutIdleConfig() {
         let model = NoiseModel.depolarizing(singleQubitError: 0.1, twoQubitError: 0.2)
         let dm = DensityMatrix(qubits: 3)
 
-        let withIdle = model.applyNoiseWithIdle(after: .hadamard, targetQubits: [0], to: dm, totalQubits: 3)
-        let withoutIdle = model.applyNoise(after: .hadamard, targetQubits: [0], to: dm)
+        let result = model.applyNoise(after: .hadamard, targetQubits: [0], to: dm, totalQubits: 3)
 
-        #expect(abs(withIdle.purity() - withoutIdle.purity()) < 1e-10,
-                "Should behave same as applyNoise when no idle config")
+        #expect(result.purity() < 1.0, "Gate noise should reduce purity")
+        #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved")
     }
 
     @Test("From hardware profile creates noise model")
@@ -1313,28 +1312,28 @@ struct EdgeNoiseParametersTests {
 struct TimingAwareNoiseModelTests {
     @Test("Creates from hardware profile")
     func createsFromProfile() {
-        let profile = HardwareNoiseProfile.ibmManila
+        let profile = HardwareNoiseProfile.linearChain(qubits: 3)
         let model = TimingAwareNoiseModel(profile: profile)
 
-        #expect(model.profile.qubitCount == 5, "Should have 5 qubits")
+        #expect(model.profile.qubitCount == 3, "Should have 3 qubits")
     }
 
     @Test("Apply single-qubit noise")
     func applySingleQubitNoise() {
-        let profile = HardwareNoiseProfile.ibmManila
+        let profile = HardwareNoiseProfile.linearChain(qubits: 3)
         let model = TimingAwareNoiseModel(profile: profile)
-        let dm = DensityMatrix(qubits: 5)
+        let dm = DensityMatrix(qubits: 3)
 
-        let result = model.applySingleQubitNoise(qubit: 0, to: dm)
+        let result = model.applyNoise(qubit: 0, to: dm)
 
         #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved")
     }
 
     @Test("Apply idle noise to non-active qubits")
     func applyIdleNoise() {
-        let profile = HardwareNoiseProfile.ibmManila
+        let profile = HardwareNoiseProfile.linearChain(qubits: 3)
         let model = TimingAwareNoiseModel(profile: profile)
-        let dm = DensityMatrix(qubits: 5)
+        let dm = DensityMatrix(qubits: 3)
 
         let result = model.applyIdleNoise(activeQubits: [0], gateTime: 300, to: dm)
 
@@ -1343,66 +1342,66 @@ struct TimingAwareNoiseModelTests {
 
     @Test("Apply all noise combines gate and idle")
     func applyAllNoiseCombines() {
-        let profile = HardwareNoiseProfile.ibmManila
+        let profile = HardwareNoiseProfile.linearChain(qubits: 3)
         let model = TimingAwareNoiseModel(profile: profile)
-        let dm = DensityMatrix(qubits: 5)
+        let dm = DensityMatrix(qubits: 3)
 
-        let result = model.applyAllNoise(after: .hadamard, targetQubits: [0], to: dm)
+        let result = model.applyNoise(after: .hadamard, targetQubits: [0], to: dm)
 
         #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved")
     }
 
     @Test("Get measurement error models")
     func getMeasurementErrorModels() {
-        let profile = HardwareNoiseProfile.ibmManila
+        let profile = HardwareNoiseProfile.linearChain(qubits: 3)
         let model = TimingAwareNoiseModel(profile: profile)
 
-        let models = model.measurementErrorModels()
+        let models = model.profile.measurementErrorModels()
 
-        #expect(models.count == 5, "Should have 5 measurement error models")
+        #expect(models.count == 3, "Should have 3 measurement error models")
     }
 
     @Test("Apply all noise handles two-qubit gate (CNOT)")
     func applyAllNoiseTwoQubitGate() {
-        let profile = HardwareNoiseProfile.linearChain(qubits: 5)
+        let profile = HardwareNoiseProfile.linearChain(qubits: 3)
         let model = TimingAwareNoiseModel(profile: profile)
-        let dm = DensityMatrix(qubits: 5)
+        let dm = DensityMatrix(qubits: 3)
 
-        let result = model.applyAllNoise(after: .cnot, targetQubits: [0, 1], to: dm)
+        let result = model.applyNoise(after: .cnot, targetQubits: [0, 1], to: dm)
 
         #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved")
     }
 
     @Test("Apply all noise handles three-qubit gate (Toffoli)")
     func applyAllNoiseThreeQubitGate() {
-        let profile = HardwareNoiseProfile.linearChain(qubits: 5)
+        let profile = HardwareNoiseProfile.linearChain(qubits: 3)
         let model = TimingAwareNoiseModel(profile: profile)
-        let dm = DensityMatrix(qubits: 5)
+        let dm = DensityMatrix(qubits: 3)
 
-        let result = model.applyAllNoise(after: .toffoli, targetQubits: [0, 1, 2], to: dm)
+        let result = model.applyNoise(after: .toffoli, targetQubits: [0, 1, 2], to: dm)
 
         #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved")
     }
 
     @Test("Apply all noise applies idle decoherence even for three-qubit gate")
     func applyAllNoiseThreeQubitWithIdle() {
-        let profile = HardwareNoiseProfile.linearChain(qubits: 5)
+        let profile = HardwareNoiseProfile.linearChain(qubits: 3)
         let model = TimingAwareNoiseModel(profile: profile)
 
-        let dm = DensityMatrix.basis(qubits: 5, state: 0b11111)
+        let dm = DensityMatrix.basis(qubits: 3, state: 0b111)
 
-        let result = model.applyAllNoise(after: .toffoli, targetQubits: [0, 1, 2], to: dm)
+        let result = model.applyNoise(after: .toffoli, targetQubits: [0, 1, 2], to: dm)
 
         #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved")
     }
 
     @Test("Apply two-qubit noise uses profile edge parameters")
     func applyTwoQubitNoiseUsesEdge() {
-        let profile = HardwareNoiseProfile.ibmManila
+        let profile = HardwareNoiseProfile.linearChain(qubits: 3)
         let model = TimingAwareNoiseModel(profile: profile)
-        let dm = DensityMatrix(qubits: 5)
+        let dm = DensityMatrix(qubits: 3)
 
-        let result = model.applyTwoQubitNoise(qubits: [0, 1], to: dm)
+        let result = model.applyNoise(qubits: [0, 1], to: dm)
 
         #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved")
         #expect(result.purity() < 1.0, "Noise should reduce purity")
@@ -1671,11 +1670,11 @@ struct NoiseModelIdleNoiseTests {
         let model = NoiseModel.typicalNISQWithIdle
         let dm = DensityMatrix(qubits: 3)
 
-        let result = model.applyNoiseWithIdle(
+        let result = model.applyNoise(
             after: .hadamard,
             targetQubits: [0],
             to: dm,
-            totalQubits: 3,
+            totalQubits: 3
         )
 
         #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved")
@@ -1693,9 +1692,19 @@ struct NoiseModelIdleNoiseTests {
     @Test("From profile with idle")
     func fromProfileWithIdle() {
         let profile = HardwareNoiseProfile.ibmManila
-        let model = NoiseModel.fromWithIdle(profile: profile)
+        let model = NoiseModel(profile: profile)
 
         #expect(model.hasIdleNoise, "Should have idle noise from profile")
         #expect(model.idleNoiseConfig != nil, "Idle config should be set")
+    }
+
+    @Test("From profile without idle noise")
+    func fromProfileWithoutIdle() {
+        let profile = HardwareNoiseProfile.ibmManila
+        let model = NoiseModel(profile: profile, includeIdleNoise: false)
+
+        #expect(!model.hasIdleNoise, "Should not have idle noise when disabled")
+        #expect(model.idleNoiseConfig == nil, "Idle config should be nil")
+        #expect(model.hasNoise, "Should still have gate noise from profile")
     }
 }

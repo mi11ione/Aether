@@ -63,23 +63,17 @@ public enum ParameterConstraint: Equatable, Hashable, Sendable {
     /// **Example:**
     /// ```swift
     /// let bounded = ParameterConstraint.bounded(min: -1.0, max: 1.0)
-    /// bounded.apply(to: 2.5)   // 1.0
-    /// bounded.apply(to: -3.0)  // -1.0
-    /// bounded.apply(to: 0.5)   // 0.5
-    ///
-    /// let nonNeg = ParameterConstraint.nonNegative
-    /// nonNeg.apply(to: -5.0)  // 0.0
-    /// nonNeg.apply(to: 3.0)   // 3.0
+    /// let clamped = bounded.apply(to: 2.5)  // 1.0
     ///
     /// let periodic = ParameterConstraint.periodic(period: 2 * .pi)
-    /// periodic.apply(to: 3 * .pi)  // π
-    /// periodic.apply(to: -0.5)     // 2π - 0.5
+    /// let wrapped = periodic.apply(to: 3 * .pi)  // π
     /// ```
     ///
     /// - Parameter value: Parameter value to constrain
     /// - Returns: Constrained parameter value
     /// - Complexity: O(1)
     @_effects(readonly)
+    @_optimize(speed)
     @inlinable
     public func apply(to value: Double) -> Double {
         switch self {
@@ -102,15 +96,10 @@ public enum ParameterConstraint: Equatable, Hashable, Sendable {
     /// **Example:**
     /// ```swift
     /// let bounded = ParameterConstraint.bounded(min: 0.0, max: 1.0)
-    /// if let (lo, hi) = bounded.bounds {
-    ///     print("[\(lo), \(hi)]")  // [0.0, 1.0]
-    /// }
+    /// let range = bounded.bounds  // (min: 0.0, max: 1.0)
     ///
     /// let nonNeg = ParameterConstraint.nonNegative
-    /// print(nonNeg.bounds)  // nil
-    ///
-    /// let periodic = ParameterConstraint.periodic(period: 2 * .pi)
-    /// print(periodic.bounds)  // nil
+    /// let noBounds = nonNeg.bounds  // nil
     /// ```
     ///
     /// - Returns: Tuple of (min, max) for bounded constraints, nil otherwise
@@ -145,7 +134,7 @@ public extension ParameterConstraint {
     @_effects(readonly)
     @inlinable
     static func makeBounded(min: Double, max: Double) -> ParameterConstraint {
-        ValidationUtilities.validateHalfOpenRange(max, min: min, max: .infinity, name: "Bounded constraint max")
+        ValidationUtilities.validateOpenMinRange(max, min: min, max: .infinity, name: "Bounded constraint max")
         return .bounded(min: min, max: max)
     }
 

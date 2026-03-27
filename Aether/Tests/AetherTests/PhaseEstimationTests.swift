@@ -267,7 +267,7 @@ struct PhasePrecisionAnalysisInitializationTests {
             precisionBits: 10,
             minSuccessProbability: 0.9,
             maxAbsoluteError: 0.0009765625,
-            requiresFloat64: false,
+            isFloat64Required: false,
         )
 
         #expect(
@@ -283,8 +283,8 @@ struct PhasePrecisionAnalysisInitializationTests {
             "maxAbsoluteError should be 1/1024",
         )
         #expect(
-            analysis.requiresFloat64 == false,
-            "requiresFloat64 should be false for 10 bits",
+            analysis.isFloat64Required == false,
+            "isFloat64Required should be false for 10 bits",
         )
     }
 
@@ -294,7 +294,7 @@ struct PhasePrecisionAnalysisInitializationTests {
             precisionBits: 20,
             minSuccessProbability: 0.95,
             maxAbsoluteError: 1.0 / Double(1 << 20),
-            requiresFloat64: true,
+            isFloat64Required: true,
         )
 
         #expect(
@@ -302,8 +302,8 @@ struct PhasePrecisionAnalysisInitializationTests {
             "precisionBits should be 20",
         )
         #expect(
-            analysis.requiresFloat64 == true,
-            "requiresFloat64 should be true for 20 bits",
+            analysis.isFloat64Required == true,
+            "isFloat64Required should be true for 20 bits",
         )
     }
 }
@@ -379,7 +379,7 @@ struct PhaseEstimationPrecisionAnalysisTests {
     }
 
     @Test("RequiresFloat64 is false for 15 or fewer bits")
-    func requiresFloat64FalseForLowPrecision() {
+    func isFloat64RequiredFalseForLowPrecision() {
         let analysis = QuantumCircuit.phaseEstimationPrecision(
             targetPrecision: 0.01,
             minSuccessProbability: 0.5,
@@ -390,13 +390,13 @@ struct PhaseEstimationPrecisionAnalysisTests {
             "precisionBits should be 15 or fewer for this configuration",
         )
         #expect(
-            analysis.requiresFloat64 == false,
-            "requiresFloat64 should be false for 15 or fewer bits",
+            analysis.isFloat64Required == false,
+            "isFloat64Required should be false for 15 or fewer bits",
         )
     }
 
     @Test("RequiresFloat64 is true for more than 15 bits")
-    func requiresFloat64TrueForHighPrecision() {
+    func isFloat64RequiredTrueForHighPrecision() {
         let analysis = QuantumCircuit.phaseEstimationPrecision(
             targetPrecision: 0.00001,
             minSuccessProbability: 0.99,
@@ -404,8 +404,8 @@ struct PhaseEstimationPrecisionAnalysisTests {
 
         if analysis.precisionBits > 15 {
             #expect(
-                analysis.requiresFloat64 == true,
-                "requiresFloat64 should be true for more than 15 bits",
+                analysis.isFloat64Required == true,
+                "isFloat64Required should be true for more than 15 bits",
             )
         }
     }
@@ -424,14 +424,14 @@ struct PhaseEstimationPrecisionAnalysisTests {
     }
 }
 
-/// Test suite for QuantumCircuit.extractPhase static method.
+/// Test suite for QuantumCircuit.phase static method.
 /// Validates phase extraction from measurement outcomes with
 /// various precision configurations.
 @Suite("Phase Extraction from Measurement")
 struct PhaseExtractionTests {
     @Test("Measurement 0 extracts phase 0.0")
-    func extractPhaseZero() {
-        let phase = QuantumCircuit.extractPhase(from: 0, precisionBits: 4)
+    func phaseZero() {
+        let phase = QuantumCircuit.phase(from: 0, precisionBits: 4)
 
         #expect(
             abs(phase) < 1e-10,
@@ -440,8 +440,8 @@ struct PhaseExtractionTests {
     }
 
     @Test("Measurement 2^(n-1) extracts phase 0.5")
-    func extractPhaseHalf() {
-        let phase = QuantumCircuit.extractPhase(from: 8, precisionBits: 4)
+    func phaseHalf() {
+        let phase = QuantumCircuit.phase(from: 8, precisionBits: 4)
 
         #expect(
             abs(phase - 0.5) < 1e-10,
@@ -450,8 +450,8 @@ struct PhaseExtractionTests {
     }
 
     @Test("Measurement 2^(n-2) extracts phase 0.25")
-    func extractPhaseQuarter() {
-        let phase = QuantumCircuit.extractPhase(from: 4, precisionBits: 4)
+    func phaseQuarter() {
+        let phase = QuantumCircuit.phase(from: 4, precisionBits: 4)
 
         #expect(
             abs(phase - 0.25) < 1e-10,
@@ -460,8 +460,8 @@ struct PhaseExtractionTests {
     }
 
     @Test("Measurement 3*2^(n-2) extracts phase 0.75")
-    func extractPhaseThreeQuarters() {
-        let phase = QuantumCircuit.extractPhase(from: 12, precisionBits: 4)
+    func phaseThreeQuarters() {
+        let phase = QuantumCircuit.phase(from: 12, precisionBits: 4)
 
         #expect(
             abs(phase - 0.75) < 1e-10,
@@ -470,14 +470,14 @@ struct PhaseExtractionTests {
     }
 
     @Test("Phase extraction with different precision bits")
-    func extractPhaseVariousPrecisions() {
-        let phase3bit = QuantumCircuit.extractPhase(from: 4, precisionBits: 3)
+    func phaseVariousPrecisions() {
+        let phase3bit = QuantumCircuit.phase(from: 4, precisionBits: 3)
         #expect(
             abs(phase3bit - 0.5) < 1e-10,
             "measurement 4 with 3 bits should extract phase 0.5 (4/8)",
         )
 
-        let phase5bit = QuantumCircuit.extractPhase(from: 16, precisionBits: 5)
+        let phase5bit = QuantumCircuit.phase(from: 16, precisionBits: 5)
         #expect(
             abs(phase5bit - 0.5) < 1e-10,
             "measurement 16 with 5 bits should extract phase 0.5 (16/32)",
@@ -485,8 +485,8 @@ struct PhaseExtractionTests {
     }
 
     @Test("Maximum measurement extracts phase near 1.0")
-    func extractPhaseMaxMeasurement() {
-        let phase = QuantumCircuit.extractPhase(from: 15, precisionBits: 4)
+    func phaseMaxMeasurement() {
+        let phase = QuantumCircuit.phase(from: 15, precisionBits: 4)
 
         #expect(
             abs(phase - 0.9375) < 1e-10,
@@ -495,9 +495,9 @@ struct PhaseExtractionTests {
     }
 
     @Test("Single precision bit extracts binary phases")
-    func extractPhaseSingleBit() {
-        let phase0 = QuantumCircuit.extractPhase(from: 0, precisionBits: 1)
-        let phase1 = QuantumCircuit.extractPhase(from: 1, precisionBits: 1)
+    func phaseSingleBit() {
+        let phase0 = QuantumCircuit.phase(from: 0, precisionBits: 1)
+        let phase1 = QuantumCircuit.phase(from: 1, precisionBits: 1)
 
         #expect(
             abs(phase0) < 1e-10,
@@ -636,7 +636,7 @@ struct PhaseEstimationIntegrationTests {
 }
 
 /// Test suite for Float64 requirement threshold in precision analysis.
-/// Validates that the requiresFloat64 flag correctly triggers
+/// Validates that the isFloat64Required flag correctly triggers
 /// when precision exceeds single-precision floating point limits.
 @Suite("Float64 Requirement Threshold")
 struct Float64RequirementThresholdTests {
@@ -646,11 +646,11 @@ struct Float64RequirementThresholdTests {
             precisionBits: 14,
             minSuccessProbability: 0.9,
             maxAbsoluteError: 1.0 / Double(1 << 14),
-            requiresFloat64: false,
+            isFloat64Required: false,
         )
 
         #expect(
-            analysis.requiresFloat64 == false,
+            analysis.isFloat64Required == false,
             "14 bits should not require Float64",
         )
     }
@@ -661,11 +661,11 @@ struct Float64RequirementThresholdTests {
             precisionBits: 15,
             minSuccessProbability: 0.9,
             maxAbsoluteError: 1.0 / Double(1 << 15),
-            requiresFloat64: false,
+            isFloat64Required: false,
         )
 
         #expect(
-            analysis.requiresFloat64 == false,
+            analysis.isFloat64Required == false,
             "15 bits should not require Float64",
         )
     }
@@ -676,11 +676,11 @@ struct Float64RequirementThresholdTests {
             precisionBits: 16,
             minSuccessProbability: 0.9,
             maxAbsoluteError: 1.0 / Double(1 << 16),
-            requiresFloat64: true,
+            isFloat64Required: true,
         )
 
         #expect(
-            analysis.requiresFloat64 == true,
+            analysis.isFloat64Required == true,
             "16 bits should require Float64",
         )
     }
@@ -691,16 +691,16 @@ struct Float64RequirementThresholdTests {
             precisionBits: 20,
             minSuccessProbability: 0.95,
             maxAbsoluteError: 1.0 / Double(1 << 20),
-            requiresFloat64: true,
+            isFloat64Required: true,
         )
 
         #expect(
-            analysis.requiresFloat64 == true,
+            analysis.isFloat64Required == true,
             "20 bits should require Float64",
         )
     }
 
-    @Test("phaseEstimationPrecision returns correct requiresFloat64 for high precision")
+    @Test("phaseEstimationPrecision returns correct isFloat64Required for high precision")
     func phaseEstimationPrecisionHighPrecisionRequirement() {
         let analysis = QuantumCircuit.phaseEstimationPrecision(
             targetPrecision: 0.000001,
@@ -709,7 +709,7 @@ struct Float64RequirementThresholdTests {
 
         if analysis.precisionBits > 15 {
             #expect(
-                analysis.requiresFloat64 == true,
+                analysis.isFloat64Required == true,
                 "high precision analysis should require Float64 when bits > 15",
             )
         }

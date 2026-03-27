@@ -65,12 +65,13 @@ public enum QASM3Exporter: Sendable {
             case let .reset(qubit, _):
                 lines.append("reset q[\(qubit)];")
             case let .measure(qubit, classicalBit, _):
-                let cbit = classicalBit ?? qubit
-                lines.append("c[\(cbit)] = measure q[\(qubit)];")
+                let targetBit = classicalBit ?? qubit
+                lines.append("c[\(targetBit)] = measure q[\(qubit)];")
             }
         }
 
-        return lines.joined(separator: "\n") + "\n"
+        lines.append("")
+        return lines.joined(separator: "\n")
     }
 
     /// Format a gate operation as a QASM 3.0 statement.
@@ -87,8 +88,6 @@ public enum QASM3Exporter: Sendable {
                 innerGate: innerGate,
                 controls: controls,
                 qubits: qubits,
-                lines: &lines,
-                customGateCounter: &customGateCounter,
             )
         case .customSingleQubit, .customTwoQubit, .customUnitary:
             return formatCustomGate(
@@ -114,19 +113,15 @@ public enum QASM3Exporter: Sendable {
         innerGate: QuantumGate,
         controls: [Int],
         qubits: [Int],
-        lines _: inout [String],
-        customGateCounter _: inout Int,
     ) -> String {
         let (baseGate, allControls) = QuantumGate.controlled(gate: innerGate, controls: controls)
             .flattenControlled()
 
         let controlCount = allControls.count
-        let targetQubits = Array(qubits.suffix(qubits.count - controlCount))
-        let controlQubits = Array(qubits.prefix(controlCount))
 
         let baseName = GateNameMapping.qasmName(for: baseGate, version: .v3)
         let params = parameterList(for: baseGate)
-        let qubitArgs = (controlQubits + targetQubits).map { "q[\($0)]" }.joined(separator: ", ")
+        let qubitArgs = formatQubitArgs(qubits)
 
         let modifier = if controlCount == 1 {
             "ctrl @ "
@@ -150,8 +145,8 @@ public enum QASM3Exporter: Sendable {
         let gateName = "custom_u\(customGateCounter)"
         customGateCounter += 1
 
-        let numQubits = gate.qubitsRequired
-        let qubitsDecl = (0 ..< numQubits).map { "q\($0)" }.joined(separator: ", ")
+        let qubitCount = gate.qubitsRequired
+        let qubitsDecl = (0 ..< qubitCount).lazy.map { "q\($0)" }.joined(separator: ", ")
         lines.append("gate \(gateName) \(qubitsDecl) {}")
 
         let qubitArgs = formatQubitArgs(qubits)
@@ -161,38 +156,9 @@ public enum QASM3Exporter: Sendable {
     /// Serialize gate parameters to a comma-separated string.
     @_effects(readonly)
     private static func parameterList(for gate: QuantumGate) -> String {
-        let values = extractParameterValues(from: gate)
+        let values = gate.parameterValues
         if values.isEmpty { return "" }
-        return values.map { formatParameterValue($0) }.joined(separator: ", ")
-    }
-
-    /// Extract ordered parameter values from a gate.
-    @_effects(readonly)
-    private static func extractParameterValues(from gate: QuantumGate) -> [ParameterValue] {
-        switch gate {
-        case let .phase(angle),
-             let .rotationX(angle),
-             let .rotationY(angle),
-             let .rotationZ(angle),
-             let .controlledPhase(angle),
-             let .controlledRotationX(angle),
-             let .controlledRotationY(angle),
-             let .controlledRotationZ(angle),
-             let .givens(angle),
-             let .xx(angle),
-             let .yy(angle),
-             let .zz(angle),
-             let .globalPhase(angle):
-            [angle]
-        case let .u1(lambda):
-            [lambda]
-        case let .u2(phi, lambda):
-            [phi, lambda]
-        case let .u3(theta, phi, lambda):
-            [theta, phi, lambda]
-        default:
-            []
-        }
+        return values.lazy.map { formatParameterValue($0) }.joined(separator: ", ")
     }
 
     /// Format a single parameter value as a QASM string.
@@ -210,6 +176,7 @@ public enum QASM3Exporter: Sendable {
         }
     }
 
+    /// Recursively format an expression node as a QASM string.
     @_effects(readonly)
     private static func formatExpression(_ node: ExpressionNode) -> String {
         switch node {
@@ -246,7 +213,7 @@ public enum QASM3Exporter: Sendable {
     @_effects(readonly)
     private static func formatDouble(_ value: Double) -> String {
         if !value.isNaN, !value.isInfinite, value == Double(Int(value)) {
-            return String(format: "%.1f", value)
+            return "\(Int(value)).0"
         }
         let formatted = String(value)
         if formatted.contains(".") || formatted.contains("e") || formatted.contains("E") {
@@ -258,6 +225,6 @@ public enum QASM3Exporter: Sendable {
     /// Format qubit arguments as comma-separated q[i] references.
     @_effects(readonly)
     private static func formatQubitArgs(_ qubits: [Int]) -> String {
-        qubits.map { "q[\($0)]" }.joined(separator: ", ")
+        qubits.lazy.map { "q[\($0)]" }.joined(separator: ", ")
     }
 }

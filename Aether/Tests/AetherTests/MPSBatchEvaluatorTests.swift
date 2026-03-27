@@ -15,7 +15,7 @@ struct MPSBatchEvaluatorTests {
         let evaluator = MPSBatchEvaluator()
         let stats = await evaluator.statistics
 
-        #expect(stats.maxBatchSize > 0)
+        #expect(stats.maxBatchSize > 0, "Max batch size should be positive")
     }
 
     @Test("Single circuit batch evaluation")
@@ -32,13 +32,13 @@ struct MPSBatchEvaluatorTests {
             from: initialState,
         )
 
-        #expect(results.count == 1)
-        #expect(results[0].qubits == 2)
+        #expect(results.count == 1, "Should produce one output state")
+        #expect(results[0].qubits == 2, "Output state should have 2 qubits")
 
         let expected = circuit.execute()
         for i in 0 ..< 4 {
-            #expect(abs(results[0].amplitudes[i].real - expected.amplitudes[i].real) < 1e-5)
-            #expect(abs(results[0].amplitudes[i].imaginary - expected.amplitudes[i].imaginary) < 1e-5)
+            #expect(abs(results[0].amplitudes[i].real - expected.amplitudes[i].real) < 1e-5, "Real part mismatch at index \(i)")
+            #expect(abs(results[0].amplitudes[i].imaginary - expected.amplitudes[i].imaginary) < 1e-5, "Imaginary part mismatch at index \(i)")
         }
     }
 
@@ -66,16 +66,16 @@ struct MPSBatchEvaluatorTests {
             from: initialState,
         )
 
-        #expect(results.count == 3)
+        #expect(results.count == 3, "Should produce three output states")
 
         let expected1 = circuit1.execute()
         let expected2 = circuit2.execute()
         let expected3 = circuit3.execute()
 
         for i in 0 ..< 4 {
-            #expect(abs(results[0].amplitudes[i].real - expected1.amplitudes[i].real) < 1e-5)
-            #expect(abs(results[1].amplitudes[i].real - expected2.amplitudes[i].real) < 1e-5)
-            #expect(abs(results[2].amplitudes[i].real - expected3.amplitudes[i].real) < 1e-5)
+            #expect(abs(results[0].amplitudes[i].real - expected1.amplitudes[i].real) < 1e-5, "Circuit 1 real part mismatch at index \(i)")
+            #expect(abs(results[1].amplitudes[i].real - expected2.amplitudes[i].real) < 1e-5, "Circuit 2 real part mismatch at index \(i)")
+            #expect(abs(results[2].amplitudes[i].real - expected3.amplitudes[i].real) < 1e-5, "Circuit 3 real part mismatch at index \(i)")
         }
     }
 
@@ -103,13 +103,13 @@ struct MPSBatchEvaluatorTests {
             observable: hamiltonian,
         )
 
-        #expect(energies.count == 2)
+        #expect(energies.count == 2, "Should produce two expectation values")
 
         let expected1 = hamiltonian.expectationValue(of: circuit1.execute())
         let expected2 = hamiltonian.expectationValue(of: circuit2.execute())
 
-        #expect(abs(energies[0] - expected1) < 1e-5)
-        #expect(abs(energies[1] - expected2) < 1e-5)
+        #expect(abs(energies[0] - expected1) < 1e-5, "First observable expectation value should match reference")
+        #expect(abs(energies[1] - expected2) < 1e-5, "Second observable expectation value should match reference")
     }
 
     @Test("Batch evaluation with SparseHamiltonian")
@@ -137,13 +137,13 @@ struct MPSBatchEvaluatorTests {
             sparse: sparseH,
         )
 
-        #expect(energies.count == 2)
+        #expect(energies.count == 2, "Should produce two sparse expectation values")
 
         let expected1 = await sparseH.expectationValue(of: circuit1.execute())
         let expected2 = await sparseH.expectationValue(of: circuit2.execute())
 
-        #expect(abs(energies[0] - expected1) < 1e-5)
-        #expect(abs(energies[1] - expected2) < 1e-5)
+        #expect(abs(energies[0] - expected1) < 1e-5, "First sparse expectation value should match reference")
+        #expect(abs(energies[1] - expected2) < 1e-5, "Second sparse expectation value should match reference")
     }
 
     @Test("Three-qubit circuit batch evaluation")
@@ -161,12 +161,12 @@ struct MPSBatchEvaluatorTests {
             from: initialState,
         )
 
-        #expect(results.count == 1)
-        #expect(results[0].qubits == 3)
+        #expect(results.count == 1, "Should produce one output state")
+        #expect(results[0].qubits == 3, "Output state should have 3 qubits")
 
         let expected = circuit.execute()
         for i in 0 ..< 8 {
-            #expect(abs(results[0].amplitudes[i].real - expected.amplitudes[i].real) < 1e-5)
+            #expect(abs(results[0].amplitudes[i].real - expected.amplitudes[i].real) < 1e-5, "Three-qubit real part mismatch at index \(i)")
         }
     }
 
@@ -176,9 +176,9 @@ struct MPSBatchEvaluatorTests {
         let maxBatch8 = await evaluator.maxBatchSize(for: 8)
         let maxBatch10 = await evaluator.maxBatchSize(for: 10)
 
-        #expect(maxBatch8 > 0)
-        #expect(maxBatch10 > 0)
-        #expect(maxBatch8 >= maxBatch10)
+        #expect(maxBatch8 > 0, "8-qubit max batch size should be positive")
+        #expect(maxBatch10 > 0, "10-qubit max batch size should be positive")
+        #expect(maxBatch8 >= maxBatch10, "Fewer qubits should allow equal or larger batch size")
     }
 
     @Test("Statistics provide device information")
@@ -186,8 +186,8 @@ struct MPSBatchEvaluatorTests {
         let evaluator = MPSBatchEvaluator()
         let stats = await evaluator.statistics
 
-        #expect(!stats.deviceName.isEmpty)
-        #expect(stats.maxBatchSize > 0)
+        #expect(!stats.deviceName.isEmpty, "Device name should not be empty")
+        #expect(stats.maxBatchSize > 0, "Statistics max batch size should be positive")
     }
 
     @Test("VQE gradient parameter set batch evaluation")
@@ -219,7 +219,7 @@ struct MPSBatchEvaluatorTests {
             observable: hamiltonian,
         )
 
-        #expect(energies.count == 4)
+        #expect(energies.count == 4, "Should produce one energy per parameter shift circuit")
     }
 
     @Test("Bell state preparation batch")
@@ -238,10 +238,10 @@ struct MPSBatchEvaluatorTests {
         )
 
         let inv_sqrt2 = 1.0 / sqrt(2.0)
-        #expect(abs(results[0].amplitudes[0].real - inv_sqrt2) < 1e-5)
-        #expect(abs(results[0].amplitudes[3].real - inv_sqrt2) < 1e-5)
-        #expect(abs(results[0].amplitudes[1].magnitude) < 1e-5)
-        #expect(abs(results[0].amplitudes[2].magnitude) < 1e-5)
+        #expect(abs(results[0].amplitudes[0].real - inv_sqrt2) < 1e-5, "Bell state |00> amplitude should be 1/sqrt(2)")
+        #expect(abs(results[0].amplitudes[3].real - inv_sqrt2) < 1e-5, "Bell state |11> amplitude should be 1/sqrt(2)")
+        #expect(abs(results[0].amplitudes[1].magnitude) < 1e-5, "Bell state |01> amplitude should be zero")
+        #expect(abs(results[0].amplitudes[2].magnitude) < 1e-5, "Bell state |10> amplitude should be zero")
     }
 
     @Test("Rotation sweep batch evaluation")
@@ -262,12 +262,12 @@ struct MPSBatchEvaluatorTests {
             from: QuantumState(qubits: 2),
         )
 
-        #expect(results.count == 5)
+        #expect(results.count == 5, "Should produce five output states for rotation sweep")
 
         for (index, circuit) in circuits.enumerated() {
             let expected = circuit.execute()
             for i in 0 ..< 4 {
-                #expect(abs(results[index].amplitudes[i].real - expected.amplitudes[i].real) < 1e-5)
+                #expect(abs(results[index].amplitudes[i].real - expected.amplitudes[i].real) < 1e-5, "Rotation sweep circuit \(index) real part mismatch at amplitude \(i)")
             }
         }
     }
@@ -286,8 +286,8 @@ struct MPSBatchEvaluatorTests {
             from: initialState,
         )
 
-        #expect(results.count == 1)
-        #expect(results[0].qubits == 4)
+        #expect(results.count == 1, "Should produce one output state for four-qubit circuit")
+        #expect(results[0].qubits == 4, "Output state should have 4 qubits")
     }
 
     @Test("Batch with identity circuits")
@@ -307,11 +307,11 @@ struct MPSBatchEvaluatorTests {
             from: initialState,
         )
 
-        #expect(results.count == 2)
+        #expect(results.count == 2, "Should produce two output states for identity circuits")
 
         for result in results {
-            #expect(abs(result.amplitudes[0].real - 1.0) < 1e-5)
-            #expect(abs(result.amplitudes[1].magnitude) < 1e-5)
+            #expect(abs(result.amplitudes[0].real - 1.0) < 1e-5, "Identity circuit should preserve |00> amplitude at 1.0")
+            #expect(abs(result.amplitudes[1].magnitude) < 1e-5, "Identity circuit should keep |01> amplitude at zero")
         }
     }
 
@@ -335,7 +335,7 @@ struct MPSBatchEvaluatorTests {
             norm += amplitude.magnitude * amplitude.magnitude
         }
 
-        #expect(abs(norm - 1.0) < 1e-5)
+        #expect(abs(norm - 1.0) < 1e-5, "Output state should be normalized to 1.0")
     }
 
     @Test("Multiple Hamiltonian measurements in batch")
@@ -370,15 +370,15 @@ struct MPSBatchEvaluatorTests {
             observable: hamiltonian2,
         )
 
-        #expect(energies1.count == 1)
-        #expect(energies2.count == 1)
+        #expect(energies1.count == 1, "First Hamiltonian should produce one energy value")
+        #expect(energies2.count == 1, "Second Hamiltonian should produce one energy value")
 
         let state = circuit.execute()
         let expected1 = hamiltonian1.expectationValue(of: state)
         let expected2 = hamiltonian2.expectationValue(of: state)
 
-        #expect(abs(energies1[0] - expected1) < 1e-5)
-        #expect(abs(energies2[0] - expected2) < 1e-5)
+        #expect(abs(energies1[0] - expected1) < 1e-5, "Z(0) expectation value should match reference")
+        #expect(abs(energies2[0] - expected2) < 1e-5, "Z(1) expectation value should match reference")
     }
 
     @Test("Batch with Toffoli gate")
@@ -399,7 +399,7 @@ struct MPSBatchEvaluatorTests {
 
         let expected = circuit.execute()
         for i in 0 ..< 8 {
-            #expect(abs(results[0].amplitudes[i].real - expected.amplitudes[i].real) < 1e-5)
+            #expect(abs(results[0].amplitudes[i].real - expected.amplitudes[i].real) < 1e-5, "Toffoli gate real part mismatch at index \(i)")
         }
     }
 
@@ -424,7 +424,7 @@ struct MPSBatchEvaluatorTests {
         let expected = prepCircuit.execute()
 
         for i in 0 ..< 4 {
-            #expect(abs(results[0].amplitudes[i].real - expected.amplitudes[i].real) < 1e-5)
+            #expect(abs(results[0].amplitudes[i].real - expected.amplitudes[i].real) < 1e-5, "Custom initial state real part mismatch at index \(i)")
         }
     }
 
@@ -442,7 +442,7 @@ struct MPSBatchEvaluatorTests {
             from: initialState,
         )
 
-        #expect(abs(results[0].amplitudes[0].real + 1.0) < 1e-5)
+        #expect(abs(results[0].amplitudes[0].real + 1.0) < 1e-5, "Full 2pi rotation should negate the amplitude")
     }
 
     @Test("Batch evaluation correctness vs sequential")
@@ -463,13 +463,13 @@ struct MPSBatchEvaluatorTests {
             from: initialState,
         )
 
-        #expect(batchResults.count == 5)
+        #expect(batchResults.count == 5, "Batch should produce five output states")
 
         for (index, circuit) in circuits.enumerated() {
             let sequential = circuit.execute()
             for i in 0 ..< 4 {
-                #expect(abs(batchResults[index].amplitudes[i].real - sequential.amplitudes[i].real) < 1e-5)
-                #expect(abs(batchResults[index].amplitudes[i].imaginary - sequential.amplitudes[i].imaginary) < 1e-5)
+                #expect(abs(batchResults[index].amplitudes[i].real - sequential.amplitudes[i].real) < 1e-5, "Batch vs sequential real part mismatch for circuit \(index) at amplitude \(i)")
+                #expect(abs(batchResults[index].amplitudes[i].imaginary - sequential.amplitudes[i].imaginary) < 1e-5, "Batch vs sequential imaginary part mismatch for circuit \(index) at amplitude \(i)")
             }
         }
     }
@@ -496,19 +496,19 @@ struct MPSBatchEvaluatorTests {
             from: initialState,
         )
 
-        #expect(results.count == batchSize)
+        #expect(results.count == batchSize, "All 1050 circuits should be evaluated after chunking")
 
         let testIndices = [0, 200, 500, 800, 1049]
         for index in testIndices {
             let expected = circuits[index].execute()
             for i in 0 ..< 4 {
-                #expect(abs(results[index].amplitudes[i].real - expected.amplitudes[i].real) < 1e-5)
-                #expect(abs(results[index].amplitudes[i].imaginary - expected.amplitudes[i].imaginary) < 1e-5)
+                #expect(abs(results[index].amplitudes[i].real - expected.amplitudes[i].real) < 1e-5, "Chunked batch real part mismatch for circuit \(index) at amplitude \(i)")
+                #expect(abs(results[index].amplitudes[i].imaginary - expected.amplitudes[i].imaginary) < 1e-5, "Chunked batch imaginary part mismatch for circuit \(index) at amplitude \(i)")
             }
         }
     }
 
-    @Test("BatchEvaluatorStatistics description formats correctly")
+    @Test("MPSBatchEvaluator.Statistics description formats correctly")
     func statisticsDescription() async {
         let evaluator = MPSBatchEvaluator()
         let stats = await evaluator.statistics
@@ -521,9 +521,9 @@ struct MPSBatchEvaluatorTests {
         #expect(description.contains("\(stats.maxBatchSize)"), "Should include actual batch size")
     }
 
-    @Test("BatchEvaluatorStatistics shows CPU when Metal unavailable")
+    @Test("MPSBatchEvaluator.Statistics shows CPU when Metal unavailable")
     func statisticsCPUDeviceName() {
-        let stats = BatchEvaluatorStatistics(
+        let stats = MPSBatchEvaluator.Statistics(
             isMetalAvailable: false,
             maxBatchSize: 100,
             deviceName: "CPU",
@@ -649,12 +649,38 @@ struct MPSBatchEvaluatorTests {
         #expect(!stats.isMetalAvailable, "Statistics should reflect Metal unavailable")
     }
 
-    @Test("BatchEvaluatorStatistics includes precision policy")
+    @Test("MPSBatchEvaluator.Statistics includes precision policy")
     func statisticsIncludesPrecisionPolicy() async {
         let evaluator = MPSBatchEvaluator(precisionPolicy: .balanced)
         let stats = await evaluator.statistics
 
         #expect(stats.precisionPolicy == .balanced, "Statistics should include precision policy")
         #expect(stats.description.contains("Precision Policy"), "Description should show precision policy")
+    }
+
+    @Test("Accurate policy CPU path evaluates batch correctly")
+    func accuratePolicyCPUPathEvaluates() async {
+        let evaluator = MPSBatchEvaluator(precisionPolicy: .accurate)
+        let state = QuantumState(qubits: 2)
+
+        let identity: [[Complex<Double>]] = [
+            [.one, .zero, .zero, .zero],
+            [.zero, .one, .zero, .zero],
+            [.zero, .zero, .one, .zero],
+            [.zero, .zero, .zero, .one],
+        ]
+        let results = await evaluator.evaluate(batch: [identity], from: state)
+
+        #expect(results.count == 1, "Should produce one output state per unitary")
+        #expect(results[0].isNormalized(), "CPU evaluated state should be normalized")
+        #expect(abs(results[0].amplitude(of: 0).real - 1.0) < 1e-10, "Identity should preserve |00> state")
+    }
+
+    @Test("Accurate policy maxBatchSize returns 1")
+    func accuratePolicyMaxBatchSize() async {
+        let evaluator = MPSBatchEvaluator(precisionPolicy: .accurate)
+        let batch = await evaluator.maxBatchSize(for: 4)
+
+        #expect(batch == 1, "CPU-only evaluator should return batch size 1")
     }
 }

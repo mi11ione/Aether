@@ -115,12 +115,14 @@ public extension QASMToken {
 }
 
 extension QASMToken {
+    /// OpenQASM 2.0 reserved keyword set.
     @usableFromInline
     static let qasmV2Keywords: Set<String> = [
         "OPENQASM", "include", "qreg", "creg", "gate", "opaque",
         "barrier", "if", "measure", "reset",
     ]
 
+    /// Additional keywords introduced in OpenQASM 3.0.
     @usableFromInline
     static let qasmV3AdditionalKeywords: Set<String> = [
         "qubit", "bit", "int", "uint", "float", "angle", "bool",

@@ -187,30 +187,14 @@ public enum BackendDispatch {
         for operation in circuit.operations {
             switch operation {
             case let .gate(gate, qubits, _):
-                applyGateToMPS(gate, qubits: qubits, mps: &mps)
+                MPSGateApplication.apply(gate, to: qubits, mps: &mps)
             case let .reset(qubit, _):
-                MPSGateApplication.applySingleQubitGate(.pauliX, to: qubit, mps: &mps)
+                MPSGateApplication.apply(.pauliX, to: [qubit], mps: &mps)
             case let .measure(qubit, _, _):
-                MPSGateApplication.applySingleQubitGate(.pauliZ, to: qubit, mps: &mps)
+                MPSGateApplication.apply(.pauliZ, to: [qubit], mps: &mps)
             }
         }
 
         return mps.toQuantumState()
-    }
-
-    /// Applies a quantum gate to the matrix product state.
-    @usableFromInline
-    @inline(__always)
-    static func applyGateToMPS(_ gate: QuantumGate, qubits: [Int], mps: inout MatrixProductState) {
-        switch gate.qubitsRequired {
-        case 1:
-            MPSGateApplication.applySingleQubitGate(gate, to: qubits[0], mps: &mps)
-        case 2:
-            MPSGateApplication.applyTwoQubitGate(gate, control: qubits[0], target: qubits[1], mps: &mps)
-        case 3:
-            MPSGateApplication.applyToffoli(control1: qubits[0], control2: qubits[1], target: qubits[2], mps: &mps)
-        default:
-            ValidationUtilities.validateUpperBound(gate.qubitsRequired, max: 3, name: "MPS gate qubit count")
-        }
     }
 }

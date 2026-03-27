@@ -2109,3 +2109,66 @@ struct QASM2FinalParserGapTests {
         #expect(result.diagnostics.contains { $0.message.contains("OPENQASM") }, "whitespace-only source must produce missing OPENQASM header error")
     }
 }
+
+/// Validates parser error recovery for malformed expressions.
+/// Covers nil-guard paths in additive, multiplicative, unary,
+/// and function call parsing with truncated or invalid input.
+@Suite("QASM2 Malformed Expression Coverage")
+struct QASM2MalformedExpressionCoverageTests {
+    @Test("Truncated additive expression triggers guard path")
+    func truncatedAdditive() {
+        let source = "OPENQASM 2.0; qreg q[1]; rx(1.0+) q[0];"
+        let result = QASM2Importer.parse(source)
+        #expect(!result.diagnostics.isEmpty, "Truncated additive should produce diagnostics")
+    }
+
+    @Test("Truncated subtraction expression triggers guard path")
+    func truncatedSubtraction() {
+        let source = "OPENQASM 2.0; qreg q[1]; rx(1.0-) q[0];"
+        let result = QASM2Importer.parse(source)
+        #expect(!result.diagnostics.isEmpty, "Truncated subtraction should produce diagnostics")
+    }
+
+    @Test("Truncated multiplicative expression triggers guard path")
+    func truncatedMultiplicative() {
+        let source = "OPENQASM 2.0; qreg q[1]; rx(1.0*) q[0];"
+        let result = QASM2Importer.parse(source)
+        #expect(!result.diagnostics.isEmpty, "Truncated multiply should produce diagnostics")
+    }
+
+    @Test("Truncated division expression triggers guard path")
+    func truncatedDivision() {
+        let source = "OPENQASM 2.0; qreg q[1]; rx(1.0/) q[0];"
+        let result = QASM2Importer.parse(source)
+        #expect(!result.diagnostics.isEmpty, "Truncated division should produce diagnostics")
+    }
+
+    @Test("Unary negation of invalid expression triggers guard path")
+    func unaryNegationInvalid() {
+        let source = "OPENQASM 2.0; qreg q[1]; rx(-]) q[0];"
+        let result = QASM2Importer.parse(source)
+        #expect(!result.diagnostics.isEmpty, "Unary negation of invalid token should produce diagnostics")
+    }
+
+    @Test("Function call with missing argument triggers guard path")
+    func functionMissingArg() {
+        let source = "OPENQASM 2.0; qreg q[1]; rx(sin()) q[0];"
+        let result = QASM2Importer.parse(source)
+        #expect(!result.diagnostics.isEmpty, "Function call with empty parens should produce diagnostics")
+    }
+
+    @Test("Missing qubit index in register reference triggers guard path")
+    func missingQubitIndex() {
+        let source = "OPENQASM 2.0; qreg q[2]; h q[;];"
+        let result = QASM2Importer.parse(source)
+        #expect(!result.diagnostics.isEmpty, "Missing qubit index should produce diagnostics")
+    }
+
+    @Test("Trailing comma in qubit arg list triggers guard path")
+    func trailingCommaQubitArgs() {
+        let source = "OPENQASM 2.0; qreg q[2]; cx q[0],;"
+        let result = QASM2Importer.parse(source)
+        #expect(!result.diagnostics.isEmpty, "Trailing comma in qubit args should produce diagnostics")
+    }
+
+}

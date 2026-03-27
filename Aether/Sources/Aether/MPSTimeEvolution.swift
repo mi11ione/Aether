@@ -3,6 +3,9 @@
 
 import Foundation
 
+private let cbrt4 = pow(4.0, 1.0 / 3.0)
+private let fifthRoot4 = pow(4.0, 1.0 / 5.0)
+
 /// TEBD evolution gate generators for common Hamiltonians.
 ///
 /// Provides efficient gate matrix computation for time evolution of nearest-neighbor
@@ -322,6 +325,8 @@ public actor MPSTimeEvolution {
     ///   - order: Trotter decomposition order (default: .second)
     /// - Returns: TEBDResult containing evolved state and statistics
     /// - Complexity: O(steps * qubits * chi^3) where chi is bond dimension
+    /// - Precondition: steps > 0
+    /// - Precondition: time > 0
     @_optimize(speed)
     public func evolveIsing(
         mps: MatrixProductState,
@@ -386,6 +391,8 @@ public actor MPSTimeEvolution {
     ///   - order: Trotter decomposition order (default: .second)
     /// - Returns: TEBDResult containing evolved state and statistics
     /// - Complexity: O(steps * qubits * chi^3) where chi is bond dimension
+    /// - Precondition: steps > 0
+    /// - Precondition: time > 0
     @_optimize(speed)
     public func evolveHeisenberg(
         mps: MatrixProductState,
@@ -441,6 +448,7 @@ public actor MPSTimeEvolution {
     ///   - order: Trotter decomposition order (default: .second)
     /// - Returns: TEBDResult containing evolved state and statistics
     /// - Complexity: O(steps * qubits * chi^3) where chi is bond dimension
+    /// - Precondition: steps > 0
     @_optimize(speed)
     public func evolveWithGate(
         mps: MatrixProductState,
@@ -479,6 +487,7 @@ public actor MPSTimeEvolution {
         )
     }
 
+    /// Dispatch a single Trotter step to the appropriate order implementation.
     @_optimize(speed)
     private func applyTrotterStep(
         mps: inout MatrixProductState,
@@ -514,6 +523,7 @@ public actor MPSTimeEvolution {
         }
     }
 
+    /// Apply first-order Trotter step with single even-odd sweep.
     @_optimize(speed)
     private func applyFirstOrderStep(
         mps: inout MatrixProductState,
@@ -531,6 +541,7 @@ public actor MPSTimeEvolution {
         return gatesApplied
     }
 
+    /// Apply second-order Trotter step with half-full-half bond sweeps.
     @_optimize(speed)
     private func applySecondOrderStep(
         mps: inout MatrixProductState,
@@ -539,9 +550,9 @@ public actor MPSTimeEvolution {
     ) async -> Int {
         var gatesApplied = 0
 
-        gatesApplied += await applyEvenBonds(mps: &mps, gate: gate, factor: 0.5)
-        gatesApplied += await applyOddBonds(mps: &mps, gate: gate, factor: 1.0)
-        gatesApplied += await applyEvenBonds(mps: &mps, gate: gate, factor: 0.5)
+        gatesApplied += await applyBonds(mps: &mps, gate: gate, factor: 0.5, startingSite: 0)
+        gatesApplied += await applyBonds(mps: &mps, gate: gate, factor: 1.0, startingSite: 1)
+        gatesApplied += await applyBonds(mps: &mps, gate: gate, factor: 0.5, startingSite: 0)
 
         if let singleGates = singleSiteGates {
             applySingleSiteGates(mps: &mps, gates: singleGates)
@@ -550,13 +561,14 @@ public actor MPSTimeEvolution {
         return gatesApplied
     }
 
+    /// Apply fourth-order Suzuki-Trotter step via recursive composition.
     @_optimize(speed)
     private func applyFourthOrderStep(
         mps: inout MatrixProductState,
         gate: [[Complex<Double>]],
         singleSiteGates: [[[Complex<Double>]]]?,
     ) async -> Int {
-        let s = 1.0 / (4.0 - pow(4.0, 1.0 / 3.0))
+        let s = 1.0 / (4.0 - cbrt4)
         let centralFactor = 1.0 - 4.0 * s
 
         var gatesApplied = 0
@@ -574,13 +586,14 @@ public actor MPSTimeEvolution {
         return gatesApplied
     }
 
+    /// Apply sixth-order Suzuki-Trotter step via recursive composition.
     @_optimize(speed)
     private func applySixthOrderStep(
         mps: inout MatrixProductState,
         gate: [[Complex<Double>]],
         singleSiteGates: [[[Complex<Double>]]]?,
     ) async -> Int {
-        let s = 1.0 / (4.0 - pow(4.0, 1.0 / 5.0))
+        let s = 1.0 / (4.0 - fifthRoot4)
         let centralFactor = 1.0 - 4.0 * s
 
         var gatesApplied = 0
@@ -598,6 +611,7 @@ public actor MPSTimeEvolution {
         return gatesApplied
     }
 
+    /// Apply a scaled second-order sweep as a sub-step of higher-order decompositions.
     @_optimize(speed)
     private func applySecondOrderSweep(
         mps: inout MatrixProductState,
@@ -605,19 +619,20 @@ public actor MPSTimeEvolution {
         factor: Double,
     ) async -> Int {
         var gatesApplied = 0
-        gatesApplied += await applyEvenBonds(mps: &mps, gate: gate, factor: factor * 0.5)
-        gatesApplied += await applyOddBonds(mps: &mps, gate: gate, factor: factor)
-        gatesApplied += await applyEvenBonds(mps: &mps, gate: gate, factor: factor * 0.5)
+        gatesApplied += await applyBonds(mps: &mps, gate: gate, factor: factor * 0.5, startingSite: 0)
+        gatesApplied += await applyBonds(mps: &mps, gate: gate, factor: factor, startingSite: 1)
+        gatesApplied += await applyBonds(mps: &mps, gate: gate, factor: factor * 0.5, startingSite: 0)
         return gatesApplied
     }
 
+    /// Apply a scaled fourth-order sweep as a sub-step of sixth-order decomposition.
     @_optimize(speed)
     private func applyFourthOrderSweep(
         mps: inout MatrixProductState,
         gate: [[Complex<Double>]],
         factor: Double,
     ) async -> Int {
-        let s = 1.0 / (4.0 - pow(4.0, 1.0 / 3.0))
+        let s = 1.0 / (4.0 - cbrt4)
         let centralFactor = 1.0 - 4.0 * s
 
         var gatesApplied = 0
@@ -629,6 +644,7 @@ public actor MPSTimeEvolution {
         return gatesApplied
     }
 
+    /// Apply two-site gates to all even bonds then all odd bonds.
     @_optimize(speed)
     private func applyEvenOddSweep(
         mps: inout MatrixProductState,
@@ -636,21 +652,23 @@ public actor MPSTimeEvolution {
         factor: Double,
     ) async -> Int {
         var gatesApplied = 0
-        gatesApplied += await applyEvenBonds(mps: &mps, gate: gate, factor: factor)
-        gatesApplied += await applyOddBonds(mps: &mps, gate: gate, factor: factor)
+        gatesApplied += await applyBonds(mps: &mps, gate: gate, factor: factor, startingSite: 0)
+        gatesApplied += await applyBonds(mps: &mps, gate: gate, factor: factor, startingSite: 1)
         return gatesApplied
     }
 
+    /// Apply a scaled two-site gate to alternating bonds from the given starting site.
     @_optimize(speed)
-    private func applyEvenBonds(
+    private func applyBonds(
         mps: inout MatrixProductState,
         gate: [[Complex<Double>]],
         factor: Double,
+        startingSite: Int,
     ) async -> Int {
         let scaledGate = scaleGate(gate, factor: factor)
         var gatesApplied = 0
 
-        var site = 0
+        var site = startingSite
         while site + 1 < mps.qubits {
             await applyTwoSiteGate(mps: &mps, gate: scaledGate, site: site)
             gatesApplied += 1
@@ -660,25 +678,7 @@ public actor MPSTimeEvolution {
         return gatesApplied
     }
 
-    @_optimize(speed)
-    private func applyOddBonds(
-        mps: inout MatrixProductState,
-        gate: [[Complex<Double>]],
-        factor: Double,
-    ) async -> Int {
-        let scaledGate = scaleGate(gate, factor: factor)
-        var gatesApplied = 0
-
-        var site = 1
-        while site + 1 < mps.qubits {
-            await applyTwoSiteGate(mps: &mps, gate: scaledGate, site: site)
-            gatesApplied += 1
-            site += 2
-        }
-
-        return gatesApplied
-    }
-
+    /// Scale gate matrix phases by the given factor.
     @_optimize(speed)
     @_effects(readonly)
     private func scaleGate(_ gate: [[Complex<Double>]], factor: Double) -> [[Complex<Double>]] {
@@ -693,6 +693,7 @@ public actor MPSTimeEvolution {
         }
     }
 
+    /// Apply an array of single-site gates to corresponding sites.
     @_optimize(speed)
     private func applySingleSiteGates(
         mps: inout MatrixProductState,
@@ -706,6 +707,7 @@ public actor MPSTimeEvolution {
         }
     }
 
+    /// Apply a single 2x2 gate to the tensor at the given site.
     @_optimize(speed)
     private func applySingleSiteGate(
         mps: inout MatrixProductState,
@@ -774,7 +776,7 @@ public actor MPSTimeEvolution {
     ///   - singleSiteGates: Optional array of 2x2 single-site gates
     /// - Complexity: O(qubits * chi^3) where chi is bond dimension
     @_optimize(speed)
-    func applyTEBDStep(
+    public func applyTEBDStep(
         mps: inout MatrixProductState,
         evenGate: [[Complex<Double>]],
         oddGate: [[Complex<Double>]],
@@ -817,7 +819,7 @@ public actor MPSTimeEvolution {
     ///   - site: Left site index (gate acts on site and site+1)
     /// - Complexity: O(chi^3) for SVD decomposition
     @_optimize(speed)
-    func applyTwoSiteGate(
+    public func applyTwoSiteGate(
         mps: inout MatrixProductState,
         gate: [[Complex<Double>]],
         site: Int,
@@ -835,47 +837,56 @@ public actor MPSTimeEvolution {
 
         let combined: [Complex<Double>]
         if useGPU {
-            let contracted = await accelerator.contractAdjacentTensors(tensorA, tensorB)
+            let contracted = await accelerator.contract(tensorA, tensorB)
             combined = flattenContracted(contracted, chiL: chiL, chiR: chiR)
         } else {
             combined = contractTensorsCPU(tensorA, tensorB, chiL: chiL, chiM: chiM, chiR: chiR)
         }
 
-        var transformed = [Complex<Double>](repeating: .zero, count: chiL * 4 * chiR)
+        let g00 = gate[0][0]; let g01 = gate[0][1]; let g02 = gate[0][2]; let g03 = gate[0][3]
+        let g10 = gate[1][0]; let g11 = gate[1][1]; let g12 = gate[1][2]; let g13 = gate[1][3]
+        let g20 = gate[2][0]; let g21 = gate[2][1]; let g22 = gate[2][2]; let g23 = gate[2][3]
+        let g30 = gate[3][0]; let g31 = gate[3][1]; let g32 = gate[3][2]; let g33 = gate[3][3]
 
-        for alpha in 0 ..< chiL {
-            for gamma in 0 ..< chiR {
-                for iPrime in 0 ..< 2 {
-                    for jPrime in 0 ..< 2 {
-                        var sum: Complex<Double> = .zero
-                        for i in 0 ..< 2 {
-                            for j in 0 ..< 2 {
-                                let gateRow = iPrime * 2 + jPrime
-                                let gateCol = i * 2 + j
-                                let combIdx = alpha * (4 * chiR) + i * (2 * chiR) + j * chiR + gamma
-                                sum = sum + gate[gateRow][gateCol] * combined[combIdx]
+        let gateFlat = [g00, g01, g02, g03, g10, g11, g12, g13, g20, g21, g22, g23, g30, g31, g32, g33]
+
+        let transformed = [Complex<Double>](unsafeUninitializedCapacity: chiL * 4 * chiR) { buffer, count in
+            for alpha in 0 ..< chiL {
+                for gamma in 0 ..< chiR {
+                    for iPrime in 0 ..< 2 {
+                        for jPrime in 0 ..< 2 {
+                            var sum: Complex<Double> = .zero
+                            let gateRow = iPrime * 2 + jPrime
+                            for i in 0 ..< 2 {
+                                for j in 0 ..< 2 {
+                                    let gateCol = i * 2 + j
+                                    let combIdx = alpha * (4 * chiR) + i * (2 * chiR) + j * chiR + gamma
+                                    sum = sum + gateFlat[gateRow * 4 + gateCol] * combined[combIdx]
+                                }
                             }
+                            let outIdx = alpha * (4 * chiR) + iPrime * (2 * chiR) + jPrime * chiR + gamma
+                            buffer[outIdx] = sum
                         }
-                        let outIdx = alpha * (4 * chiR) + iPrime * (2 * chiR) + jPrime * chiR + gamma
-                        transformed[outIdx] = sum
                     }
                 }
             }
+            count = chiL * 4 * chiR
         }
 
         let rows = chiL * 2
         let cols = 2 * chiR
-        var matrix = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: cols), count: rows)
-        for alpha in 0 ..< chiL {
-            for i in 0 ..< 2 {
-                let row = alpha * 2 + i
+        let matrix = (0 ..< rows).map { row in
+            let alpha = row / 2
+            let i = row % 2
+            return [Complex<Double>](unsafeUninitializedCapacity: cols) { buffer, count in
                 for j in 0 ..< 2 {
                     for gamma in 0 ..< chiR {
                         let col = j * chiR + gamma
                         let idx = alpha * (4 * chiR) + i * (2 * chiR) + j * chiR + gamma
-                        matrix[row][col] = transformed[idx]
+                        buffer[col] = transformed[idx]
                     }
                 }
+                count = cols
             }
         }
 
@@ -932,6 +943,7 @@ public actor MPSTimeEvolution {
         ))
     }
 
+    /// Flatten a 4D contracted tensor into a 1D interleaved array.
     @_optimize(speed)
     @_effects(readonly)
     private func flattenContracted(
@@ -954,6 +966,7 @@ public actor MPSTimeEvolution {
         }
     }
 
+    /// Contract two adjacent MPS tensors on CPU via explicit index summation.
     @_optimize(speed)
     @_effects(readonly)
     private func contractTensorsCPU(
@@ -991,8 +1004,8 @@ public actor MPSTimeEvolution {
 /// **Example:**
 /// ```swift
 /// var mps = MatrixProductState(qubits: 10, maxBondDimension: 32)
-/// let isingResult = await mps.evolvingIsing(J: 1.0, h: 0.5, time: 1.0, steps: 100)
-/// let heisenbergResult = await mps.evolvingHeisenberg(J: 1.0, delta: 1.0, time: 1.0, steps: 100)
+/// let isingResult = await mps.evolveIsing(J: 1.0, h: 0.5, time: 1.0, steps: 100)
+/// let heisenbergResult = await mps.evolveHeisenberg(J: 1.0, delta: 1.0, time: 1.0, steps: 100)
 /// ```
 public extension MatrixProductState {
     /// Evolve under Ising Hamiltonian.
@@ -1003,7 +1016,7 @@ public extension MatrixProductState {
     /// **Example:**
     /// ```swift
     /// var mps = MatrixProductState(qubits: 10, maxBondDimension: 32)
-    /// let result = await mps.evolvingIsing(J: 1.0, h: 0.5, time: 1.0, steps: 100)
+    /// let result = await mps.evolveIsing(J: 1.0, h: 0.5, time: 1.0, steps: 100)
     /// print(result.finalState.currentMaxBondDimension)
     /// ```
     ///
@@ -1014,7 +1027,7 @@ public extension MatrixProductState {
     ///   - steps: Number of Trotter steps
     /// - Returns: TEBDResult containing evolved state and statistics
     /// - Complexity: O(steps * qubits * chi^3)
-    func evolvingIsing(
+    func evolveIsing(
         J: Double,
         h: Double,
         time: Double,
@@ -1039,7 +1052,7 @@ public extension MatrixProductState {
     /// **Example:**
     /// ```swift
     /// var mps = MatrixProductState(qubits: 10, maxBondDimension: 32)
-    /// let result = await mps.evolvingHeisenberg(J: 1.0, delta: 1.0, time: 1.0, steps: 100)
+    /// let result = await mps.evolveHeisenberg(J: 1.0, delta: 1.0, time: 1.0, steps: 100)
     /// print(result.truncationStatistics.cumulativeError)
     /// ```
     ///
@@ -1050,7 +1063,7 @@ public extension MatrixProductState {
     ///   - steps: Number of Trotter steps
     /// - Returns: TEBDResult containing evolved state and statistics
     /// - Complexity: O(steps * qubits * chi^3)
-    func evolvingHeisenberg(
+    func evolveHeisenberg(
         J: Double,
         delta: Double,
         time: Double,

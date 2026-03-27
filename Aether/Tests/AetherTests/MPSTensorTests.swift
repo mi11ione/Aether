@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -635,8 +635,8 @@ struct MPSTensorMatrixSliceTests {
     func matrixPhysicalZeroGroundState() {
         let tensor = MPSTensor.groundState(site: 0, qubits: 4, maxBondDimension: 16)
 
-        let matrix0 = tensor.matrixForPhysicalIndex(0)
-        let matrix1 = tensor.matrixForPhysicalIndex(1)
+        let matrix0 = tensor.matrix(forPhysical:0)
+        let matrix1 = tensor.matrix(forPhysical:1)
 
         #expect(
             matrix0.count == 1,
@@ -665,8 +665,8 @@ struct MPSTensorMatrixSliceTests {
         }
         let tensor = MPSTensor(leftBondDimension: 2, rightBondDimension: 3, site: 1, elements: elements)
 
-        let matrix0 = tensor.matrixForPhysicalIndex(0)
-        let matrix1 = tensor.matrixForPhysicalIndex(1)
+        let matrix0 = tensor.matrix(forPhysical:0)
+        let matrix1 = tensor.matrix(forPhysical:1)
 
         #expect(
             matrix0.count == 2,
@@ -705,8 +705,8 @@ struct MPSTensorMatrixSliceTests {
         ]
         let tensor = MPSTensor(leftBondDimension: 1, rightBondDimension: 1, site: 0, elements: elements)
 
-        let matrix0 = tensor.matrixForPhysicalIndex(0)
-        let matrix1 = tensor.matrixForPhysicalIndex(1)
+        let matrix0 = tensor.matrix(forPhysical:0)
+        let matrix1 = tensor.matrix(forPhysical:1)
 
         #expect(
             abs(matrix0[0][0].real - 1.0) < 1e-10 && abs(matrix0[0][0].imaginary - 2.0) < 1e-10,
@@ -724,7 +724,7 @@ struct MPSTensorMatrixSliceTests {
 /// Ensures element ordering and total count are preserved after reshape.
 @Suite("MPSTensor - Reshape For SVD")
 struct MPSTensorReshapeTests {
-    @Test("Reshape mergeLeft=true produces (leftBond*2) x rightBond matrix")
+    @Test("Reshape mergingLeft=true produces (leftBond*2) x rightBond matrix")
     func reshapeMergeLeftDimensions() {
         let elements: [Complex<Double>] = [
             Complex(1, 0), Complex(2, 0), Complex(3, 0),
@@ -734,19 +734,19 @@ struct MPSTensorReshapeTests {
         ]
         let tensor = MPSTensor(leftBondDimension: 2, rightBondDimension: 3, site: 1, elements: elements)
 
-        let matrix = tensor.reshapeForSVD(mergeLeft: true)
+        let matrix = tensor.reshapeForSVD(mergingLeft: true)
 
         #expect(
             matrix.count == 4,
-            "mergeLeft=true should produce 4 rows (2*2), got \(matrix.count)",
+            "mergingLeft=true should produce 4 rows (2*2), got \(matrix.count)",
         )
         #expect(
             matrix[0].count == 3,
-            "mergeLeft=true should produce 3 columns, got \(matrix[0].count)",
+            "mergingLeft=true should produce 3 columns, got \(matrix[0].count)",
         )
     }
 
-    @Test("Reshape mergeLeft=false produces leftBond x (2*rightBond) matrix")
+    @Test("Reshape mergingLeft=false produces leftBond x (2*rightBond) matrix")
     func reshapeMergeRightDimensions() {
         let elements: [Complex<Double>] = [
             Complex(1, 0), Complex(2, 0), Complex(3, 0),
@@ -756,26 +756,26 @@ struct MPSTensorReshapeTests {
         ]
         let tensor = MPSTensor(leftBondDimension: 2, rightBondDimension: 3, site: 1, elements: elements)
 
-        let matrix = tensor.reshapeForSVD(mergeLeft: false)
+        let matrix = tensor.reshapeForSVD(mergingLeft: false)
 
         #expect(
             matrix.count == 2,
-            "mergeLeft=false should produce 2 rows, got \(matrix.count)",
+            "mergingLeft=false should produce 2 rows, got \(matrix.count)",
         )
         #expect(
             matrix[0].count == 6,
-            "mergeLeft=false should produce 6 columns (2*3), got \(matrix[0].count)",
+            "mergingLeft=false should produce 6 columns (2*3), got \(matrix[0].count)",
         )
     }
 
-    @Test("Reshape mergeLeft=true element ordering")
+    @Test("Reshape mergingLeft=true element ordering")
     func reshapeMergeLeftOrdering() {
         let elements: [Complex<Double>] = [
             Complex(0, 0), Complex(1, 0), Complex(2, 0), Complex(3, 0),
             Complex(4, 0), Complex(5, 0), Complex(6, 0), Complex(7, 0),
         ]
         let tensor = MPSTensor(leftBondDimension: 2, rightBondDimension: 2, site: 1, elements: elements)
-        let matrix = tensor.reshapeForSVD(mergeLeft: true)
+        let matrix = tensor.reshapeForSVD(mergingLeft: true)
 
         #expect(
             abs(matrix[0][0].real - 0.0) < 1e-10,
@@ -799,14 +799,14 @@ struct MPSTensorReshapeTests {
         )
     }
 
-    @Test("Reshape mergeLeft=false element ordering")
+    @Test("Reshape mergingLeft=false element ordering")
     func reshapeMergeRightOrdering() {
         let elements: [Complex<Double>] = [
             Complex(0, 0), Complex(1, 0), Complex(2, 0), Complex(3, 0),
             Complex(4, 0), Complex(5, 0), Complex(6, 0), Complex(7, 0),
         ]
         let tensor = MPSTensor(leftBondDimension: 2, rightBondDimension: 2, site: 1, elements: elements)
-        let matrix = tensor.reshapeForSVD(mergeLeft: false)
+        let matrix = tensor.reshapeForSVD(mergingLeft: false)
 
         #expect(
             abs(matrix[0][0].real - 0.0) < 1e-10,
@@ -841,8 +841,8 @@ struct MPSTensorReshapeTests {
         ]
         let tensor = MPSTensor(leftBondDimension: 1, rightBondDimension: 2, site: 0, elements: elements)
 
-        let matrixLeft = tensor.reshapeForSVD(mergeLeft: true)
-        let matrixRight = tensor.reshapeForSVD(mergeLeft: false)
+        let matrixLeft = tensor.reshapeForSVD(mergingLeft: true)
+        let matrixRight = tensor.reshapeForSVD(mergingLeft: false)
 
         var countLeft = 0
         for row in matrixLeft {
@@ -855,11 +855,11 @@ struct MPSTensorReshapeTests {
 
         #expect(
             countLeft == 4,
-            "mergeLeft=true should preserve 4 elements, got \(countLeft)",
+            "mergingLeft=true should preserve 4 elements, got \(countLeft)",
         )
         #expect(
             countRight == 4,
-            "mergeLeft=false should preserve 4 elements, got \(countRight)",
+            "mergingLeft=false should preserve 4 elements, got \(countRight)",
         )
     }
 }
@@ -924,14 +924,14 @@ struct MPSTensorEdgeCasesTests {
         let elements: [Complex<Double>] = [.one, .zero]
         let tensor = MPSTensor(leftBondDimension: 1, rightBondDimension: 1, site: 0, elements: elements)
 
-        let matrix = tensor.reshapeForSVD(mergeLeft: true)
+        let matrix = tensor.reshapeForSVD(mergingLeft: true)
         #expect(
             matrix.count == 2,
-            "Minimal tensor mergeLeft should have 2 rows, got \(matrix.count)",
+            "Minimal tensor mergingLeft should have 2 rows, got \(matrix.count)",
         )
         #expect(
             matrix[0].count == 1,
-            "Minimal tensor mergeLeft should have 1 column, got \(matrix[0].count)",
+            "Minimal tensor mergingLeft should have 1 column, got \(matrix[0].count)",
         )
     }
 
@@ -950,14 +950,14 @@ struct MPSTensorEdgeCasesTests {
             "Large tensor should have \(elementCount) elements, got \(tensor.elements.count)",
         )
 
-        let matrixLeft = tensor.reshapeForSVD(mergeLeft: true)
+        let matrixLeft = tensor.reshapeForSVD(mergingLeft: true)
         #expect(
             matrixLeft.count == leftBond * 2,
-            "mergeLeft should produce \(leftBond * 2) rows, got \(matrixLeft.count)",
+            "mergingLeft should produce \(leftBond * 2) rows, got \(matrixLeft.count)",
         )
         #expect(
             matrixLeft[0].count == rightBond,
-            "mergeLeft should produce \(rightBond) columns, got \(matrixLeft[0].count)",
+            "mergingLeft should produce \(rightBond) columns, got \(matrixLeft[0].count)",
         )
     }
 
@@ -1183,7 +1183,7 @@ struct MPSTensorConsistencyTests {
         let tensor = MPSTensor(leftBondDimension: 2, rightBondDimension: 2, site: 1, elements: elements)
 
         for physical in 0 ..< 2 {
-            let matrix = tensor.matrixForPhysicalIndex(physical)
+            let matrix = tensor.matrix(forPhysical:physical)
             for alpha in 0 ..< 2 {
                 for beta in 0 ..< 2 {
                     let matrixValue = matrix[alpha][beta]
@@ -1191,7 +1191,7 @@ struct MPSTensorConsistencyTests {
 
                     #expect(
                         matrixValue == subscriptValue,
-                        "matrixForPhysicalIndex(\(physical))[\(alpha)][\(beta)] should match tensor[\(alpha),\(physical),\(beta)]",
+                        "matrix(forPhysical:\(physical))[\(alpha)][\(beta)] should match tensor[\(alpha),\(physical),\(beta)]",
                     )
                 }
             }

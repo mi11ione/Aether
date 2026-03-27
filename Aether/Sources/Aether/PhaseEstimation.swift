@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under Apache 2.0
 
+import Accelerate
 import Foundation
 
 /// Result of quantum phase estimation encoding the estimated eigenvalue phase.
@@ -188,7 +189,7 @@ public struct PhasePrecisionAnalysis: Sendable {
     ///
     /// True when precisionBits > 15, as single-precision floating point
     /// cannot accurately represent phases with more than ~7 decimal digits.
-    public let requiresFloat64: Bool
+    public let isFloat64Required: Bool
 
     /// Creates a precision analysis with all components.
     ///
@@ -196,7 +197,7 @@ public struct PhasePrecisionAnalysis: Sendable {
     ///   - precisionBits: Number of qubits needed
     ///   - minSuccessProbability: Guaranteed minimum success probability
     ///   - maxAbsoluteError: Maximum phase estimation error
-    ///   - requiresFloat64: Whether double precision is necessary
+    ///   - isFloat64Required: Whether double precision is necessary
     ///
     /// **Example:**
     /// ```swift
@@ -204,19 +205,19 @@ public struct PhasePrecisionAnalysis: Sendable {
     ///     precisionBits: 10,
     ///     minSuccessProbability: 0.9,
     ///     maxAbsoluteError: 0.0009765625,
-    ///     requiresFloat64: false
+    ///     isFloat64Required: false
     /// )
     /// ```
     public init(
         precisionBits: Int,
         minSuccessProbability: Double,
         maxAbsoluteError: Double,
-        requiresFloat64: Bool,
+        isFloat64Required: Bool,
     ) {
         self.precisionBits = precisionBits
         self.minSuccessProbability = minSuccessProbability
         self.maxAbsoluteError = maxAbsoluteError
-        self.requiresFloat64 = requiresFloat64
+        self.isFloat64Required = isFloat64Required
     }
 }
 
@@ -227,10 +228,9 @@ public extension QuantumCircuit {
     /// with specified success probability. Accounts for both the binary precision
     /// limit and probabilistic error from non-exact phases.
     ///
-    /// The analysis uses:
-    /// - Base precision: n = ceil(log2(1/targetPrecision))
-    /// - Success probability: For delta extra bits, P >= 1 - 1/(2*(delta-1))
-    /// - Float64 requirement: When n > 15 bits
+    /// The analysis computes base precision as `ceil(log2(1/targetPrecision))`, adds
+    /// extra bits to meet the success probability bound P >= 1 - 1/(2*(delta-1)), and
+    /// flags Float64 requirement when precision exceeds 15 bits.
     ///
     /// **Example:**
     /// ```swift
@@ -259,7 +259,7 @@ public extension QuantumCircuit {
         minSuccessProbability: Double = 0.9,
     ) -> PhasePrecisionAnalysis {
         ValidationUtilities.validatePositiveDouble(targetPrecision, name: "targetPrecision")
-        ValidationUtilities.validateOpenMinRange(minSuccessProbability, min: 0.0, max: 1.0, name: "minSuccessProbability")
+        ValidationUtilities.validateOpenRange(minSuccessProbability, min: 0.0, max: 1.0, name: "minSuccessProbability")
 
         let baseBits = Int(Foundation.ceil(Foundation.log2(1.0 / targetPrecision)))
 
@@ -270,12 +270,10 @@ public extension QuantumCircuit {
         }
 
         let totalBits = max(1, baseBits + extraBits)
-        let maxError = 1.0 / Double(1 << totalBits)
+        let maxError = exp2(-Double(totalBits))
 
         let achievedProbability: Double = if extraBits >= 2 {
             1.0 - 1.0 / (2.0 * Double(extraBits - 1))
-        } else if extraBits == 1 {
-            PhaseEstimationConstants.baseSuccessProbability
         } else {
             PhaseEstimationConstants.baseSuccessProbability
         }
@@ -286,7 +284,7 @@ public extension QuantumCircuit {
             precisionBits: totalBits,
             minSuccessProbability: achievedProbability,
             maxAbsoluteError: maxError,
-            requiresFloat64: needsFloat64,
+            isFloat64Required: needsFloat64,
         )
     }
 
@@ -298,7 +296,7 @@ public extension QuantumCircuit {
     ///
     /// **Example:**
     /// ```swift
-    /// let phase = QuantumCircuit.extractPhase(from: 8, precisionBits: 4)
+    /// let phase = QuantumCircuit.phase(from: 8, precisionBits: 4)
     /// print(phase)  // 0.5 (since 8/16 = 0.5)
     /// ```
     ///
@@ -315,7 +313,7 @@ public extension QuantumCircuit {
     @_effects(readonly)
     @_optimize(speed)
     @inlinable
-    static func extractPhase(from measurementOutcome: Int, precisionBits: Int) -> Double {
+    static func phase(from measurementOutcome: Int, precisionBits: Int) -> Double {
         ValidationUtilities.validateNonNegativeInt(measurementOutcome, name: "measurementOutcome")
         ValidationUtilities.validatePositiveInt(precisionBits, name: "precisionBits")
 
@@ -365,25 +363,26 @@ public extension QuantumState {
 
         let precisionStateSize = 1 << precisionQubits
 
-        var precisionProbabilities = [Double](repeating: 0.0, count: precisionStateSize)
+        var precisionProbabilities = [Double](unsafeUninitializedCapacity: precisionStateSize) { buffer, count in
+            buffer.initialize(repeating: 0.0)
+            count = precisionStateSize
+        }
 
+        let precisionMask = precisionStateSize - 1
         for basisIndex in 0 ..< stateSpaceSize {
-            let precisionIndex = basisIndex % precisionStateSize
+            let precisionIndex = basisIndex & precisionMask
             let probability = amplitudes[basisIndex].magnitudeSquared
             precisionProbabilities[precisionIndex] += probability
         }
 
-        var maxPrecisionIndex = 0
-        var maxProbability = precisionProbabilities[0]
-        for i in 1 ..< precisionStateSize {
-            if precisionProbabilities[i] > maxProbability {
-                maxProbability = precisionProbabilities[i]
-                maxPrecisionIndex = i
-            }
-        }
+        var maxProbability = 0.0
+        var maxIndex: vDSP_Length = 0
+        vDSP_maxviD(precisionProbabilities, 1, &maxProbability, &maxIndex, vDSP_Length(precisionStateSize))
+        let maxPrecisionIndex = Int(maxIndex)
 
-        let estimatedPhase = Double(maxPrecisionIndex) / Double(precisionStateSize)
-        let theoreticalPrecision = 1.0 / Double(precisionStateSize)
+        let reciprocalStateSize = 1.0 / Double(precisionStateSize)
+        let estimatedPhase = Double(maxPrecisionIndex) * reciprocalStateSize
+        let theoreticalPrecision = reciprocalStateSize
 
         return PhaseEstimationResult(
             estimatedPhase: estimatedPhase,
@@ -395,8 +394,10 @@ public extension QuantumState {
     }
 }
 
-enum PhaseEstimationConstants {
-    @inlinable
+/// Constants for phase estimation probability calculations.
+private enum PhaseEstimationConstants {
+    /// Minimum success probability for single-round QPE: 4/pi^2.
+    @inline(__always)
     static var baseSuccessProbability: Double {
         4.0 / (.pi * .pi)
     }

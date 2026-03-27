@@ -791,7 +791,7 @@ public actor DMRG {
         if direction == .rightToLeft {
             for site in stride(from: mps.qubits - 1, through: 1, by: -1) {
                 let tensor = result.tensors[site]
-                let matrix = tensor.reshapeForSVD(mergeLeft: false)
+                let matrix = tensor.reshapeForSVD(mergingLeft: false)
 
                 let svdResult = SVDDecomposition.decompose(
                     matrix: matrix,

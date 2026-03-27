@@ -132,6 +132,7 @@ enum QAOAAnsatz {
         coefficient: Double,
     ) {
         let operatorCount = pauliString.operators.count
+        guard operatorCount > 0 else { return }
 
         var targetQubits = [Int](unsafeUninitializedCapacity: operatorCount) { buffer, count in
             for i in 0 ..< operatorCount {
@@ -143,8 +144,8 @@ enum QAOAAnsatz {
         }
         targetQubits.sort()
 
-        let scaledCoeff = coefficient * 2.0
-        let scaledParameter = Parameter(name: "\(parameter.name)_c_\(scaledCoeff)")
+        let scaledCoefficient = coefficient * 2.0
+        let scaledParameter = Parameter(name: "\(parameter.name)_c_\(scaledCoefficient)")
 
         if targetQubits.count == 1 {
             circuit.append(.rotationZ(.parameter(scaledParameter)), to: targetQubits[0])
@@ -191,16 +192,17 @@ enum QAOAAnsatz {
 ///
 /// - SeeAlso: ``QAOA``
 struct QAOAParameterBinder: Sendable {
-    private let parameterInfo: [(name: String, baseIndex: Int, coefficient: Double)]
+    private typealias ParameterMapping = (name: String, baseIndex: Int, coefficient: Double)
+
+    private let parameterInfo: [ParameterMapping]
     private let ansatz: QuantumCircuit
 
     /// Create binder with pre-computed parameter info.
     @_optimize(speed)
-    @_effects(readonly)
     init(ansatz: QuantumCircuit) {
         self.ansatz = ansatz
 
-        var info: [(name: String, baseIndex: Int, coefficient: Double)] = []
+        var info: [ParameterMapping] = []
         info.reserveCapacity(ansatz.parameterCount)
 
         for param in ansatz.parameters {
@@ -208,16 +210,16 @@ struct QAOAParameterBinder: Sendable {
 
             guard let coeffSeparatorRange = paramName.range(of: "_c_") else { continue }
 
-            let baseName = String(paramName[..<coeffSeparatorRange.lowerBound])
-            let coeffStr = String(paramName[coeffSeparatorRange.upperBound...])
-            guard let coefficient = Double(coeffStr) else { continue }
+            let baseName = paramName[..<coeffSeparatorRange.lowerBound]
+            let coefficientString = paramName[coeffSeparatorRange.upperBound...]
+            guard let coefficient = Double(coefficientString) else { continue }
 
             guard let underscoreRange = baseName.range(of: "_", options: .backwards) else { continue }
-            let typeStr = String(baseName[..<underscoreRange.lowerBound])
-            let layerStr = String(baseName[underscoreRange.upperBound...])
-            guard let layer = Int(layerStr) else { continue }
+            let typeString = baseName[..<underscoreRange.lowerBound]
+            let layerString = baseName[underscoreRange.upperBound...]
+            guard let layer = Int(layerString) else { continue }
 
-            let isGamma = typeStr == "gamma"
+            let isGamma = typeString == "gamma"
             let baseIndex = isGamma ? (2 * layer) : (2 * layer + 1)
             info.append((name: paramName, baseIndex: baseIndex, coefficient: coefficient))
         }
@@ -225,21 +227,26 @@ struct QAOAParameterBinder: Sendable {
         parameterInfo = info
     }
 
-    /// Bind base parameters to ansatz with coefficient scaling.
+    /// Expand base parameters to ansatz with coefficient scaling.
     ///
-    /// - Parameter baseParameters: Array of [γ₀, β₀, γ₁, β₁, ..., γₚ₋₁, βₚ₋₁]
+    /// **Example:**
+    /// ```swift
+    /// let ansatz = QuantumCircuit.qaoa(cost: cost, mixer: mixer, qubits: 3, depth: 1)
+    /// let binder = QAOAParameterBinder(ansatz: ansatz)
+    /// let circuit = binder.binding(parameters: [0.5, 0.3])
+    /// ```
+    ///
+    /// - Parameter parameters: Array of [γ₀, β₀, γ₁, β₁, ..., γₚ₋₁, βₚ₋₁]
     /// - Returns: Concrete quantum circuit with all parameters bound
     ///
     /// - Complexity: O(n) where n is the number of parameters (no string parsing)
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
-    func bind(baseParameters: [Double]) -> QuantumCircuit {
-        var bindings: [String: Double] = Dictionary(minimumCapacity: parameterInfo.count)
-
-        for info in parameterInfo {
-            bindings[info.name] = baseParameters[info.baseIndex] * info.coefficient
-        }
+    func binding(parameters: [Double]) -> QuantumCircuit {
+        let bindings = Dictionary(uniqueKeysWithValues: parameterInfo.lazy.map { info in
+            (info.name, parameters[info.baseIndex] * info.coefficient)
+        })
 
         return ansatz.binding(bindings)
     }

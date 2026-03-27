@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Testing
 
 /// Test suite for MemoryProfiler.estimate() function.
@@ -223,7 +223,7 @@ struct MemoryEstimatePropertiesTests {
         let estimate = MemoryProfiler.estimate(qubits: 2)
         #expect(estimate.stateBytes == 64, "2 qubit estimate should have stateBytes of 64")
         #expect(estimate.unitaryBytes == 256, "2 qubit estimate should have unitaryBytes of 256")
-        #expect(estimate.isRecommended == true, "Small qubit count should be recommended")
+        #expect(estimate.isRecommended, "Small qubit count should be recommended")
     }
 }
 

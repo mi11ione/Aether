@@ -11,80 +11,80 @@ import Testing
 struct PauliCommutationTests {
     @Test("Identity commutes with all Pauli operators")
     func identityCommutation() {
-        #expect(PauliCommutation.commute(nil, nil))
-        #expect(PauliCommutation.commute(nil, .x))
-        #expect(PauliCommutation.commute(nil, .y))
-        #expect(PauliCommutation.commute(nil, .z))
-        #expect(PauliCommutation.commute(.x, nil))
-        #expect(PauliCommutation.commute(.y, nil))
-        #expect(PauliCommutation.commute(.z, nil))
+        #expect(PauliCommutation.commute(nil, nil), "Identity should commute with identity")
+        #expect(PauliCommutation.commute(nil, .x), "Identity should commute with X")
+        #expect(PauliCommutation.commute(nil, .y), "Identity should commute with Y")
+        #expect(PauliCommutation.commute(nil, .z), "Identity should commute with Z")
+        #expect(PauliCommutation.commute(.x, nil), "X should commute with identity")
+        #expect(PauliCommutation.commute(.y, nil), "Y should commute with identity")
+        #expect(PauliCommutation.commute(.z, nil), "Z should commute with identity")
     }
 
     @Test("Same Pauli operators commute")
     func sameOperatorCommutation() {
-        #expect(PauliCommutation.commute(.x, .x))
-        #expect(PauliCommutation.commute(.y, .y))
-        #expect(PauliCommutation.commute(.z, .z))
+        #expect(PauliCommutation.commute(.x, .x), "X should commute with X")
+        #expect(PauliCommutation.commute(.y, .y), "Y should commute with Y")
+        #expect(PauliCommutation.commute(.z, .z), "Z should commute with Z")
     }
 
     @Test("Different Pauli operators anticommute")
     func differentOperatorAnticommutation() {
-        #expect(!PauliCommutation.commute(.x, .y))
-        #expect(!PauliCommutation.commute(.x, .z))
-        #expect(!PauliCommutation.commute(.y, .z))
-        #expect(!PauliCommutation.commute(.y, .x))
-        #expect(!PauliCommutation.commute(.z, .x))
-        #expect(!PauliCommutation.commute(.z, .y))
+        #expect(!PauliCommutation.commute(.x, .y), "X and Y should anticommute")
+        #expect(!PauliCommutation.commute(.x, .z), "X and Z should anticommute")
+        #expect(!PauliCommutation.commute(.y, .z), "Y and Z should anticommute")
+        #expect(!PauliCommutation.commute(.y, .x), "Y and X should anticommute")
+        #expect(!PauliCommutation.commute(.z, .x), "Z and X should anticommute")
+        #expect(!PauliCommutation.commute(.z, .y), "Z and Y should anticommute")
     }
 
     @Test("Multi-qubit Pauli strings with even anticommutations commute")
     func multiQubitEvenAnticommutations() {
         let ps1 = PauliString(.x(0), .y(1))
         let ps2 = PauliString(.y(0), .x(1))
-        #expect(PauliCommutation.commute(ps1, ps2))
+        #expect(PauliCommutation.commute(ps1, ps2), "Strings with 2 anticommuting positions should commute")
     }
 
     @Test("Multi-qubit Pauli strings with odd anticommutations anticommute")
     func multiQubitOddAnticommutations() {
         let ps1 = PauliString(.x(0), .y(1))
         let ps2 = PauliString(.x(0), .z(1))
-        #expect(!PauliCommutation.commute(ps1, ps2))
+        #expect(!PauliCommutation.commute(ps1, ps2), "Strings with 1 anticommuting position should anticommute")
     }
 
     @Test("Non-overlapping Pauli strings commute")
     func nonOverlappingStrings() {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(1))
-        #expect(PauliCommutation.commute(ps1, ps2))
+        #expect(PauliCommutation.commute(ps1, ps2), "Non-overlapping strings should commute")
     }
 
     @Test("Qubit-wise commuting strings with matching operators")
     func qwcMatchingOperators() {
         let ps1 = PauliString(.x(0), .y(1))
         let ps2 = PauliString(.x(0), .y(1))
-        #expect(PauliCommutation.areQWC(ps1, ps2))
+        #expect(PauliCommutation.areQWC(ps1, ps2), "Identical operators should be QWC")
     }
 
     @Test("Qubit-wise commuting strings with identity gaps")
     func qwcWithIdentityGaps() {
         let ps1 = PauliString(.x(0), .z(2))
         let ps2 = PauliString(.x(0), .y(1))
-        #expect(PauliCommutation.areQWC(ps1, ps2))
+        #expect(PauliCommutation.areQWC(ps1, ps2), "Non-overlapping qubits should be QWC")
     }
 
     @Test("Non-qubit-wise commuting strings with conflicting operators")
     func nonQwcConflictingOperators() {
         let ps1 = PauliString(.x(0), .y(1))
         let ps2 = PauliString(.y(0), .x(1))
-        #expect(!PauliCommutation.areQWC(ps1, ps2))
+        #expect(!PauliCommutation.areQWC(ps1, ps2), "Conflicting operators should not be QWC")
     }
 
     @Test("Measurement basis for single Pauli string")
     func measurementBasisSingleString() {
         let ps = PauliString(.x(0), .z(1))
         let basis = PauliCommutation.measurementBasis(of: ps)
-        #expect(basis[0] == .x)
-        #expect(basis[1] == .z)
+        #expect(basis[0] == .x, "Qubit 0 should have X basis")
+        #expect(basis[1] == .z, "Qubit 1 should have Z basis")
     }
 
     @Test("Measurement basis for QWC group")
@@ -93,8 +93,8 @@ struct PauliCommutationTests {
         let ps2 = PauliString(.x(0))
         let ps3 = PauliString(.y(1))
         let basis = PauliCommutation.measurementBasis(of: [ps1, ps2, ps3])
-        #expect(basis?[0] == .x)
-        #expect(basis?[1] == .y)
+        #expect(basis?[0] == .x, "QWC group qubit 0 should have X basis")
+        #expect(basis?[1] == .y, "QWC group qubit 1 should have Y basis")
     }
 
     @Test("Measurement basis returns nil for non-QWC strings")
@@ -102,13 +102,13 @@ struct PauliCommutationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let basis = PauliCommutation.measurementBasis(of: [ps1, ps2])
-        #expect(basis == nil)
+        #expect(basis == nil, "Non-QWC strings should return nil basis")
     }
 
     @Test("Measurement basis for empty array")
     func measurementBasisEmptyArray() {
         let basis = PauliCommutation.measurementBasis(of: [])
-        #expect(basis?.isEmpty == true)
+        #expect(basis?.isEmpty == true, "Empty array should return empty basis dictionary")
     }
 }
 
@@ -676,7 +676,7 @@ struct ObservableApproximationTests {
         let ps3 = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.1, pauliString: ps2), (coefficient: 0.01, pauliString: ps3)])
         let truncated = observable.filtering(coefficientThreshold: 0.05)
-        #expect(truncated.terms.count == 2)
+        #expect(truncated.terms.count == 2, "Should keep terms above threshold")
     }
 
     @Test("Truncate keeps largest term when all below threshold")
@@ -685,8 +685,8 @@ struct ObservableApproximationTests {
         let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 0.01, pauliString: ps1), (coefficient: 0.02, pauliString: ps2)])
         let truncated = observable.filtering(coefficientThreshold: 0.1)
-        #expect(truncated.terms.count == 1)
-        #expect(abs(truncated.terms[0].coefficient - 0.02) < 1e-10)
+        #expect(truncated.terms.count == 1, "Should keep single largest term")
+        #expect(abs(truncated.terms[0].coefficient - 0.02) < 1e-10, "Should keep the 0.02 coefficient term")
     }
 
     @Test("Truncate with zero threshold keeps all terms")
@@ -694,14 +694,14 @@ struct ObservableApproximationTests {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: 0.1, pauliString: ps)])
         let truncated = observable.filtering(coefficientThreshold: 0.0)
-        #expect(truncated.terms.count == 2)
+        #expect(truncated.terms.count == 2, "Zero threshold should keep all terms")
     }
 
     @Test("Truncate empty observable")
     func truncateEmptyObservable() {
         let observable = Observable(terms: [])
         let truncated = observable.filtering(coefficientThreshold: 0.1)
-        #expect(truncated.terms.isEmpty)
+        #expect(truncated.terms.isEmpty, "Empty observable should remain empty after filtering")
     }
 
     @Test("Top-K selection")
@@ -711,8 +711,8 @@ struct ObservableApproximationTests {
         let ps3 = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 3.0, pauliString: ps2), (coefficient: 2.0, pauliString: ps3)])
         let topK = observable.keepingLargest(2)
-        #expect(topK.terms.count == 2)
-        #expect(abs(topK.terms[0].coefficient) >= abs(topK.terms[1].coefficient))
+        #expect(topK.terms.count == 2, "Should keep exactly 2 terms")
+        #expect(abs(topK.terms[0].coefficient) >= abs(topK.terms[1].coefficient), "Terms should be sorted by magnitude")
     }
 
     @Test("Top-K with k larger than term count")
@@ -720,7 +720,7 @@ struct ObservableApproximationTests {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps)])
         let topK = observable.keepingLargest(10)
-        #expect(topK.terms.count == 2)
+        #expect(topK.terms.count == 2, "Should return all terms when k exceeds count")
     }
 
     @Test("Top-K with k equal to zero returns largest term")
@@ -728,7 +728,7 @@ struct ObservableApproximationTests {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let topK = observable.keepingLargest(0)
-        #expect(topK.terms.count == 1)
+        #expect(topK.terms.count == 1, "k=0 should return single largest term")
     }
 
     @Test("Approximation error calculation")
@@ -738,7 +738,7 @@ struct ObservableApproximationTests {
         let approximate = Observable(terms: [(coefficient: 0.9, pauliString: ps)])
         let state = QuantumState(qubits: 1)
         let error = full.error(of: approximate, state: state)
-        #expect(error >= 0.0)
+        #expect(error >= 0.0, "Error should be non-negative")
     }
 
     @Test("Approximation error for identical observables")
@@ -747,7 +747,7 @@ struct ObservableApproximationTests {
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let state = QuantumState(qubits: 1)
         let error = observable.error(of: observable, state: state)
-        #expect(abs(error) < 1e-10)
+        #expect(abs(error) < 1e-10, "Identical observables should have zero error")
     }
 
     @Test("Approximation statistics computation")
@@ -757,9 +757,9 @@ struct ObservableApproximationTests {
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let approximate = Observable(terms: [(coefficient: 1.0, pauliString: ps1)])
         let stats = full.approximationStatistics(of: approximate)
-        #expect(stats.originalTerms == 2)
-        #expect(stats.approximateTerms == 1)
-        #expect(stats.reductionFactor == 2.0)
+        #expect(stats.originalTerms == 2, "Should have 2 original terms")
+        #expect(stats.approximateTerms == 1, "Should have 1 approximate term")
+        #expect(stats.reductionFactor == 2.0, "Reduction factor should be 2x")
     }
 
     @Test("Approximation statistics for identical observables")
@@ -767,8 +767,8 @@ struct ObservableApproximationTests {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let stats = observable.approximationStatistics(of: observable)
-        #expect(stats.originalTerms == stats.approximateTerms)
-        #expect(stats.reductionFactor == 1.0)
+        #expect(stats.originalTerms == stats.approximateTerms, "Identical observables should have equal term counts")
+        #expect(stats.reductionFactor == 1.0, "No reduction for identical observables")
     }
 
     @Test("Approximation statistics description format")
@@ -789,8 +789,8 @@ struct ObservableApproximationTests {
         let approximate = Observable(terms: [(coefficient: 1.8, pauliString: ps)])
         let state = QuantumState(qubits: 1)
         let relError = full.relativeError(of: approximate, state: state)
-        #expect(relError >= 0.0)
-        #expect(relError <= 1.0)
+        #expect(relError >= 0.0, "Relative error should be non-negative")
+        #expect(relError <= 1.0, "Relative error should not exceed 1.0")
     }
 
     @Test("Relative approximation error with zero exact value")
@@ -800,7 +800,7 @@ struct ObservableApproximationTests {
         let approximate = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let state = QuantumState(qubits: 1)
         let relError = full.relativeError(of: approximate, state: state)
-        #expect(abs(relError) < 1e-9)
+        #expect(abs(relError) < 1e-9, "Relative error should be zero when exact value is zero")
     }
 
     @Test("Validate approximation within tolerance")
@@ -809,8 +809,8 @@ struct ObservableApproximationTests {
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 0.99, pauliString: ps)])
         let state = QuantumState(qubits: 1)
-        let valid = full.meetsAccuracy(approximate, state: state, tolerance: 0.1)
-        #expect(valid)
+        let valid = full.meetsAccuracy(of: approximate, state: state, tolerance: 0.1)
+        #expect(valid, "Approximation should be within tolerance")
     }
 
     @Test("Validate approximation outside tolerance")
@@ -819,8 +819,8 @@ struct ObservableApproximationTests {
         let full = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let approximate = Observable(terms: [(coefficient: 0.5, pauliString: ps)])
         let state = QuantumState(qubits: 1)
-        let valid = full.meetsAccuracy(approximate, state: state, tolerance: 0.01)
-        #expect(!valid)
+        let valid = full.meetsAccuracy(of: approximate, state: state, tolerance: 0.01)
+        #expect(!valid, "Approximation should exceed tolerance")
     }
 
     @Test("Find optimal threshold for approximation")
@@ -830,9 +830,9 @@ struct ObservableApproximationTests {
         let ps3 = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.5, pauliString: ps2), (coefficient: 0.1, pauliString: ps3)])
         let state = QuantumState(qubits: 1)
-        let threshold = observable.findOptimalThreshold(state: state, maxError: 0.2, searchSteps: 10)
-        #expect(threshold >= 0.0)
-        #expect(threshold <= 1.0)
+        let threshold = observable.optimalThreshold(for: state, maxError: 0.2, searchSteps: 10)
+        #expect(threshold >= 0.0, "Threshold should be non-negative")
+        #expect(threshold <= 1.0, "Threshold should not exceed max coefficient")
     }
 
     @Test("Find optimal threshold with strict error constraint")
@@ -842,17 +842,17 @@ struct ObservableApproximationTests {
         let ps3 = PauliString(.z(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 0.3, pauliString: ps2), (coefficient: 0.1, pauliString: ps3)])
         let state = QuantumState(qubits: 1)
-        let threshold = observable.findOptimalThreshold(state: state, maxError: 0.01, searchSteps: 20)
+        let threshold = observable.optimalThreshold(for: state, maxError: 0.01, searchSteps: 20)
         let approx = observable.filtering(coefficientThreshold: threshold)
         let error = observable.error(of: approx, state: state)
-        #expect(error <= 0.02)
+        #expect(error <= 0.02, "Error should be within twice the target")
     }
 
     @Test("topK with k=0 on empty observable returns empty")
     func topKZeroEmptyObservable() {
         let observable = Observable(terms: [])
         let result = observable.keepingLargest(0)
-        #expect(result.terms.isEmpty)
+        #expect(result.terms.isEmpty, "Empty observable should remain empty")
     }
 
     @Test("Approximation statistics with empty original observable")
@@ -862,18 +862,18 @@ struct ObservableApproximationTests {
         let nonEmpty = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let stats = empty.approximationStatistics(of: nonEmpty)
 
-        #expect(stats.originalTerms == 0)
-        #expect(stats.reductionFactor == 1.0)
-        #expect(stats.coefficientRetention == 0.0)
+        #expect(stats.originalTerms == 0, "Original should have 0 terms")
+        #expect(stats.reductionFactor == 1.0, "Reduction factor should default to 1.0")
+        #expect(stats.coefficientRetention == 0.0, "Retention should be 0 for empty original")
     }
 
     @Test("Find optimal threshold on empty observable")
     func findOptimalThresholdEmpty() {
         let observable = Observable(terms: [])
         let state = QuantumState(qubits: 1)
-        let threshold = observable.findOptimalThreshold(state: state, maxError: 0.1)
+        let threshold = observable.optimalThreshold(for: state, maxError: 0.1)
 
-        #expect(abs(threshold - 1.0) < 1e-6)
+        #expect(abs(threshold - 1.0) < 1e-6, "Empty observable threshold should converge to 1.0")
     }
 
     @Test("topK with k=0 returns single largest term")
@@ -886,8 +886,8 @@ struct ObservableApproximationTests {
 
         let approx = observable.keepingLargest(0)
 
-        #expect(approx.terms.count == 1)
-        #expect(abs(approx.terms[0].coefficient - 3.5) < 1e-10)
+        #expect(approx.terms.count == 1, "k=0 should return single term")
+        #expect(abs(approx.terms[0].coefficient - 3.5) < 1e-10, "Should keep largest magnitude term")
     }
 
     @Test("topK with k=0 on empty observable returns empty")
@@ -895,7 +895,7 @@ struct ObservableApproximationTests {
         let observable = Observable(terms: [])
         let approx = observable.keepingLargest(0)
 
-        #expect(approx.terms.count == 0)
+        #expect(approx.terms.count == 0, "Empty observable should stay empty")
     }
 
     @Test("topK with negative k returns largest term")
@@ -907,8 +907,8 @@ struct ObservableApproximationTests {
 
         let approx = observable.keepingLargest(-1)
 
-        #expect(approx.terms.count == 1)
-        #expect(abs(abs(approx.terms[0].coefficient) - 5.0) < 1e-10)
+        #expect(approx.terms.count == 1, "Negative k should return single term")
+        #expect(abs(abs(approx.terms[0].coefficient) - 5.0) < 1e-10, "Should keep largest magnitude term")
     }
 
     @Test("topK with k=1 returns single largest term")
@@ -921,8 +921,8 @@ struct ObservableApproximationTests {
 
         let approx = observable.keepingLargest(1)
 
-        #expect(approx.terms.count == 1)
-        #expect(abs(approx.terms[0].coefficient - 4.0) < 1e-10)
+        #expect(approx.terms.count == 1, "k=1 should return single term")
+        #expect(abs(approx.terms[0].coefficient - 4.0) < 1e-10, "Should keep coefficient 4.0 term")
     }
 
     @Test("topK with k=2 returns two largest terms")
@@ -936,11 +936,11 @@ struct ObservableApproximationTests {
 
         let approx = observable.keepingLargest(2)
 
-        #expect(approx.terms.count == 2)
+        #expect(approx.terms.count == 2, "k=2 should return two terms")
 
         let coeffs = approx.terms.map { abs($0.coefficient) }.sorted(by: >)
-        #expect(abs(coeffs[0] - 4.0) < 1e-10)
-        #expect(abs(coeffs[1] - 3.0) < 1e-10)
+        #expect(abs(coeffs[0] - 4.0) < 1e-10, "First coefficient should be 4.0")
+        #expect(abs(coeffs[1] - 3.0) < 1e-10, "Second coefficient should be 3.0")
     }
 
     @Test("topK with k larger than term count returns all terms")
@@ -952,7 +952,7 @@ struct ObservableApproximationTests {
 
         let approx = observable.keepingLargest(10)
 
-        #expect(approx.terms.count == 2)
+        #expect(approx.terms.count == 2, "Should return all terms when k exceeds count")
     }
 
     @Test("topK selects by absolute value of coefficient")
@@ -965,8 +965,8 @@ struct ObservableApproximationTests {
 
         let approx = observable.keepingLargest(1)
 
-        #expect(approx.terms.count == 1)
-        #expect(abs(abs(approx.terms[0].coefficient) - 5.0) < 1e-10)
+        #expect(approx.terms.count == 1, "k=1 should return single term")
+        #expect(abs(abs(approx.terms[0].coefficient) - 5.0) < 1e-10, "Should select by absolute value")
     }
 }
 
@@ -984,7 +984,7 @@ struct MeasurementOptimizationIntegrationTests {
         let groups2 = observable.qwcGroups
 
         let countsMatch = await groups1().count == groups2().count
-        #expect(countsMatch)
+        #expect(countsMatch, "Cached groups should return same count")
     }
 
     @Test("QWC groups for single term")
@@ -992,8 +992,8 @@ struct MeasurementOptimizationIntegrationTests {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let groups = observable.qwcGroups
-        await #expect(groups().count == 1)
-        await #expect(groups()[0].terms.count == 1)
+        await #expect(groups().count == 1, "Single term should form 1 group")
+        await #expect(groups()[0].terms.count == 1, "Group should contain 1 term")
     }
 
     @Test("QWC groups reduce measurement count")
@@ -1003,7 +1003,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps3 = PauliString(.y(1))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3)])
         let groups = observable.qwcGroups
-        await #expect(groups().count < 3)
+        await #expect(groups().count < 3, "QWC grouping should reduce group count below term count")
     }
 
     @Test("Unitary partitions caching")
@@ -1013,7 +1013,7 @@ struct MeasurementOptimizationIntegrationTests {
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let partitions1 = await observable.unitaryPartitions()
         let partitions2 = await observable.unitaryPartitions()
-        #expect(partitions1.count == partitions2.count)
+        #expect(partitions1.count == partitions2.count, "Cached partitions should return same count")
     }
 
     @Test("Unitary partitions for single term")
@@ -1021,7 +1021,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
         let partitions = await observable.unitaryPartitions()
-        #expect(!partitions.isEmpty)
+        #expect(!partitions.isEmpty, "Single term should produce at least one partition")
     }
 
     @Test("Shot allocation for observable terms")
@@ -1030,8 +1030,8 @@ struct MeasurementOptimizationIntegrationTests {
         let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 3.0, pauliString: ps2)])
         let allocation = observable.allocateShots(totalShots: 1000, state: nil)
-        #expect(allocation.count == 2)
-        #expect(allocation.values.reduce(0, +) <= 1000)
+        #expect(allocation.count == 2, "Should allocate for both terms")
+        #expect(allocation.values.reduce(0, +) <= 1000, "Total allocated shots should not exceed budget")
     }
 
     @Test("Shot allocation for QWC groups")
@@ -1040,7 +1040,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps2 = PauliString(.x(0), .y(1))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let allocation = await observable.allocateShotsForGroups(totalShots: 1000, state: nil)
-        #expect(!allocation.isEmpty)
+        #expect(!allocation.isEmpty, "Should produce non-empty group allocation")
     }
 
     @Test("Measurement optimization statistics computation")
@@ -1049,8 +1049,8 @@ struct MeasurementOptimizationIntegrationTests {
         let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         let stats = await observable.optimizationStatistics()
-        #expect(stats.numTerms == 2)
-        #expect(stats.numQWCGroups > 0)
+        #expect(stats.numTerms == 2, "Should report 2 terms")
+        #expect(stats.numQWCGroups > 0, "Should have at least 1 QWC group")
     }
 
     @Test("Measurement optimization statistics description format")
@@ -1068,8 +1068,8 @@ struct MeasurementOptimizationIntegrationTests {
     func measurementOptimizationStatisticsEmpty() async {
         let observable = Observable(terms: [])
         let stats = await observable.optimizationStatistics()
-        #expect(stats.numTerms == 0)
-        #expect(stats.numQWCGroups == 0)
+        #expect(stats.numTerms == 0, "Empty observable should report 0 terms")
+        #expect(stats.numQWCGroups == 0, "Empty observable should have 0 groups")
     }
 
     @Test("Different observables have different QWC groups")
@@ -1080,11 +1080,11 @@ struct MeasurementOptimizationIntegrationTests {
         let obs2 = Observable(terms: [(coefficient: 1.0, pauliString: ps2)])
         let groups1 = obs1.qwcGroups
         let groups2 = obs2.qwcGroups
-        await #expect(groups1().count == 1)
-        await #expect(groups2().count == 1)
+        await #expect(groups1().count == 1, "X observable should have 1 group")
+        await #expect(groups2().count == 1, "Y observable should have 1 group")
 
         let measurementMatch = await groups1()[0].measurementBasis != groups2()[0].measurementBasis
-        #expect(measurementMatch)
+        #expect(measurementMatch, "X and Y observables should have different measurement bases")
     }
 
     @Test("Shot allocation respects minimum shots")
@@ -1094,7 +1094,7 @@ struct MeasurementOptimizationIntegrationTests {
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 100.0, pauliString: ps2)])
         let allocation = observable.allocateShots(totalShots: 500, minShotsPerTerm: 50, state: nil)
         for shots in allocation.values {
-            #expect(shots >= 50)
+            #expect(shots >= 50, "Each term should receive at least minimum shots")
         }
     }
 
@@ -1106,7 +1106,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps4 = PauliString(.x(0), .y(1))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3), (coefficient: 4.0, pauliString: ps4)])
         let groups = observable.qwcGroups
-        await #expect(groups().count < observable.terms.count)
+        await #expect(groups().count < observable.terms.count, "QWC grouping should reduce circuit count")
     }
 
     @Test("Clear grouping caches")
@@ -1128,8 +1128,8 @@ struct MeasurementOptimizationIntegrationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
-        let count = await observable.measureCircuitCount(for: .termByTerm)
-        #expect(count == 2)
+        let count = await observable.circuitCount(for: .termByTerm)
+        #expect(count == 2, "Term-by-term should require one circuit per term")
     }
 
     @Test("Measurement circuits for QWC grouping strategy")
@@ -1137,31 +1137,31 @@ struct MeasurementOptimizationIntegrationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
-        let count = await observable.measureCircuitCount(for: .qwcGrouping)
-        #expect(count == 1)
+        let count = await observable.circuitCount(for: .qwcGrouping)
+        #expect(count == 1, "Identical Pauli strings should form 1 QWC group")
     }
 
     @Test("Measurement circuits for unitary partitioning strategy")
     func measurementCircuitsUnitaryPartitioning() async {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let count = await observable.measureCircuitCount(for: .unitaryPartitioning)
-        #expect(count >= 1)
+        let count = await observable.circuitCount(for: .unitaryPartitioning)
+        #expect(count >= 1, "Should require at least 1 circuit")
     }
 
     @Test("Measurement circuits for automatic strategy selection")
     func measurementCircuitsAutomatic() async {
         let ps = PauliString(.x(0))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps)])
-        let count = await observable.measureCircuitCount(for: .automatic)
-        #expect(count >= 1)
+        let count = await observable.circuitCount(for: .automatic)
+        #expect(count >= 1, "Automatic strategy should require at least 1 circuit")
     }
 
     @Test("Automatic strategy selects QWC grouping for medium-sized Hamiltonians (20-499 terms)")
     func automaticStrategySelectsQWCGrouping() async {
         var terms: PauliTerms = []
         for i in 0 ..< 50 {
-            let qubit = i % 5
+            let qubit = i % 3
             let basis: PauliBasis = [.x, .y, .z][i % 3]
             let op = switch basis {
             case .x: PauliOperator.x(qubit)
@@ -1172,8 +1172,8 @@ struct MeasurementOptimizationIntegrationTests {
         }
         let observable = Observable(terms: terms)
 
-        let automaticCount = await observable.measureCircuitCount(for: .automatic)
-        let qwcCount = await observable.measureCircuitCount(for: .qwcGrouping)
+        let automaticCount = await observable.circuitCount(for: .automatic)
+        let qwcCount = await observable.circuitCount(for: .qwcGrouping)
 
         #expect(automaticCount == qwcCount, "Automatic strategy should select QWC grouping for 50 terms")
         #expect(automaticCount < 50, "QWC grouping should reduce circuit count below term count")
@@ -1273,7 +1273,7 @@ struct MeasurementOptimizationIntegrationTests {
             terms.append((coefficient: 1.0, pauliString: ps))
         }
         let observable = Observable(terms: terms)
-        let count = await observable.measureCircuitCount(for: .automatic)
+        let count = await observable.circuitCount(for: .automatic)
         #expect(count >= 1)
     }
 

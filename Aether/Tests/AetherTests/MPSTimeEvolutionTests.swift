@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -654,45 +654,45 @@ struct TruncationStatisticsTrackingTests {
 }
 
 /// Test suite for MatrixProductState extension methods for time evolution.
-/// Validates the convenience methods evolvingIsing and evolvingHeisenberg.
+/// Validates the convenience methods evolveIsing and evolveHeisenberg.
 @Suite("MatrixProductState Extension Methods")
 struct MatrixProductStateExtensionMethodsTests {
-    @Test("evolvingIsing returns valid result")
-    func evolvingIsingReturnsValidResult() async {
+    @Test("evolveIsing returns valid result")
+    func evolveIsingReturnsValidResult() async {
         let mps = MatrixProductState(qubits: 4, maxBondDimension: 8)
-        let result = await mps.evolvingIsing(J: 1.0, h: 0.5, time: 0.2, steps: 5)
+        let result = await mps.evolveIsing(J: 1.0, h: 0.5, time: 0.2, steps: 5)
 
         #expect(result.finalState.qubits == 4, "Final state should have same number of qubits")
         #expect(result.steps == 5, "Result should have requested number of steps")
         #expect(abs(result.time - 0.2) < 1e-10, "Result should have requested evolution time")
     }
 
-    @Test("evolvingIsing preserves normalization")
-    func evolvingIsingPreservesNormalization() async {
+    @Test("evolveIsing preserves normalization")
+    func evolveIsingPreservesNormalization() async {
         let mps = MatrixProductState(qubits: 4, maxBondDimension: 8)
-        let result = await mps.evolvingIsing(J: 1.0, h: 0.5, time: 0.3, steps: 8)
+        let result = await mps.evolveIsing(J: 1.0, h: 0.5, time: 0.3, steps: 8)
 
         let normSquared = result.finalState.normSquared()
-        #expect(abs(normSquared - 1.0) < 1e-5, "evolvingIsing should preserve normalization")
+        #expect(abs(normSquared - 1.0) < 1e-5, "evolveIsing should preserve normalization")
     }
 
-    @Test("evolvingHeisenberg returns valid result")
-    func evolvingHeisenbergReturnsValidResult() async {
+    @Test("evolveHeisenberg returns valid result")
+    func evolveHeisenbergReturnsValidResult() async {
         let mps = MatrixProductState(qubits: 4, maxBondDimension: 8)
-        let result = await mps.evolvingHeisenberg(J: 1.0, delta: 1.0, time: 0.2, steps: 5)
+        let result = await mps.evolveHeisenberg(J: 1.0, delta: 1.0, time: 0.2, steps: 5)
 
         #expect(result.finalState.qubits == 4, "Final state should have same number of qubits")
         #expect(result.steps == 5, "Result should have requested number of steps")
         #expect(abs(result.time - 0.2) < 1e-10, "Result should have requested evolution time")
     }
 
-    @Test("evolvingHeisenberg preserves normalization")
-    func evolvingHeisenbergPreservesNormalization() async {
+    @Test("evolveHeisenberg preserves normalization")
+    func evolveHeisenbergPreservesNormalization() async {
         let mps = MatrixProductState(qubits: 4, maxBondDimension: 8)
-        let result = await mps.evolvingHeisenberg(J: 1.0, delta: 1.0, time: 0.3, steps: 8)
+        let result = await mps.evolveHeisenberg(J: 1.0, delta: 1.0, time: 0.3, steps: 8)
 
         let normSquared = result.finalState.normSquared()
-        #expect(abs(normSquared - 1.0) < 1e-5, "evolvingHeisenberg should preserve normalization")
+        #expect(abs(normSquared - 1.0) < 1e-5, "evolveHeisenberg should preserve normalization")
     }
 
     @Test("Extension methods do not modify original MPS")
@@ -700,10 +700,10 @@ struct MatrixProductStateExtensionMethodsTests {
         let mps = MatrixProductState(qubits: 4, maxBondDimension: 8)
         let originalAmplitude = mps.amplitude(of: 0)
 
-        _ = await mps.evolvingIsing(J: 1.0, h: 0.5, time: 0.2, steps: 5)
+        _ = await mps.evolveIsing(J: 1.0, h: 0.5, time: 0.2, steps: 5)
 
         let afterAmplitude = mps.amplitude(of: 0)
-        #expect(abs(originalAmplitude.real - afterAmplitude.real) < 1e-10, "Original MPS should not be modified by evolvingIsing")
+        #expect(abs(originalAmplitude.real - afterAmplitude.real) < 1e-10, "Original MPS should not be modified by evolveIsing")
         #expect(abs(originalAmplitude.imaginary - afterAmplitude.imaginary) < 1e-10, "Original MPS imaginary should not be modified")
     }
 }

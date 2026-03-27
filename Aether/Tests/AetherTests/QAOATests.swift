@@ -17,19 +17,19 @@ struct QAOAAlgorithmTests {
             cost: cost,
             qubits: 3,
             depth: 2,
-            optimizer: COBYLAOptimizer(tolerance: 1e-4),
+            optimizer: COBYLAOptimizer(minTrustRadius: 1e-4),
             convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 200),
         )
 
         let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
 
-        #expect(result.optimalCost < -0.7)
-        #expect(result.optimalCost.isFinite)
-        #expect(!result.optimalCost.isNaN)
-        #expect(result.optimalParameters.count == 4)
-        #expect(result.iterations > 0)
-        #expect(result.functionEvaluations > 0)
-        #expect(!result.solutionProbabilities.isEmpty)
+        #expect(result.optimalCost < -0.7, "Triangle graph optimal cost should be less than -0.7")
+        #expect(result.optimalCost.isFinite, "Optimal cost should be finite")
+        #expect(!result.optimalCost.isNaN, "Optimal cost should not be NaN")
+        #expect(result.optimalParameters.count == 4, "Depth-2 should produce 4 parameters")
+        #expect(result.iterations > 0, "Should complete at least one iteration")
+        #expect(result.functionEvaluations > 0, "Should have at least one function evaluation")
+        #expect(!result.solutionProbabilities.isEmpty, "Should produce solution probabilities")
     }
 
     @Test("Square graph optimization")
@@ -40,22 +40,22 @@ struct QAOAAlgorithmTests {
             cost: cost,
             qubits: 4,
             depth: 2,
-            optimizer: COBYLAOptimizer(tolerance: 1e-4),
+            optimizer: COBYLAOptimizer(minTrustRadius: 1e-4),
             convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 300),
         )
 
         let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
 
-        #expect(result.optimalCost < -1.5)
-        #expect(result.optimalCost.isFinite)
-        #expect(!result.solutionProbabilities.isEmpty)
+        #expect(result.optimalCost < -1.5, "Square graph optimal cost should be less than -1.5")
+        #expect(result.optimalCost.isFinite, "Optimal cost should be finite")
+        #expect(!result.solutionProbabilities.isEmpty, "Should produce solution probabilities")
 
         let topSolutions = result.solutionProbabilities.sorted { $0.value > $1.value }.prefix(3)
-        #expect(topSolutions.count > 0)
+        #expect(topSolutions.count > 0, "Should have at least one top solution")
 
         for (_, probability) in topSolutions {
-            #expect(probability > 0)
-            #expect(probability <= 1.0)
+            #expect(probability > 0, "Each top solution probability should be positive")
+            #expect(probability <= 1.0, "Each top solution probability should not exceed 1.0")
         }
     }
 
@@ -67,15 +67,15 @@ struct QAOAAlgorithmTests {
             cost: cost,
             qubits: 2,
             depth: 1,
-            optimizer: COBYLAOptimizer(tolerance: 1e-4),
+            optimizer: COBYLAOptimizer(minTrustRadius: 1e-4),
             convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
         )
 
         let result = await qaoa.run(from: [0.5, 0.5])
 
-        #expect(result.optimalCost < -0.3)
-        #expect(result.optimalParameters.count == 2)
-        #expect(!result.costHistory.isEmpty)
+        #expect(result.optimalCost < -0.3, "Single edge optimal cost should be less than -0.3")
+        #expect(result.optimalParameters.count == 2, "Depth-1 should produce 2 parameters")
+        #expect(!result.costHistory.isEmpty, "Should have non-empty cost history")
     }
 
     @Test("Pentagon graph optimization")
@@ -91,8 +91,8 @@ struct QAOAAlgorithmTests {
 
         let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
 
-        #expect(result.optimalCost < -1.5)
-        #expect(result.optimalCost.isFinite)
+        #expect(result.optimalCost < -1.5, "Pentagon graph optimal cost should be less than -1.5")
+        #expect(result.optimalCost.isFinite, "Pentagon graph optimal cost should be finite")
     }
 
     @Test("Complete K₄ optimization")
@@ -108,8 +108,8 @@ struct QAOAAlgorithmTests {
 
         let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
 
-        #expect(result.optimalCost < -1.5)
-        #expect(result.optimalCost.isFinite)
+        #expect(result.optimalCost < -1.5, "Complete K4 optimal cost should be less than -1.5")
+        #expect(result.optimalCost.isFinite, "Complete K4 optimal cost should be finite")
     }
 
     @Test("Star graph optimization")
@@ -125,8 +125,8 @@ struct QAOAAlgorithmTests {
 
         let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5])
 
-        #expect(result.optimalCost < -1.5)
-        #expect(result.optimalCost.isFinite)
+        #expect(result.optimalCost < -1.5, "Star graph optimal cost should be less than -1.5")
+        #expect(result.optimalCost.isFinite, "Star graph optimal cost should be finite")
     }
 }
 
@@ -147,8 +147,8 @@ struct QAOAProgressTrackingTests {
         )
 
         let progress = await qaoa.progress
-        #expect(progress.iteration >= 0)
-        #expect(progress.cost.isFinite || progress.cost == 0)
+        #expect(progress.iteration >= 0, "Progress iteration should be non-negative")
+        #expect(progress.cost.isFinite || progress.cost == 0, "Progress cost should be finite or zero")
     }
 
     @Test("Progress callback is invoked during optimization")
@@ -225,26 +225,26 @@ struct QAOABackendSelectionTests {
             cost: cost,
             qubits: 3,
             depth: 1,
-            optimizer: COBYLAOptimizer(tolerance: 1e-6),
-            sparseBackend: true,
+            optimizer: COBYLAOptimizer(minTrustRadius: 1e-6),
+            isSparseEnabled: true,
         )
 
         let qaoaObservable = QAOA(
             cost: cost,
             qubits: 3,
             depth: 1,
-            optimizer: COBYLAOptimizer(tolerance: 1e-6),
-            sparseBackend: false,
+            optimizer: COBYLAOptimizer(minTrustRadius: 1e-6),
+            isSparseEnabled: false,
         )
 
         let resultSparse = await qaoaSparse.run(from: initialParams)
         let resultObservable = await qaoaObservable.run(from: initialParams)
 
         let costDifference = abs(resultSparse.optimalCost - resultObservable.optimalCost)
-        #expect(costDifference < 1e-3)
+        #expect(costDifference < 1e-3, "Sparse and observable backends should produce costs within 1e-3 of each other")
     }
 
-    @Test("Backend property returns sparse when sparseBackend enabled")
+    @Test("Backend property returns sparse when isSparseEnabled enabled")
     func backendReturnsSparse() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1)])
 
@@ -252,7 +252,7 @@ struct QAOABackendSelectionTests {
             cost: cost,
             qubits: 2,
             depth: 1,
-            sparseBackend: true,
+            isSparseEnabled: true,
         )
 
         let backend = await qaoa.backend
@@ -262,7 +262,7 @@ struct QAOABackendSelectionTests {
         }
     }
 
-    @Test("Backend property returns observable when sparseBackend disabled")
+    @Test("Backend property returns observable when isSparseEnabled disabled")
     func backendReturnsObservable() async {
         let cost = MaxCut.hamiltonian(edges: [(0, 1), (1, 2)])
 
@@ -270,7 +270,7 @@ struct QAOABackendSelectionTests {
             cost: cost,
             qubits: 3,
             depth: 1,
-            sparseBackend: false,
+            isSparseEnabled: false,
         )
 
         let backend = await qaoa.backend
@@ -321,12 +321,12 @@ struct QAOAOptimizerIntegrationTests {
             cost: cost,
             qubits: 2,
             depth: 1,
-            optimizer: COBYLAOptimizer(tolerance: 1e-4),
+            optimizer: COBYLAOptimizer(minTrustRadius: 1e-4),
             convergence: ConvergenceCriteria(energyTolerance: 1e-4, maxIterations: 100),
         )
 
         let result = await qaoa.run(from: [0.5, 0.5])
-        #expect(result.optimalCost.isFinite)
+        #expect(result.optimalCost.isFinite, "COBYLA optimizer should produce finite optimal cost")
     }
 
     @Test("Nelder-Mead optimizer produces finite cost")
@@ -342,7 +342,7 @@ struct QAOAOptimizerIntegrationTests {
         )
 
         let result = await qaoa.run(from: [0.5, 0.5])
-        #expect(result.optimalCost.isFinite)
+        #expect(result.optimalCost.isFinite, "Nelder-Mead optimizer should produce finite optimal cost")
     }
 
     @Test("Gradient Descent optimizer produces finite cost")
@@ -358,7 +358,7 @@ struct QAOAOptimizerIntegrationTests {
         )
 
         let result = await qaoa.run(from: [0.5, 0.5])
-        #expect(result.optimalCost.isFinite)
+        #expect(result.optimalCost.isFinite, "Gradient Descent optimizer should produce finite optimal cost")
     }
 
     @Test("L-BFGS-B optimizer produces finite cost")
@@ -374,7 +374,7 @@ struct QAOAOptimizerIntegrationTests {
         )
 
         let result = await qaoa.run(from: [0.5, 0.5])
-        #expect(result.optimalCost.isFinite)
+        #expect(result.optimalCost.isFinite, "L-BFGS-B optimizer should produce finite optimal cost")
     }
 }
 
@@ -392,16 +392,16 @@ struct QAOAConvergenceTests {
             cost: cost,
             qubits: 2,
             depth: 1,
-            optimizer: COBYLAOptimizer(tolerance: 1e-10),
+            optimizer: COBYLAOptimizer(minTrustRadius: 1e-10),
             convergence: ConvergenceCriteria(energyTolerance: 1e-10, maxIterations: maxIter),
         )
 
         let result = await qaoa.run(from: [0.5, 0.5])
 
-        #expect(result.iterations <= maxIter)
+        #expect(result.iterations <= maxIter, "Iterations should not exceed the max iteration limit")
 
         if result.iterations == maxIter {
-            #expect(result.convergenceReason == .maxIterationsReached)
+            #expect(result.convergenceReason == .maxIterationsReached, "Convergence reason should be maxIterationsReached when iteration limit is hit")
         }
     }
 }
@@ -426,8 +426,8 @@ struct QAOASolutionProbabilitiesTests {
 
         let totalProbability = result.solutionProbabilities.values.reduce(0.0, +)
 
-        #expect(totalProbability > 0.9)
-        #expect(totalProbability <= 1.0)
+        #expect(totalProbability > 0.9, "Total probability should be greater than 0.9")
+        #expect(totalProbability <= 1.0, "Total probability should not exceed 1.0")
     }
 
     @Test("Probabilities are above filtering threshold")
@@ -444,8 +444,8 @@ struct QAOASolutionProbabilitiesTests {
         let result = await qaoa.run(from: [0.5, 0.5])
 
         for (_, probability) in result.solutionProbabilities {
-            #expect(probability > 1e-6)
-            #expect(probability <= 1.0)
+            #expect(probability > 1e-6, "Each solution probability should be above the filtering threshold of 1e-6")
+            #expect(probability <= 1.0, "Each solution probability should not exceed 1.0")
         }
     }
 
@@ -464,16 +464,16 @@ struct QAOASolutionProbabilitiesTests {
 
         let sortedSolutions = result.solutionProbabilities.sorted { $0.value > $1.value }
 
-        #expect(sortedSolutions.count > 0)
+        #expect(sortedSolutions.count > 0, "Should have at least one sorted solution")
 
         if sortedSolutions.count > 1 {
             for i in 1 ..< sortedSolutions.count {
-                #expect(sortedSolutions[i].value <= sortedSolutions[i - 1].value)
+                #expect(sortedSolutions[i].value <= sortedSolutions[i - 1].value, "Solutions should be sorted in descending order by probability")
             }
         }
 
         if let topSolution = sortedSolutions.first {
-            #expect(topSolution.key >= 0 && topSolution.key < 4)
+            #expect(topSolution.key >= 0 && topSolution.key < 4, "Top solution bitstring should be a valid 2-qubit state (0-3)")
         }
     }
 }
@@ -712,8 +712,8 @@ struct QAOADepthVariationsTests {
 
         let result = await qaoa.run(from: [0.5, 0.5])
 
-        #expect(result.optimalParameters.count == 2)
-        #expect(result.optimalCost.isFinite)
+        #expect(result.optimalParameters.count == 2, "Depth-1 should produce 2 parameters")
+        #expect(result.optimalCost.isFinite, "Depth-1 optimal cost should be finite")
     }
 
     @Test("Depth-3 has 6 parameters")
@@ -729,8 +729,8 @@ struct QAOADepthVariationsTests {
 
         let result = await qaoa.run(from: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
 
-        #expect(result.optimalParameters.count == 6)
-        #expect(result.optimalCost.isFinite)
+        #expect(result.optimalParameters.count == 6, "Depth-3 should produce 6 parameters")
+        #expect(result.optimalCost.isFinite, "Depth-3 optimal cost should be finite")
     }
 
     @Test("Depth-5 has 10 parameters")
@@ -746,8 +746,8 @@ struct QAOADepthVariationsTests {
 
         let result = await qaoa.run(from: Array(repeating: 0.5, count: 10))
 
-        #expect(result.optimalParameters.count == 10)
-        #expect(result.optimalCost.isFinite)
+        #expect(result.optimalParameters.count == 10, "Depth-5 should produce 10 parameters")
+        #expect(result.optimalCost.isFinite, "Depth-5 optimal cost should be finite")
     }
 }
 
@@ -770,11 +770,11 @@ struct QAOAResultRepresentationTests {
 
         let description = result.description
 
-        #expect(description.contains("QAOA Result"))
-        #expect(description.contains("Optimal Cost"))
-        #expect(description.contains("Parameters"))
-        #expect(description.contains("Iterations"))
-        #expect(description.contains("Convergence"))
+        #expect(description.contains("QAOA Result"), "Description should contain 'QAOA Result' header")
+        #expect(description.contains("Optimal Cost"), "Description should contain 'Optimal Cost' field")
+        #expect(description.contains("Parameters"), "Description should contain 'Parameters' field")
+        #expect(description.contains("Iterations"), "Description should contain 'Iterations' field")
+        #expect(description.contains("Convergence"), "Description should contain 'Convergence' field")
     }
 
     @Test("Result description truncates parameters beyond 4")

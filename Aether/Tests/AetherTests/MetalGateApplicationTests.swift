@@ -17,9 +17,9 @@ struct MetalGateApplicationTests {
         let state = QuantumState(qubits: 4)
         let newState = await metal.apply(.hadamard, to: 0, state: state)
 
-        #expect(newState.isNormalized())
-        #expect(abs(newState.amplitude(of: 0).magnitude - 1.0 / sqrt(2.0)) < 1e-5)
-        #expect(abs(newState.amplitude(of: 1).magnitude - 1.0 / sqrt(2.0)) < 1e-5)
+        #expect(newState.isNormalized(), "Hadamard should preserve normalization")
+        #expect(abs(newState.amplitude(of: 0).magnitude - 1.0 / sqrt(2.0)) < 1e-5, "Hadamard |0> amplitude should be 1/sqrt(2)")
+        #expect(abs(newState.amplitude(of: 1).magnitude - 1.0 / sqrt(2.0)) < 1e-5, "Hadamard |1> amplitude should be 1/sqrt(2)")
     }
 
     @Test("Metal applies Pauli-X gate correctly")
@@ -29,8 +29,8 @@ struct MetalGateApplicationTests {
         let state = QuantumState(qubits: 4)
         let newState = await metal.apply(.pauliX, to: 0, state: state)
 
-        #expect(newState.isNormalized())
-        #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-5)
+        #expect(newState.isNormalized(), "Pauli-X should preserve normalization")
+        #expect(abs(newState.amplitude(of: 1).real - 1.0) < 1e-5, "Pauli-X should flip |0> to |1>")
     }
 
     @Test("Metal applies Phase gate correctly")
@@ -43,7 +43,7 @@ struct MetalGateApplicationTests {
 
         let newState = await metal.apply(.phase(.pi / 2), to: 0, state: superposition)
 
-        #expect(newState.isNormalized())
+        #expect(newState.isNormalized(), "Phase gate should preserve normalization")
     }
 
     @Test("Metal applies CNOT gate correctly")
@@ -56,8 +56,8 @@ struct MetalGateApplicationTests {
 
         let newState = await metal.apply(.cnot, to: [0, 1], state: state)
 
-        #expect(newState.isNormalized())
-        #expect(abs(newState.amplitude(of: 2).real - 1.0) < 1e-5)
+        #expect(newState.isNormalized(), "CNOT should preserve normalization")
+        #expect(abs(newState.amplitude(of: 2).real - 1.0) < 1e-5, "CNOT with control=0 should not flip target")
     }
 
     @Test("Metal creates Bell state")
@@ -69,13 +69,13 @@ struct MetalGateApplicationTests {
         state = await metal.apply(.hadamard, to: 0, state: state)
         state = await metal.apply(.cnot, to: [0, 1], state: state)
 
-        #expect(state.isNormalized())
+        #expect(state.isNormalized(), "Bell state should be normalized")
 
         let p0 = state.probability(of: 0)
         let p3 = state.probability(of: 3)
 
-        #expect(abs(p0 - 0.5) < 1e-4)
-        #expect(abs(p3 - 0.5) < 1e-4)
+        #expect(abs(p0 - 0.5) < 1e-4, "Bell state |00> probability should be 0.5")
+        #expect(abs(p3 - 0.5) < 1e-4, "Bell state |11> probability should be 0.5")
     }
 
     @Test("Metal applies Toffoli gate")
@@ -88,8 +88,8 @@ struct MetalGateApplicationTests {
 
         let newState = await metal.apply(.toffoli, to: [0, 1, 2], state: state)
 
-        #expect(newState.isNormalized())
-        #expect(abs(newState.amplitude(of: 7).real - 1.0) < 1e-5)
+        #expect(newState.isNormalized(), "Toffoli should preserve normalization")
+        #expect(abs(newState.amplitude(of: 7).real - 1.0) < 1e-5, "Toffoli should flip target when both controls are 1")
     }
 
     @Test("Metal results match CPU for single-qubit gate")
@@ -104,8 +104,8 @@ struct MetalGateApplicationTests {
             let cpuAmp = cpuState.amplitude(of: i)
             let gpuAmp = gpuState.amplitude(of: i)
 
-            #expect(abs(cpuAmp.real - gpuAmp.real) < 1e-5)
-            #expect(abs(cpuAmp.imaginary - gpuAmp.imaginary) < 1e-5)
+            #expect(abs(cpuAmp.real - gpuAmp.real) < 1e-5, "CPU/GPU real parts should match for amplitude \(i)")
+            #expect(abs(cpuAmp.imaginary - gpuAmp.imaginary) < 1e-5, "CPU/GPU imaginary parts should match for amplitude \(i)")
         }
     }
 
@@ -125,8 +125,8 @@ struct MetalGateApplicationTests {
             let cpuAmp = cpuState.amplitude(of: i)
             let gpuAmp = gpuState.amplitude(of: i)
 
-            #expect(abs(cpuAmp.real - gpuAmp.real) < 1e-5)
-            #expect(abs(cpuAmp.imaginary - gpuAmp.imaginary) < 1e-5)
+            #expect(abs(cpuAmp.real - gpuAmp.real) < 1e-5, "CNOT CPU/GPU real parts should match for amplitude \(i)")
+            #expect(abs(cpuAmp.imaginary - gpuAmp.imaginary) < 1e-5, "CNOT CPU/GPU imaginary parts should match for amplitude \(i)")
         }
     }
 
@@ -162,8 +162,8 @@ struct MetalGateApplicationTests {
             state = await metal.apply(.hadamard, to: 0, state: state)
         }
 
-        #expect(state.isNormalized())
-        #expect(abs(state.amplitude(of: 0).real - 1.0) < 1e-4)
+        #expect(state.isNormalized(), "Sequential gates should preserve normalization")
+        #expect(abs(state.amplitude(of: 0).real - 1.0) < 1e-4, "Even number of Hadamards should return to |0>")
     }
 
     @Test("applyHybrid uses CPU for small states")
@@ -172,8 +172,8 @@ struct MetalGateApplicationTests {
 
         let newState = await GateApplication.applyHybrid(.hadamard, to: 0, state: state)
 
-        #expect(newState.isNormalized())
-        #expect(abs(newState.amplitude(of: 0).magnitude - 1.0 / sqrt(2.0)) < 1e-10)
+        #expect(newState.isNormalized(), "Hybrid CPU path should preserve normalization")
+        #expect(abs(newState.amplitude(of: 0).magnitude - 1.0 / sqrt(2.0)) < 1e-10, "CPU Hadamard amplitude should be 1/sqrt(2)")
     }
 
     @Test("applyHybrid attempts GPU for large states")
@@ -181,7 +181,7 @@ struct MetalGateApplicationTests {
         let state = QuantumState(qubits: 10)
         let newState = await GateApplication.applyHybrid(.hadamard, to: 0, state: state)
 
-        #expect(newState.isNormalized())
+        #expect(newState.isNormalized(), "Hybrid GPU path should preserve normalization")
     }
 
     @Test("Metal handles identity gate")
@@ -191,7 +191,7 @@ struct MetalGateApplicationTests {
         let state = QuantumState(qubits: 4)
         let newState = await metal.apply(.identity, to: 0, state: state)
 
-        #expect(abs(newState.amplitude(of: 0).real - 1.0) < 1e-10)
+        #expect(abs(newState.amplitude(of: 0).real - 1.0) < 1e-10, "Identity gate should not change state")
     }
 
     @Test("Metal handles rotation gates")
@@ -204,9 +204,9 @@ struct MetalGateApplicationTests {
         let ry = await metal.apply(.rotationY(.pi / 4), to: 0, state: state)
         let rz = await metal.apply(.rotationZ(.pi / 4), to: 0, state: state)
 
-        #expect(rx.isNormalized())
-        #expect(ry.isNormalized())
-        #expect(rz.isNormalized())
+        #expect(rx.isNormalized(), "Rotation-X should preserve normalization")
+        #expect(ry.isNormalized(), "Rotation-Y should preserve normalization")
+        #expect(rz.isNormalized(), "Rotation-Z should preserve normalization")
     }
 
     @Test("Metal applies controlled-phase gate")
@@ -233,7 +233,7 @@ struct MetalGateApplicationTests {
         let newState = await metal.apply(.swap, to: [0, 1], state: state)
 
         #expect(newState.isNormalized(), "SWAP gate should preserve normalization")
-        #expect(abs(newState.amplitude(of: 2).real - 1.0) < 1e-5)
+        #expect(abs(newState.amplitude(of: 2).real - 1.0) < 1e-5, "SWAP should move |01> to |10>")
     }
 
     @Test("Metal two-qubit gates match CPU results")
@@ -252,8 +252,8 @@ struct MetalGateApplicationTests {
             let cpuAmp = cpuState.amplitude(of: i)
             let gpuAmp = gpuState.amplitude(of: i)
 
-            #expect(abs(cpuAmp.real - gpuAmp.real) < 1e-5)
-            #expect(abs(cpuAmp.imaginary - gpuAmp.imaginary) < 1e-5)
+            #expect(abs(cpuAmp.real - gpuAmp.real) < 1e-5, "Two-qubit CPU/GPU real parts should match for amplitude \(i)")
+            #expect(abs(cpuAmp.imaginary - gpuAmp.imaginary) < 1e-5, "Two-qubit CPU/GPU imaginary parts should match for amplitude \(i)")
         }
     }
 

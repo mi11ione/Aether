@@ -144,7 +144,7 @@ public actor QuantumSimulator {
         let maxQubit: Int = circuit.highestQubitIndex
         var state = QuantumCircuit.expandStateForAncilla(startState, maxQubit: maxQubit)
 
-        let useGPU: Bool = useMetalAcceleration && metalApplication != nil && PrecisionPolicy.shouldUseGPU(qubits: state.qubits, policy: precisionPolicy)
+        let useGPU: Bool = useMetalAcceleration && metalApplication != nil && precisionPolicy.shouldUseGPU(forQubitCount: state.qubits)
         let progressMultiplier: Double = operationCount > 0 ? 1.0 / Double(operationCount) : 0.0
         let lastIndex: Int = operationCount - 1
         let operations = circuit.operations

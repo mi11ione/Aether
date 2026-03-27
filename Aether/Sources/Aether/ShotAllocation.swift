@@ -226,9 +226,9 @@ public struct ShotAllocator {
         let termCount: Int = terms.count
         return [Double](unsafeUninitializedCapacity: termCount) { buffer, count in
             for i in 0 ..< termCount {
-                let expectation = Observable.computePauliExpectation(
-                    pauliString: terms[i].pauliString,
-                    for: state,
+                let expectation = Observable.pauliExpectation(
+                    of: terms[i].pauliString,
+                    for: state
                 )
                 buffer[i] = 1.0 - expectation * expectation
             }

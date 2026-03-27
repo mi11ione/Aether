@@ -36,10 +36,13 @@ import Foundation
 /// - SeeAlso: ``Observable``
 /// - SeeAlso: ``SparseHamiltonian``
 public actor QAOA {
+    /// Minimum probability threshold for solution filtering.
+    private static let minimumProbability: Double = 1e-6
+
     // MARK: - Configuration
 
     /// Precision policy controlling GPU/CPU backend selection.
-    private let _precisionPolicy: PrecisionPolicy
+    public nonisolated let precisionPolicy: PrecisionPolicy
 
     /// Cost Hamiltonian H_p encoding optimization problem
     private let costHamiltonian: Observable
@@ -101,9 +104,8 @@ public actor QAOA {
     ///   - depth: Number of alternating QAOA layers (typical range 1-10)
     ///   - optimizer: Classical parameter optimization algorithm
     ///   - convergence: Termination criteria for optimization loop
-    ///   - sparseBackend: Enable sparse Hamiltonian hardware acceleration
+    ///   - isSparseEnabled: Enable sparse Hamiltonian hardware acceleration
     ///   - precisionPolicy: Precision policy controlling GPU/CPU backend selection
-    /// - Precondition: `qubits` must be positive and ≤30 for memory constraints
     /// - SeeAlso: ``run(from:progress:)``
     /// - SeeAlso: ``MaxCut``
     /// - SeeAlso: ``MixerHamiltonian``
@@ -113,19 +115,19 @@ public actor QAOA {
         mixer: Observable? = nil,
         qubits: Int,
         depth: Int,
-        optimizer: Optimizer = COBYLAOptimizer(tolerance: 1e-6),
+        optimizer: Optimizer = COBYLAOptimizer(minTrustRadius: 1e-6),
         convergence: ConvergenceCriteria = ConvergenceCriteria(),
-        sparseBackend: Bool = true,
+        isSparseEnabled: Bool = true,
         precisionPolicy: PrecisionPolicy = .fast,
     ) {
-        _precisionPolicy = precisionPolicy
+        self.precisionPolicy = precisionPolicy
         costHamiltonian = cost
         mixerHamiltonian = mixer ?? MixerHamiltonian.x(qubits: qubits)
         self.qubits = qubits
         self.depth = depth
         self.optimizer = optimizer
         self.convergence = convergence
-        sparseHamiltonian = sparseBackend ? SparseHamiltonian(observable: cost, precisionPolicy: precisionPolicy) : nil
+        sparseHamiltonian = isSparseEnabled ? SparseHamiltonian(observable: cost, precisionPolicy: precisionPolicy) : nil
         simulator = QuantumSimulator(precisionPolicy: precisionPolicy)
 
         ansatz = QuantumCircuit.qaoa(
@@ -179,15 +181,20 @@ public actor QAOA {
         currentIteration = 0
         currentCost = 0.0
 
-        let costFunction: @Sendable ([Double]) async -> Double = { params in
-            let concreteCircuit: QuantumCircuit = self.parameterBinder.bind(baseParameters: params)
-            let state: QuantumState = await self.simulator.execute(concreteCircuit)
-            let cost: Double = if let sparseH = self.sparseHamiltonian {
-                await sparseH.expectationValue(of: state)
-            } else {
-                self.costHamiltonian.expectationValue(of: state)
+        let costFunction: @Sendable ([Double]) async -> Double
+        if let sparseH = sparseHamiltonian {
+            costFunction = { params in
+                let concreteCircuit = self.parameterBinder.binding(parameters: params)
+                let state = await self.simulator.execute(concreteCircuit)
+                return await sparseH.expectationValue(of: state)
             }
-            return cost
+        } else {
+            let observable = costHamiltonian
+            costFunction = { params in
+                let concreteCircuit = self.parameterBinder.binding(parameters: params)
+                let state = await self.simulator.execute(concreteCircuit)
+                return observable.expectationValue(of: state)
+            }
         }
 
         let optimizerProgress: ProgressCallback? = if let callback = progress {
@@ -208,7 +215,7 @@ public actor QAOA {
             progress: optimizerProgress,
         )
 
-        let finalCircuit: QuantumCircuit = parameterBinder.bind(baseParameters: optimizerResult.parameters)
+        let finalCircuit: QuantumCircuit = parameterBinder.binding(parameters: optimizerResult.parameters)
         let finalState: QuantumState = await simulator.execute(finalCircuit)
         let solutionProbabilities: [Int: Double] = extractSolutionProbabilities(state: finalState)
 
@@ -234,6 +241,7 @@ public actor QAOA {
     /// - Parameter state: Quantum state after QAOA circuit execution
     /// - Returns: Dictionary mapping bitstring index to probability (filtered > 1e-6)
     /// - Complexity: O(2^n) for probability computation and filtering
+    @_effects(readonly)
     @_optimize(speed)
     @_eagerMove
     @inline(__always)
@@ -243,7 +251,7 @@ public actor QAOA {
 
         for i in 0 ..< state.stateSpaceSize {
             let prob: Double = state.probability(of: i)
-            if prob > 1e-6 {
+            if prob > Self.minimumProbability {
                 probabilities[i] = prob
             }
         }
@@ -252,22 +260,6 @@ public actor QAOA {
     }
 
     // MARK: - State Queries
-
-    /// Precision policy controlling GPU/CPU backend selection.
-    ///
-    /// Returns the precision policy configured at initialization. Controls backend selection
-    /// for both quantum simulator circuit execution and sparse Hamiltonian expectation values.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let qaoa = QAOA(cost: cost, qubits: 4, depth: 2, precisionPolicy: .balanced)
-    /// print("Policy: \(qaoa.precisionPolicy)")  // "Balanced (GPU threshold: 12 qubits, tolerance: 1e-7)"
-    /// ```
-    ///
-    /// - SeeAlso: ``PrecisionPolicy``
-    public var precisionPolicy: PrecisionPolicy {
-        _precisionPolicy
-    }
 
     /// Current optimization iteration and cost value.
     ///
@@ -330,7 +322,7 @@ public actor QAOA {
     /// if case .sparse(let desc) = backend { print("Sparse: \(desc)") }
     /// ```
     ///
-    /// - SeeAlso: ``QAOA/backend``
+    /// - SeeAlso: ``backend``
     /// - SeeAlso: ``SparseHamiltonian``
     @frozen
     public enum BackendType: Sendable {
@@ -353,7 +345,7 @@ public actor QAOA {
     /// print("Optimal cost: \(result.optimalCost)")
     /// ```
     ///
-    /// - SeeAlso: ``QAOA/run(from:progress:)``
+    /// - SeeAlso: ``run(from:progress:)``
     /// - SeeAlso: ``TerminationReason``
     @frozen
     public struct Result: Sendable, CustomStringConvertible {
@@ -378,6 +370,7 @@ public actor QAOA {
         /// Total objective function evaluations
         public let functionEvaluations: Int
 
+        /// Creates a QAOA optimization result with all components.
         public init(
             optimalCost: Double,
             optimalParameters: [Double],
@@ -433,6 +426,7 @@ public actor QAOA {
         /// - Parameter count: Number of top solutions to extract
         /// - Returns: Array of (bitstring, probability) tuples sorted descending by probability
         /// - Complexity: O(n + k log k) where n = total solutions, k = requested count
+        @_effects(readonly)
         @_optimize(speed)
         @_eagerMove
         public func topSolutions(_ count: Int) -> [(bitstring: Int, probability: Double)] {
@@ -467,6 +461,7 @@ public actor QAOA {
         }
 
         /// Min-heap sift down for partial sort.
+        @_optimize(speed)
         @inline(__always)
         private func siftDown(_ heap: inout [(bitstring: Int, probability: Double)], _ index: Int, _ size: Int) {
             var i = index

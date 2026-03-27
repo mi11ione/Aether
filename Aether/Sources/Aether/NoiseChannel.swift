@@ -41,8 +41,6 @@ public protocol NoiseChannel: Sendable {
     func apply(to matrix: DensityMatrix, qubit: Int) -> DensityMatrix
 }
 
-// MARK: - Default Implementation
-
 public extension NoiseChannel {
     /// Default implementation applying Kraus operators to specified qubit.
     ///
@@ -89,21 +87,23 @@ public extension NoiseChannel {
                 let row0 = row & ~mask
                 let row1 = row | mask
                 let rowBit = (row >> qubit) & 1
+                let kRowPair = rowBit == 0 ? (k00, k01) : (k10, k11)
 
                 for col in 0 ..< dim {
                     let col0 = col & ~mask
                     let col1 = col | mask
                     let colBit = (col >> qubit) & 1
+                    let kColPaird = colBit == 0 ? (k00d, k01d) : (k10d, k11d)
 
                     let rho00 = matrix[row: row0, col: col0]
                     let rho01 = matrix[row: row0, col: col1]
                     let rho10 = matrix[row: row1, col: col0]
                     let rho11 = matrix[row: row1, col: col1]
 
-                    let kRow0 = rowBit == 0 ? k00 : k10
-                    let kRow1 = rowBit == 0 ? k01 : k11
-                    let kCol0d = colBit == 0 ? k00d : k10d
-                    let kCol1d = colBit == 0 ? k01d : k11d
+                    let kRow0 = kRowPair.0
+                    let kRow1 = kRowPair.1
+                    let kCol0d = kColPaird.0
+                    let kCol1d = kColPaird.1
 
                     let newVal = kRow0 * rho00 * kCol0d +
                         kRow0 * rho01 * kCol1d +
@@ -119,8 +119,6 @@ public extension NoiseChannel {
         return newElements
     }
 }
-
-// MARK: - Depolarizing Channel
 
 /// Depolarizing noise channel: ρ -> (1-p)ρ + (p/3)(XρX + YρY + ZρZ).
 ///
@@ -182,8 +180,6 @@ public struct DepolarizingChannel: NoiseChannel {
     }
 }
 
-// MARK: - Amplitude Damping Channel
-
 /// Amplitude damping channel modeling energy relaxation (T₁ decay).
 ///
 /// Models spontaneous emission where |1⟩ decays to |0⟩ with probability γ. This is the
@@ -233,8 +229,6 @@ public struct AmplitudeDampingChannel: NoiseChannel {
         krausOperators = [k0, k1]
     }
 }
-
-// MARK: - Phase Damping Channel
 
 /// Phase damping channel modeling dephasing (T₂ decay) without energy loss.
 ///
@@ -287,8 +281,6 @@ public struct PhaseDampingChannel: NoiseChannel {
     }
 }
 
-// MARK: - Bit Flip Channel
-
 /// Bit flip channel: ρ -> (1-p)ρ + pXρX.
 ///
 /// Applies Pauli X error (bit flip) with probability p. This is a classical-like error model
@@ -338,8 +330,6 @@ public struct BitFlipChannel: NoiseChannel {
         krausOperators = [k0, k1]
     }
 }
-
-// MARK: - Phase Flip Channel
 
 /// Phase flip channel: ρ -> (1-p)ρ + pZρZ.
 ///
@@ -391,8 +381,6 @@ public struct PhaseFlipChannel: NoiseChannel {
     }
 }
 
-// MARK: - Bit-Phase Flip Channel
-
 /// Bit-phase flip channel: ρ -> (1-p)ρ + pYρY.
 ///
 /// Applies Pauli Y error (combined bit and phase flip) with probability p. Y = iXZ, so this
@@ -439,8 +427,6 @@ public struct BitPhaseFlipChannel: NoiseChannel {
         krausOperators = [k0, k1]
     }
 }
-
-// MARK: - Generalized Amplitude Damping
 
 /// Generalized amplitude damping for finite-temperature environments.
 ///
@@ -510,8 +496,6 @@ public struct GeneralizedAmplitudeDampingChannel: NoiseChannel {
     }
 }
 
-// MARK: - Custom Kraus Channel
-
 /// Custom noise channel defined by user-provided Kraus operators.
 ///
 /// Allows defining arbitrary single-qubit noise channels via explicit Kraus operator matrices.
@@ -547,8 +531,6 @@ public struct CustomKrausChannel: NoiseChannel {
     }
 }
 
-// MARK: - Two-Qubit Depolarizing Channel
-
 /// Two-qubit depolarizing channel for correlated noise on gate pairs.
 ///
 /// Models noise on two-qubit gates (CNOT, CZ, etc.) where the error rate is typically
@@ -562,7 +544,7 @@ public struct CustomKrausChannel: NoiseChannel {
 /// let noisyState = channel.apply(to: dm, qubits: [0, 1])
 /// ```
 @frozen
-public struct TwoQubitDepolarizingChannel: NoiseChannel, Sendable {
+public struct TwoQubitDepolarizingChannel: NoiseChannel {
     /// Error probability p ∈ [0, 1].
     public let errorProbability: Double
 
@@ -677,35 +659,37 @@ public struct TwoQubitDepolarizingChannel: NoiseChannel, Sendable {
         let mask0 = 1 << q0
         let mask1 = 1 << q1
 
-        var newElements = [Complex<Double>](repeating: .zero, count: size)
+        let newElements = [Complex<Double>](unsafeUninitializedCapacity: size) { buffer, count in
+            for row in 0 ..< dim {
+                for col in 0 ..< dim {
+                    var sum = Complex<Double>.zero
 
-        for row in 0 ..< dim {
-            for col in 0 ..< dim {
-                var sum = Complex<Double>.zero
+                    let rowIdx = ((row >> q0) & 1) | (((row >> q1) & 1) << 1)
+                    let colIdx = ((col >> q0) & 1) | (((col >> q1) & 1) << 1)
 
-                for a in 0 ..< 4 {
-                    let aRow = (row & ~mask0 & ~mask1) |
-                        ((a & 1) << q0) |
-                        (((a >> 1) & 1) << q1)
-
-                    for b in 0 ..< 4 {
-                        let bCol = (col & ~mask0 & ~mask1) |
-                            ((b & 1) << q0) |
-                            (((b >> 1) & 1) << q1)
-
-                        let rowIdx = ((row >> q0) & 1) | (((row >> q1) & 1) << 1)
-                        let colIdx = ((col >> q0) & 1) | (((col >> q1) & 1) << 1)
+                    for a in 0 ..< 4 {
+                        let aRow = (row & ~mask0 & ~mask1) |
+                            ((a & 1) << q0) |
+                            (((a >> 1) & 1) << q1)
 
                         let kElement = kraus[rowIdx][a]
-                        let kDaggerElement = kraus[colIdx][b].conjugate
-                        let rhoElement = matrix[row: aRow, col: bCol]
 
-                        sum = sum + kElement * rhoElement * kDaggerElement
+                        for b in 0 ..< 4 {
+                            let bCol = (col & ~mask0 & ~mask1) |
+                                ((b & 1) << q0) |
+                                (((b >> 1) & 1) << q1)
+
+                            let kDaggerElement = kraus[colIdx][b].conjugate
+                            let rhoElement = matrix[row: aRow, col: bCol]
+
+                            sum = sum + kElement * rhoElement * kDaggerElement
+                        }
                     }
-                }
 
-                newElements[row * dim + col] = sum
+                    buffer[row * dim + col] = sum
+                }
             }
+            count = size
         }
 
         return newElements

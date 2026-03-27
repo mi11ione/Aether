@@ -301,11 +301,13 @@ public actor MPSBatchEvaluator {
         var idx = 0
         for unitary in unitaries {
             for row in unitary {
-                for element in row {
-                    realMatrices[idx] = Float(element.real)
-                    imagMatrices[idx] = Float(element.imaginary)
-                    idx += 1
+                row.withUnsafeBytes { srcBytes in
+                    let srcDoubles = srcBytes.bindMemory(to: Double.self)
+                    // Safety: baseAddress! safe — row is non-empty (dimension >= 1 validated)
+                    vDSP_vdpsp(srcDoubles.baseAddress!, 2, &realMatrices + idx, 1, vDSP_Length(dimension))
+                    vDSP_vdpsp(srcDoubles.baseAddress! + 1, 2, &imagMatrices + idx, 1, vDSP_Length(dimension))
                 }
+                idx += dimension
             }
         }
 
@@ -636,62 +638,70 @@ public actor MPSBatchEvaluator {
     /// let stats = await evaluator.statistics
     /// ```
     ///
-    /// - SeeAlso: ``BatchEvaluatorStatistics``
-    public var statistics: BatchEvaluatorStatistics {
-        BatchEvaluatorStatistics(
+    /// - SeeAlso: ``Statistics``
+    public var statistics: Statistics {
+        Statistics(
             isMetalAvailable: isMetalAvailable,
             maxBatchSize: maxBatchSize,
             deviceName: device?.name ?? "CPU",
             precisionPolicy: _precisionPolicy,
         )
     }
-}
 
-// MARK: - Supporting Types
+    /// Diagnostic information for batch evaluator GPU configuration.
+    ///
+    /// Captures Metal availability, device name, maximum batch size, and precision policy
+    /// for performance analysis and debugging. Returned by ``statistics``.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let stats = await evaluator.statistics
+    /// if stats.isMetalAvailable {
+    ///     print("GPU: \(stats.deviceName), max batch: \(stats.maxBatchSize)")
+    /// }
+    /// ```
+    @frozen
+    public struct Statistics: Sendable, Equatable, CustomStringConvertible {
+        /// Whether Metal GPU acceleration is available.
+        public let isMetalAvailable: Bool
 
-/// Diagnostic information for batch evaluator GPU configuration.
-///
-/// Captures Metal availability, device name, maximum batch size, and precision policy
-/// for performance analysis and debugging. Returned by ``MPSBatchEvaluator/statistics``.
-///
-/// **Example:**
-/// ```swift
-/// let stats = await evaluator.statistics
-/// if stats.isMetalAvailable {
-///     print("GPU: \(stats.deviceName), max batch: \(stats.maxBatchSize)")
-/// }
-/// ```
-@frozen
-public struct BatchEvaluatorStatistics: Sendable, Equatable, CustomStringConvertible {
-    /// Whether Metal GPU acceleration is available.
-    public let isMetalAvailable: Bool
+        /// Maximum batch size before automatic chunking required.
+        public let maxBatchSize: Int
 
-    /// Maximum batch size before automatic chunking required.
-    public let maxBatchSize: Int
+        /// Metal device name or "CPU" when Metal unavailable.
+        public let deviceName: String
 
-    /// Metal device name or "CPU" when Metal unavailable.
-    public let deviceName: String
+        /// Precision policy controlling GPU/CPU backend selection.
+        public let precisionPolicy: PrecisionPolicy
 
-    /// Precision policy controlling GPU/CPU backend selection.
-    public let precisionPolicy: PrecisionPolicy
+        /// Creates statistics with specified configuration values.
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let stats = MPSBatchEvaluator.Statistics(
+        ///     isMetalAvailable: true,
+        ///     maxBatchSize: 100,
+        ///     deviceName: "Apple M1",
+        ///     precisionPolicy: .fast
+        /// )
+        /// ```
+        public init(isMetalAvailable: Bool, maxBatchSize: Int, deviceName: String, precisionPolicy: PrecisionPolicy) {
+            self.isMetalAvailable = isMetalAvailable
+            self.maxBatchSize = maxBatchSize
+            self.deviceName = deviceName
+            self.precisionPolicy = precisionPolicy
+        }
 
-    /// Creates statistics with specified configuration values.
-    public init(isMetalAvailable: Bool, maxBatchSize: Int, deviceName: String, precisionPolicy: PrecisionPolicy) {
-        self.isMetalAvailable = isMetalAvailable
-        self.maxBatchSize = maxBatchSize
-        self.deviceName = deviceName
-        self.precisionPolicy = precisionPolicy
-    }
-
-    @inlinable
-    public var description: String {
-        """
-        Batch Evaluator Statistics:
-          Metal Available: \(isMetalAvailable)
-          Device: \(deviceName)
-          Max Batch Size: \(maxBatchSize)
-          Precision Policy: \(precisionPolicy)
-        """
+        @inlinable
+        public var description: String {
+            """
+            Batch Evaluator Statistics:
+              Metal Available: \(isMetalAvailable)
+              Device: \(deviceName)
+              Max Batch Size: \(maxBatchSize)
+              Precision Policy: \(precisionPolicy)
+            """
+        }
     }
 }
 

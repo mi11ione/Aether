@@ -21,9 +21,9 @@ struct QAOAAnsatzTests {
             depth: 1,
         )
 
-        #expect(!ansatz.isEmpty)
-        #expect(ansatz.parameters.contains { $0.name.starts(with: "gamma_0_c_") })
-        #expect(ansatz.parameters.contains { $0.name.starts(with: "beta_0_c_") })
+        #expect(!ansatz.isEmpty, "Depth-1 ansatz should produce non-empty circuit")
+        #expect(ansatz.parameters.contains { $0.name.starts(with: "gamma_0_c_") }, "Should contain scaled gamma_0 parameter")
+        #expect(ansatz.parameters.contains { $0.name.starts(with: "beta_0_c_") }, "Should contain scaled beta_0 parameter")
     }
 
     @Test("Depth-2 has scaled parameters for both layers")
@@ -39,12 +39,12 @@ struct QAOAAnsatzTests {
         )
 
         let scaledParameters = ansatz.parameters.filter { $0.name.contains("_c_") }
-        #expect(scaledParameters.count > 0)
+        #expect(scaledParameters.count > 0, "Depth-2 ansatz should have scaled parameters")
 
-        #expect(ansatz.parameters.contains { $0.name.starts(with: "gamma_0_c_") })
-        #expect(ansatz.parameters.contains { $0.name.starts(with: "beta_0_c_") })
-        #expect(ansatz.parameters.contains { $0.name.starts(with: "gamma_1_c_") })
-        #expect(ansatz.parameters.contains { $0.name.starts(with: "beta_1_c_") })
+        #expect(ansatz.parameters.contains { $0.name.starts(with: "gamma_0_c_") }, "Should contain scaled gamma_0 parameter")
+        #expect(ansatz.parameters.contains { $0.name.starts(with: "beta_0_c_") }, "Should contain scaled beta_0 parameter")
+        #expect(ansatz.parameters.contains { $0.name.starts(with: "gamma_1_c_") }, "Should contain scaled gamma_1 parameter")
+        #expect(ansatz.parameters.contains { $0.name.starts(with: "beta_1_c_") }, "Should contain scaled beta_1 parameter")
     }
 
     @Test("Depth-5 has scaled parameters for all layers")
@@ -59,8 +59,8 @@ struct QAOAAnsatzTests {
             depth: 5,
         )
 
-        #expect(ansatz.parameters.contains { $0.name.starts(with: "gamma_4_c_") })
-        #expect(ansatz.parameters.contains { $0.name.starts(with: "beta_4_c_") })
+        #expect(ansatz.parameters.contains { $0.name.starts(with: "gamma_4_c_") }, "Should contain scaled gamma_4 parameter for layer 5")
+        #expect(ansatz.parameters.contains { $0.name.starts(with: "beta_4_c_") }, "Should contain scaled beta_4 parameter for layer 5")
     }
 
     @Test("Circuit starts with Hadamard gates")
@@ -75,8 +75,8 @@ struct QAOAAnsatzTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.5])
-        #expect(circuit.operations.count > 2)
+        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.5])
+        #expect(circuit.operations.count > 2, "Bound circuit should have more than 2 operations")
     }
 }
 
@@ -97,14 +97,14 @@ struct PauliStringExponentiationTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.3])
 
         let hasCNOT = circuit.operations.contains { op in
             if op.gate == .cnot { return true }
             return false
         }
 
-        #expect(hasCNOT)
+        #expect(hasCNOT, "ZZ exponentiation should produce CNOT gates")
     }
 
     @Test("Three-qubit ZZZ uses extended ladder")
@@ -120,14 +120,14 @@ struct PauliStringExponentiationTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.3])
 
         let cnotCount = circuit.operations.count(where: { op in
             if op.gate == .cnot { return true }
             return false
         })
 
-        #expect(cnotCount >= 4)
+        #expect(cnotCount >= 4, "Three-qubit ZZZ should have at least 4 CNOT gates")
     }
 
     @Test("Y operator requires Rx basis rotation")
@@ -142,14 +142,14 @@ struct PauliStringExponentiationTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.3])
 
         let rxGates = circuit.operations.filter { op in
             if case .rotationX = op.gate { return true }
             return false
         }
 
-        #expect(rxGates.count >= 2)
+        #expect(rxGates.count >= 2, "Y operator should produce forward and inverse Rx basis rotations")
     }
 
     @Test("Mixed XYZ string has multiple basis rotations")
@@ -165,7 +165,7 @@ struct PauliStringExponentiationTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.3])
 
         let hadamardGates = circuit.operations.filter { op in
             if op.gate == .hadamard { return true }
@@ -177,8 +177,8 @@ struct PauliStringExponentiationTests {
             return false
         }
 
-        #expect(hadamardGates.count >= 2)
-        #expect(rxGates.count >= 2)
+        #expect(hadamardGates.count >= 2, "X operator in mixed string should produce Hadamard basis rotations")
+        #expect(rxGates.count >= 2, "Y operator in mixed string should produce Rx basis rotations")
     }
 }
 
@@ -202,14 +202,14 @@ struct CoefficientScalingTests {
         let scaledGammaParams = ansatz.parameters.filter { $0.name.starts(with: "gamma_0_c_") }
         let scaledBetaParams = ansatz.parameters.filter { $0.name.starts(with: "beta_0_c_") }
 
-        #expect(!scaledGammaParams.isEmpty)
-        #expect(!scaledBetaParams.isEmpty)
+        #expect(!scaledGammaParams.isEmpty, "Should have scaled gamma parameters")
+        #expect(!scaledBetaParams.isEmpty, "Should have scaled beta parameters")
 
         let gammaCoefficient = -0.5 * 2.0
-        #expect(ansatz.parameters.contains { $0.name == "gamma_0_c_\(gammaCoefficient)" })
+        #expect(ansatz.parameters.contains { $0.name == "gamma_0_c_\(gammaCoefficient)" }, "Should encode doubled cost coefficient in parameter name")
 
         let betaCoefficient = 1.0 * 2.0
-        #expect(ansatz.parameters.contains { $0.name == "beta_0_c_\(betaCoefficient)" })
+        #expect(ansatz.parameters.contains { $0.name == "beta_0_c_\(betaCoefficient)" }, "Should encode doubled mixer coefficient in parameter name")
     }
 
     @Test("Near-zero coefficients are filtered")
@@ -227,8 +227,8 @@ struct CoefficientScalingTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
-        #expect(!circuit.operations.isEmpty)
+        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.3])
+        #expect(!circuit.operations.isEmpty, "Near-zero term should be filtered but non-zero term should produce operations")
     }
 }
 
@@ -249,10 +249,10 @@ struct CompleteQAOAWorkflowsTests {
             depth: 2,
         )
 
-        #expect(!ansatz.isEmpty)
+        #expect(!ansatz.isEmpty, "Triangle MaxCut ansatz should produce non-empty circuit")
 
         let scaledParams = ansatz.parameters.filter { $0.name.contains("_c_") }
-        #expect(scaledParams.count > 0)
+        #expect(scaledParams.count > 0, "Triangle MaxCut ansatz should have scaled parameters")
     }
 
     @Test("Square MaxCut ansatz binds successfully")
@@ -267,10 +267,10 @@ struct CompleteQAOAWorkflowsTests {
             depth: 3,
         )
 
-        #expect(!ansatz.isEmpty)
+        #expect(!ansatz.isEmpty, "Square MaxCut ansatz should produce non-empty circuit")
 
         let scaledParams = ansatz.parameters.filter { $0.name.contains("_c_") }
-        #expect(scaledParams.count > 0)
+        #expect(scaledParams.count > 0, "Square MaxCut ansatz should have scaled parameters")
     }
 
     @Test("Parameter binding produces valid circuit")
@@ -285,10 +285,10 @@ struct CompleteQAOAWorkflowsTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).bind(baseParameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.3])
 
-        #expect(!circuit.operations.isEmpty)
-        #expect(circuit.qubits == 2)
+        #expect(!circuit.operations.isEmpty, "Bound circuit should have operations")
+        #expect(circuit.qubits == 2, "Bound circuit should preserve qubit count")
     }
 }
 
@@ -342,7 +342,7 @@ struct QAOAParameterBinderEdgeCaseTests {
         circuit.append(.rotationX(.parameter(beta)), to: 0)
 
         let binder = QAOAParameterBinder(ansatz: circuit)
-        let bound = binder.bind(baseParameters: [0.5, 0.25])
+        let bound = binder.binding(parameters: [0.5, 0.25])
 
         #expect(bound.parameters.isEmpty, "Well-formed parameters should be bound")
     }

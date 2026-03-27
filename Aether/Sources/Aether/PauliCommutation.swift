@@ -51,9 +51,7 @@ public enum PauliCommutation {
     @inlinable
     @_effects(readonly)
     public static func commute(_ p1: PauliBasis?, _ p2: PauliBasis?) -> Bool {
-        if p1 == nil || p2 == nil { return true }
-        if p1 == p2 { return true }
-        return false
+        p1 == nil || p2 == nil || p1 == p2
     }
 
     // MARK: - Multi-Qubit Commutation
@@ -85,17 +83,16 @@ public enum PauliCommutation {
     @inlinable
     @_effects(readonly)
     public static func commute(_ ps1: PauliString, _ ps2: PauliString) -> Bool {
+        let (smaller, larger) = ps1.operators.count <= ps2.operators.count
+            ? (ps1.operators, ps2.operators)
+            : (ps2.operators, ps1.operators)
+        let lookup = Dictionary(uniqueKeysWithValues: smaller.map { ($0.qubit, $0.basis) })
         var anticommutingCount = 0
-
-        for op1 in ps1.operators {
-            for op2 in ps2.operators {
-                if op1.qubit == op2.qubit, op1.basis != op2.basis {
-                    anticommutingCount += 1
-                    break
-                }
+        for op in larger {
+            if let existingBasis = lookup[op.qubit], existingBasis != op.basis {
+                anticommutingCount += 1
             }
         }
-
         return anticommutingCount & 1 == 0
     }
 
@@ -110,11 +107,11 @@ public enum PauliCommutation {
     ///
     /// **Example:**
     /// ```swift
-    /// let xx = PauliString(operators: [.init(basis: .x, qubit: 0), .init(basis: .x, qubit: 1)])
+    /// let xi = PauliString(operators: [.init(basis: .x, qubit: 0)])
     /// let xy = PauliString(operators: [.init(basis: .x, qubit: 0), .init(basis: .y, qubit: 1)])
     /// let yx = PauliString(operators: [.init(basis: .y, qubit: 0), .init(basis: .x, qubit: 1)])
     ///
-    /// PauliCommutation.areQWC(xx, xy)  // true - qubit 0 matches (X), qubit 1 compatible
+    /// PauliCommutation.areQWC(xi, xy)  // true - qubit 0 matches (X), qubit 1 identity in xi
     /// PauliCommutation.areQWC(xy, yx)  // false - conflict on both qubits
     /// ```
     ///
@@ -127,11 +124,13 @@ public enum PauliCommutation {
     @inlinable
     @_effects(readonly)
     public static func areQWC(_ ps1: PauliString, _ ps2: PauliString) -> Bool {
-        for op1 in ps1.operators {
-            for op2 in ps2.operators {
-                if op1.qubit == op2.qubit, op1.basis != op2.basis {
-                    return false
-                }
+        let (smaller, larger) = ps1.operators.count <= ps2.operators.count
+            ? (ps1.operators, ps2.operators)
+            : (ps2.operators, ps1.operators)
+        let lookup = Dictionary(uniqueKeysWithValues: smaller.map { ($0.qubit, $0.basis) })
+        for op in larger {
+            if let existingBasis = lookup[op.qubit], existingBasis != op.basis {
+                return false
             }
         }
         return true
@@ -143,7 +142,8 @@ public enum PauliCommutation {
     ///
     /// QWC strings can be measured simultaneously using a single basis rotation circuit. This
     /// method determines which basis (X, Y, or Z) should be applied to each qubit. Returns `nil`
-    /// if the input strings are not QWC, indicating they cannot be measured together.
+    /// if the input strings are not QWC, indicating they cannot be measured together. An empty
+    /// array returns an empty dictionary, reflecting the vacuously true QWC property.
     ///
     /// **Example:**
     /// ```swift
@@ -158,28 +158,28 @@ public enum PauliCommutation {
     /// - Parameter strings: Array of Pauli strings expected to be QWC
     /// - Returns: Dictionary mapping qubit indices to measurement bases, or `nil` if strings conflict
     /// - Complexity: O(total operators across all strings)
-    /// - Note: Empty array returns empty dictionary (vacuously true QWC property)
     /// - SeeAlso: ``areQWC(_:_:)``
     /// - SeeAlso: ``QWCGrouper``
     @_optimize(speed)
     @_eagerMove
+    @inlinable
     @_effects(readonly)
     public static func measurementBasis(of strings: [PauliString]) -> [Int: PauliBasis]? {
         guard !strings.isEmpty else { return [:] }
 
-        var basis: [Int: PauliBasis] = [:]
+        var result: [Int: PauliBasis] = [:]
 
         for string in strings {
             for op in string.operators {
-                if let existing = basis[op.qubit] {
+                if let existing = result[op.qubit] {
                     if existing != op.basis { return nil }
                 } else {
-                    basis[op.qubit] = op.basis
+                    result[op.qubit] = op.basis
                 }
             }
         }
 
-        return basis
+        return result
     }
 
     /// Extracts the measurement basis from a single Pauli string.
@@ -204,14 +204,9 @@ public enum PauliCommutation {
     /// - Complexity: O(n) where n is the number of operators in the string
     @_optimize(speed)
     @_eagerMove
+    @inlinable
     @_effects(readonly)
     public static func measurementBasis(of string: PauliString) -> [Int: PauliBasis] {
-        var basis: [Int: PauliBasis] = [:]
-
-        for op in string.operators {
-            basis[op.qubit] = op.basis
-        }
-
-        return basis
+        Dictionary(uniqueKeysWithValues: string.operators.map { ($0.qubit, $0.basis) })
     }
 }

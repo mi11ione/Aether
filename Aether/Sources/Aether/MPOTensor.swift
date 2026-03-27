@@ -95,21 +95,18 @@ public struct MPOTensor: Sendable, Equatable {
     ///   - rightBondDimension: Size of right bond index (must be positive)
     ///   - elements: Flattened tensor elements (count must equal leftBond * d * d * rightBond where d=2)
     /// - Complexity: O(1)
-    /// - Precondition: Bond dimensions must be positive, elements count must match dimensions
+    /// - Precondition: leftBondDimension > 0
+    /// - Precondition: rightBondDimension > 0
+    /// - Precondition: elements.count == leftBondDimension * 4 * rightBondDimension
     public init(leftBondDimension: Int, rightBondDimension: Int, elements: [Complex<Double>]) {
         ValidationUtilities.validatePositiveInt(leftBondDimension, name: "Left bond dimension")
         ValidationUtilities.validatePositiveInt(rightBondDimension, name: "Right bond dimension")
 
-        let d = 2
-        let expectedCount = leftBondDimension * d * d * rightBondDimension
-        precondition(
-            elements.count == expectedCount,
-            "MPO tensor element count must be \(leftBondDimension) * \(d) * \(d) * \(rightBondDimension) = \(expectedCount) (got \(elements.count))",
-        )
+        ValidationUtilities.validateMPOTensorElementCount(elements, leftBond: leftBondDimension, rightBond: rightBondDimension)
 
         self.leftBondDimension = leftBondDimension
         self.rightBondDimension = rightBondDimension
-        physicalDimension = d
+        physicalDimension = 2
         self.elements = elements
     }
 
@@ -132,7 +129,10 @@ public struct MPOTensor: Sendable, Equatable {
     ///   - right: Right bond index (0 to rightBondDimension-1)
     /// - Returns: Complex amplitude W[left, physIn, physOut, right]
     /// - Complexity: O(1)
-    /// - Precondition: All indices must be within valid ranges
+    /// - Precondition: 0 <= left < leftBondDimension
+    /// - Precondition: 0 <= physIn < physicalDimension
+    /// - Precondition: 0 <= physOut < physicalDimension
+    /// - Precondition: 0 <= right < rightBondDimension
     @inlinable
     public subscript(left: Int, physIn: Int, physOut: Int, right: Int) -> Complex<Double> {
         let d = physicalDimension

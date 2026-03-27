@@ -43,8 +43,7 @@ public enum PrecisionPolicy: Sendable, CaseIterable, CustomStringConvertible {
 
     /// Maximum numerical precision with CPU-only execution.
     ///
-    /// Forces Float64 CPU execution regardless of state size. Uses Accelerate
-    /// framework for vectorized operations. Tolerance ~1e-10. Required for
+    /// Forces Float64 CPU execution regardless of state size. Tolerance ~1e-10. Required for
     /// phase-sensitive algorithms (QPE, QFT), deep circuits (>200 gates), and
     /// final verification runs where numerical accuracy is paramount.
     case accurate
@@ -110,37 +109,23 @@ public enum PrecisionPolicy: Sendable, CaseIterable, CustomStringConvertible {
         }
     }
 
-    // MARK: - Static Properties
-
-    /// Default precision policy for general use.
-    ///
-    /// Returns `.fast` which maximizes throughput while maintaining acceptable
-    /// precision for most variational algorithms. Override with `.balanced` or
-    /// `.accurate` for production runs or phase-sensitive algorithms.
-    @inlinable
-    public static var `default`: PrecisionPolicy { .fast }
-
-    // MARK: - Static Methods
-
-    /// Determines whether GPU should be used for given qubit count and policy.
+    /// Determines whether GPU should be used for the given qubit count.
     ///
     /// Combines qubit threshold check with policy GPU flag. Returns true only
-    /// when policy permits GPU acceleration AND state size meets threshold.
+    /// when this policy permits GPU acceleration AND state size meets threshold.
     ///
     /// **Example:**
     /// ```swift
-    /// let useGPU = PrecisionPolicy.shouldUseGPU(qubits: 15, policy: .balanced)
+    /// let useGPU = PrecisionPolicy.balanced.shouldUseGPU(forQubitCount: 15)
     /// ```
     ///
-    /// - Parameters:
-    ///   - qubits: Number of qubits in quantum state
-    ///   - policy: Precision policy governing backend selection
+    /// - Parameter qubits: Number of qubits in quantum state
     /// - Returns: true if GPU should be used, false for CPU execution
     /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     @inline(__always)
-    public static func shouldUseGPU(qubits: Int, policy: PrecisionPolicy) -> Bool {
-        policy.isGPUEnabled && qubits >= policy.gpuQubitThreshold
+    public func shouldUseGPU(forQubitCount qubits: Int) -> Bool {
+        isGPUEnabled && qubits >= gpuQubitThreshold
     }
 }

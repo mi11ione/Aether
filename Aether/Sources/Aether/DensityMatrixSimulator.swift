@@ -150,26 +150,16 @@ public actor DensityMatrixSimulator {
         progress = Progress(executed: 0, total: totalOps)
 
         var state = initial
-        let useIdleNoise = noiseModel.hasIdleNoise
-
         for (index, operation) in operations.enumerated() {
             state = state.applying(operation)
 
             if noiseModel.hasNoise, let gate = operation.gate {
-                if useIdleNoise {
-                    state = noiseModel.applyNoiseWithIdle(
-                        after: gate,
-                        targetQubits: operation.qubits,
-                        to: state,
-                        totalQubits: circuit.qubits,
-                    )
-                } else {
-                    state = noiseModel.applyNoise(
-                        after: gate,
-                        targetQubits: operation.qubits,
-                        to: state,
-                    )
-                }
+                state = noiseModel.applyNoise(
+                    after: gate,
+                    targetQubits: operation.qubits,
+                    to: state,
+                    totalQubits: circuit.qubits
+                )
             }
 
             if index % 10 == 0 {
@@ -540,7 +530,7 @@ public actor TimingAwareDensityMatrixSimulator {
             state = state.applying(operation)
 
             if let gate = operation.gate {
-                state = noiseModel.applyAllNoise(
+                state = noiseModel.applyNoise(
                     after: gate,
                     targetQubits: operation.qubits,
                     to: state,
@@ -604,7 +594,7 @@ public actor TimingAwareDensityMatrixSimulator {
         let state = await execute(circuit)
         var probabilities = state.probabilities()
 
-        let measurementModels = noiseModel.measurementErrorModels()
+        let measurementModels = noiseModel.profile.measurementErrorModels()
         probabilities = applyPerQubitMeasurementError(
             probabilities: probabilities,
             models: measurementModels,
@@ -724,7 +714,7 @@ private func applyMeasurementErrors(
                 let partner = i | mask
                 let p0 = noisyProbs[i]
                 let p1 = noisyProbs[partner]
-                let (noisyP0, noisyP1) = model.applyError(to: (p0, p1))
+                let (noisyP0, noisyP1) = model.apply(to: (p0, p1))
                 newProbs[i] = noisyP0
                 newProbs[partner] = noisyP1
             }

@@ -99,6 +99,8 @@ public struct MPSTensor: Sendable, Equatable {
     ///   - elements: Flattened tensor elements (count must equal leftBondDimension * 2 * rightBondDimension)
     /// - Complexity: O(1)
     /// - Precondition: Bond dimensions must be positive, elements count must match dimensions
+    /// - SeeAlso: ``groundState(site:qubits:maxBondDimension:)``
+    /// - SeeAlso: ``basisState(_:site:qubits:maxBondDimension:)``
     public init(leftBondDimension: Int, rightBondDimension: Int, site: Int, elements: [Complex<Double>]) {
         ValidationUtilities.validatePositiveInt(leftBondDimension, name: "Left bond dimension")
         ValidationUtilities.validatePositiveInt(rightBondDimension, name: "Right bond dimension")
@@ -131,6 +133,7 @@ public struct MPSTensor: Sendable, Equatable {
     /// - Returns: MPS tensor representing |0⟩ at this site
     /// - Complexity: O(1)
     /// - Precondition: 0 <= site < qubits, qubits > 0
+    /// - SeeAlso: ``basisState(_:site:qubits:maxBondDimension:)``
     @_eagerMove
     public static func groundState(site: Int, qubits: Int, maxBondDimension: Int) -> MPSTensor {
         ValidationUtilities.validatePositiveQubits(qubits)
@@ -162,6 +165,7 @@ public struct MPSTensor: Sendable, Equatable {
     /// - Returns: MPS tensor with the appropriate physical index populated
     /// - Complexity: O(1)
     /// - Precondition: 0 <= site < qubits, qubits > 0, 0 <= basisState < 2^qubits
+    /// - SeeAlso: ``groundState(site:qubits:maxBondDimension:)``
     @_eagerMove
     public static func basisState(_ basisState: Int, site: Int, qubits: Int, maxBondDimension: Int) -> MPSTensor {
         ValidationUtilities.validatePositiveQubits(qubits)
@@ -192,6 +196,8 @@ public struct MPSTensor: Sendable, Equatable {
     /// - Returns: Complex amplitude A[left, physical, right]
     /// - Complexity: O(1)
     /// - Precondition: All indices must be within valid ranges
+    /// - SeeAlso: ``elements``
+    /// - SeeAlso: ``matrix(forPhysical:)``
     @inlinable
     public subscript(left: Int, physical: Int, right: Int) -> Complex<Double> {
         ValidationUtilities.validateIndexInBounds(left, bound: leftBondDimension, name: "Left bond index")
@@ -205,20 +211,21 @@ public struct MPSTensor: Sendable, Equatable {
     /// Contracts the tensor with a left vector: result[i,beta] = Sum_alpha v[alpha] * A[alpha,i,beta].
     ///
     /// Performs left contraction to propagate MPS computation from left to right.
-    /// Uses BLAS cblas_zgemv for tensors with 64+ elements, scalar loop otherwise.
+    /// Vectorized for large tensors.
     ///
     /// **Example:**
     /// ```swift
     /// let tensor = MPSTensor.groundState(site: 1, qubits: 4, maxBondDimension: 16)
     /// let leftVec: [Complex<Double>] = [.one]
     /// let result = tensor.contractLeft(with: leftVec)
-    /// // result[i][beta] contains contracted values for each physical index i
     /// ```
     ///
     /// - Parameter leftVector: Vector of size leftBondDimension
     /// - Returns: 2D array [physical][rightBond] of contracted values
-    /// - Complexity: O(leftBond * rightBond) per physical index, BLAS-accelerated for large tensors
+    /// - Complexity: O(leftBond * physicalDim * rightBond)
     /// - Precondition: leftVector.count == leftBondDimension
+    /// - SeeAlso: ``contractRight(with:)``
+    @_effects(readonly)
     @_optimize(speed)
     @_eagerMove
     public func contractLeft(with leftVector: [Complex<Double>]) -> [[Complex<Double>]] {
@@ -233,25 +240,28 @@ public struct MPSTensor: Sendable, Equatable {
         return contractLeftScalar(with: leftVector)
     }
 
+    /// Scalar-loop left contraction for small tensors.
+    @_effects(readonly)
     @_optimize(speed)
     @_eagerMove
     private func contractLeftScalar(with leftVector: [Complex<Double>]) -> [[Complex<Double>]] {
-        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: rightBondDimension), count: physicalDimension)
-
-        for physical in 0 ..< physicalDimension {
-            for beta in 0 ..< rightBondDimension {
-                var sum: Complex<Double> = .zero
-                for alpha in 0 ..< leftBondDimension {
-                    let flatIndex = alpha * (physicalDimension * rightBondDimension) + physical * rightBondDimension + beta
-                    sum = sum + leftVector[alpha] * elements[flatIndex]
+        (0 ..< physicalDimension).map { physical in
+            [Complex<Double>](unsafeUninitializedCapacity: rightBondDimension) { buffer, count in
+                for beta in 0 ..< rightBondDimension {
+                    var sum: Complex<Double> = .zero
+                    for alpha in 0 ..< leftBondDimension {
+                        let flatIndex = alpha * (physicalDimension * rightBondDimension) + physical * rightBondDimension + beta
+                        sum = sum + leftVector[alpha] * elements[flatIndex]
+                    }
+                    buffer[beta] = sum
                 }
-                result[physical][beta] = sum
+                count = rightBondDimension
             }
         }
-
-        return result
     }
 
+    /// BLAS-accelerated left contraction for large tensors.
+    @_effects(readonly)
     @_optimize(speed)
     @_eagerMove
     private func contractLeftBLAS(with leftVector: [Complex<Double>]) -> [[Complex<Double>]] {
@@ -313,11 +323,13 @@ public struct MPSTensor: Sendable, Equatable {
             }
         }
 
-        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: rightBondDimension), count: physicalDimension)
-        for physical in 0 ..< physicalDimension {
-            for betaIdx in 0 ..< rightBondDimension {
-                let idx = (physical * rightBondDimension + betaIdx) * 2
-                result[physical][betaIdx] = Complex(resultInterleaved[idx], resultInterleaved[idx + 1])
+        let result = (0 ..< physicalDimension).map { physical in
+            [Complex<Double>](unsafeUninitializedCapacity: rightBondDimension) { buffer, count in
+                for betaIdx in 0 ..< rightBondDimension {
+                    let idx = (physical * rightBondDimension + betaIdx) * 2
+                    buffer[betaIdx] = Complex(resultInterleaved[idx], resultInterleaved[idx + 1])
+                }
+                count = rightBondDimension
             }
         }
 
@@ -327,20 +339,21 @@ public struct MPSTensor: Sendable, Equatable {
     /// Contracts the tensor with a right vector: result[alpha,i] = Sum_beta A[alpha,i,beta] * v[beta].
     ///
     /// Performs right contraction to propagate MPS computation from right to left.
-    /// Uses BLAS cblas_zgemv for tensors with 64+ elements, scalar loop otherwise.
+    /// Vectorized for large tensors.
     ///
     /// **Example:**
     /// ```swift
     /// let tensor = MPSTensor.groundState(site: 2, qubits: 4, maxBondDimension: 16)
     /// let rightVec: [Complex<Double>] = [.one]
     /// let result = tensor.contractRight(with: rightVec)
-    /// // result[alpha][i] contains contracted values for each left bond and physical index
     /// ```
     ///
     /// - Parameter rightVector: Vector of size rightBondDimension
     /// - Returns: 2D array [leftBond][physical] of contracted values
-    /// - Complexity: O(leftBond * rightBond) per physical index, BLAS-accelerated for large tensors
+    /// - Complexity: O(leftBond * physicalDim * rightBond)
     /// - Precondition: rightVector.count == rightBondDimension
+    /// - SeeAlso: ``contractLeft(with:)``
+    @_effects(readonly)
     @_optimize(speed)
     @_eagerMove
     public func contractRight(with rightVector: [Complex<Double>]) -> [[Complex<Double>]] {
@@ -355,25 +368,28 @@ public struct MPSTensor: Sendable, Equatable {
         return contractRightScalar(with: rightVector)
     }
 
+    /// Scalar-loop right contraction for small tensors.
+    @_effects(readonly)
     @_optimize(speed)
     @_eagerMove
     private func contractRightScalar(with rightVector: [Complex<Double>]) -> [[Complex<Double>]] {
-        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: physicalDimension), count: leftBondDimension)
-
-        for alpha in 0 ..< leftBondDimension {
-            for physical in 0 ..< physicalDimension {
-                var sum: Complex<Double> = .zero
-                for beta in 0 ..< rightBondDimension {
-                    let flatIndex = alpha * (physicalDimension * rightBondDimension) + physical * rightBondDimension + beta
-                    sum = sum + elements[flatIndex] * rightVector[beta]
+        (0 ..< leftBondDimension).map { alpha in
+            [Complex<Double>](unsafeUninitializedCapacity: physicalDimension) { buffer, count in
+                for physical in 0 ..< physicalDimension {
+                    var sum: Complex<Double> = .zero
+                    for beta in 0 ..< rightBondDimension {
+                        let flatIndex = alpha * (physicalDimension * rightBondDimension) + physical * rightBondDimension + beta
+                        sum = sum + elements[flatIndex] * rightVector[beta]
+                    }
+                    buffer[physical] = sum
                 }
-                result[alpha][physical] = sum
+                count = physicalDimension
             }
         }
-
-        return result
     }
 
+    /// BLAS-accelerated right contraction for large tensors.
+    @_effects(readonly)
     @_optimize(speed)
     @_eagerMove
     private func contractRightBLAS(with rightVector: [Complex<Double>]) -> [[Complex<Double>]] {
@@ -435,11 +451,13 @@ public struct MPSTensor: Sendable, Equatable {
             }
         }
 
-        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: physicalDimension), count: leftBondDimension)
-        for alphaIdx in 0 ..< leftBondDimension {
-            for physical in 0 ..< physicalDimension {
-                let idx = (alphaIdx * physicalDimension + physical) * 2
-                result[alphaIdx][physical] = Complex(resultInterleaved[idx], resultInterleaved[idx + 1])
+        let result = (0 ..< leftBondDimension).map { alphaIdx in
+            [Complex<Double>](unsafeUninitializedCapacity: physicalDimension) { buffer, count in
+                for physical in 0 ..< physicalDimension {
+                    let idx = (alphaIdx * physicalDimension + physical) * 2
+                    buffer[physical] = Complex(resultInterleaved[idx], resultInterleaved[idx + 1])
+                }
+                count = physicalDimension
             }
         }
 
@@ -454,17 +472,20 @@ public struct MPSTensor: Sendable, Equatable {
     /// **Example:**
     /// ```swift
     /// let tensor = MPSTensor.groundState(site: 0, qubits: 4, maxBondDimension: 16)
-    /// let matrixZero = tensor.matrixForPhysicalIndex(0)
-    /// let matrixOne = tensor.matrixForPhysicalIndex(1)
+    /// let matrixZero = tensor.matrix(forPhysical: 0)
+    /// let matrixOne = tensor.matrix(forPhysical: 1)
     /// ```
     ///
     /// - Parameter physicalIndex: Physical index (0 or 1)
     /// - Returns: 2D matrix [leftBond][rightBond] for the given physical index
     /// - Complexity: O(leftBond * rightBond)
     /// - Precondition: physicalIndex must be 0 or 1
+    /// - SeeAlso: ``subscript(left:physical:right:)``
+    /// - SeeAlso: ``reshapeForSVD(mergingLeft:)``
     @_effects(readonly)
+    @_optimize(speed)
     @_eagerMove
-    public func matrixForPhysicalIndex(_ physicalIndex: Int) -> [[Complex<Double>]] {
+    public func matrix(forPhysical physicalIndex: Int) -> [[Complex<Double>]] {
         ValidationUtilities.validateIndexInBounds(physicalIndex, bound: physicalDimension, name: "Physical index")
 
         return (0 ..< leftBondDimension).map { alpha in
@@ -480,25 +501,27 @@ public struct MPSTensor: Sendable, Equatable {
 
     /// Reshapes the tensor into a matrix for SVD decomposition.
     ///
-    /// For mergeLeft=true: combines left bond and physical indices into rows,
+    /// For mergingLeft=true: combines left bond and physical indices into rows,
     /// resulting in (leftBond * 2) x rightBond matrix.
-    /// For mergeLeft=false: combines physical and right bond indices into columns,
+    /// For mergingLeft=false: combines physical and right bond indices into columns,
     /// resulting in leftBond x (2 * rightBond) matrix.
     ///
     /// **Example:**
     /// ```swift
     /// let tensor = MPSTensor(leftBondDimension: 2, rightBondDimension: 3, site: 1, elements: elements)
-    /// let leftMerged = tensor.reshapeForSVD(mergeLeft: true)   // 4x3 matrix
-    /// let rightMerged = tensor.reshapeForSVD(mergeLeft: false) // 2x6 matrix
+    /// let leftMerged = tensor.reshapeForSVD(mergingLeft: true)   // 4x3 matrix
+    /// let rightMerged = tensor.reshapeForSVD(mergingLeft: false) // 2x6 matrix
     /// ```
     ///
-    /// - Parameter mergeLeft: If true, merge (alpha,i) into rows; if false, merge (i,beta) into columns
+    /// - Parameter mergingLeft: If true, merge (alpha,i) into rows; if false, merge (i,beta) into columns
     /// - Returns: 2D matrix suitable for SVD decomposition
     /// - Complexity: O(leftBond * 2 * rightBond)
+    /// - SeeAlso: ``matrix(forPhysical:)``
     @_effects(readonly)
+    @_optimize(speed)
     @_eagerMove
-    public func reshapeForSVD(mergeLeft: Bool) -> [[Complex<Double>]] {
-        if mergeLeft {
+    public func reshapeForSVD(mergingLeft: Bool) -> [[Complex<Double>]] {
+        if mergingLeft {
             let rows = leftBondDimension * physicalDimension
             let cols = rightBondDimension
 

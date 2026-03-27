@@ -18,6 +18,8 @@ import Foundation
 ///     .constant(Double.pi / 4)
 /// )
 /// ```
+///
+/// - SeeAlso: ``ParameterExpression``
 @frozen
 public indirect enum ExpressionNode: Equatable, Hashable, Sendable {
     /// Literal numeric value
@@ -71,6 +73,8 @@ public indirect enum ExpressionNode: Equatable, Hashable, Sendable {
 ///
 /// let grad = sum.gradient(withRespectTo: theta)
 /// ```
+///
+/// - SeeAlso: ``ExpressionNode``
 @frozen
 public struct ParameterExpression: Equatable, Hashable, Sendable {
     /// Root node of the expression DAG
@@ -141,8 +145,9 @@ public struct ParameterExpression: Equatable, Hashable, Sendable {
     /// ```
     ///
     /// - Complexity: O(n) where n is the number of nodes in the expression tree
+    @inlinable
     public var isSymbolic: Bool {
-        !parameters.isEmpty
+        nodeContainsParameter(node)
     }
 
     /// Set of all symbolic parameters in expression
@@ -161,7 +166,9 @@ public struct ParameterExpression: Equatable, Hashable, Sendable {
     ///
     /// - Complexity: O(n) where n is the number of nodes in the expression tree
     public var parameters: Set<Parameter> {
-        collectParameters(from: node)
+        var result = Set<Parameter>()
+        collectParameters(from: node, into: &result)
+        return result
     }
 
     /// Evaluates expression using parameter bindings
@@ -182,6 +189,7 @@ public struct ParameterExpression: Equatable, Hashable, Sendable {
     /// - Returns: Evaluated numerical result
     /// - Complexity: O(n) where n is the number of unique nodes in the expression tree
     /// - Precondition: All symbolic parameters must have bindings in dictionary
+    /// - SeeAlso: ``gradient(withRespectTo:)``
     @_effects(readonly)
     @inlinable
     public func evaluate(using bindings: [String: Double]) -> Double {
@@ -209,13 +217,14 @@ public struct ParameterExpression: Equatable, Hashable, Sendable {
     /// - Parameter parameter: Parameter to differentiate with respect to
     /// - Returns: Symbolic expression representing the gradient
     /// - Complexity: O(n) where n is the number of nodes in the expression tree
+    /// - SeeAlso: ``evaluate(using:)``
     @_effects(readonly)
     public func gradient(withRespectTo parameter: Parameter) -> ParameterExpression {
         ParameterExpression(node: differentiateNode(node, withRespectTo: parameter))
     }
 
-    @_effects(readonly)
-    @usableFromInline
+    /// Evaluates expression node with memoization cache
+    @inlinable
     func evaluateNodeMemoized(_ node: ExpressionNode, using bindings: [String: Double], cache: inout [ExpressionNode: Double]) -> Double {
         if let cached = cache[node] {
             return cached
@@ -224,6 +233,7 @@ public struct ParameterExpression: Equatable, Hashable, Sendable {
         case let .constant(value):
             value
         case let .parameter(param):
+            // Safe: validateExpressionBinding ensures all parameters have bindings
             bindings[param.name]!
         case let .add(lhs, rhs):
             evaluateNodeMemoized(lhs, using: bindings, cache: &cache) + evaluateNodeMemoized(rhs, using: bindings, cache: &cache)
@@ -252,29 +262,33 @@ public struct ParameterExpression: Equatable, Hashable, Sendable {
         return result
     }
 
-    @_effects(readonly)
-    private func collectParameters(from node: ExpressionNode) -> Set<Parameter> {
+    /// Returns whether the node tree contains any parameter reference
+    @inlinable
+    func nodeContainsParameter(_ node: ExpressionNode) -> Bool {
         switch node {
-        case .constant:
-            []
-        case let .parameter(param):
-            [param]
-        case let .add(lhs, rhs),
-             let .subtract(lhs, rhs),
-             let .multiply(lhs, rhs),
-             let .divide(lhs, rhs):
-            collectParameters(from: lhs).union(collectParameters(from: rhs))
-        case let .negate(inner),
-             let .sin(inner),
-             let .cos(inner),
-             let .tan(inner),
-             let .exp(inner),
-             let .log(inner),
-             let .arctan(inner):
-            collectParameters(from: inner)
+        case .constant: false
+        case .parameter: true
+        case let .add(l, r), let .subtract(l, r), let .multiply(l, r), let .divide(l, r):
+            nodeContainsParameter(l) || nodeContainsParameter(r)
+        case let .negate(i), let .sin(i), let .cos(i), let .tan(i), let .exp(i), let .log(i), let .arctan(i):
+            nodeContainsParameter(i)
         }
     }
 
+    /// Collects all parameters from the node tree into the result set
+    private func collectParameters(from node: ExpressionNode, into result: inout Set<Parameter>) {
+        switch node {
+        case .constant: break
+        case let .parameter(param): result.insert(param)
+        case let .add(l, r), let .subtract(l, r), let .multiply(l, r), let .divide(l, r):
+            collectParameters(from: l, into: &result)
+            collectParameters(from: r, into: &result)
+        case let .negate(i), let .sin(i), let .cos(i), let .tan(i), let .exp(i), let .log(i), let .arctan(i):
+            collectParameters(from: i, into: &result)
+        }
+    }
+
+    /// Returns the symbolically differentiated expression node
     @_effects(readonly)
     private func differentiateNode(_ node: ExpressionNode, withRespectTo param: Parameter) -> ExpressionNode {
         switch node {

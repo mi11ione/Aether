@@ -456,7 +456,7 @@
 
         for site in 0 ..< result.qubits - 1 {
             let tensor = result.tensors[site]
-            let matrix = tensor.reshapeForSVD(mergeLeft: true)
+            let matrix = tensor.reshapeForSVD(mergingLeft: true)
 
             let svdResult = SVDDecomposition.decompose(matrix: matrix, truncation: truncation)
 

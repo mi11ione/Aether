@@ -23,10 +23,8 @@ import Foundation
 public struct MeasurementErrorModel: Sendable, Equatable {
     /// Confusion matrix M[prepared][measured].
     ///
-    /// - M[0][0] = P(measure 0 | prepared 0) = 1 - p1Given0
-    /// - M[0][1] = P(measure 1 | prepared 0) = p1Given0
-    /// - M[1][0] = P(measure 0 | prepared 1) = p0Given1
-    /// - M[1][1] = P(measure 1 | prepared 1) = 1 - p0Given1
+    /// Row 0 represents state |0⟩: `M[0][0] = 1 - p1Given0`, `M[0][1] = p1Given0`.
+    /// Row 1 represents state |1⟩: `M[1][0] = p0Given1`, `M[1][1] = 1 - p0Given1`.
     public let confusionMatrix: [[Double]]
 
     /// Inverse confusion matrix for error mitigation.
@@ -48,6 +46,7 @@ public struct MeasurementErrorModel: Sendable, Equatable {
     /// - Precondition: 0 ≤ p0Given1 ≤ 1
     /// - Precondition: 0 ≤ p1Given0 ≤ 1
     /// - Precondition: Resulting confusion matrix must be invertible
+    /// - Complexity: O(1)
     public init(p0Given1: Double, p1Given0: Double) {
         ValidationUtilities.validateErrorProbability(p0Given1, name: "p0Given1")
         ValidationUtilities.validateErrorProbability(p1Given0, name: "p1Given0")
@@ -103,12 +102,18 @@ public struct MeasurementErrorModel: Sendable, Equatable {
     ///
     /// Transforms ideal probabilities to noisy probabilities: P_noisy = M * P_ideal.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let model = MeasurementErrorModel(p0Given1: 0.1, p1Given0: 0.05)
+    /// let noisy = model.apply(to: (p0: 1.0, p1: 0.0))
+    /// ```
+    ///
     /// - Parameter probabilities: Two-element array [P(0), P(1)]
     /// - Returns: Noisy probability distribution
     /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
-    public func applyError(to probabilities: (p0: Double, p1: Double)) -> (p0: Double, p1: Double) {
+    public func apply(to probabilities: (p0: Double, p1: Double)) -> (p0: Double, p1: Double) {
         let noisyP0 = confusionMatrix[0][0] * probabilities.p0 + confusionMatrix[1][0] * probabilities.p1
         let noisyP1 = confusionMatrix[0][1] * probabilities.p0 + confusionMatrix[1][1] * probabilities.p1
         return (noisyP0, noisyP1)
@@ -120,10 +125,15 @@ public struct MeasurementErrorModel: Sendable, Equatable {
     /// May produce negative "probabilities" which should be interpreted as statistical
     /// corrections rather than true probabilities.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let model = MeasurementErrorModel(p0Given1: 0.1, p1Given0: 0.05)
+    /// let corrected = model.mitigate(probabilities: (p0: 0.93, p1: 0.07))
+    /// ```
+    ///
     /// - Parameter probabilities: Observed (noisy) probabilities [P(0), P(1)]
     /// - Returns: Corrected probability distribution
     /// - Complexity: O(1)
-    /// - Note: Results may be negative or > 1 due to statistical corrections
     @_effects(readonly)
     @inlinable
     public func mitigate(probabilities: (p0: Double, p1: Double)) -> (p0: Double, p1: Double) {
@@ -151,6 +161,7 @@ public struct MeasurementErrorModel: Sendable, Equatable {
     /// - Returns: Corrected histogram with mitigated counts
     /// - Complexity: O(2^n) where n = totalQubits
     /// - Precondition: 0 ≤ qubit < totalQubits
+    @_effects(readonly)
     @_optimize(speed)
     public func mitigateHistogram(
         _ histogram: [Int: Int],
@@ -161,6 +172,7 @@ public struct MeasurementErrorModel: Sendable, Equatable {
 
         let mask = 1 << qubit
         var corrected: [Int: Double] = [:]
+        corrected.reserveCapacity(histogram.count)
 
         for (state, count) in histogram {
             let bit = (state >> qubit) & 1
@@ -198,10 +210,8 @@ public struct MeasurementErrorModel: Sendable, Equatable {
 /// Complete noise model for quantum circuit simulation.
 ///
 /// Configures noise channels for different gate types, measurement errors, and idle noise.
-/// Supports per-gate-type noise configuration with typical NISQ device characteristics:
-/// - Single-qubit gate error: ~0.1%
-/// - Two-qubit gate error: ~1% (10x worse)
-/// - Measurement error: ~1-5%
+/// Typical NISQ device characteristics are ~0.1% single-qubit gate error, ~1% two-qubit
+/// gate error (10x worse), and 1-5% measurement error.
 ///
 /// When `idleNoiseConfig` is set, qubits not involved in the current gate accumulate T₁/T₂ decay
 /// during that gate's execution time, modeling realistic hardware where idle qubits decohere
@@ -243,12 +253,24 @@ public struct NoiseModel: Sendable {
     public let idleNoiseConfig: IdleNoiseConfig?
 
     /// Whether any noise is configured.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let model = NoiseModel.ideal
+    /// let noisy = model.hasNoise
+    /// ```
     @inlinable
     public var hasNoise: Bool {
         singleQubitNoise != nil || twoQubitNoise != nil || measurementError != nil || idleNoiseConfig != nil
     }
 
     /// Whether idle noise is configured.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let model = NoiseModel.typicalNISQWithIdle
+    /// let hasIdle = model.hasIdleNoise
+    /// ```
     @inlinable
     public var hasIdleNoise: Bool {
         idleNoiseConfig != nil
@@ -277,6 +299,7 @@ public struct NoiseModel: Sendable {
     ///   - twoQubitNoise: Noise channel for two-qubit gates (nil = no noise)
     ///   - measurementError: Measurement error model (nil = perfect readout)
     ///   - idleNoiseConfig: Idle noise configuration (nil = no idle noise)
+    /// - Complexity: O(1)
     public init(
         singleQubitNoise: (any NoiseChannel)? = nil,
         twoQubitNoise: TwoQubitDepolarizingChannel? = nil,
@@ -313,6 +336,7 @@ public struct NoiseModel: Sendable {
     ///   - singleQubitError: Error probability for single-qubit gates
     ///   - twoQubitError: Error probability for two-qubit gates
     /// - Returns: NoiseModel with depolarizing channels
+    /// - Complexity: O(1)
     @_effects(readonly)
     public static func depolarizing(
         singleQubitError: Double,
@@ -326,22 +350,18 @@ public struct NoiseModel: Sendable {
 
     /// Create realistic NISQ device noise model.
     ///
-    /// Based on typical IBM/Google superconducting qubit parameters:
-    /// - Single-qubit gate error: 0.1%
-    /// - Two-qubit gate error: 1%
-    /// - Measurement error: 2% (asymmetric)
+    /// Based on typical IBM/Google superconducting qubit parameters with 0.1% single-qubit
+    /// gate error, 1% two-qubit gate error, and 2% asymmetric measurement error.
     ///
     /// **Example:**
     /// ```swift
     /// let model = NoiseModel.typicalNISQ
     /// ```
-    public static var typicalNISQ: NoiseModel {
-        NoiseModel(
-            singleQubitNoise: DepolarizingChannel(errorProbability: 0.001),
-            twoQubitNoise: TwoQubitDepolarizingChannel(errorProbability: 0.01),
-            measurementError: MeasurementErrorModel(p0Given1: 0.02, p1Given0: 0.01),
-        )
-    }
+    public static let typicalNISQ = NoiseModel(
+        singleQubitNoise: DepolarizingChannel(errorProbability: 0.001),
+        twoQubitNoise: TwoQubitDepolarizingChannel(errorProbability: 0.01),
+        measurementError: MeasurementErrorModel(p0Given1: 0.02, p1Given0: 0.01)
+    )
 
     /// Create realistic NISQ device noise model with idle decoherence.
     ///
@@ -351,14 +371,12 @@ public struct NoiseModel: Sendable {
     /// ```swift
     /// let model = NoiseModel.typicalNISQWithIdle
     /// ```
-    public static var typicalNISQWithIdle: NoiseModel {
-        NoiseModel(
-            singleQubitNoise: DepolarizingChannel(errorProbability: 0.001),
-            twoQubitNoise: TwoQubitDepolarizingChannel(errorProbability: 0.01),
-            measurementError: MeasurementErrorModel(p0Given1: 0.02, p1Given0: 0.01),
-            idleNoiseConfig: IdleNoiseConfig(t1: 100_000, t2: 80000, timings: .ibmDefault),
-        )
-    }
+    public static let typicalNISQWithIdle = NoiseModel(
+        singleQubitNoise: DepolarizingChannel(errorProbability: 0.001),
+        twoQubitNoise: TwoQubitDepolarizingChannel(errorProbability: 0.01),
+        measurementError: MeasurementErrorModel(p0Given1: 0.02, p1Given0: 0.01),
+        idleNoiseConfig: IdleNoiseConfig(t1: 100_000, t2: 80000, timings: .ibmDefault)
+    )
 
     /// Create amplitude damping noise model for T₁-limited devices.
     ///
@@ -372,6 +390,8 @@ public struct NoiseModel: Sendable {
     ///   - singleQubitGateTime: Single-qubit gate time in nanoseconds
     ///   - twoQubitGateTime: Two-qubit gate time in nanoseconds
     /// - Returns: NoiseModel with amplitude damping based on T₁
+    /// - Precondition: t1 > 0
+    /// - Complexity: O(1)
     @_effects(readonly)
     public static func amplitudeDamping(
         t1: Double,
@@ -387,31 +407,32 @@ public struct NoiseModel: Sendable {
         )
     }
 
-    /// Create noise model from hardware profile.
+    /// Create noise model from hardware profile with optional idle noise.
     ///
     /// Uses average parameters from the hardware profile to create a uniform noise model.
-    /// Create noise model from hardware profile with idle noise.
+    /// When `includeIdleNoise` is true, adds T₁/T₂ decay on idle qubits during gate execution.
     ///
     /// **Example:**
     /// ```swift
-    /// let model = NoiseModel.fromWithIdle(profile: HardwareNoiseProfile.ibmManila)
+    /// let model = NoiseModel(profile: HardwareNoiseProfile.ibmManila)
     /// ```
     ///
-    /// - Parameter profile: Hardware noise profile
-    /// - Returns: NoiseModel with idle noise based on profile T₁/T₂
-    @_effects(readonly)
-    public static func fromWithIdle(profile: HardwareNoiseProfile) -> NoiseModel {
+    /// - Parameters:
+    ///   - profile: Hardware noise profile
+    ///   - includeIdleNoise: Whether to include T₁/T₂ idle decoherence
+    /// - Complexity: O(n) where n is the number of qubits in the profile
+    public init(profile: HardwareNoiseProfile, includeIdleNoise: Bool = true) {
         let base = profile.noiseModel()
-        let idleConfig = IdleNoiseConfig(
+        let idleConfig: IdleNoiseConfig? = includeIdleNoise ? IdleNoiseConfig(
             t1: profile.averageT1,
             t2: profile.averageT2,
-            timings: profile.gateTimings,
-        )
-        return NoiseModel(
+            timings: profile.gateTimings
+        ) : nil
+        self.init(
             singleQubitNoise: base.singleQubitNoise,
             twoQubitNoise: base.twoQubitNoise,
             measurementError: base.measurementError,
-            idleNoiseConfig: idleConfig,
+            idleNoiseConfig: idleConfig
         )
     }
 }
@@ -454,6 +475,11 @@ public struct IdleNoiseConfig: Sendable, Equatable {
 
     /// Create idle noise configuration with uniform T₁/T₂.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let config = IdleNoiseConfig(t1: 100_000, t2: 80_000)
+    /// ```
+    ///
     /// - Parameters:
     ///   - t1: T₁ relaxation time in nanoseconds
     ///   - t2: T₂ coherence time in nanoseconds (must be ≤ 2*T₁)
@@ -461,6 +487,7 @@ public struct IdleNoiseConfig: Sendable, Equatable {
     /// - Precondition: t1 > 0
     /// - Precondition: t2 > 0
     /// - Precondition: t2 ≤ 2*t1
+    /// - Complexity: O(1)
     public init(t1: Double, t2: Double, timings: GateTimingModel = .ibmDefault) {
         ValidationUtilities.validatePositiveDouble(t1, name: "T₁")
         ValidationUtilities.validatePositiveDouble(t2, name: "T₂")
@@ -475,6 +502,14 @@ public struct IdleNoiseConfig: Sendable, Equatable {
 
     /// Create idle noise configuration with per-qubit T₁/T₂.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let config = IdleNoiseConfig(
+    ///     perQubitT1: [100_000, 90_000],
+    ///     perQubitT2: [80_000, 70_000]
+    /// )
+    /// ```
+    ///
     /// - Parameters:
     ///   - perQubitT1: T₁ time per qubit in nanoseconds
     ///   - perQubitT2: T₂ time per qubit in nanoseconds
@@ -483,6 +518,7 @@ public struct IdleNoiseConfig: Sendable, Equatable {
     /// - Precondition: All T₁ values > 0
     /// - Precondition: All T₂ values > 0
     /// - Precondition: T₂[i] ≤ 2*T₁[i] for all i
+    /// - Complexity: O(n) where n is the number of qubits
     public init(perQubitT1: [Double], perQubitT2: [Double], timings: GateTimingModel = .ibmDefault) {
         ValidationUtilities.validateEqualCounts(perQubitT1, perQubitT2, name1: "perQubitT1", name2: "perQubitT2")
         ValidationUtilities.validateAllPositive(perQubitT1, name: "T₁")
@@ -500,6 +536,14 @@ public struct IdleNoiseConfig: Sendable, Equatable {
     }
 
     /// Get T₁ for specific qubit.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let config = IdleNoiseConfig(t1: 100_000, t2: 80_000)
+    /// let t1 = config.t1ForQubit(0)
+    /// ```
+    ///
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     public func t1ForQubit(_ qubit: Int) -> Double {
@@ -507,6 +551,14 @@ public struct IdleNoiseConfig: Sendable, Equatable {
     }
 
     /// Get T₂ for specific qubit.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let config = IdleNoiseConfig(t1: 100_000, t2: 80_000)
+    /// let t2 = config.t2ForQubit(0)
+    /// ```
+    ///
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     public func t2ForQubit(_ qubit: Int) -> Double {
@@ -514,6 +566,14 @@ public struct IdleNoiseConfig: Sendable, Equatable {
     }
 
     /// Compute amplitude damping γ for given idle time.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let config = IdleNoiseConfig(t1: 100_000, t2: 80_000)
+    /// let gamma = config.amplitudeDampingGamma(idleTime: 300)
+    /// ```
+    ///
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     public func amplitudeDampingGamma(idleTime: Double, qubit: Int? = nil) -> Double {
@@ -522,13 +582,21 @@ public struct IdleNoiseConfig: Sendable, Equatable {
     }
 
     /// Compute phase damping γ for given idle time.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let config = IdleNoiseConfig(t1: 100_000, t2: 80_000)
+    /// let gamma = config.phaseDampingGamma(idleTime: 300)
+    /// ```
+    ///
+    /// - Complexity: O(1)
     @_effects(readonly)
     @inlinable
     public func phaseDampingGamma(idleTime: Double, qubit: Int? = nil) -> Double {
         let t1Val = qubit.map { t1ForQubit($0) } ?? t1
         let t2Val = qubit.map { t2ForQubit($0) } ?? t2
 
-        let tPhiInverse = 1.0 / t2Val - 1.0 / (2.0 * t1Val)
+        let tPhiInverse = (2.0 * t1Val - t2Val) / (2.0 * t1Val * t2Val)
         if tPhiInverse <= 0 {
             return 0
         }
@@ -537,6 +605,14 @@ public struct IdleNoiseConfig: Sendable, Equatable {
     }
 
     /// Create amplitude damping channel for idle time on specific qubit.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let config = IdleNoiseConfig(t1: 100_000, t2: 80_000)
+    /// let channel = config.amplitudeDampingChannel(idleTime: 300)
+    /// ```
+    ///
+    /// - Complexity: O(1)
     @_effects(readonly)
     public func amplitudeDampingChannel(idleTime: Double, qubit: Int? = nil) -> AmplitudeDampingChannel {
         let gamma = amplitudeDampingGamma(idleTime: idleTime, qubit: qubit)
@@ -544,6 +620,14 @@ public struct IdleNoiseConfig: Sendable, Equatable {
     }
 
     /// Create phase damping channel for idle time on specific qubit.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let config = IdleNoiseConfig(t1: 100_000, t2: 80_000)
+    /// let channel = config.phaseDampingChannel(idleTime: 300)
+    /// ```
+    ///
+    /// - Complexity: O(1)
     @_effects(readonly)
     public func phaseDampingChannel(idleTime: Double, qubit: Int? = nil) -> PhaseDampingChannel {
         let gamma = phaseDampingGamma(idleTime: idleTime, qubit: qubit)
@@ -551,73 +635,21 @@ public struct IdleNoiseConfig: Sendable, Equatable {
     }
 }
 
-// MARK: - Noise Model Extension for Gate Application
-
-public extension NoiseModel {
-    /// Apply appropriate noise channel after gate execution.
-    ///
-    /// Selects noise channel based on gate type and applies to density matrix.
-    ///
-    /// - Parameters:
-    ///   - gate: Gate that was just executed
-    ///   - targetQubits: Qubits the gate was applied to
-    ///   - matrix: Current density matrix state
-    /// - Returns: Noisy density matrix after channel application
+extension IdleNoiseConfig {
+    /// Apply T₁/T₂ decay to non-active qubits during gate execution.
     @_optimize(speed)
-    @_effects(readonly)
     @_eagerMove
-    func applyNoise(
-        after gate: QuantumGate,
-        targetQubits: [Int],
+    fileprivate func applyDecay(
         to matrix: DensityMatrix,
+        activeQubits: [Int],
+        gateTime: Double,
+        totalQubits: Int
     ) -> DensityMatrix {
-        switch gate.qubitsRequired {
-        case 1:
-            guard let noise = singleQubitNoise else { return matrix }
-            return noise.apply(to: matrix, qubit: targetQubits[0])
+        var result = matrix
 
-        case 2:
-            guard let noise = twoQubitNoise else { return matrix }
-            return noise.apply(to: matrix, qubits: targetQubits)
-
-        default:
-            return matrix
-        }
-    }
-
-    /// Apply gate noise and idle noise to all affected qubits.
-    ///
-    /// This method:
-    /// 1. Applies gate-specific noise to active qubits
-    /// 2. Applies T₁/T₂ decay to idle qubits based on gate duration
-    ///
-    /// - Parameters:
-    ///   - gate: Gate that was just executed
-    ///   - targetQubits: Qubits the gate was applied to
-    ///   - matrix: Current density matrix state
-    ///   - totalQubits: Total number of qubits in the system
-    /// - Returns: Noisy density matrix after all noise channels
-    @_optimize(speed)
-    @_effects(readonly)
-    @_eagerMove
-    func applyNoiseWithIdle(
-        after gate: QuantumGate,
-        targetQubits: [Int],
-        to matrix: DensityMatrix,
-        totalQubits: Int,
-    ) -> DensityMatrix {
-        var result = applyNoise(after: gate, targetQubits: targetQubits, to: matrix)
-
-        guard let idleConfig = idleNoiseConfig else {
-            return result
-        }
-
-        let activeSet = Set(targetQubits)
-        let gateTime = idleConfig.timings.gateTime(for: gate.qubitsRequired)
-
-        for qubit in 0 ..< totalQubits where !activeSet.contains(qubit) {
-            let t1Gamma = idleConfig.amplitudeDampingGamma(idleTime: gateTime, qubit: qubit)
-            let t2Gamma = idleConfig.phaseDampingGamma(idleTime: gateTime, qubit: qubit)
+        for qubit in 0 ..< totalQubits where !activeQubits.contains(qubit) {
+            let t1Gamma = amplitudeDampingGamma(idleTime: gateTime, qubit: qubit)
+            let t2Gamma = phaseDampingGamma(idleTime: gateTime, qubit: qubit)
 
             if t1Gamma > 1e-12 {
                 let t1Channel = AmplitudeDampingChannel(gamma: min(t1Gamma, 1.0))
@@ -628,6 +660,66 @@ public extension NoiseModel {
                 let t2Channel = PhaseDampingChannel(gamma: min(t2Gamma, 1.0))
                 result = t2Channel.apply(to: result, qubit: qubit)
             }
+        }
+
+        return result
+    }
+}
+
+// MARK: - Noise Model Extension for Gate Application
+
+public extension NoiseModel {
+    /// Apply noise after gate execution, including idle decoherence if configured.
+    ///
+    /// Selects noise channel based on gate type, applies to density matrix, then
+    /// applies T₁/T₂ decay to idle qubits when ``idleNoiseConfig`` is set.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let model = NoiseModel.typicalNISQWithIdle
+    /// let dm = DensityMatrix(qubits: 2)
+    /// let noisy = model.applyNoise(after: .hadamard, targetQubits: [0], to: dm, totalQubits: 2)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - gate: Gate that was just executed
+    ///   - targetQubits: Qubits the gate was applied to
+    ///   - matrix: Current density matrix state
+    ///   - totalQubits: Total number of qubits in the system
+    /// - Returns: Noisy density matrix after all noise channels
+    /// - Complexity: O(q × 4^n) where q is idle qubits and n is total qubits
+    @_optimize(speed)
+    @_effects(readonly)
+    @_eagerMove
+    func applyNoise(
+        after gate: QuantumGate,
+        targetQubits: [Int],
+        to matrix: DensityMatrix,
+        totalQubits: Int
+    ) -> DensityMatrix {
+        var result = matrix
+
+        switch gate.qubitsRequired {
+        case 1:
+            if let noise = singleQubitNoise {
+                result = noise.apply(to: result, qubit: targetQubits[0])
+            }
+        case 2:
+            if let noise = twoQubitNoise {
+                result = noise.apply(to: result, qubits: targetQubits)
+            }
+        default:
+            break
+        }
+
+        if let idleConfig = idleNoiseConfig {
+            let gateTime = idleConfig.timings.gateTime(for: gate.qubitsRequired)
+            result = idleConfig.applyDecay(
+                to: result,
+                activeQubits: targetQubits,
+                gateTime: gateTime,
+                totalQubits: totalQubits
+            )
         }
 
         return result
@@ -644,9 +736,13 @@ public extension NoiseModel {
 /// **Example:**
 /// ```swift
 /// let profile = HardwareNoiseProfile.ibmManila
-/// let timingModel = TimingAwareNoiseModel(profile: profile)
-/// let result = await timingModel.execute(circuit)
+/// let model = TimingAwareNoiseModel(profile: profile)
+/// let dm = DensityMatrix(qubits: 5)
+/// let noisy = model.applyNoise(after: .hadamard, targetQubits: [0], to: dm)
 /// ```
+///
+/// - SeeAlso: ``NoiseModel`` for uniform noise models
+/// - SeeAlso: ``HardwareNoiseProfile`` for device characterization
 @frozen
 public struct TimingAwareNoiseModel: Sendable {
     /// Hardware profile with per-qubit parameters.
@@ -657,7 +753,13 @@ public struct TimingAwareNoiseModel: Sendable {
 
     /// Create timing-aware model from hardware profile.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let model = TimingAwareNoiseModel(profile: .ibmManila)
+    /// ```
+    ///
     /// - Parameter profile: Hardware noise profile with per-qubit parameters
+    /// - Complexity: O(n) where n is the number of qubits
     public init(profile: HardwareNoiseProfile) {
         self.profile = profile
         idleConfig = IdleNoiseConfig(
@@ -669,80 +771,100 @@ public struct TimingAwareNoiseModel: Sendable {
 
     /// Apply per-qubit gate noise for single-qubit gate.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let model = TimingAwareNoiseModel(profile: .ibmManila)
+    /// let dm = DensityMatrix(qubits: 5)
+    /// let noisy = model.applyNoise(qubit: 0, to: dm)
+    /// ```
+    ///
     /// - Parameters:
     ///   - qubit: Target qubit
     ///   - matrix: Density matrix
     /// - Returns: Noisy density matrix
+    /// - Complexity: O(4^n) where n is total qubits
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
-    public func applySingleQubitNoise(qubit: Int, to matrix: DensityMatrix) -> DensityMatrix {
+    public func applyNoise(qubit: Int, to matrix: DensityMatrix) -> DensityMatrix {
         let channel = profile.singleQubitChannel(for: qubit)
         return channel.apply(to: matrix, qubit: qubit)
     }
 
     /// Apply per-edge gate noise for two-qubit gate.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let model = TimingAwareNoiseModel(profile: .ibmManila)
+    /// let dm = DensityMatrix(qubits: 5)
+    /// let noisy = model.applyNoise(qubits: [0, 1], to: dm)
+    /// ```
+    ///
     /// - Parameters:
     ///   - qubits: Target qubit pair
     ///   - matrix: Density matrix
     /// - Returns: Noisy density matrix
+    /// - Complexity: O(4^n) where n is total qubits
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
-    public func applyTwoQubitNoise(qubits: [Int], to matrix: DensityMatrix) -> DensityMatrix {
+    public func applyNoise(qubits: [Int], to matrix: DensityMatrix) -> DensityMatrix {
         let channel = profile.twoQubitChannel(q1: qubits[0], q2: qubits[1])
         return channel.apply(to: matrix, qubits: qubits)
     }
 
     /// Apply idle noise to all non-active qubits.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let model = TimingAwareNoiseModel(profile: .ibmManila)
+    /// let dm = DensityMatrix(qubits: 5)
+    /// let noisy = model.applyIdleNoise(activeQubits: [0], gateTime: 300, to: dm)
+    /// ```
+    ///
     /// - Parameters:
     ///   - activeQubits: Qubits involved in current gate
     ///   - gateTime: Duration of gate in nanoseconds
     ///   - matrix: Density matrix
     /// - Returns: Density matrix with idle decoherence applied
+    /// - Complexity: O(q × 4^n) where q is idle qubits and n is total qubits
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
     public func applyIdleNoise(
-        activeQubits: Set<Int>,
+        activeQubits: [Int],
         gateTime: Double,
-        to matrix: DensityMatrix,
+        to matrix: DensityMatrix
     ) -> DensityMatrix {
-        var result = matrix
-
-        for qubit in 0 ..< profile.qubitCount where !activeQubits.contains(qubit) {
-            let t1Gamma = idleConfig.amplitudeDampingGamma(idleTime: gateTime, qubit: qubit)
-            let t2Gamma = idleConfig.phaseDampingGamma(idleTime: gateTime, qubit: qubit)
-
-            if t1Gamma > 1e-12 {
-                let t1Channel = AmplitudeDampingChannel(gamma: min(t1Gamma, 1.0))
-                result = t1Channel.apply(to: result, qubit: qubit)
-            }
-
-            if t2Gamma > 1e-12 {
-                let t2Channel = PhaseDampingChannel(gamma: min(t2Gamma, 1.0))
-                result = t2Channel.apply(to: result, qubit: qubit)
-            }
-        }
-
-        return result
+        idleConfig.applyDecay(
+            to: matrix,
+            activeQubits: activeQubits,
+            gateTime: gateTime,
+            totalQubits: profile.qubitCount
+        )
     }
 
     /// Apply all noise for a gate operation.
     ///
     /// Combines gate-specific noise with idle decoherence on all qubits.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let model = TimingAwareNoiseModel(profile: .ibmManila)
+    /// let dm = DensityMatrix(qubits: 5)
+    /// let noisy = model.applyNoise(after: .hadamard, targetQubits: [0], to: dm)
+    /// ```
+    ///
     /// - Parameters:
     ///   - gate: Gate that was executed
     ///   - targetQubits: Qubits the gate acted on
     ///   - matrix: Current density matrix
     /// - Returns: Fully noisy density matrix
+    /// - Complexity: O(q × 4^n) where q is total qubits and n is total qubits
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
-    public func applyAllNoise(
+    public func applyNoise(
         after gate: QuantumGate,
         targetQubits: [Int],
         to matrix: DensityMatrix,
@@ -751,22 +873,16 @@ public struct TimingAwareNoiseModel: Sendable {
 
         switch gate.qubitsRequired {
         case 1:
-            result = applySingleQubitNoise(qubit: targetQubits[0], to: result)
+            result = applyNoise(qubit: targetQubits[0], to: result)
         case 2:
-            result = applyTwoQubitNoise(qubits: targetQubits, to: result)
+            result = applyNoise(qubits: targetQubits, to: result)
         default:
             break
         }
 
-        let activeSet = Set(targetQubits)
         let gateTime = profile.gateTimings.gateTime(for: gate.qubitsRequired)
-        result = applyIdleNoise(activeQubits: activeSet, gateTime: gateTime, to: result)
+        result = applyIdleNoise(activeQubits: targetQubits, gateTime: gateTime, to: result)
 
         return result
-    }
-
-    /// Get per-qubit measurement error models.
-    public func measurementErrorModels() -> [MeasurementErrorModel] {
-        profile.measurementErrorModels()
     }
 }

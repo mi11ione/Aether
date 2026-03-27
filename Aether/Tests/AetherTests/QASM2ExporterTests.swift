@@ -239,4 +239,32 @@ struct QASM2ExporterCoverageTests {
 
         #expect(qasm.contains("1.234"), "Non-special angle 1.234 must fall through to String(value) formatting")
     }
+
+    @Test("Negative pi formats as symbolic -pi")
+    func negativePiFormat() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.value(-.pi)), to: 0)
+        let qasm = QASM2Exporter.export(circuit)
+
+        #expect(qasm.contains("-pi"), "Angle -pi must format as symbolic '-pi'")
+    }
+
+    @Test("Negative pi/2 formats as symbolic -pi/2")
+    func negativePiOver2Format() {
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationZ(.value(-.pi / 2.0)), to: 0)
+        let qasm = QASM2Exporter.export(circuit)
+
+        #expect(qasm.contains("-pi/2"), "Angle -pi/2 must format as symbolic '-pi/2'")
+    }
+
+    @Test("Concrete expression parameter evaluates to formatted double")
+    func concreteExpressionFormat() {
+        var circuit = QuantumCircuit(qubits: 1)
+        let expr = ParameterExpression(1.5)
+        circuit.append(.rotationZ(.expression(expr)), to: 0)
+        let qasm = QASM2Exporter.export(circuit)
+
+        #expect(qasm.contains("1.5"), "Concrete expression should evaluate and format as decimal")
+    }
 }

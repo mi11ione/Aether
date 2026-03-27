@@ -13,7 +13,7 @@ struct MPSSingleQubitGateTests {
     @Test("Hadamard on |0> creates equal superposition")
     func hadamardOnZeroState() {
         var mps = MatrixProductState(qubits: 3, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
 
         let amp0 = mps.amplitude(of: 0b000)
         let amp1 = mps.amplitude(of: 0b001)
@@ -28,7 +28,7 @@ struct MPSSingleQubitGateTests {
     @Test("Pauli-X flips |0> to |1>")
     func pauliXFlipsState() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.pauliX, to: 0, mps: &mps)
+        MPSGateApplication.apply(.pauliX, to: [0], mps: &mps)
 
         let amp0 = mps.amplitude(of: 0b00)
         let amp1 = mps.amplitude(of: 0b01)
@@ -40,7 +40,7 @@ struct MPSSingleQubitGateTests {
     @Test("Pauli-Y applies correct transformation")
     func pauliYTransformation() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.pauliY, to: 0, mps: &mps)
+        MPSGateApplication.apply(.pauliY, to: [0], mps: &mps)
 
         let amp0 = mps.amplitude(of: 0b00)
         let amp1 = mps.amplitude(of: 0b01)
@@ -52,7 +52,7 @@ struct MPSSingleQubitGateTests {
     @Test("Pauli-Z leaves |0> unchanged")
     func pauliZOnZero() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.pauliZ, to: 0, mps: &mps)
+        MPSGateApplication.apply(.pauliZ, to: [0], mps: &mps)
 
         let amp0 = mps.amplitude(of: 0b00)
         #expect(abs(amp0.real - 1.0) < 1e-10, "Z|0> should remain |0>")
@@ -61,8 +61,8 @@ struct MPSSingleQubitGateTests {
     @Test("S gate applies pi/2 phase to |1>")
     func sGatePhase() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applySingleQubitGate(.sGate, to: 0, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.sGate, to: [0], mps: &mps)
 
         let amp1 = mps.amplitude(of: 0b01)
         let invSqrt2 = 1.0 / sqrt(2.0)
@@ -74,8 +74,8 @@ struct MPSSingleQubitGateTests {
     @Test("T gate applies pi/4 phase to |1>")
     func tGatePhase() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applySingleQubitGate(.tGate, to: 0, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.tGate, to: [0], mps: &mps)
 
         let amp1 = mps.amplitude(of: 0b01)
         let invSqrt2 = 1.0 / sqrt(2.0)
@@ -88,7 +88,7 @@ struct MPSSingleQubitGateTests {
     @Test("Gate on middle qubit preserves other qubits")
     func gateOnMiddleQubit() {
         var mps = MatrixProductState(qubits: 5, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.pauliX, to: 2, mps: &mps)
+        MPSGateApplication.apply(.pauliX, to: [2], mps: &mps)
 
         let expectedState = 0b00100
         let amp = mps.amplitude(of: expectedState)
@@ -100,7 +100,7 @@ struct MPSSingleQubitGateTests {
     @Test("Gate on last qubit works correctly")
     func gateOnLastQubit() {
         var mps = MatrixProductState(qubits: 4, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.pauliX, to: 3, mps: &mps)
+        MPSGateApplication.apply(.pauliX, to: [3], mps: &mps)
 
         let amp = mps.amplitude(of: 0b1000)
         #expect(abs(amp.real - 1.0) < 1e-10, "X on last qubit should produce |1000>")
@@ -115,7 +115,7 @@ struct MPSGateNormalizationTests {
     @Test("Single-qubit Hadamard preserves normalization")
     func hadamardPreservesNorm() {
         var mps = MatrixProductState(qubits: 4, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
 
         #expect(mps.isNormalized(), "Hadamard should preserve MPS normalization")
     }
@@ -123,10 +123,10 @@ struct MPSGateNormalizationTests {
     @Test("Multiple single-qubit gates preserve normalization")
     func multipleGatesPreserveNorm() {
         var mps = MatrixProductState(qubits: 4, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applySingleQubitGate(.pauliX, to: 1, mps: &mps)
-        MPSGateApplication.applySingleQubitGate(.sGate, to: 2, mps: &mps)
-        MPSGateApplication.applySingleQubitGate(.tGate, to: 3, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.pauliX, to: [1], mps: &mps)
+        MPSGateApplication.apply(.sGate, to: [2], mps: &mps)
+        MPSGateApplication.apply(.tGate, to: [3], mps: &mps)
 
         #expect(mps.isNormalized(), "Multiple single-qubit gates should preserve normalization")
     }
@@ -134,8 +134,8 @@ struct MPSGateNormalizationTests {
     @Test("Two-qubit CNOT preserves normalization")
     func cnotPreservesNorm() {
         var mps = MatrixProductState(qubits: 4, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         #expect(mps.isNormalized(), "CNOT should preserve MPS normalization")
     }
@@ -143,9 +143,9 @@ struct MPSGateNormalizationTests {
     @Test("Two-qubit CZ preserves normalization")
     func czPreservesNorm() {
         var mps = MatrixProductState(qubits: 4, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 1, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cz, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [1], mps: &mps)
+        MPSGateApplication.apply(.cz, to: [0, 1], mps: &mps)
 
         #expect(mps.isNormalized(), "CZ should preserve MPS normalization")
     }
@@ -153,8 +153,8 @@ struct MPSGateNormalizationTests {
     @Test("SWAP gate preserves normalization")
     func swapPreservesNorm() {
         var mps = MatrixProductState(qubits: 4, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.swap, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.swap, to: [0, 1], mps: &mps)
 
         #expect(mps.isNormalized(), "SWAP should preserve MPS normalization")
     }
@@ -164,13 +164,13 @@ struct MPSGateNormalizationTests {
         var mps = MatrixProductState(qubits: 4, maxBondDimension: 32)
 
         for i in 0 ..< 4 {
-            MPSGateApplication.applySingleQubitGate(.hadamard, to: i, mps: &mps)
+            MPSGateApplication.apply(.hadamard, to: [i], mps: &mps)
         }
         for i in 0 ..< 3 {
-            MPSGateApplication.applyTwoQubitGate(.cnot, control: i, target: i + 1, mps: &mps)
+            MPSGateApplication.apply(.cnot, to: [i, i + 1], mps: &mps)
         }
         for i in 0 ..< 4 {
-            MPSGateApplication.applySingleQubitGate(.tGate, to: i, mps: &mps)
+            MPSGateApplication.apply(.tGate, to: [i], mps: &mps)
         }
 
         #expect(mps.isNormalized(), "Deep circuit should preserve MPS normalization")
@@ -185,7 +185,7 @@ struct MPSAdjacentTwoQubitGateTests {
     @Test("CNOT on adjacent qubits |00> -> |00>")
     func cnotOnZeroZero() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b00).real - 1.0) < 1e-10, "CNOT|00> should be |00>")
     }
@@ -193,7 +193,7 @@ struct MPSAdjacentTwoQubitGateTests {
     @Test("CNOT on adjacent qubits |01> -> |11>")
     func cnotOnZeroOne() {
         var mps = MatrixProductState(qubits: 2, basisState: 0b01, maxBondDimension: 16)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b11).real - 1.0) < 1e-10, "CNOT|01> should be |11>")
     }
@@ -201,7 +201,7 @@ struct MPSAdjacentTwoQubitGateTests {
     @Test("CNOT on adjacent qubits |10> -> |10>")
     func cnotOnOneZero() {
         var mps = MatrixProductState(qubits: 2, basisState: 0b10, maxBondDimension: 16)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b10).real - 1.0) < 1e-10, "CNOT|10> should be |10>")
     }
@@ -209,7 +209,7 @@ struct MPSAdjacentTwoQubitGateTests {
     @Test("CNOT on adjacent qubits |11> -> |01>")
     func cnotOnOneOne() {
         var mps = MatrixProductState(qubits: 2, basisState: 0b11, maxBondDimension: 16)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b01).real - 1.0) < 1e-10, "CNOT|11> should be |01>")
     }
@@ -217,9 +217,9 @@ struct MPSAdjacentTwoQubitGateTests {
     @Test("CZ on adjacent qubits applies phase only to |11>")
     func czAdjacentQubits() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 1, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cz, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [1], mps: &mps)
+        MPSGateApplication.apply(.cz, to: [0, 1], mps: &mps)
 
         let amp00 = mps.amplitude(of: 0b00)
         let amp01 = mps.amplitude(of: 0b01)
@@ -235,7 +235,7 @@ struct MPSAdjacentTwoQubitGateTests {
     @Test("SWAP on adjacent qubits exchanges states")
     func swapAdjacentQubits() {
         var mps = MatrixProductState(qubits: 2, basisState: 0b01, maxBondDimension: 16)
-        MPSGateApplication.applyTwoQubitGate(.swap, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.swap, to: [0, 1], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b10).real - 1.0) < 1e-10, "SWAP|01> should be |10>")
     }
@@ -243,7 +243,7 @@ struct MPSAdjacentTwoQubitGateTests {
     @Test("CNOT with control > target works correctly")
     func cnotControlGreaterThanTarget() {
         var mps = MatrixProductState(qubits: 2, basisState: 0b10, maxBondDimension: 16)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 1, target: 0, mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [1, 0], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b11).real - 1.0) < 1e-10, "CNOT with control=1 on |10> should be |11>")
     }
@@ -257,8 +257,8 @@ struct MPSBellStateTests {
     @Test("H + CNOT creates Bell state (|00> + |11>)/sqrt(2)")
     func bellStateCreation() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         let amp00 = mps.amplitude(of: 0b00)
         let amp01 = mps.amplitude(of: 0b01)
@@ -275,8 +275,8 @@ struct MPSBellStateTests {
     @Test("Bell state is normalized")
     func bellStateNormalized() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         #expect(mps.isNormalized(), "Bell state should be normalized")
     }
@@ -284,8 +284,8 @@ struct MPSBellStateTests {
     @Test("Bell state has correct probabilities")
     func bellStateProbabilities() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         #expect(abs(mps.probability(of: 0b00) - 0.5) < 1e-10, "Bell state P(|00>) should be 0.5")
         #expect(abs(mps.probability(of: 0b11) - 0.5) < 1e-10, "Bell state P(|11>) should be 0.5")
@@ -296,8 +296,8 @@ struct MPSBellStateTests {
     @Test("Bell state bond dimension is 2")
     func bellStateBondDimension() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         #expect(mps.currentMaxBondDimension == 2, "Bell state should have bond dimension 2")
     }
@@ -311,7 +311,7 @@ struct MPSNonAdjacentTwoQubitGateTests {
     @Test("CNOT on qubits 0 and 2 works correctly")
     func cnotNonAdjacent() {
         var mps = MatrixProductState(qubits: 3, basisState: 0b001, maxBondDimension: 16)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 2, mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 2], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b101).real - 1.0) < 1e-10, "CNOT on non-adjacent |001> should be |101>")
     }
@@ -319,7 +319,7 @@ struct MPSNonAdjacentTwoQubitGateTests {
     @Test("CNOT on qubits 0 and 3 works correctly")
     func cnotFarApart() {
         var mps = MatrixProductState(qubits: 4, basisState: 0b0001, maxBondDimension: 16)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 3, mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 3], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b1001).real - 1.0) < 1e-10, "CNOT on far apart |0001> should be |1001>")
     }
@@ -327,9 +327,9 @@ struct MPSNonAdjacentTwoQubitGateTests {
     @Test("CZ on non-adjacent qubits applies phase correctly")
     func czNonAdjacent() {
         var mps = MatrixProductState(qubits: 4, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 2, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cz, control: 0, target: 2, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [2], mps: &mps)
+        MPSGateApplication.apply(.cz, to: [0, 2], mps: &mps)
 
         let amp0000 = mps.amplitude(of: 0b0000)
         let amp0001 = mps.amplitude(of: 0b0001)
@@ -345,8 +345,8 @@ struct MPSNonAdjacentTwoQubitGateTests {
     @Test("Non-adjacent gate preserves normalization")
     func nonAdjacentPreservesNorm() {
         var mps = MatrixProductState(qubits: 5, maxBondDimension: 32)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 4, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 4], mps: &mps)
 
         #expect(mps.isNormalized(), "Non-adjacent CNOT should preserve normalization")
     }
@@ -354,8 +354,8 @@ struct MPSNonAdjacentTwoQubitGateTests {
     @Test("Bell state via non-adjacent qubits")
     func bellStateNonAdjacent() {
         var mps = MatrixProductState(qubits: 4, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 3, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 3], mps: &mps)
 
         let amp0000 = mps.amplitude(of: 0b0000)
         let amp1001 = mps.amplitude(of: 0b1001)
@@ -374,7 +374,7 @@ struct MPSToffoliDecompositionTests {
     @Test("Toffoli |000> -> |000>")
     func toffoliZeroZeroZero() {
         var mps = MatrixProductState(qubits: 3, basisState: 0b000, maxBondDimension: 32)
-        MPSGateApplication.applyToffoli(control1: 0, control2: 1, target: 2, mps: &mps)
+        MPSGateApplication.apply(.toffoli, to: [0, 1, 2], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b000).real - 1.0) < 1e-8, "Toffoli|000> should be |000>")
     }
@@ -382,7 +382,7 @@ struct MPSToffoliDecompositionTests {
     @Test("Toffoli |001> -> |001>")
     func toffoliZeroZeroOne() {
         var mps = MatrixProductState(qubits: 3, basisState: 0b001, maxBondDimension: 32)
-        MPSGateApplication.applyToffoli(control1: 0, control2: 1, target: 2, mps: &mps)
+        MPSGateApplication.apply(.toffoli, to: [0, 1, 2], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b001).real - 1.0) < 1e-8, "Toffoli|001> should be |001>")
     }
@@ -390,7 +390,7 @@ struct MPSToffoliDecompositionTests {
     @Test("Toffoli |010> -> |010>")
     func toffoliZeroOneZero() {
         var mps = MatrixProductState(qubits: 3, basisState: 0b010, maxBondDimension: 32)
-        MPSGateApplication.applyToffoli(control1: 0, control2: 1, target: 2, mps: &mps)
+        MPSGateApplication.apply(.toffoli, to: [0, 1, 2], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b010).real - 1.0) < 1e-8, "Toffoli|010> should be |010>")
     }
@@ -398,7 +398,7 @@ struct MPSToffoliDecompositionTests {
     @Test("Toffoli |011> -> |111> (both controls active)")
     func toffoliZeroOneOne() {
         var mps = MatrixProductState(qubits: 3, basisState: 0b011, maxBondDimension: 32)
-        MPSGateApplication.applyToffoli(control1: 0, control2: 1, target: 2, mps: &mps)
+        MPSGateApplication.apply(.toffoli, to: [0, 1, 2], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b111).real - 1.0) < 1e-8, "Toffoli|011> should be |111>")
     }
@@ -406,7 +406,7 @@ struct MPSToffoliDecompositionTests {
     @Test("Toffoli |100> -> |100>")
     func toffoliOneZeroZero() {
         var mps = MatrixProductState(qubits: 3, basisState: 0b100, maxBondDimension: 32)
-        MPSGateApplication.applyToffoli(control1: 0, control2: 1, target: 2, mps: &mps)
+        MPSGateApplication.apply(.toffoli, to: [0, 1, 2], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b100).real - 1.0) < 1e-8, "Toffoli|100> should be |100>")
     }
@@ -414,7 +414,7 @@ struct MPSToffoliDecompositionTests {
     @Test("Toffoli |101> -> |101>")
     func toffoliOneZeroOne() {
         var mps = MatrixProductState(qubits: 3, basisState: 0b101, maxBondDimension: 32)
-        MPSGateApplication.applyToffoli(control1: 0, control2: 1, target: 2, mps: &mps)
+        MPSGateApplication.apply(.toffoli, to: [0, 1, 2], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b101).real - 1.0) < 1e-8, "Toffoli|101> should be |101>")
     }
@@ -422,7 +422,7 @@ struct MPSToffoliDecompositionTests {
     @Test("Toffoli |110> -> |110>")
     func toffoliOneOneZero() {
         var mps = MatrixProductState(qubits: 3, basisState: 0b110, maxBondDimension: 32)
-        MPSGateApplication.applyToffoli(control1: 0, control2: 1, target: 2, mps: &mps)
+        MPSGateApplication.apply(.toffoli, to: [0, 1, 2], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b110).real - 1.0) < 1e-8, "Toffoli|110> should be |110>")
     }
@@ -430,7 +430,7 @@ struct MPSToffoliDecompositionTests {
     @Test("Toffoli |111> -> |011> (flip target)")
     func toffoliOneOneOne() {
         var mps = MatrixProductState(qubits: 3, basisState: 0b111, maxBondDimension: 32)
-        MPSGateApplication.applyToffoli(control1: 0, control2: 1, target: 2, mps: &mps)
+        MPSGateApplication.apply(.toffoli, to: [0, 1, 2], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b011).real - 1.0) < 1e-8, "Toffoli|111> should be |011>")
     }
@@ -438,9 +438,9 @@ struct MPSToffoliDecompositionTests {
     @Test("Toffoli preserves normalization")
     func toffoliPreservesNorm() {
         var mps = MatrixProductState(qubits: 3, maxBondDimension: 32)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 1, mps: &mps)
-        MPSGateApplication.applyToffoli(control1: 0, control2: 1, target: 2, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [1], mps: &mps)
+        MPSGateApplication.apply(.toffoli, to: [0, 1, 2], mps: &mps)
 
         #expect(mps.isNormalized(), "Toffoli should preserve normalization")
     }
@@ -448,7 +448,7 @@ struct MPSToffoliDecompositionTests {
     @Test("Toffoli with non-adjacent qubits")
     func toffoliNonAdjacent() {
         var mps = MatrixProductState(qubits: 5, basisState: 0b00011, maxBondDimension: 32)
-        MPSGateApplication.applyToffoli(control1: 0, control2: 1, target: 4, mps: &mps)
+        MPSGateApplication.apply(.toffoli, to: [0, 1, 4], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b10011).real - 1.0) < 1e-8, "Toffoli with non-adjacent qubits should work")
     }
@@ -462,7 +462,7 @@ struct MPSQuantumStateComparisonTests {
     @Test("Single Hadamard matches QuantumState")
     func singleHadamardComparison() {
         var mps = MatrixProductState(qubits: 3, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 1, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [1], mps: &mps)
 
         var state = QuantumState(qubits: 3)
         state = state.applying(.hadamard, to: 1)
@@ -478,8 +478,8 @@ struct MPSQuantumStateComparisonTests {
     @Test("Bell state matches QuantumState")
     func bellStateComparison() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         var state = QuantumState(qubits: 2)
         state = state.applying(.hadamard, to: 0)
@@ -496,9 +496,9 @@ struct MPSQuantumStateComparisonTests {
     @Test("GHZ state matches QuantumState")
     func ghzStateComparison() {
         var mps = MatrixProductState(qubits: 3, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 2, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 2], mps: &mps)
 
         var state = QuantumState(qubits: 3)
         state = state.applying(.hadamard, to: 0)
@@ -516,11 +516,11 @@ struct MPSQuantumStateComparisonTests {
     @Test("Complex circuit matches QuantumState")
     func complexCircuitComparison() {
         var mps = MatrixProductState(qubits: 4, maxBondDimension: 32)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applySingleQubitGate(.pauliX, to: 2, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
-        MPSGateApplication.applySingleQubitGate(.sGate, to: 1, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cz, control: 1, target: 3, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.pauliX, to: [2], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
+        MPSGateApplication.apply(.sGate, to: [1], mps: &mps)
+        MPSGateApplication.apply(.cz, to: [1, 3], mps: &mps)
 
         var state = QuantumState(qubits: 4)
         state = state.applying(.hadamard, to: 0)
@@ -542,8 +542,8 @@ struct MPSQuantumStateComparisonTests {
         let angle = Double.pi / 3
 
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.rotationY(angle), to: 0, mps: &mps)
-        MPSGateApplication.applySingleQubitGate(.rotationZ(angle), to: 1, mps: &mps)
+        MPSGateApplication.apply(.rotationY(angle), to: [0], mps: &mps)
+        MPSGateApplication.apply(.rotationZ(angle), to: [1], mps: &mps)
 
         var state = QuantumState(qubits: 2)
         state = state.applying(.rotationY(angle), to: 0)
@@ -569,10 +569,10 @@ struct MPSTruncationTests {
         var mps = MatrixProductState(qubits: 6, maxBondDimension: maxBond)
 
         for i in 0 ..< 6 {
-            MPSGateApplication.applySingleQubitGate(.hadamard, to: i, mps: &mps)
+            MPSGateApplication.apply(.hadamard, to: [i], mps: &mps)
         }
         for i in 0 ..< 5 {
-            MPSGateApplication.applyTwoQubitGate(.cnot, control: i, target: i + 1, mps: &mps)
+            MPSGateApplication.apply(.cnot, to: [i, i + 1], mps: &mps)
         }
 
         #expect(mps.currentMaxBondDimension <= maxBond, "Bond dimension should not exceed maxBondDimension")
@@ -585,10 +585,10 @@ struct MPSTruncationTests {
         let initialCount = mps.truncationStatistics.truncationCount
 
         for i in 0 ..< 4 {
-            MPSGateApplication.applySingleQubitGate(.hadamard, to: i, mps: &mps)
+            MPSGateApplication.apply(.hadamard, to: [i], mps: &mps)
         }
         for i in 0 ..< 3 {
-            MPSGateApplication.applyTwoQubitGate(.cnot, control: i, target: i + 1, mps: &mps)
+            MPSGateApplication.apply(.cnot, to: [i, i + 1], mps: &mps)
         }
 
         #expect(mps.truncationStatistics.truncationCount > initialCount, "Truncation count should increase after two-qubit gates")
@@ -597,8 +597,8 @@ struct MPSTruncationTests {
     @Test("Low bond dimension still maintains reasonable approximation")
     func lowBondDimensionApproximation() {
         var mps = MatrixProductState(qubits: 4, maxBondDimension: 4)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         #expect(mps.isNormalized(), "Even with truncation, MPS should remain normalized")
 
@@ -615,12 +615,12 @@ struct MPSTruncationTests {
         var mpsHigh = MatrixProductState(qubits: 5, maxBondDimension: 16)
 
         for i in 0 ..< 5 {
-            MPSGateApplication.applySingleQubitGate(.hadamard, to: i, mps: &mpsLow)
-            MPSGateApplication.applySingleQubitGate(.hadamard, to: i, mps: &mpsHigh)
+            MPSGateApplication.apply(.hadamard, to: [i], mps: &mpsLow)
+            MPSGateApplication.apply(.hadamard, to: [i], mps: &mpsHigh)
         }
         for i in 0 ..< 4 {
-            MPSGateApplication.applyTwoQubitGate(.cnot, control: i, target: i + 1, mps: &mpsLow)
-            MPSGateApplication.applyTwoQubitGate(.cnot, control: i, target: i + 1, mps: &mpsHigh)
+            MPSGateApplication.apply(.cnot, to: [i, i + 1], mps: &mpsLow)
+            MPSGateApplication.apply(.cnot, to: [i, i + 1], mps: &mpsHigh)
         }
 
         let lowError = mpsLow.truncationStatistics.cumulativeError
@@ -635,27 +635,27 @@ struct MPSTruncationTests {
 /// Ensures method chaining and functional style work correctly.
 @Suite("MPS Fluent API")
 struct MPSFluentAPITests {
-    @Test("applySingleQubitGate mutating method works")
+    @Test("apply single-qubit gate mutating method works")
     func applySingleQubitGateMutating() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        mps.applySingleQubitGate(.hadamard, to: 0)
+        mps.apply(.hadamard, to: 0)
 
         let amp0 = mps.amplitude(of: 0)
         let invSqrt2 = 1.0 / sqrt(2.0)
 
-        #expect(abs(amp0.real - invSqrt2) < 1e-10, "Fluent applySingleQubitGate should work")
+        #expect(abs(amp0.real - invSqrt2) < 1e-10, "Fluent apply single-qubit gate should work")
     }
 
-    @Test("applyTwoQubitGate mutating method works")
+    @Test("apply two-qubit gate mutating method works")
     func applyTwoQubitGateMutating() {
         var mps = MatrixProductState(qubits: 2, maxBondDimension: 16)
-        mps.applySingleQubitGate(.hadamard, to: 0)
-        mps.applyTwoQubitGate(.cnot, control: 0, target: 1)
+        mps.apply(.hadamard, to: 0)
+        mps.apply(.cnot, to: [0, 1])
 
         let amp11 = mps.amplitude(of: 0b11)
         let invSqrt2 = 1.0 / sqrt(2.0)
 
-        #expect(abs(amp11.real - invSqrt2) < 1e-10, "Fluent applyTwoQubitGate should work")
+        #expect(abs(amp11.real - invSqrt2) < 1e-10, "Fluent apply two-qubit gate should work")
     }
 
     @Test("applying returns new MPS for single-qubit gate")
@@ -725,7 +725,7 @@ struct MPSEdgeCasesTests {
     @Test("Single qubit MPS works")
     func singleQubitMPS() {
         var mps = MatrixProductState(qubits: 1, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
 
         let amp0 = mps.amplitude(of: 0)
         let amp1 = mps.amplitude(of: 1)
@@ -738,7 +738,7 @@ struct MPSEdgeCasesTests {
     @Test("Many qubits with product state")
     func manyQubitsProductState() {
         var mps = MatrixProductState(qubits: 20, maxBondDimension: 4)
-        MPSGateApplication.applySingleQubitGate(.pauliX, to: 10, mps: &mps)
+        MPSGateApplication.apply(.pauliX, to: [10], mps: &mps)
 
         let expectedState = 1 << 10
         #expect(abs(mps.amplitude(of: expectedState).real - 1.0) < 1e-10, "Large MPS single gate should work")
@@ -750,8 +750,8 @@ struct MPSEdgeCasesTests {
         var mps = MatrixProductState(qubits: 3, maxBondDimension: 16)
 
         for _ in 0 ..< 10 {
-            MPSGateApplication.applySingleQubitGate(.hadamard, to: 1, mps: &mps)
-            MPSGateApplication.applySingleQubitGate(.hadamard, to: 1, mps: &mps)
+            MPSGateApplication.apply(.hadamard, to: [1], mps: &mps)
+            MPSGateApplication.apply(.hadamard, to: [1], mps: &mps)
         }
 
         let amp0 = mps.amplitude(of: 0)
@@ -761,8 +761,8 @@ struct MPSEdgeCasesTests {
     @Test("CNOT twice is identity")
     func cnotTwiceIsIdentity() {
         var mps = MatrixProductState(qubits: 2, basisState: 0b01, maxBondDimension: 16)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         #expect(abs(mps.amplitude(of: 0b01).real - 1.0) < 1e-10, "CNOT twice should return to original state")
     }
@@ -770,10 +770,10 @@ struct MPSEdgeCasesTests {
     @Test("Identity gate leaves state unchanged")
     func identityGate() {
         var mps = MatrixProductState(qubits: 3, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
 
         let ampBefore = mps.amplitude(of: 0)
-        MPSGateApplication.applySingleQubitGate(.identity, to: 0, mps: &mps)
+        MPSGateApplication.apply(.identity, to: [0], mps: &mps)
         let ampAfter = mps.amplitude(of: 0)
 
         #expect(abs(ampBefore.real - ampAfter.real) < 1e-10, "Identity should not change state (real)")
@@ -795,8 +795,8 @@ struct MPSEdgeCasesTests {
     @Test("toQuantumState roundtrip preserves state")
     func toQuantumStateRoundtrip() {
         var mps = MatrixProductState(qubits: 3, maxBondDimension: 16)
-        MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-        MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
+        MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+        MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
 
         let state = mps.toQuantumState()
 

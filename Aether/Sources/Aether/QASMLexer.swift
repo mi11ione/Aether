@@ -153,6 +153,7 @@ public enum QASMLexer: Sendable {
     /// Skip single-line comment from current position to end of line.
     @inlinable
     @inline(__always)
+    @_effects(readonly)
     static func skipLineComment(
         scalars: String.UnicodeScalarView,
         from start: String.UnicodeScalarView.Index,
@@ -166,6 +167,7 @@ public enum QASMLexer: Sendable {
 
     /// Skip block comment from after /* to past */.
     @inlinable
+    @_effects(readonly)
     static func skipBlockComment(
         scalars: String.UnicodeScalarView,
         from start: String.UnicodeScalarView.Index,
@@ -203,6 +205,7 @@ public enum QASMLexer: Sendable {
 
     /// Scan integer or real literal including optional scientific notation.
     @inlinable
+    @_effects(readonly)
     static func scanNumber(
         scalars: String.UnicodeScalarView,
         from start: String.UnicodeScalarView.Index,
@@ -257,6 +260,7 @@ public enum QASMLexer: Sendable {
 
     /// Scan string literal from after opening quote to past closing quote.
     @inlinable
+    @_effects(readonly)
     static func scanString(
         scalars: String.UnicodeScalarView,
         from start: String.UnicodeScalarView.Index,
@@ -282,6 +286,7 @@ public enum QASMLexer: Sendable {
     /// Whether scalar is valid identifier start character.
     @inlinable
     @inline(__always)
+    @_effects(readonly)
     static func isIdentifierStart(_ scalar: Unicode.Scalar) -> Bool {
         (scalar >= "a" && scalar <= "z")
             || (scalar >= "A" && scalar <= "Z")
@@ -291,6 +296,7 @@ public enum QASMLexer: Sendable {
     /// Whether scalar is valid identifier continuation character.
     @inlinable
     @inline(__always)
+    @_effects(readonly)
     static func isIdentifierContinue(_ scalar: Unicode.Scalar) -> Bool {
         isIdentifierStart(scalar) || isDigit(scalar)
     }
@@ -298,6 +304,7 @@ public enum QASMLexer: Sendable {
     /// Whether scalar is an ASCII digit.
     @inlinable
     @inline(__always)
+    @_effects(readonly)
     static func isDigit(_ scalar: Unicode.Scalar) -> Bool {
         scalar >= "0" && scalar <= "9"
     }
@@ -305,6 +312,7 @@ public enum QASMLexer: Sendable {
     /// Whether the scalar after the given index is a digit.
     @inlinable
     @inline(__always)
+    @_effects(readonly)
     static func peekIsDigit(
         scalars: String.UnicodeScalarView,
         after index: String.UnicodeScalarView.Index,

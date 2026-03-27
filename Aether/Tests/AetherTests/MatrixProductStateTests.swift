@@ -765,7 +765,7 @@ struct MPSYPauliExpectationValueTests {
     @Test("Y Pauli expectation value on superposition state")
     func yPauliExpectationValue() {
         var mps = MatrixProductState(qubits: 1, maxBondDimension: 4)
-        mps.applySingleQubitGate(.hadamard, to: 0)
+        mps.apply(.hadamard, to: 0)
         let yString = PauliString(.y(0))
         let expectation = mps.expectationValue(of: yString)
         #expect(abs(expectation) < 1e-10, "Y expectation on |+⟩ should be 0")

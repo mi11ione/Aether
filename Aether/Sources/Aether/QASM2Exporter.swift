@@ -26,7 +26,7 @@ public enum QASM2Exporter: Sendable {
     /// Produces a complete QASM 2.0 program including header, register declarations,
     /// optional custom gate definitions, and gate/operation statements. Parameterized
     /// gates emit their ``ParameterValue`` as decimal literals or symbolic names.
-    /// Custom unitary gates receive synthesized declarations named "custom_0", "custom_1", etc.
+    /// Custom unitary gates receive synthesized declarations.
     ///
     /// **Example:**
     /// ```swift
@@ -77,13 +77,13 @@ public enum QASM2Exporter: Sendable {
         result += "qreg q[\(qubitCount)];\n"
         result += "creg c[\(qubitCount)];\n"
 
-        for declaration in customGateDeclarations {
-            result += declaration
+        if !customGateDeclarations.isEmpty {
+            result += customGateDeclarations.joined(separator: "\n")
             result += "\n"
         }
 
-        for line in operationLines {
-            result += line
+        if !operationLines.isEmpty {
+            result += operationLines.joined(separator: "\n")
             result += "\n"
         }
 
@@ -111,42 +111,11 @@ public enum QASM2Exporter: Sendable {
                 innerGate: innerGate,
                 controls: controls,
                 qubits: qubits,
-                customCounter: &customCounter,
-                customDeclarations: &customDeclarations,
             )
         default:
             let name = GateNameMapping.qasmName(for: gate, version: .v2)
-            let params = extractParameterValues(from: gate)
+            let params = gate.parameterValues
             return formatGateStatement(name: name, params: params, qubits: qubits)
-        }
-    }
-
-    /// Extract parameter values from a parameterized gate.
-    @_effects(readonly)
-    private static func extractParameterValues(from gate: QuantumGate) -> [ParameterValue] {
-        switch gate {
-        case let .phase(angle),
-             let .rotationX(angle),
-             let .rotationY(angle),
-             let .rotationZ(angle),
-             let .controlledPhase(angle),
-             let .controlledRotationX(angle),
-             let .controlledRotationY(angle),
-             let .controlledRotationZ(angle),
-             let .givens(angle),
-             let .xx(angle),
-             let .yy(angle),
-             let .zz(angle),
-             let .globalPhase(angle):
-            [angle]
-        case let .u1(lambda):
-            [lambda]
-        case let .u2(phi, lambda):
-            [phi, lambda]
-        case let .u3(theta, phi, lambda):
-            [theta, phi, lambda]
-        default:
-            []
         }
     }
 
@@ -156,17 +125,11 @@ public enum QASM2Exporter: Sendable {
         var statement = name
         if !params.isEmpty {
             statement += "("
-            for (index, param) in params.enumerated() {
-                if index > 0 { statement += "," }
-                statement += serializeParameterValue(param)
-            }
+            statement += params.map { serializeParameterValue($0) }.joined(separator: ",")
             statement += ")"
         }
         statement += " "
-        for (index, qubit) in qubits.enumerated() {
-            if index > 0 { statement += "," }
-            statement += "q[\(qubit)]"
-        }
+        statement += qubits.map { "q[\($0)]" }.joined(separator: ",")
         statement += ";"
         return statement
     }
@@ -211,11 +174,7 @@ public enum QASM2Exporter: Sendable {
         counter += 1
 
         let qubitCount = gate.qubitsRequired
-        var qubitsDecl = ""
-        for i in 0 ..< qubitCount {
-            if i > 0 { qubitsDecl += "," }
-            qubitsDecl += "a\(i)"
-        }
+        let qubitsDecl = (0 ..< qubitCount).map { "a\($0)" }.joined(separator: ",")
 
         var declaration = "gate \(gateName) \(qubitsDecl) {\n"
         declaration += "}\n"
@@ -229,11 +188,9 @@ public enum QASM2Exporter: Sendable {
         innerGate: QuantumGate,
         controls: [Int],
         qubits: [Int],
-        customCounter _: inout Int,
-        customDeclarations _: inout [String],
     ) -> String {
         let name = GateNameMapping.qasmName(for: .controlled(gate: innerGate, controls: controls), version: .v2)
-        let params = extractParameterValues(from: innerGate)
+        let params = innerGate.parameterValues
         return formatGateStatement(name: name, params: params, qubits: qubits)
     }
 }

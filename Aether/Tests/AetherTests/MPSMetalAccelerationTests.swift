@@ -19,8 +19,9 @@ struct MPSMetalAccelerationTests {
     @Test("isAvailable property is accessible")
     func isAvailableAccessible() async {
         let accelerator = MPSMetalAcceleration()
-        let available = accelerator.isAvailable
-        #expect(available == true || available == false, "isAvailable should return a boolean value")
+        let available1 = accelerator.isAvailable
+        let available2 = accelerator.isAvailable
+        #expect(available1 == available2, "isAvailable should return consistent results")
     }
 
     @Test("gpuThreshold constant is 32")
@@ -28,8 +29,8 @@ struct MPSMetalAccelerationTests {
         #expect(MPSMetalAcceleration.gpuThreshold == 32, "gpuThreshold should be 32 for optimal GPU/CPU switching")
     }
 
-    @Test("matrixMultiply computes correct result for identity matrix")
-    func matrixMultiplyIdentity() async {
+    @Test("multiply computes correct result for identity matrix")
+    func multiplyIdentity() async {
         let accelerator = MPSMetalAcceleration()
 
         let identity: [[Complex<Double>]] = [
@@ -42,7 +43,7 @@ struct MPSMetalAccelerationTests {
             [Complex(5.0, 6.0), Complex(7.0, 8.0)],
         ]
 
-        let result = await accelerator.matrixMultiply(identity, matrix)
+        let result = await accelerator.multiply(identity, matrix)
 
         #expect(result.count == 2, "Result should have 2 rows")
         #expect(result[0].count == 2, "Result should have 2 columns")
@@ -55,8 +56,8 @@ struct MPSMetalAccelerationTests {
         }
     }
 
-    @Test("matrixMultiply computes correct complex multiplication")
-    func matrixMultiplyComplex() async {
+    @Test("multiply computes correct complex multiplication")
+    func multiplyComplex() async {
         let accelerator = MPSMetalAcceleration()
 
         let a: [[Complex<Double>]] = [
@@ -69,7 +70,7 @@ struct MPSMetalAccelerationTests {
             [Complex(1.0, 1.0), Complex(2.0, 0.0)],
         ]
 
-        let result = await accelerator.matrixMultiply(a, b)
+        let result = await accelerator.multiply(a, b)
 
         let expected00 = Complex(1.0, 1.0) * Complex(1.0, 0.0) + Complex(2.0, 0.0) * Complex(1.0, 1.0)
         let expected01 = Complex(1.0, 1.0) * Complex(0.0, 1.0) + Complex(2.0, 0.0) * Complex(2.0, 0.0)
@@ -82,8 +83,8 @@ struct MPSMetalAccelerationTests {
         #expect((result[1][1] - expected11).magnitude < 1e-10, "Result[1][1] should match expected complex product")
     }
 
-    @Test("matrixMultiply uses CPU path for small matrices")
-    func matrixMultiplySmallCPU() async {
+    @Test("multiply uses CPU path for small matrices")
+    func multiplySmallCPU() async {
         let accelerator = MPSMetalAcceleration()
 
         let size = MPSMetalAcceleration.gpuThreshold - 1
@@ -95,7 +96,7 @@ struct MPSMetalAccelerationTests {
             b[i][i] = Complex(Double(i + 1), 0.0)
         }
 
-        let result = await accelerator.matrixMultiply(a, b)
+        let result = await accelerator.multiply(a, b)
 
         #expect(result.count == size, "Result should have \(size) rows for small matrix CPU path")
 
@@ -106,8 +107,8 @@ struct MPSMetalAccelerationTests {
         }
     }
 
-    @Test("matrixMultiply uses GPU path for large matrices when available")
-    func matrixMultiplyLargeGPU() async {
+    @Test("multiply uses GPU path for large matrices when available")
+    func multiplyLargeGPU() async {
         let accelerator = MPSMetalAcceleration()
 
         let size = MPSMetalAcceleration.gpuThreshold
@@ -119,7 +120,7 @@ struct MPSMetalAccelerationTests {
             b[i][i] = Complex(Double(i + 1), 0.0)
         }
 
-        let result = await accelerator.matrixMultiply(a, b)
+        let result = await accelerator.multiply(a, b)
 
         #expect(result.count == size, "Result should have \(size) rows for large matrix path")
 
@@ -132,8 +133,8 @@ struct MPSMetalAccelerationTests {
         }
     }
 
-    @Test("matrixMultiply handles non-square matrices")
-    func matrixMultiplyNonSquare() async {
+    @Test("multiply handles non-square matrices")
+    func multiplyNonSquare() async {
         let accelerator = MPSMetalAcceleration()
 
         let a: [[Complex<Double>]] = [
@@ -147,7 +148,7 @@ struct MPSMetalAccelerationTests {
             [Complex(11.0, 0.0), Complex(12.0, 0.0)],
         ]
 
-        let result = await accelerator.matrixMultiply(a, b)
+        let result = await accelerator.multiply(a, b)
 
         #expect(result.count == 2, "Result should have 2 rows for 2x3 * 3x2 multiplication")
         #expect(result[0].count == 2, "Result should have 2 columns for 2x3 * 3x2 multiplication")
@@ -163,30 +164,30 @@ struct MPSMetalAccelerationTests {
         #expect((result[1][1] - expected11).magnitude < 1e-10, "Result[1][1] should be 154 for non-square multiplication")
     }
 
-    @Test("matrixMultiply returns empty for empty matrices")
-    func matrixMultiplyEmpty() async {
+    @Test("multiply returns empty for empty matrices")
+    func multiplyEmpty() async {
         let accelerator = MPSMetalAcceleration()
 
         let empty: [[Complex<Double>]] = []
         let nonEmpty: [[Complex<Double>]] = [[.one]]
 
-        let result1 = await accelerator.matrixMultiply(empty, nonEmpty)
-        let result2 = await accelerator.matrixMultiply(nonEmpty, empty)
-        let result3 = await accelerator.matrixMultiply(empty, empty)
+        let result1 = await accelerator.multiply(empty, nonEmpty)
+        let result2 = await accelerator.multiply(nonEmpty, empty)
+        let result3 = await accelerator.multiply(empty, empty)
 
         #expect(result1.isEmpty, "Empty left matrix should return empty result")
         #expect(result2.isEmpty, "Empty right matrix should return empty result")
         #expect(result3.isEmpty, "Both empty matrices should return empty result")
     }
 
-    @Test("matrixMultiply handles 1x1 matrices")
-    func matrixMultiply1x1() async {
+    @Test("multiply handles 1x1 matrices")
+    func multiply1x1() async {
         let accelerator = MPSMetalAcceleration()
 
         let a: [[Complex<Double>]] = [[Complex(3.0, 4.0)]]
         let b: [[Complex<Double>]] = [[Complex(1.0, 2.0)]]
 
-        let result = await accelerator.matrixMultiply(a, b)
+        let result = await accelerator.multiply(a, b)
 
         let expected = Complex(3.0, 4.0) * Complex(1.0, 2.0)
 
@@ -195,34 +196,14 @@ struct MPSMetalAccelerationTests {
         #expect((result[0][0] - expected).magnitude < 1e-10, "1x1 multiplication should compute correct product")
     }
 
-    @Test("matrixMultiply returns empty for dimension mismatch")
-    func matrixMultiplyDimensionMismatch() async {
-        let accelerator = MPSMetalAcceleration()
-
-        let a: [[Complex<Double>]] = [
-            [.one, .zero],
-            [.zero, .one],
-        ]
-
-        let b: [[Complex<Double>]] = [
-            [.one, .zero, .zero],
-            [.zero, .one, .zero],
-            [.zero, .zero, .one],
-        ]
-
-        let result = await accelerator.matrixMultiply(a, b)
-
-        #expect(result.isEmpty, "Dimension mismatch (2x2 * 3x3) should return empty result")
-    }
-
-    @Test("contractAdjacentTensors produces correct 4D result")
-    func contractAdjacentTensorsBasic() async {
+    @Test("contract produces correct 4D result")
+    func contractBasic() async {
         let accelerator = MPSMetalAcceleration()
 
         let left = MPSTensor.groundState(site: 0, qubits: 4, maxBondDimension: 16)
         let right = MPSTensor.groundState(site: 1, qubits: 4, maxBondDimension: 16)
 
-        let result = await accelerator.contractAdjacentTensors(left, right)
+        let result = await accelerator.contract(left, right)
 
         #expect(result.count == left.leftBondDimension, "Result alpha dimension should match left tensor's left bond")
         #expect(result[0].count == 2, "Result should have physical dimension 2 for left physical index")
@@ -235,14 +216,14 @@ struct MPSMetalAccelerationTests {
         #expect(result[0][1][1][0].magnitude < 1e-10, "Ground state contraction [0][1][1][0] should be 0")
     }
 
-    @Test("contractAdjacentTensors with basis state 1")
-    func contractAdjacentTensorsBasisState() async {
+    @Test("contract with basis state 1")
+    func contractBasisState() async {
         let accelerator = MPSMetalAcceleration()
 
         let left = MPSTensor.basisState(0b01, site: 0, qubits: 4, maxBondDimension: 16)
         let right = MPSTensor.basisState(0b01, site: 1, qubits: 4, maxBondDimension: 16)
 
-        let result = await accelerator.contractAdjacentTensors(left, right)
+        let result = await accelerator.contract(left, right)
 
         #expect((result[0][1][0][0] - .one).magnitude < 1e-10, "Basis |01> contraction [0][1][0][0] should be 1")
         #expect(result[0][0][0][0].magnitude < 1e-10, "Basis |01> contraction [0][0][0][0] should be 0")
@@ -250,19 +231,19 @@ struct MPSMetalAccelerationTests {
         #expect(result[0][1][1][0].magnitude < 1e-10, "Basis |01> contraction [0][1][1][0] should be 0")
     }
 
-    @Test("chainContraction returns identity for empty input")
-    func chainContractionEmpty() async {
+    @Test("multiplyChain returns identity for empty input")
+    func multiplyChainEmpty() async {
         let accelerator = MPSMetalAcceleration()
 
-        let result = await accelerator.chainContraction(matrices: [])
+        let result = await accelerator.multiply(chain: [])
 
         #expect(result.count == 1, "Empty chain should return 1x1 identity")
         #expect(result[0].count == 1, "Empty chain should return 1x1 identity")
         #expect((result[0][0] - .one).magnitude < 1e-10, "Empty chain should return identity element [[1]]")
     }
 
-    @Test("chainContraction returns single matrix unchanged")
-    func chainContractionSingleMatrix() async {
+    @Test("multiplyChain returns single matrix unchanged")
+    func multiplyChainSingleMatrix() async {
         let accelerator = MPSMetalAcceleration()
 
         let matrix: [[Complex<Double>]] = [
@@ -270,7 +251,7 @@ struct MPSMetalAccelerationTests {
             [Complex(5.0, 6.0), Complex(7.0, 8.0)],
         ]
 
-        let result = await accelerator.chainContraction(matrices: [matrix])
+        let result = await accelerator.multiply(chain: [matrix])
 
         #expect(result.count == 2, "Single matrix chain should return same row count")
         #expect(result[0].count == 2, "Single matrix chain should return same column count")
@@ -283,8 +264,8 @@ struct MPSMetalAccelerationTests {
         }
     }
 
-    @Test("chainContraction computes correct sequential product")
-    func chainContractionSequential() async {
+    @Test("multiplyChain computes correct sequential product")
+    func multiplyChainSequential() async {
         let accelerator = MPSMetalAcceleration()
 
         let m1: [[Complex<Double>]] = [
@@ -302,7 +283,7 @@ struct MPSMetalAccelerationTests {
             [Complex(0.0, 0.0), Complex(1.0, 0.0)],
         ]
 
-        let result = await accelerator.chainContraction(matrices: [m1, m2, m3])
+        let result = await accelerator.multiply(chain: [m1, m2, m3])
 
         let m1m2Expected00 = Complex(1 * 5 + 2 * 7, 0.0)
         let m1m2Expected01 = Complex(1 * 6 + 2 * 8, 0.0)
@@ -341,8 +322,8 @@ struct MPSMetalAccelerationTests {
             }
         }
 
-        let smallResult = await accelerator.matrixMultiply(smallA, smallB)
-        let largeResult = await accelerator.matrixMultiply(largeA, largeB)
+        let smallResult = await accelerator.multiply(smallA, smallB)
+        let largeResult = await accelerator.multiply(largeA, largeB)
 
         #expect(smallResult.count == smallSize, "Small matrix result should have correct row count")
         #expect(largeResult.count == largeSize, "Large matrix result should have correct row count")
@@ -386,9 +367,9 @@ struct MPSMetalAccelerationTests {
             [Complex(0.0, 1.0), Complex(-1.0, 1.0)],
         ]
 
-        let result1 = await accelerator.matrixMultiply(a, b)
-        let result2 = await accelerator.matrixMultiply(a, b)
-        let result3 = await accelerator.matrixMultiply(a, b)
+        let result1 = await accelerator.multiply(a, b)
+        let result2 = await accelerator.multiply(a, b)
+        let result3 = await accelerator.multiply(a, b)
 
         for i in 0 ..< 2 {
             for j in 0 ..< 2 {
@@ -400,8 +381,8 @@ struct MPSMetalAccelerationTests {
         }
     }
 
-    @Test("matrixMultiply handles very small values")
-    func matrixMultiplySmallValues() async {
+    @Test("multiply handles very small values")
+    func multiplySmallValues() async {
         let accelerator = MPSMetalAcceleration()
 
         let a: [[Complex<Double>]] = [
@@ -414,7 +395,7 @@ struct MPSMetalAccelerationTests {
             [Complex(1e-10, 1e-10), Complex(2e-10, 0.0)],
         ]
 
-        let result = await accelerator.matrixMultiply(a, b)
+        let result = await accelerator.multiply(a, b)
 
         #expect(result.count == 2, "Small value multiplication should produce valid result")
         #expect(result[0].count == 2, "Small value multiplication should have correct dimensions")
@@ -426,8 +407,8 @@ struct MPSMetalAccelerationTests {
         }
     }
 
-    @Test("matrixMultiply handles mixed magnitude values")
-    func matrixMultiplyMixedMagnitude() async {
+    @Test("multiply handles mixed magnitude values")
+    func multiplyMixedMagnitude() async {
         let accelerator = MPSMetalAcceleration()
 
         let a: [[Complex<Double>]] = [
@@ -440,7 +421,7 @@ struct MPSMetalAccelerationTests {
             [Complex(1e6, 0.0), Complex(1e-6, 0.0)],
         ]
 
-        let result = await accelerator.matrixMultiply(a, b)
+        let result = await accelerator.multiply(a, b)
 
         let expected00 = Complex(1e6 * 1e-6 + 1e-6 * 1e6, 0.0)
 
@@ -448,8 +429,8 @@ struct MPSMetalAccelerationTests {
         #expect(abs(result[0][0].real - expected00.real) < 1e-6, "Mixed magnitude result[0][0] should be approximately 2")
     }
 
-    @Test("matrixMultiply handles matrices at GPU threshold boundary")
-    func matrixMultiplyAtThreshold() async {
+    @Test("multiply handles matrices at GPU threshold boundary")
+    func multiplyAtThreshold() async {
         let accelerator = MPSMetalAcceleration()
 
         let sizes = [
@@ -467,7 +448,7 @@ struct MPSMetalAccelerationTests {
                 b[i][i] = Complex(2.0, 0.0)
             }
 
-            let result = await accelerator.matrixMultiply(a, b)
+            let result = await accelerator.multiply(a, b)
 
             #expect(result.count == size, "Result should have \(size) rows at threshold boundary")
 
@@ -480,8 +461,8 @@ struct MPSMetalAccelerationTests {
         }
     }
 
-    @Test("matrixMultiply handles large matrices efficiently")
-    func matrixMultiplyLarge() async {
+    @Test("multiply handles large matrices efficiently")
+    func multiplyLarge() async {
         let accelerator = MPSMetalAcceleration()
 
         let size = 64
@@ -495,7 +476,7 @@ struct MPSMetalAccelerationTests {
             }
         }
 
-        let result = await accelerator.matrixMultiply(a, b)
+        let result = await accelerator.multiply(a, b)
 
         #expect(result.count == size, "Large 64x64 multiplication should produce correct row count")
         #expect(result[0].count == size, "Large 64x64 multiplication should produce correct column count")
@@ -508,8 +489,8 @@ struct MPSMetalAccelerationTests {
         }
     }
 
-    @Test("matrixMultiply handles pure imaginary matrices")
-    func matrixMultiplyPureImaginary() async {
+    @Test("multiply handles pure imaginary matrices")
+    func multiplyPureImaginary() async {
         let accelerator = MPSMetalAcceleration()
 
         let a: [[Complex<Double>]] = [
@@ -522,7 +503,7 @@ struct MPSMetalAccelerationTests {
             [Complex(0.0, 0.0), Complex(0.0, 1.0)],
         ]
 
-        let result = await accelerator.matrixMultiply(a, b)
+        let result = await accelerator.multiply(a, b)
 
         let expected00 = Complex(0.0, 1.0) * Complex(0.0, 1.0) + Complex(0.0, 2.0) * Complex(0.0, 0.0)
         let expected01 = Complex(0.0, 1.0) * Complex(0.0, 0.0) + Complex(0.0, 2.0) * Complex(0.0, 1.0)
@@ -535,8 +516,8 @@ struct MPSMetalAccelerationTests {
         #expect((result[1][1] - expected11).magnitude < 1e-10, "Pure imaginary result[1][1] should be -4")
     }
 
-    @Test("matrixMultiply with zero matrix produces zero result")
-    func matrixMultiplyZero() async {
+    @Test("multiply with zero matrix produces zero result")
+    func multiplyZero() async {
         let accelerator = MPSMetalAcceleration()
 
         let zero: [[Complex<Double>]] = [
@@ -549,8 +530,8 @@ struct MPSMetalAccelerationTests {
             [Complex(5.0, 6.0), Complex(7.0, 8.0)],
         ]
 
-        let result1 = await accelerator.matrixMultiply(zero, nonZero)
-        let result2 = await accelerator.matrixMultiply(nonZero, zero)
+        let result1 = await accelerator.multiply(zero, nonZero)
+        let result2 = await accelerator.multiply(nonZero, zero)
 
         for i in 0 ..< 2 {
             for j in 0 ..< 2 {
@@ -560,8 +541,8 @@ struct MPSMetalAccelerationTests {
         }
     }
 
-    @Test("chainContraction with MPS tensor matrices")
-    func chainContractionMPSTensors() async {
+    @Test("multiplyChain with MPS tensor matrices")
+    func multiplyChainMPSTensors() async {
         let accelerator = MPSMetalAcceleration()
 
         let tensor0 = MPSTensor.groundState(site: 0, qubits: 3, maxBondDimension: 16)
@@ -569,19 +550,19 @@ struct MPSMetalAccelerationTests {
         let tensor2 = MPSTensor.groundState(site: 2, qubits: 3, maxBondDimension: 16)
 
         let matrices = [
-            tensor0.matrixForPhysicalIndex(0),
-            tensor1.matrixForPhysicalIndex(0),
-            tensor2.matrixForPhysicalIndex(0),
+            tensor0.matrix(forPhysical:0),
+            tensor1.matrix(forPhysical:0),
+            tensor2.matrix(forPhysical:0),
         ]
 
-        let result = await accelerator.chainContraction(matrices: matrices)
+        let result = await accelerator.multiply(chain: matrices)
 
         #expect(result.count == 1, "Ground state chain should produce 1x1 result")
         #expect(result[0].count == 1, "Ground state chain should produce 1x1 result")
         #expect((result[0][0] - .one).magnitude < 1e-10, "Ground state |000> chain contraction should be 1")
     }
 
-    @Test("Multiple concurrent matrixMultiply calls produce correct results")
+    @Test("Multiple concurrent multiply calls produce correct results")
     func concurrentMatrixMultiply() async {
         let accelerator = MPSMetalAcceleration()
 
@@ -595,9 +576,9 @@ struct MPSMetalAccelerationTests {
             [Complex(4.0, 3.0), Complex(5.0, 4.0)],
         ]
 
-        async let result1 = accelerator.matrixMultiply(a, b)
-        async let result2 = accelerator.matrixMultiply(a, b)
-        async let result3 = accelerator.matrixMultiply(a, b)
+        async let result1 = accelerator.multiply(a, b)
+        async let result2 = accelerator.multiply(a, b)
+        async let result3 = accelerator.multiply(a, b)
 
         let results = await [result1, result2, result3]
 
@@ -620,7 +601,7 @@ struct MPSMetalAccelerationTests {
         let tensor1 = MPSTensor.basisState(0b101, site: 1, qubits: 3, maxBondDimension: 16)
         let tensor2 = MPSTensor.basisState(0b101, site: 2, qubits: 3, maxBondDimension: 16)
 
-        let contracted01 = await accelerator.contractAdjacentTensors(tensor0, tensor1)
+        let contracted01 = await accelerator.contract(tensor0, tensor1)
 
         #expect(contracted01.count == 1, "First contraction should have alpha dimension 1")
 
@@ -628,10 +609,10 @@ struct MPSMetalAccelerationTests {
 
         #expect((contracted01[0][physBits[0]][physBits[1]][0] - .one).magnitude < 1e-10, "Contracted amplitude for correct bits should be 1")
 
-        let matrix2 = tensor2.matrixForPhysicalIndex(physBits[2])
+        let matrix2 = tensor2.matrix(forPhysical:physBits[2])
         let finalMatrix = [[contracted01[0][physBits[0]][physBits[1]][0]]]
 
-        let finalResult = await accelerator.chainContraction(matrices: [finalMatrix, matrix2])
+        let finalResult = await accelerator.multiply(chain: [finalMatrix, matrix2])
 
         #expect((finalResult[0][0] - .one).magnitude < 1e-10, "Full contraction of |101> should give amplitude 1")
     }

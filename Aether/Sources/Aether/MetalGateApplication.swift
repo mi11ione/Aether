@@ -124,6 +124,7 @@ public actor MetalGateApplication {
     @_effects(readonly)
     @inline(__always)
     private static func toGPUAmplitudes(_ amplitudes: [Complex<Double>]) -> [(Float, Float)] {
+        guard !amplitudes.isEmpty else { return [] }
         let n = amplitudes.count
         var result = [(Float, Float)](unsafeUninitializedCapacity: n) { _, count in
             count = n
@@ -133,6 +134,7 @@ public actor MetalGateApplication {
             let srcDoubles = srcBytes.bindMemory(to: Double.self)
             result.withUnsafeMutableBytes { dstBytes in
                 let dstFloats = dstBytes.bindMemory(to: Float.self)
+                // Safety: baseAddress! safe — non-empty guard above, withUnsafeBytes guarantees valid pointer
                 vDSP_vdpsp(srcDoubles.baseAddress!, 1, dstFloats.baseAddress!, 1, vDSP_Length(n * 2))
             }
         }
@@ -144,6 +146,7 @@ public actor MetalGateApplication {
     @_effects(readonly)
     @inline(__always)
     private static func fromGPUAmplitudes(_ pointer: UnsafePointer<(Float, Float)>, count: Int) -> [Complex<Double>] {
+        guard count > 0 else { return [] }
         var result = [Complex<Double>](unsafeUninitializedCapacity: count) { _, outCount in
             outCount = count
         }
@@ -151,6 +154,7 @@ public actor MetalGateApplication {
         result.withUnsafeMutableBytes { dstBytes in
             let dstDoubles = dstBytes.bindMemory(to: Double.self)
             let srcFloats = UnsafeRawPointer(pointer).bindMemory(to: Float.self, capacity: count * 2)
+            // Safety: baseAddress! safe — non-empty guard above, withUnsafeMutableBytes guarantees valid pointer
             vDSP_vspdp(srcFloats, 1, dstDoubles.baseAddress!, 1, vDSP_Length(count * 2))
         }
 
@@ -175,13 +179,22 @@ public actor MetalGateApplication {
     @inline(__always)
     private static func toGPUMatrix4x4(_ matrix: [[Complex<Double>]]) -> [(Float, Float)] {
         [(Float, Float)](unsafeUninitializedCapacity: 16) { buffer, count in
-            var idx = 0
-            for row in 0 ..< 4 {
-                for col in 0 ..< 4 {
-                    buffer[idx] = (Float(matrix[row][col].real), Float(matrix[row][col].imaginary))
-                    idx += 1
-                }
-            }
+            buffer[0] = (Float(matrix[0][0].real), Float(matrix[0][0].imaginary))
+            buffer[1] = (Float(matrix[0][1].real), Float(matrix[0][1].imaginary))
+            buffer[2] = (Float(matrix[0][2].real), Float(matrix[0][2].imaginary))
+            buffer[3] = (Float(matrix[0][3].real), Float(matrix[0][3].imaginary))
+            buffer[4] = (Float(matrix[1][0].real), Float(matrix[1][0].imaginary))
+            buffer[5] = (Float(matrix[1][1].real), Float(matrix[1][1].imaginary))
+            buffer[6] = (Float(matrix[1][2].real), Float(matrix[1][2].imaginary))
+            buffer[7] = (Float(matrix[1][3].real), Float(matrix[1][3].imaginary))
+            buffer[8] = (Float(matrix[2][0].real), Float(matrix[2][0].imaginary))
+            buffer[9] = (Float(matrix[2][1].real), Float(matrix[2][1].imaginary))
+            buffer[10] = (Float(matrix[2][2].real), Float(matrix[2][2].imaginary))
+            buffer[11] = (Float(matrix[2][3].real), Float(matrix[2][3].imaginary))
+            buffer[12] = (Float(matrix[3][0].real), Float(matrix[3][0].imaginary))
+            buffer[13] = (Float(matrix[3][1].real), Float(matrix[3][1].imaginary))
+            buffer[14] = (Float(matrix[3][2].real), Float(matrix[3][2].imaginary))
+            buffer[15] = (Float(matrix[3][3].real), Float(matrix[3][3].imaginary))
             count = 16
         }
     }
@@ -241,7 +254,8 @@ public actor MetalGateApplication {
     ///   - state: Input quantum state (normalized statevector)
     /// - Returns: New quantum state with unitary transformation applied, maintaining normalization
     /// - Complexity: O(2^n) time, O(2^n) GPU buffer allocation
-    /// - Precondition: All qubit indices must be valid for state
+    /// - Precondition: 0 <= qubit < state.qubits for all qubit indices
+    /// - Precondition: Global phase angle must be finite (no NaN/Inf)
     @_eagerMove
     public func apply(_ gate: QuantumGate, to qubits: [Int], state: QuantumState) -> QuantumState {
         switch gate {
@@ -267,7 +281,7 @@ public actor MetalGateApplication {
             return GateApplication.applyCCZ(qubit1: qubits[0], qubit2: qubits[1], qubit3: qubits[2], state: state)
 
         case let .controlled(innerGate, controls):
-            return applyControlledGate(gate: innerGate, controls: controls, targetQubits: qubits, state: state)
+            return GateApplication.applyControlledGate(gate: innerGate, controls: controls, targetQubits: qubits, state: state)
 
         case .customUnitary, .diagonal, .multiplexor:
             return GateApplication.applyMultiQubitGate(gate: gate, qubits: qubits, state: state)
@@ -291,7 +305,7 @@ public actor MetalGateApplication {
     ///   - state: Input quantum state (normalized statevector)
     /// - Returns: New quantum state with gate applied
     /// - Complexity: O(2^n) time, O(2^n) GPU buffer allocation
-    /// - Precondition: qubit must be valid index for state
+    /// - Precondition: 0 <= qubit < state.qubits
     @_eagerMove
     public func apply(_ gate: QuantumGate, to qubit: Int, state: QuantumState) -> QuantumState {
         apply(gate, to: [qubit], state: state)
@@ -310,11 +324,12 @@ public actor MetalGateApplication {
     ///
     /// **Example:**
     /// ```swift
-    /// let gpu = MetalGateApplication()
+    /// let gpu = MetalGateApplication()!
     /// let state = QuantumState(qubits: 2)
     /// let op = CircuitOperation.gate(.hadamard, qubits: [0])
-    /// let result = gpu.apply(op, state: state)
+    /// let result = await gpu.apply(op, state: state)
     /// ```
+    @_eagerMove
     public func apply(_ operation: CircuitOperation, state: QuantumState) -> QuantumState {
         switch operation {
         case let .gate(gate, qubits, _):
@@ -328,6 +343,7 @@ public actor MetalGateApplication {
 
     // MARK: - Private Metal Implementations
 
+    /// Dispatch single-qubit gate to GPU via Metal compute shader.
     @_optimize(speed)
     @_eagerMove
     private func applySingleQubitGate(gate: QuantumGate, qubit: Int, state: QuantumState) -> QuantumState {
@@ -387,6 +403,7 @@ public actor MetalGateApplication {
         return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 
+    /// Dispatch CNOT gate to GPU via dedicated Metal kernel.
     @_optimize(speed)
     @_eagerMove
     private func applyCNOT(control: Int, target: Int, state: QuantumState) -> QuantumState {
@@ -431,6 +448,7 @@ public actor MetalGateApplication {
         return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 
+    /// Dispatch arbitrary two-qubit gate to GPU via 4x4 matrix kernel.
     @_optimize(speed)
     @_eagerMove
     private func applyTwoQubitGate(gate: QuantumGate, control: Int, target: Int, state: QuantumState) -> QuantumState {
@@ -479,6 +497,7 @@ public actor MetalGateApplication {
         return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 
+    /// Dispatch Toffoli/Fredkin gate to GPU via dedicated three-qubit kernel.
     @_optimize(speed)
     @_eagerMove
     private func applyToffoli(control1: Int, control2: Int, target: Int, state: QuantumState) -> QuantumState {
@@ -525,15 +544,6 @@ public actor MetalGateApplication {
         return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 
-    @_eagerMove
-    private func applyControlledGate(
-        gate: QuantumGate,
-        controls: [Int],
-        targetQubits: [Int],
-        state: QuantumState,
-    ) -> QuantumState {
-        GateApplication.applyControlledGate(gate: gate, controls: controls, targetQubits: targetQubits, state: state)
-    }
 }
 
 // MARK: - Hybrid CPU/GPU Gate Application
@@ -572,7 +582,7 @@ public extension GateApplication {
         state: QuantumState,
         policy: PrecisionPolicy = .fast,
     ) async -> QuantumState {
-        if PrecisionPolicy.shouldUseGPU(qubits: state.qubits, policy: policy),
+        if policy.shouldUseGPU(forQubitCount: state.qubits),
            let metalApp = sharedMetalGateApplication
         {
             return await metalApp.apply(gate, to: qubits, state: state)
@@ -623,6 +633,13 @@ public enum MetalUtilities {
     /// `default.metallib` file first (for Xcode builds), then default library from app bundle,
     /// finally runtime compilation from `QuantumGPU.metal` source (for CLI). Returns nil if
     /// all strategies fail; caller must handle Metal unavailability with CPU fallback.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// guard let device = MTLCreateSystemDefaultDevice(),
+    ///       let library = MetalUtilities.loadLibrary(device: device)
+    /// else { return nil }
+    /// ```
     ///
     /// - Parameter device: Metal device to create library for
     /// - Returns: Shader library if any loading strategy succeeds, nil otherwise

@@ -108,7 +108,7 @@ public enum GPUProfiler {
         let stateSpaceSize = 1 << qubits
         let transferBytes = bytesPerAmplitude * stateSpaceSize * transferDirections
 
-        let shouldUseGPU = PrecisionPolicy.shouldUseGPU(qubits: qubits, policy: precisionPolicy)
+        let shouldUseGPU = precisionPolicy.shouldUseGPU(forQubitCount: qubits)
         let metalAvailable = metalDevice != nil
 
         let startTime = mach_absolute_time()

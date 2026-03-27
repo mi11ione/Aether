@@ -1768,4 +1768,32 @@ public extension QuantumGate {
             return (self, [])
         }
     }
+
+    /// Ordered parameter values for parameterized gates.
+    var parameterValues: [ParameterValue] {
+        switch self {
+        case let .phase(angle),
+             let .rotationX(angle),
+             let .rotationY(angle),
+             let .rotationZ(angle),
+             let .controlledPhase(angle),
+             let .controlledRotationX(angle),
+             let .controlledRotationY(angle),
+             let .controlledRotationZ(angle),
+             let .givens(angle),
+             let .xx(angle),
+             let .yy(angle),
+             let .zz(angle),
+             let .globalPhase(angle):
+            [angle]
+        case let .u1(lambda):
+            [lambda]
+        case let .u2(phi, lambda):
+            [phi, lambda]
+        case let .u3(theta, phi, lambda):
+            [theta, phi, lambda]
+        default:
+            []
+        }
+    }
 }

@@ -20,7 +20,7 @@ import Foundation
 ///
 /// **Example:**
 /// ```swift
-/// let optimizer = COBYLAOptimizer(tolerance: 1e-6)
+/// let optimizer = COBYLAOptimizer(minTrustRadius: 1e-6)
 /// let result = await optimizer.minimize(
 ///     { params in
 ///         let state = circuit.bound(with: params).execute()
@@ -33,10 +33,9 @@ import Foundation
 /// ```
 ///
 /// - Complexity: O(iterations x evaluations_per_iteration), where evaluations depends on algorithm
-/// - SeeAlso:
-///   - ``COBYLAOptimizer`` for recommended default
-///   - ``ConvergenceCriteria`` for termination conditions
-///   - ``OptimizerResult`` for output structure
+/// - SeeAlso: ``COBYLAOptimizer`` for recommended default
+/// - SeeAlso: ``ConvergenceCriteria`` for termination conditions
+/// - SeeAlso: ``OptimizerResult`` for output structure
 public protocol Optimizer: Sendable {
     /// Minimize objective function over parameter space
     ///
@@ -50,6 +49,7 @@ public protocol Optimizer: Sendable {
     ///   - convergenceCriteria: Termination conditions (energy tolerance, max iterations)
     ///   - progress: Optional callback receiving iteration number and current objective value
     /// - Returns: Optimization result with optimal parameters and convergence history
+    /// - Precondition: initialParameters is non-empty
     /// - Complexity: Implementation-dependent, see specific optimizer documentation
     func minimize(
         _ objectiveFunction: @Sendable ([Double]) async -> Double,
@@ -167,9 +167,8 @@ public struct ConvergenceCriteria: Sendable {
 /// }
 /// ```
 ///
-/// - SeeAlso:
-///   - ``TerminationReason`` for convergence status
-///   - ``Optimizer`` for optimization methods
+/// - SeeAlso: ``TerminationReason`` for convergence status
+/// - SeeAlso: ``Optimizer`` for optimization methods
 @frozen
 public struct OptimizerResult: Sendable {
     /// Optimal parameters found by minimization
@@ -237,6 +236,12 @@ public struct OptimizerResult: Sendable {
 /// Indicates whether optimization converged (energy or gradient criteria met)
 /// or hit iteration limit without convergence.
 ///
+/// **Example:**
+/// ```swift
+/// let reason: TerminationReason = .energyConverged
+/// print(reason.description)
+/// ```
+///
 /// - SeeAlso: ``ConvergenceCriteria`` for threshold configuration
 @frozen
 public enum TerminationReason: Sendable, CustomStringConvertible {
@@ -249,6 +254,7 @@ public enum TerminationReason: Sendable, CustomStringConvertible {
     /// Maximum iterations reached without satisfying convergence criteria
     case maxIterationsReached
 
+    /// Human-readable description of the termination reason
     @inlinable
     public var description: String {
         switch self {
@@ -285,10 +291,9 @@ public enum TerminationReason: Sendable, CustomStringConvertible {
 /// ```
 ///
 /// - Complexity: O(iterations x evals_per_iteration), where evals_per_iteration ∈ [1,4]
-/// - SeeAlso:
-///   - ``COBYLAOptimizer`` for recommended derivative-free optimizer
-///   - ``SPSAOptimizer`` for high-dimensional noisy objectives
-///   - ``Optimizer`` for protocol definition
+/// - SeeAlso: ``COBYLAOptimizer`` for recommended derivative-free optimizer
+/// - SeeAlso: ``SPSAOptimizer`` for high-dimensional noisy objectives
+/// - SeeAlso: ``Optimizer`` for protocol definition
 @frozen
 public struct NelderMeadOptimizer: Optimizer {
     /// Convergence tolerance for simplex size
@@ -325,19 +330,21 @@ public struct NelderMeadOptimizer: Optimizer {
         self.initialSimplexSize = initialSimplexSize
     }
 
-    /// Create Nelder-Mead optimizer with default simplex size
-    ///
-    /// Convenience initializer using default `initialSimplexSize = 0.1`.
-    ///
-    /// - Parameter tolerance: Convergence tolerance for simplex value range
-    public init(tolerance: Double) {
-        self.init(tolerance: tolerance, initialSimplexSize: 0.1)
-    }
-
     /// Minimize objective function using Nelder-Mead simplex method
     ///
     /// Initializes n+1 simplex vertices, then iteratively transforms simplex via
     /// reflection, expansion, contraction, or shrinkage until convergence.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let optimizer = NelderMeadOptimizer()
+    /// let result = await optimizer.minimize(
+    ///     { params in params.map { $0 * $0 }.reduce(0, +) },
+    ///     from: [1.0, 1.0],
+    ///     using: ConvergenceCriteria(),
+    ///     progress: nil
+    /// )
+    /// ```
     ///
     /// - Precondition: initialParameters is non-empty
     /// - Complexity: O(maxIterations x evals_per_iteration) where evals_per_iteration ∈ [1,4]
@@ -464,10 +471,10 @@ public struct NelderMeadOptimizer: Optimizer {
 
                 var oneMinusSigma = 1.0 - sigma
                 var sigmaVal = sigma
+                var newParams = [Double](unsafeUninitializedCapacity: n) { _, count in
+                    count = n
+                }
                 for i in 1 ... n {
-                    var newParams = [Double](unsafeUninitializedCapacity: n) { _, count in
-                        count = n
-                    }
                     vDSP_vsmulD(simplex[0].parameters, 1, &oneMinusSigma, &newParams, 1, vDSP_Length(n))
                     vDSP_vsmaD(simplex[i].parameters, 1, &sigmaVal, newParams, 1, &newParams, 1, vDSP_Length(n))
                     simplex[i].parameters = newParams
@@ -488,6 +495,7 @@ public struct NelderMeadOptimizer: Optimizer {
         )
     }
 
+    /// Simplex vertex with parameters and objective value
     struct SimplexVertex {
         var parameters: [Double]
         var value: Double
@@ -518,10 +526,9 @@ public struct NelderMeadOptimizer: Optimizer {
 /// ```
 ///
 /// - Complexity: O(maxIterations x (2n + 1)) where n = parameter count
-/// - SeeAlso:
-///   - ``LBFGSBOptimizer`` for superior gradient-based optimization
-///   - ``COBYLAOptimizer`` for gradient-free alternative
-///   - ``Optimizer`` for protocol definition
+/// - SeeAlso: ``LBFGSBOptimizer`` for superior gradient-based optimization
+/// - SeeAlso: ``COBYLAOptimizer`` for gradient-free alternative
+/// - SeeAlso: ``Optimizer`` for protocol definition
 @frozen
 public struct GradientDescentOptimizer: Optimizer {
     /// Initial learning rate (step size)
@@ -547,7 +554,7 @@ public struct GradientDescentOptimizer: Optimizer {
     /// Helps stabilize convergence near local minima.
     ///
     /// Recommended: true (default) for most applications
-    public let adaptiveLearningRate: Bool
+    public let isLearningRateAdaptive: Bool
 
     /// Parameter shift for gradient computation
     ///
@@ -557,18 +564,20 @@ public struct GradientDescentOptimizer: Optimizer {
     /// Typical values: π/2 (default for standard gates), π/4 (for some advanced gates)
     public let parameterShift: Double
 
+    private let learningRateDecay: Double = 0.95
+
     /// Create gradient descent optimizer with full configuration
     ///
     /// - Parameters:
     ///   - learningRate: Step size for parameter updates (default: 0.1)
     ///   - momentum: Velocity accumulation coefficient (default: 0.0)
-    ///   - adaptiveLearningRate: Enable learning rate decay on stagnation (default: true)
+    ///   - isLearningRateAdaptive: Enable learning rate decay on stagnation (default: true)
     ///   - parameterShift: Shift for parameter shift rule (default: π/2)
     /// - Precondition: learningRate > 0, momentum ∈ [0, 1), parameterShift > 0
     public init(
         learningRate: Double = 0.1,
         momentum: Double = 0.0,
-        adaptiveLearningRate: Bool = true,
+        isLearningRateAdaptive: Bool = true,
         parameterShift: Double = .pi / 2,
     ) {
         ValidationUtilities.validatePositiveDouble(learningRate, name: "learningRate")
@@ -577,23 +586,25 @@ public struct GradientDescentOptimizer: Optimizer {
 
         self.learningRate = learningRate
         self.momentum = momentum
-        self.adaptiveLearningRate = adaptiveLearningRate
+        self.isLearningRateAdaptive = isLearningRateAdaptive
         self.parameterShift = parameterShift
-    }
-
-    /// Create gradient descent optimizer with default momentum and adaptive learning rate
-    ///
-    /// Convenience initializer for simple usage with just learning rate configuration.
-    ///
-    /// - Parameter learningRate: Step size for parameter updates
-    public init(learningRate: Double) {
-        self.init(learningRate: learningRate, momentum: 0.0, adaptiveLearningRate: true)
     }
 
     /// Minimize objective function using gradient descent with parameter shift rule
     ///
     /// Computes gradients via quantum parameter shift, then updates parameters with
     /// momentum and adaptive learning rate until convergence.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let optimizer = GradientDescentOptimizer(learningRate: 0.1)
+    /// let result = await optimizer.minimize(
+    ///     { params in params.map { $0 * $0 }.reduce(0, +) },
+    ///     from: [1.0, 1.0],
+    ///     using: ConvergenceCriteria(),
+    ///     progress: nil
+    /// )
+    /// ```
     ///
     /// - Precondition: initialParameters is non-empty
     /// - Complexity: O(maxIterations x (2n + 1)) evaluations, where n = parameter count
@@ -620,24 +631,25 @@ public struct GradientDescentOptimizer: Optimizer {
         var currentLearningRate: Double = learningRate
         var bestValue: Double = currentValue
         var iterationsSinceImprovement = 0
+        var gradient = [Double](unsafeUninitializedCapacity: n) { _, count in
+            count = n
+        }
 
         for iteration in 0 ..< convergenceCriteria.maxIterations {
             if let callback = progress {
                 await callback(iteration, currentValue)
             }
 
-            var gradient = [Double](unsafeUninitializedCapacity: n) { _, count in
-                count = n
-            }
-
+            var paramsPlus = currentParameters
+            var paramsMinus = currentParameters
             for i in 0 ..< n {
-                var paramsPlus = currentParameters
                 paramsPlus[i] += parameterShift
                 let valuePlus: Double = await objectiveFunction(paramsPlus)
+                paramsPlus[i] = currentParameters[i]
 
-                var paramsMinus = currentParameters
                 paramsMinus[i] -= parameterShift
                 let valueMinus: Double = await objectiveFunction(paramsMinus)
+                paramsMinus[i] = currentParameters[i]
 
                 gradient[i] = (valuePlus - valueMinus) / 2.0
             }
@@ -645,10 +657,9 @@ public struct GradientDescentOptimizer: Optimizer {
 
             var gradientNormSq = 0.0
             vDSP_svesqD(gradient, 1, &gradientNormSq, vDSP_Length(n))
-            let gradientNorm: Double = sqrt(gradientNormSq)
 
             if let gnt = convergenceCriteria.gradientNormTolerance,
-               gradientNorm < gnt
+               gradientNormSq < gnt * gnt
             {
                 return OptimizerResult(
                     parameters: currentParameters,
@@ -660,10 +671,11 @@ public struct GradientDescentOptimizer: Optimizer {
                 )
             }
 
-            for i in 0 ..< n {
-                velocity[i] = momentum * velocity[i] - currentLearningRate * gradient[i]
-                currentParameters[i] += velocity[i]
-            }
+            var mom = momentum
+            vDSP_vsmulD(velocity, 1, &mom, &velocity, 1, vDSP_Length(n))
+            var negLR = -currentLearningRate
+            vDSP_vsmaD(gradient, 1, &negLR, velocity, 1, &velocity, 1, vDSP_Length(n))
+            vDSP_vaddD(currentParameters, 1, velocity, 1, &currentParameters, 1, vDSP_Length(n))
 
             let newValue: Double = await objectiveFunction(currentParameters)
             functionEvaluations += 1
@@ -684,8 +696,8 @@ public struct GradientDescentOptimizer: Optimizer {
                 iterationsSinceImprovement = 0
             } else {
                 iterationsSinceImprovement += 1
-                if adaptiveLearningRate {
-                    currentLearningRate *= 0.95
+                if isLearningRateAdaptive {
+                    currentLearningRate *= learningRateDecay
                 }
             }
 
@@ -731,10 +743,9 @@ public struct GradientDescentOptimizer: Optimizer {
 /// ```
 ///
 /// - Complexity: O(maxIterations x (2n + lineSearch)) evaluations, O(m·n) memory
-/// - SeeAlso:
-///   - ``GradientDescentOptimizer`` for simpler first-order method
-///   - ``COBYLAOptimizer`` for gradient-free alternative
-///   - ``Optimizer`` for protocol definition
+/// - SeeAlso: ``GradientDescentOptimizer`` for simpler first-order method
+/// - SeeAlso: ``COBYLAOptimizer`` for gradient-free alternative
+/// - SeeAlso: ``Optimizer`` for protocol definition
 @frozen
 public struct LBFGSBOptimizer: Optimizer {
     /// Number of previous (s,y) gradient pairs to store
@@ -797,20 +808,22 @@ public struct LBFGSBOptimizer: Optimizer {
         self.parameterShift = parameterShift
     }
 
-    /// Create L-BFGS-B optimizer with default memory size and line search
-    ///
-    /// Convenience initializer using `memorySize = 10` and `maxLineSearchSteps = 20`.
-    ///
-    /// - Parameter tolerance: Gradient norm convergence threshold
-    public init(tolerance: Double) {
-        self.init(memorySize: 10, tolerance: tolerance, maxLineSearchSteps: 20)
-    }
-
     /// Minimize objective function using L-BFGS-B quasi-Newton method
     ///
     /// Approximates Hessian inverse using limited memory (last m iterations), computes
     /// search direction via two-loop recursion, performs Wolfe line search, then updates
     /// parameter and gradient history.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let optimizer = LBFGSBOptimizer(tolerance: 1e-6)
+    /// let result = await optimizer.minimize(
+    ///     { params in params.map { $0 * $0 }.reduce(0, +) },
+    ///     from: [1.0, 1.0],
+    ///     using: ConvergenceCriteria(),
+    ///     progress: nil
+    /// )
+    /// ```
     ///
     /// - Precondition: initialParameters is non-empty
     /// - Complexity: O(maxIterations x (2n + lineSearchSteps)) evaluations, O(m·n) memory
@@ -836,8 +849,11 @@ public struct LBFGSBOptimizer: Optimizer {
         var functionEvaluations = 1 + 2 * n
 
         var sHistory: [[Double]] = []
+        sHistory.reserveCapacity(memorySize)
         var yHistory: [[Double]] = []
+        yHistory.reserveCapacity(memorySize)
         var rhoHistory: [Double] = []
+        rhoHistory.reserveCapacity(memorySize)
 
         for iteration in 0 ..< convergenceCriteria.maxIterations {
             if let callback = progress {
@@ -846,10 +862,9 @@ public struct LBFGSBOptimizer: Optimizer {
 
             var gradNormSq = 0.0
             vDSP_svesqD(gradient, 1, &gradNormSq, vDSP_Length(gradient.count))
-            let gradNorm: Double = sqrt(gradNormSq)
 
             if let gnt = convergenceCriteria.gradientNormTolerance,
-               gradNorm < gnt
+               gradNormSq < gnt * gnt
             {
                 return OptimizerResult(
                     parameters: params,
@@ -926,6 +941,11 @@ public struct LBFGSBOptimizer: Optimizer {
             vDSP_dotprD(y, 1, s, 1, &ys, vDSP_Length(n))
 
             if ys > 1e-10 {
+                if sHistory.count >= memorySize {
+                    sHistory.removeFirst()
+                    yHistory.removeFirst()
+                    rhoHistory.removeFirst()
+                }
                 sHistory.append(s)
                 yHistory.append(y)
                 rhoHistory.append(1.0 / ys)
@@ -949,7 +969,9 @@ public struct LBFGSBOptimizer: Optimizer {
 
     // MARK: - Private Helpers
 
+    /// Compute gradient via quantum parameter shift rule
     @_optimize(speed)
+    @_eagerMove
     private func computeGradient(
         params: [Double],
         objectiveFunction: @Sendable ([Double]) async -> Double,
@@ -959,14 +981,16 @@ public struct LBFGSBOptimizer: Optimizer {
             count = n
         }
 
+        var paramsPlus = params
+        var paramsMinus = params
         for i in 0 ..< n {
-            var paramsPlus = params
             paramsPlus[i] += parameterShift
             let valuePlus: Double = await objectiveFunction(paramsPlus)
+            paramsPlus[i] = params[i]
 
-            var paramsMinus = params
             paramsMinus[i] -= parameterShift
             let valueMinus: Double = await objectiveFunction(paramsMinus)
+            paramsMinus[i] = params[i]
 
             gradient[i] = (valuePlus - valueMinus) / 2.0
         }
@@ -974,11 +998,13 @@ public struct LBFGSBOptimizer: Optimizer {
         return gradient
     }
 
+    /// Line search result with step size and evaluation count
     struct LineSearchResult {
         let alpha: Double
         let evaluations: Int
     }
 
+    /// Perform Wolfe backtracking line search for step size
     @_optimize(speed)
     private func performLineSearch(
         params: [Double],
@@ -995,10 +1021,10 @@ public struct LBFGSBOptimizer: Optimizer {
         var dirGrad = 0.0
         vDSP_dotprD(direction, 1, gradient, 1, &dirGrad, vDSP_Length(n))
 
+        var newParams = [Double](unsafeUninitializedCapacity: n) { _, count in
+            count = n
+        }
         for _ in 0 ..< maxLineSearchSteps {
-            var newParams = [Double](unsafeUninitializedCapacity: n) { _, count in
-                count = n
-            }
             var alphaVal = alpha
             vDSP_vsmaD(direction, 1, &alphaVal, params, 1, &newParams, 1, vDSP_Length(n))
             let newCost: Double = await objectiveFunction(newParams)
@@ -1029,7 +1055,6 @@ public struct LBFGSBOptimizer: Optimizer {
     ///
     /// Approximates Hessian inverse using limited memory (last m iterations).
     /// Uses stored parameter differences (s) and gradient differences (y).
-    /// Optimized with vDSP for all vector operations.
     ///
     /// - Parameters:
     ///   - gradient: Current gradient
@@ -1039,6 +1064,7 @@ public struct LBFGSBOptimizer: Optimizer {
     /// - Returns: Search direction (negative gradient if no history)
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     static func computeSearchDirection(
         gradient: [Double],
         sHistory: [[Double]],
@@ -1125,10 +1151,9 @@ public struct LBFGSBOptimizer: Optimizer {
 /// ```
 ///
 /// - Complexity: O(maxIterations x 2) evaluations (constant in n!), O(n) memory
-/// - SeeAlso:
-///   - ``COBYLAOptimizer`` for deterministic gradient-free alternative
-///   - ``NelderMeadOptimizer`` for simpler gradient-free method
-///   - ``Optimizer`` for protocol definition
+/// - SeeAlso: ``COBYLAOptimizer`` for deterministic gradient-free alternative
+/// - SeeAlso: ``NelderMeadOptimizer`` for simpler gradient-free method
+/// - SeeAlso: ``Optimizer`` for protocol definition
 @frozen
 public struct SPSAOptimizer: Optimizer {
     /// Initial step size for parameter updates (a₀ in Spall's notation)
@@ -1200,28 +1225,21 @@ public struct SPSAOptimizer: Optimizer {
         self.stabilityConstant = stabilityConstant
     }
 
-    /// Create SPSA optimizer with standard decay parameters
-    ///
-    /// Uses Spall's theoretically optimal decay exponents (α=0.602, γ=0.101) and
-    /// standard stability constant (A=100).
-    ///
-    /// - Parameters:
-    ///   - initialStepSize: Initial parameter update step size (default: 0.1)
-    ///   - initialPerturbation: Initial perturbation magnitude (default: 0.01)
-    public init(initialStepSize: Double = 0.1, initialPerturbation: Double = 0.01) {
-        self.init(
-            initialStepSize: initialStepSize,
-            initialPerturbation: initialPerturbation,
-            decayExponent: 0.602,
-            perturbationDecayExponent: 0.101,
-            stabilityConstant: 100.0,
-        )
-    }
-
     /// Minimize objective function using SPSA stochastic approximation
     ///
     /// Generates random perturbations, approximates gradient via two evaluations (independent
     /// of parameter count), updates parameters with decaying step size.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let optimizer = SPSAOptimizer()
+    /// let result = await optimizer.minimize(
+    ///     { params in params.map { $0 * $0 }.reduce(0, +) },
+    ///     from: [1.0, 1.0],
+    ///     using: ConvergenceCriteria(),
+    ///     progress: nil
+    /// )
+    /// ```
     ///
     /// - Precondition: initialParameters is non-empty
     /// - Complexity: O(maxIterations x 2) evaluations (constant in n!), O(n) memory
@@ -1259,7 +1277,7 @@ public struct SPSAOptimizer: Optimizer {
                     let byteIndex = i / 8
                     let bitIndex = i % 8
                     let bit = (randomBytes[byteIndex] >> bitIndex) & 1
-                    buffer[i] = 1.0 - 2.0 * Double(bit) // branchless: 0->+1, 1->-1
+                    buffer[i] = 1.0 - 2.0 * Double(bit)
                 }
                 count = n
             }
@@ -1342,10 +1360,10 @@ public struct SPSAOptimizer: Optimizer {
 /// print("Ground state energy: \(result.value)")
 /// ```
 ///
-/// - SeeAlso:
-///   - ``NelderMeadOptimizer`` for simpler derivative-free method
-///   - ``LBFGSBOptimizer`` for gradient-based alternative
-///   - ``Optimizer`` for protocol definition
+/// - Complexity: O(maxIterations x 1-2) evaluations per iteration, O(n²) for simplex rebuild
+/// - SeeAlso: ``NelderMeadOptimizer`` for simpler derivative-free method
+/// - SeeAlso: ``LBFGSBOptimizer`` for gradient-based alternative
+/// - SeeAlso: ``Optimizer`` for protocol definition
 @frozen
 public struct COBYLAOptimizer: Optimizer {
     // MARK: - Configuration
@@ -1421,18 +1439,23 @@ public struct COBYLAOptimizer: Optimizer {
         self.simplexScale = simplexScale
     }
 
-    /// Convenience initializer with just tolerance
-    /// - Parameter tolerance: Convergence tolerance (sets minTrustRadius)
-    public init(tolerance: Double) {
-        self.init(minTrustRadius: tolerance)
-    }
-
     // MARK: - Main Optimization
 
     /// Minimize objective function using COBYLA trust region method
     ///
     /// Builds linear model from simplex interpolation, solves trust region subproblem
     /// via Cauchy point, updates trust region radius based on actual/predicted reduction.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let optimizer = COBYLAOptimizer()
+    /// let result = await optimizer.minimize(
+    ///     { params in params.map { $0 * $0 }.reduce(0, +) },
+    ///     from: [1.0, 1.0],
+    ///     using: ConvergenceCriteria(),
+    ///     progress: nil
+    /// )
+    /// ```
     ///
     /// - Precondition: initialParameters is non-empty
     /// - Complexity: O(maxIterations x 1-2) evaluations per iteration, O(n²) for simplex rebuild
@@ -1516,7 +1539,7 @@ public struct COBYLAOptimizer: Optimizer {
             }
 
             let previousRadius: Double = currentTrustRadius
-            if ratio < 0.1 {
+            if ratio < acceptRatio {
                 currentTrustRadius *= shrinkFactor
             } else if ratio > expandRatio {
                 currentTrustRadius = min(currentTrustRadius * expandFactor, maxTrustRadius)
@@ -1529,19 +1552,24 @@ public struct COBYLAOptimizer: Optimizer {
                 bestValue = trialValue
                 valueHistory.append(bestValue)
 
-                let simplexValues: [Double] = simplex.map(\.value)
-                var worstValue = 0.0
-                var worstIdx: vDSP_Length = 0
-                vDSP_maxviD(simplexValues, 1, &worstValue, &worstIdx, vDSP_Length(simplex.count))
-                let worstIndex = Int(worstIdx)
+                var worstIndex = 0
+                var worstValue = simplex[0].value
+                for i in 1 ..< simplex.count {
+                    if simplex[i].value > worstValue {
+                        worstValue = simplex[i].value
+                        worstIndex = i
+                    }
+                }
                 simplex[worstIndex] = SimplexPoint(parameters: trialParameters, value: trialValue)
 
-                let updatedValues: [Double] = simplex.map(\.value)
-                var minVal = 0.0
-                var minIdx: vDSP_Length = 0
-                vDSP_minviD(updatedValues, 1, &minVal, &minIdx, vDSP_Length(simplex.count))
-                bestIndex = Int(minIdx)
-                bestValue = minVal
+                bestValue = simplex[0].value
+                bestIndex = 0
+                for i in 1 ..< simplex.count {
+                    if simplex[i].value < bestValue {
+                        bestValue = simplex[i].value
+                        bestIndex = i
+                    }
+                }
             } else {
                 if currentTrustRadius < previousRadius * 0.9 {
                     let newSimplexSize: Double = currentTrustRadius * simplexScale
@@ -1587,17 +1615,7 @@ public struct COBYLAOptimizer: Optimizer {
 
     // MARK: - Linear Model Construction
 
-    /// Build linear model from simplex interpolation points.
-    ///
-    /// Constructs linear approximation m(x) = f(x₀) + gᵀ(x - x₀) where the gradient g is computed
-    /// via least squares from simplex points. The algorithm forms matrix Y with rows Y[i] = simplex[i].parameters - baseParameters
-    /// and vector f with f[i] = simplex[i].value - baseValue, then solves the least squares problem g = (YᵀY)⁻¹Yᵀf.
-    /// For a well-conditioned simplex, this yields an accurate gradient estimate.
-    ///
-    /// - Parameters:
-    ///   - simplex: Array of n+1 interpolation points
-    ///   - baseIndex: Index of base point (usually best point in simplex)
-    /// - Returns: Linear model with base point and gradient
+    /// Build linear model from simplex interpolation points
     @_optimize(speed)
     @_eagerMove
     private func buildLinearModel(
@@ -1613,7 +1631,9 @@ public struct COBYLAOptimizer: Optimizer {
             count = n
         }
         var directions: [[Double]] = []
+        directions.reserveCapacity(n)
         var valueDifferences: [Double] = []
+        valueDifferences.reserveCapacity(n)
 
         for i in simplex.indices where i != baseIndex {
             var direction = [Double](unsafeUninitializedCapacity: n) { _, count in
@@ -1639,14 +1659,14 @@ public struct COBYLAOptimizer: Optimizer {
                 buffer.initialize(repeating: 0.0)
                 count = n
             }
+            var absDirection = [Double](unsafeUninitializedCapacity: n) { _, count in
+                count = n
+            }
 
             for (direction, valueDiff) in zip(directions, valueDifferences) {
                 var vd = valueDiff
                 vDSP_vsmaD(direction, 1, &vd, gradient, 1, &gradient, 1, vDSP_Length(n))
 
-                var absDirection = [Double](unsafeUninitializedCapacity: n) { _, count in
-                    count = n
-                }
                 vDSP_vabsD(direction, 1, &absDirection, 1, vDSP_Length(n))
                 vDSP_vaddD(weights, 1, absDirection, 1, &weights, 1, vDSP_Length(n))
             }
@@ -1665,20 +1685,11 @@ public struct COBYLAOptimizer: Optimizer {
         )
     }
 
-    /// Solve trust region subproblem: minimize linear model within trust region
-    ///
-    /// Minimizes m(s) = g^T·s subject to ||s|| ≤ ρ, where g is the gradient and s is
-    /// the step vector. For linear models, the exact solution is the Cauchy point:
-    /// s = -ρ·g/||g|| when ||g|| > ρ, otherwise s = 0 (already at optimum). More complex
-    /// methods like dogleg or CG-Steihaug produce identical results for linear models.
-    ///
-    /// - Parameters:
-    ///   - gradient: Linear model gradient g
-    ///   - trustRadius: Current trust region radius ρ
-    /// - Returns: Step vector s from base point
+    /// Solve trust region subproblem via Cauchy point
     @_optimize(speed)
     @_eagerMove
     @inline(__always)
+    @_effects(readonly)
     private func solveTrustRegionSubproblem(
         gradient: [Double],
         trustRadius: Double,
@@ -1705,14 +1716,7 @@ public struct COBYLAOptimizer: Optimizer {
         return step
     }
 
-    /// Evaluate linear model at given step
-    ///
-    /// Computes m(x₀ + s) - m(x₀) = g^T s
-    ///
-    /// - Parameters:
-    ///   - gradient: Linear model gradient
-    ///   - step: Step vector from base point
-    /// - Returns: Model change (typically negative for descent direction)
+    /// Evaluate linear model change at given step
     @_optimize(speed)
     @_eagerMove
     @inline(__always)
@@ -1732,11 +1736,6 @@ public struct COBYLAOptimizer: Optimizer {
     struct SimplexPoint {
         var parameters: [Double]
         var value: Double
-
-        init(parameters: [Double], value: Double) {
-            self.parameters = parameters
-            self.value = value
-        }
     }
 
     /// Linear interpolation model: m(x) = f₀ + g^T(x - x₀)
@@ -1744,11 +1743,5 @@ public struct COBYLAOptimizer: Optimizer {
         let baseParameters: [Double]
         let baseValue: Double
         let gradient: [Double]
-
-        init(baseParameters: [Double], baseValue: Double, gradient: [Double]) {
-            self.baseParameters = baseParameters
-            self.baseValue = baseValue
-            self.gradient = gradient
-        }
     }
 }

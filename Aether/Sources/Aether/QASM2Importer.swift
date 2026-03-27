@@ -61,11 +61,14 @@ private struct CustomGateDefinition {
 
 /// Mutable state for the recursive-descent QASM 2.0 parser.
 private struct ParserState {
+    typealias RegisterDecl = (name: String, size: Int)
+    typealias QubitRef = (register: String, index: Int)
+
     var tokens: [QASMToken]
     var position: Int = 0
     var diagnostics: [ParseDiagnostic] = []
-    var qubitRegisters: [(name: String, size: Int)] = []
-    var classicalRegisters: [(name: String, size: Int)] = []
+    var qubitRegisters: [RegisterDecl] = []
+    var classicalRegisters: [RegisterDecl] = []
     var operations: [(gate: QuantumGate, qubits: [Int])] = []
     var customGates: [String: CustomGateDefinition] = [:]
     var line: Int = 1
@@ -83,6 +86,7 @@ private struct ParserState {
     }
 
     /// Return current token and advance position.
+    @inline(__always)
     mutating func advance() -> QASMToken {
         let token = current
         if position < tokens.count {
@@ -111,12 +115,14 @@ private struct ParserState {
     }
 
     /// Check whether the current token matches a specific keyword.
+    @inline(__always)
     func isKeyword(_ name: String) -> Bool {
         if case let .keyword(k) = current, k == name { return true }
         return false
     }
 
     /// Check whether the current token matches a specific symbol.
+    @inline(__always)
     func isSymbol(_ char: Character) -> Bool {
         if case let .symbol(c) = current, c == char { return true }
         return false
@@ -198,6 +204,20 @@ private struct ParserState {
             offset += reg.size
         }
         return nil
+    }
+
+    /// Resolve a list of qubit arguments to absolute indices.
+    mutating func resolveQubitArgs(_ args: [QubitRef]) -> [Int]? {
+        var absoluteQubits: [Int] = []
+        absoluteQubits.reserveCapacity(args.count)
+        for arg in args {
+            guard let idx = resolveQubit(register: arg.register, index: arg.index) else {
+                addError("invalid qubit reference '\(arg.register)[\(arg.index)]'")
+                return nil
+            }
+            absoluteQubits.append(idx)
+        }
+        return absoluteQubits
     }
 
     /// Total number of qubits declared across all quantum registers.
@@ -294,60 +314,46 @@ private struct ParserState {
         _ = expectSymbol(";")
     }
 
-    /// Parse quantum register declaration.
-    mutating func parseQregDecl() {
+    /// Parse a register declaration (name[size];) and return the parsed components.
+    mutating func parseRegisterDecl() -> RegisterDecl? {
         _ = advance()
         skipNewlines()
         guard let name = expectIdentifier() else {
             synchronize()
-            return
+            return nil
         }
         skipNewlines()
         guard expectSymbol("[") else {
             synchronize()
-            return
+            return nil
         }
         skipNewlines()
         guard let size = expectInteger() else {
             synchronize()
-            return
+            return nil
         }
         skipNewlines()
         guard expectSymbol("]") else {
             synchronize()
-            return
+            return nil
         }
         skipNewlines()
         _ = expectSymbol(";")
-        qubitRegisters.append((name: name, size: size))
+        return (name: name, size: size)
+    }
+
+    /// Parse quantum register declaration.
+    mutating func parseQregDecl() {
+        if let decl = parseRegisterDecl() {
+            qubitRegisters.append(decl)
+        }
     }
 
     /// Parse classical register declaration.
     mutating func parseCregDecl() {
-        _ = advance()
-        skipNewlines()
-        guard let name = expectIdentifier() else {
-            synchronize()
-            return
+        if let decl = parseRegisterDecl() {
+            classicalRegisters.append(decl)
         }
-        skipNewlines()
-        guard expectSymbol("[") else {
-            synchronize()
-            return
-        }
-        skipNewlines()
-        guard let size = expectInteger() else {
-            synchronize()
-            return
-        }
-        skipNewlines()
-        guard expectSymbol("]") else {
-            synchronize()
-            return
-        }
-        skipNewlines()
-        _ = expectSymbol(";")
-        classicalRegisters.append((name: name, size: size))
     }
 
     /// Parse gate declaration and store as custom gate definition.
@@ -398,6 +404,7 @@ private struct ParserState {
                 bodyTokens.append(advance())
             }
         }
+        bodyTokens.append(.eof)
 
         customGates[name] = CustomGateDefinition(
             name: name,
@@ -506,21 +513,14 @@ private struct ParserState {
             return
         }
 
-        var absoluteQubits: [Int] = []
-        absoluteQubits.reserveCapacity(qubitArgs.count)
-        for arg in qubitArgs {
-            guard let idx = resolveQubit(register: arg.register, index: arg.index) else {
-                addError("invalid qubit reference '\(arg.register)[\(arg.index)]'")
-                return
-            }
-            absoluteQubits.append(idx)
-        }
+        guard let absoluteQubits = resolveQubitArgs(qubitArgs) else { return }
 
         let gate = applyParameters(to: templateGate, params: params)
         operations.append((gate: gate, qubits: absoluteQubits))
     }
 
     /// Apply parsed parameter values to a template gate.
+    @_effects(readonly)
     func applyParameters(to gate: QuantumGate, params: [Double]) -> QuantumGate {
         switch gate {
         case .rotationX where params.count >= 1:
@@ -562,31 +562,19 @@ private struct ParserState {
     mutating func applyCustomGate(
         _ definition: CustomGateDefinition,
         params: [Double],
-        qubitArgs: [(register: String, index: Int)],
+        qubitArgs: [QubitRef],
     ) {
-        var absoluteQubits: [Int] = []
-        absoluteQubits.reserveCapacity(qubitArgs.count)
-        for arg in qubitArgs {
-            guard let idx = resolveQubit(register: arg.register, index: arg.index) else {
-                addError("invalid qubit reference '\(arg.register)[\(arg.index)]'")
-                return
-            }
-            absoluteQubits.append(idx)
-        }
+        guard let absoluteQubits = resolveQubitArgs(qubitArgs) else { return }
 
-        var paramBindings: [String: Double] = [:]
-        paramBindings.reserveCapacity(definition.parameterNames.count)
-        for i in 0 ..< min(params.count, definition.parameterNames.count) {
-            paramBindings[definition.parameterNames[i]] = params[i]
-        }
+        let paramBindings = Dictionary(
+            uniqueKeysWithValues: zip(definition.parameterNames.prefix(params.count), params)
+        )
 
-        var qubitBindings: [String: Int] = [:]
-        qubitBindings.reserveCapacity(definition.qubitNames.count)
-        for i in 0 ..< min(absoluteQubits.count, definition.qubitNames.count) {
-            qubitBindings[definition.qubitNames[i]] = absoluteQubits[i]
-        }
+        let qubitBindings = Dictionary(
+            uniqueKeysWithValues: zip(definition.qubitNames.prefix(absoluteQubits.count), absoluteQubits)
+        )
 
-        var bodyState = ParserState(tokens: definition.bodyTokens + [.eof])
+        var bodyState = ParserState(tokens: definition.bodyTokens)
         bodyState.qubitRegisters = qubitRegisters
         bodyState.classicalRegisters = classicalRegisters
         bodyState.customGates = customGates
@@ -619,7 +607,7 @@ private struct ParserState {
         skipNewlines()
         if isSymbol("(") {
             _ = advance()
-            params = parseParameterListWithBindings(paramBindings)
+            params = parseParameterList(bindings: paramBindings)
             skipNewlines()
             _ = expectSymbol(")")
         }
@@ -668,37 +656,18 @@ private struct ParserState {
     }
 
     /// Parse a comma-separated list of parameter expressions.
-    mutating func parseParameterList() -> [Double] {
+    mutating func parseParameterList(bindings: [String: Double]? = nil) -> [Double] {
         var params: [Double] = []
         skipNewlines()
         if isSymbol(")") { return params }
 
-        if let value = parseExpression() {
+        if let value = parseExpression(bindings: bindings) {
             params.append(value)
         }
         while isSymbol(",") {
             _ = advance()
             skipNewlines()
-            if let value = parseExpression() {
-                params.append(value)
-            }
-        }
-        return params
-    }
-
-    /// Parse parameter list resolving identifiers against bindings.
-    mutating func parseParameterListWithBindings(_ bindings: [String: Double]) -> [Double] {
-        var params: [Double] = []
-        skipNewlines()
-        if isSymbol(")") { return params }
-
-        if let value = parseExpressionWithBindings(bindings) {
-            params.append(value)
-        }
-        while isSymbol(",") {
-            _ = advance()
-            skipNewlines()
-            if let value = parseExpressionWithBindings(bindings) {
+            if let value = parseExpression(bindings: bindings) {
                 params.append(value)
             }
         }
@@ -706,51 +675,24 @@ private struct ParserState {
     }
 
     /// Parse an arithmetic expression with standard precedence.
-    mutating func parseExpression() -> Double? {
-        parseAdditive()
-    }
-
-    /// Parse expression resolving identifiers against parameter bindings.
-    mutating func parseExpressionWithBindings(_ bindings: [String: Double]) -> Double? {
-        parseAdditiveWithBindings(bindings)
+    mutating func parseExpression(bindings: [String: Double]? = nil) -> Double? {
+        parseAdditive(bindings: bindings)
     }
 
     /// Parse additive expression (+ and -).
-    mutating func parseAdditive() -> Double? {
-        guard var left = parseMultiplicative() else { return nil }
+    mutating func parseAdditive(bindings: [String: Double]? = nil) -> Double? {
+        guard var left = parseMultiplicative(bindings: bindings) else { return nil }
         skipNewlines()
         while true {
             if isSymbol("+") {
                 _ = advance()
                 skipNewlines()
-                guard let right = parseMultiplicative() else { return nil }
+                guard let right = parseMultiplicative(bindings: bindings) else { return nil }
                 left += right
             } else if isSymbol("-") {
                 _ = advance()
                 skipNewlines()
-                guard let right = parseMultiplicative() else { return nil }
-                left -= right
-            } else {
-                break
-            }
-        }
-        return left
-    }
-
-    /// Parse additive expression with bindings.
-    mutating func parseAdditiveWithBindings(_ bindings: [String: Double]) -> Double? {
-        guard var left = parseMultiplicativeWithBindings(bindings) else { return nil }
-        skipNewlines()
-        while true {
-            if isSymbol("+") {
-                _ = advance()
-                skipNewlines()
-                guard let right = parseMultiplicativeWithBindings(bindings) else { return nil }
-                left += right
-            } else if isSymbol("-") {
-                _ = advance()
-                skipNewlines()
-                guard let right = parseMultiplicativeWithBindings(bindings) else { return nil }
+                guard let right = parseMultiplicative(bindings: bindings) else { return nil }
                 left -= right
             } else {
                 break
@@ -760,41 +702,19 @@ private struct ParserState {
     }
 
     /// Parse multiplicative expression (* and /).
-    mutating func parseMultiplicative() -> Double? {
-        guard var left = parseUnary() else { return nil }
+    mutating func parseMultiplicative(bindings: [String: Double]? = nil) -> Double? {
+        guard var left = parseUnary(bindings: bindings) else { return nil }
         skipNewlines()
         while true {
             if isSymbol("*") {
                 _ = advance()
                 skipNewlines()
-                guard let right = parseUnary() else { return nil }
+                guard let right = parseUnary(bindings: bindings) else { return nil }
                 left *= right
             } else if isSymbol("/") {
                 _ = advance()
                 skipNewlines()
-                guard let right = parseUnary() else { return nil }
-                left /= right
-            } else {
-                break
-            }
-        }
-        return left
-    }
-
-    /// Parse multiplicative expression with bindings.
-    mutating func parseMultiplicativeWithBindings(_ bindings: [String: Double]) -> Double? {
-        guard var left = parseUnaryWithBindings(bindings) else { return nil }
-        skipNewlines()
-        while true {
-            if isSymbol("*") {
-                _ = advance()
-                skipNewlines()
-                guard let right = parseUnaryWithBindings(bindings) else { return nil }
-                left *= right
-            } else if isSymbol("/") {
-                _ = advance()
-                skipNewlines()
-                guard let right = parseUnaryWithBindings(bindings) else { return nil }
+                guard let right = parseUnary(bindings: bindings) else { return nil }
                 left /= right
             } else {
                 break
@@ -804,41 +724,24 @@ private struct ParserState {
     }
 
     /// Parse unary expression (unary minus).
-    mutating func parseUnary() -> Double? {
+    mutating func parseUnary(bindings: [String: Double]? = nil) -> Double? {
         skipNewlines()
         if isSymbol("-") {
             _ = advance()
             skipNewlines()
-            guard let operand = parseUnary() else { return nil }
+            guard let operand = parseUnary(bindings: bindings) else { return nil }
             return -operand
         }
         if isSymbol("+") {
             _ = advance()
             skipNewlines()
-            return parseUnary()
+            return parseUnary(bindings: bindings)
         }
-        return parsePrimary()
-    }
-
-    /// Parse unary expression with bindings.
-    mutating func parseUnaryWithBindings(_ bindings: [String: Double]) -> Double? {
-        skipNewlines()
-        if isSymbol("-") {
-            _ = advance()
-            skipNewlines()
-            guard let operand = parseUnaryWithBindings(bindings) else { return nil }
-            return -operand
-        }
-        if isSymbol("+") {
-            _ = advance()
-            skipNewlines()
-            return parseUnaryWithBindings(bindings)
-        }
-        return parsePrimaryWithBindings(bindings)
+        return parsePrimary(bindings: bindings)
     }
 
     /// Parse primary expression (numbers, pi, functions, parenthesized expressions).
-    mutating func parsePrimary() -> Double? {
+    mutating func parsePrimary(bindings: [String: Double]? = nil) -> Double? {
         skipNewlines()
         switch current {
         case let .integer(v):
@@ -852,75 +755,36 @@ private struct ParserState {
             return Double.pi
         case .identifier("sin"):
             _ = advance()
-            return parseFunctionCall(sin)
+            return parseFunctionCall(sin, bindings: bindings)
         case .identifier("cos"):
             _ = advance()
-            return parseFunctionCall(cos)
+            return parseFunctionCall(cos, bindings: bindings)
         case .identifier("tan"):
             _ = advance()
-            return parseFunctionCall(tan)
+            return parseFunctionCall(tan, bindings: bindings)
         case .identifier("exp"):
             _ = advance()
-            return parseFunctionCall(exp)
+            return parseFunctionCall(exp, bindings: bindings)
         case .identifier("ln"):
             _ = advance()
-            return parseFunctionCall(log)
+            return parseFunctionCall(log, bindings: bindings)
         case .identifier("sqrt"):
             _ = advance()
-            return parseFunctionCall(sqrt)
-        case .symbol("("):
-            _ = advance()
-            let value = parseExpression()
-            skipNewlines()
-            _ = expectSymbol(")")
-            return value
-        default:
+            return parseFunctionCall(sqrt, bindings: bindings)
+        case let .identifier(name):
+            if let bindings {
+                _ = advance()
+                if let value = bindings[name] {
+                    return value
+                }
+                addError("unbound parameter '\(name)'")
+                return 0.0
+            }
             addError("unexpected token in expression: \(current)")
             return nil
-        }
-    }
-
-    /// Parse primary expression with bindings.
-    mutating func parsePrimaryWithBindings(_ bindings: [String: Double]) -> Double? {
-        skipNewlines()
-        switch current {
-        case let .integer(v):
-            _ = advance()
-            return Double(v)
-        case let .real(v):
-            _ = advance()
-            return v
-        case .identifier("pi"):
-            _ = advance()
-            return Double.pi
-        case .identifier("sin"):
-            _ = advance()
-            return parseFunctionCallWithBindings(sin, bindings)
-        case .identifier("cos"):
-            _ = advance()
-            return parseFunctionCallWithBindings(cos, bindings)
-        case .identifier("tan"):
-            _ = advance()
-            return parseFunctionCallWithBindings(tan, bindings)
-        case .identifier("exp"):
-            _ = advance()
-            return parseFunctionCallWithBindings(exp, bindings)
-        case .identifier("ln"):
-            _ = advance()
-            return parseFunctionCallWithBindings(log, bindings)
-        case .identifier("sqrt"):
-            _ = advance()
-            return parseFunctionCallWithBindings(sqrt, bindings)
-        case let .identifier(name):
-            _ = advance()
-            if let value = bindings[name] {
-                return value
-            }
-            addError("unbound parameter '\(name)'")
-            return 0.0
         case .symbol("("):
             _ = advance()
-            let value = parseExpressionWithBindings(bindings)
+            let value = parseExpression(bindings: bindings)
             skipNewlines()
             _ = expectSymbol(")")
             return value
@@ -931,30 +795,17 @@ private struct ParserState {
     }
 
     /// Parse a function call like sin(expr).
-    mutating func parseFunctionCall(_ fn: (Double) -> Double) -> Double? {
+    mutating func parseFunctionCall(_ fn: (Double) -> Double, bindings: [String: Double]? = nil) -> Double? {
         skipNewlines()
         guard expectSymbol("(") else { return nil }
-        guard let arg = parseExpression() else { return nil }
-        skipNewlines()
-        _ = expectSymbol(")")
-        return fn(arg)
-    }
-
-    /// Parse a function call with parameter bindings.
-    mutating func parseFunctionCallWithBindings(
-        _ fn: (Double) -> Double,
-        _ bindings: [String: Double],
-    ) -> Double? {
-        skipNewlines()
-        guard expectSymbol("(") else { return nil }
-        guard let arg = parseExpressionWithBindings(bindings) else { return nil }
+        guard let arg = parseExpression(bindings: bindings) else { return nil }
         skipNewlines()
         _ = expectSymbol(")")
         return fn(arg)
     }
 
     /// Parse a single qubit argument (register[index]).
-    mutating func parseQubitArg() -> (register: String, index: Int)? {
+    mutating func parseQubitArg() -> QubitRef? {
         skipNewlines()
         guard let name = expectIdentifier() else { return nil }
         skipNewlines()
@@ -967,8 +818,8 @@ private struct ParserState {
     }
 
     /// Parse comma-separated list of qubit arguments.
-    mutating func parseQubitArgList() -> [(register: String, index: Int)] {
-        var args: [(register: String, index: Int)] = []
+    mutating func parseQubitArgList() -> [QubitRef] {
+        var args: [QubitRef] = []
         skipNewlines()
         guard let first = parseQubitArg() else { return args }
         args.append(first)
@@ -1009,20 +860,12 @@ private struct ParserState {
         let qubitCount = max(totalQubits, 1)
         var circuit = QuantumCircuit(qubits: qubitCount)
 
-        var circuitOps: [CircuitOperation] = []
-        circuitOps.reserveCapacity(operations.count)
-
         for op in operations {
             if op.qubits.count == 1, op.qubits[0] < 0 {
-                let resetQubit = -1 - op.qubits[0]
-                circuitOps.append(.reset(qubit: resetQubit))
+                circuit.addOperation(.reset(qubit: -1 - op.qubits[0]))
             } else {
-                circuitOps.append(.gate(op.gate, qubits: op.qubits))
+                circuit.addOperation(.gate(op.gate, qubits: op.qubits))
             }
-        }
-
-        for circuitOp in circuitOps {
-            circuit.addOperation(circuitOp)
         }
 
         return ParseResult(circuit: circuit, diagnostics: diagnostics)

@@ -58,12 +58,14 @@ public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible 
     ///   - constraint: Optional constraint for the parameter
     /// - Complexity: O(1)
     /// - Precondition: Name must be non-empty
+    @inlinable
     public init(name: String, constraint: ParameterConstraint? = nil) {
         ValidationUtilities.validateNonEmptyString(name, name: "Parameter name")
         self.name = name
         self.constraint = constraint
     }
 
+    /// Parameter name as textual representation
     @inlinable
     public var description: String { name }
 }
@@ -193,6 +195,7 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
     /// - Returns: Evaluated numerical value
     /// - Complexity: O(1) dictionary lookup for simple cases, O(n) for expressions
     /// - Precondition: Symbolic parameters must have binding in dictionary
+    @_effects(readonly)
     @_optimize(speed)
     @inlinable
     public func evaluate(using bindings: [String: Double]) -> Double {
@@ -201,15 +204,26 @@ public enum ParameterValue: Equatable, Hashable, Sendable, CustomStringConvertib
             return v
         case let .parameter(p):
             ValidationUtilities.validateParameterBinding(p.name, in: bindings)
+            // Safe: validateParameterBinding ensures key exists
             return bindings[p.name]!
         case let .negatedParameter(p):
             ValidationUtilities.validateParameterBinding(p.name, in: bindings)
+            // Safe: validateParameterBinding ensures key exists
             return -bindings[p.name]!
         case let .expression(expr):
             return expr.evaluate(using: bindings)
         }
     }
 
+    /// Textual representation showing parameter name, formatted value, or expression
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let symbolic = ParameterValue.parameter(Parameter(name: "theta"))
+    /// let concrete = ParameterValue.value(3.14159)
+    /// print(symbolic.description)  // "theta"
+    /// print(concrete.description)  // "3.142"
+    /// ```
     @inlinable
     public var description: String {
         switch self {

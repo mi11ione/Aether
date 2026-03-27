@@ -27,17 +27,16 @@
 /// ```
 public extension Observable {
     /// Thread-safe cache for expensive grouping computations.
-    ///
-    /// Uses Swift actor isolation to provide automatic serialization of cache access
-    /// without manual lock management. All methods are isolated to the actor, ensuring
-    /// thread-safe reads and writes.
     private actor GroupingCache {
+        /// Stores cached value alongside the terms used to compute it.
         private struct CacheEntry<T> {
             let terms: PauliTerms
             let value: T
         }
 
+        /// Cached QWC group results keyed by terms hash.
         private var qwcGroups: [Int: CacheEntry<[QWCGroup]>] = [:]
+        /// Cached unitary partition results keyed by terms hash.
         private var unitaryPartitions: [Int: CacheEntry<[UnitaryPartition]>] = [:]
 
         /// Retrieve cached QWC groups if hash matches and terms are equal.
@@ -92,13 +91,16 @@ public extension Observable {
         ) -> Bool {
             guard lhs.count == rhs.count else { return false }
             for i in 0 ..< lhs.count {
-                if lhs[i].coefficient != rhs[i].coefficient { return false }
-                if lhs[i].pauliString != rhs[i].pauliString { return false }
+                let l = lhs[i]
+                let r = rhs[i]
+                if l.coefficient != r.coefficient { return false }
+                if l.pauliString != r.pauliString { return false }
             }
             return true
         }
     }
 
+    /// Shared actor-isolated cache for grouping results.
     private static let cache = GroupingCache()
 
     // MARK: - Cache Key Generation
@@ -109,8 +111,8 @@ public extension Observable {
         var hasher = 0
         for i in 0 ..< terms.count {
             let bits = terms[i].coefficient.bitPattern
-            hasher ^= Int(truncatingIfNeeded: bits) &* 31
-            hasher ^= terms[i].pauliString.hashValue &* 17
+            hasher = hasher &* 31 &+ Int(truncatingIfNeeded: bits)
+            hasher = hasher &* 17 &+ terms[i].pauliString.hashValue
         }
         return hasher
     }
@@ -133,7 +135,7 @@ public extension Observable {
     ///     let basis = group.measurementBasis
     /// }
     /// ```
-    @_eagerMove
+    @_optimize(speed)
     func qwcGroups() async -> [QWCGroup] {
         let hash: Int = termsHash()
 
@@ -157,10 +159,11 @@ public extension Observable {
     ///
     /// **Example:**
     /// ```swift
-    /// let partitions = await hamiltonian.unitaryPartitions()
+    /// let H = Observable(terms: [(1.0, PauliString(.z(0))), (0.5, PauliString(.x(1)))])
+    /// let partitions = await H.unitaryPartitions()
     /// print("Reduced to \(partitions.count) measurement circuits")
     /// ```
-    @_eagerMove
+    @_optimize(speed)
     func unitaryPartitions() async -> [UnitaryPartition] {
         let hash = termsHash()
 
@@ -180,15 +183,25 @@ public extension Observable {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(1.0, PauliString(.z(0)))])
+    /// let _ = await H.qwcGroups()
     /// await Observable.clearGroupingCaches()
     /// ```
+    ///
+    /// - Complexity: O(1)
     static func clearGroupingCaches() async { await cache.clear() }
 
     // MARK: - Measurement Strategies
 
     /// Strategy for measuring Hamiltonian expectation values.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let strategy = Observable.MeasurementStrategy.qwcGrouping
+    /// let count = await hamiltonian.circuitCount(for: strategy)
+    /// ```
     @frozen
-    enum MeasurementStrategy: Sendable {
+    public enum MeasurementStrategy: Sendable {
         /// Measure each term independently without optimization.
         case termByTerm
 
@@ -210,15 +223,17 @@ public extension Observable {
     ///
     /// **Example:**
     /// ```swift
-    /// let circuitCount = await hamiltonian.measureCircuitCount(for: .qwcGrouping)
-    /// print("Need \(circuitCount) circuits")
+    /// let H = Observable(terms: [(1.0, PauliString(.z(0))), (0.5, PauliString(.x(1)))])
+    /// let count = await H.circuitCount(for: .qwcGrouping)
+    /// print("Need \(count) circuits")
     /// ```
-    func measureCircuitCount(for strategy: MeasurementStrategy) async -> Int {
+    @_optimize(speed)
+    func circuitCount(for strategy: MeasurementStrategy) async -> Int {
         switch strategy {
         case .termByTerm: terms.count
         case .qwcGrouping: await qwcGroups().count
         case .unitaryPartitioning: await unitaryPartitions().count
-        case .automatic: await measureCircuitCount(for: selectOptimalStrategy())
+        case .automatic: await circuitCount(for: selectOptimalStrategy())
         }
     }
 
@@ -256,6 +271,7 @@ public extension Observable {
     ///     state: currentState
     /// )
     /// ```
+    @_optimize(speed)
     @_eagerMove
     func allocateShots(
         totalShots: Int,
@@ -286,7 +302,7 @@ public extension Observable {
     ///     state: currentState
     /// )
     /// ```
-    @_eagerMove
+    @_optimize(speed)
     func allocateShotsForGroups(
         totalShots: Int,
         minShotsPerTerm: Int = 10,
@@ -300,8 +316,14 @@ public extension Observable {
     // MARK: - Comprehensive Statistics
 
     /// Statistics describing measurement optimization effectiveness.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let stats = await hamiltonian.optimizationStatistics()
+    /// print("QWC reduces circuits by \(stats.qwcReduction)x")
+    /// ```
     @frozen
-    struct MeasurementOptimizationStats: CustomStringConvertible {
+    public struct MeasurementOptimizationStats: CustomStringConvertible {
         /// Number of Hamiltonian terms.
         public let numTerms: Int
 
@@ -323,13 +345,14 @@ public extension Observable {
         /// Estimated speedup from unitary partitioning (if computed).
         public let estimatedSpeedupUnitary: Double?
 
+        /// Human-readable summary of measurement optimization metrics.
         public var description: String {
             var text = """
             Measurement Optimization Statistics:
             - Hamiltonian terms: \(numTerms)
             - QWC groups: \(numQWCGroups)
-            - QWC reduction: \(String(format: "%.1f", qwcReduction))x
-            - Estimated speedup (QWC): \(String(format: "%.1f", estimatedSpeedupQWC))x
+            - QWC reduction: \(Double(Int(qwcReduction * 10)) / 10.0)x
+            - Estimated speedup (QWC): \(Double(Int(estimatedSpeedupQWC * 10)) / 10.0)x
             """
 
             if let numPartitions = numUnitaryPartitions,
@@ -339,8 +362,8 @@ public extension Observable {
                 text += """
 
                 - Unitary partitions: \(numPartitions)
-                - Unitary reduction: \(String(format: "%.1f", unitaryRed))x
-                - Estimated speedup (Unitary): \(String(format: "%.1f", unitarySpeedup))x
+                - Unitary reduction: \(Double(Int(unitaryRed * 10)) / 10.0)x
+                - Estimated speedup (Unitary): \(Double(Int(unitarySpeedup * 10)) / 10.0)x
                 """
             }
 
@@ -359,7 +382,7 @@ public extension Observable {
     /// let stats = await hamiltonian.optimizationStatistics()
     /// print("QWC reduces circuits by \(stats.qwcReduction)x")
     /// ```
-    @_eagerMove
+    @_optimize(speed)
     func optimizationStatistics(includeUnitary: Bool = false) async -> MeasurementOptimizationStats {
         let numTerms: Int = terms.count
         let groups: [QWCGroup] = await qwcGroups()

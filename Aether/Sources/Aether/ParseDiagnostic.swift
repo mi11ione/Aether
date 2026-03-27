@@ -62,11 +62,18 @@ public struct ParseDiagnostic: Sendable, Equatable, CustomStringConvertible {
 
     /// Create a parse diagnostic with source location, message, and severity.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let diag = ParseDiagnostic(line: 5, column: 12, message: "unknown gate", severity: .error)
+    /// print(diag.severity == .error)  // true
+    /// ```
+    ///
     /// - Parameter line: Line number in source (1-based)
     /// - Parameter column: Column number in source (1-based)
     /// - Parameter message: Human-readable diagnostic message
     /// - Parameter severity: Diagnostic severity level
     /// - Complexity: O(1)
+    @inlinable
     public init(line: Int, column: Int, message: String, severity: Severity) {
         self.line = line
         self.column = column
@@ -125,9 +132,17 @@ public struct ParseResult: Sendable {
 
     /// Create a parse result with circuit and diagnostics.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let circuit = QuantumCircuit(qubits: 2)
+    /// let result = ParseResult(circuit: circuit, diagnostics: [])
+    /// print(result.succeeded)  // true
+    /// ```
+    ///
     /// - Parameter circuit: Parsed quantum circuit
     /// - Parameter diagnostics: Diagnostics collected during parsing
     /// - Complexity: O(1)
+    @inlinable
     public init(circuit: QuantumCircuit, diagnostics: [ParseDiagnostic]) {
         self.circuit = circuit
         self.diagnostics = diagnostics

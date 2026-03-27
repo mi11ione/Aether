@@ -74,14 +74,6 @@ private struct GateDefinition {
     let bodyTokens: [QASMToken]
 }
 
-/// Subroutine definition with parameter names, qubit bindings, and body tokens.
-private struct SubroutineDefinition {
-    let parameterNames: [String]
-    let qubitNames: [String]
-    let qubitSizes: [Int]
-    let bodyTokens: [QASMToken]
-}
-
 /// Gate modifier type for controlled, inverse, and power operations.
 private enum GateModifier {
     case ctrl(Int)
@@ -101,34 +93,36 @@ private struct ParserState {
     var totalBits: Int = 0
     var operations: [CircuitOperation] = []
     var gateDefinitions: [String: GateDefinition] = [:]
-    var subroutines: [String: SubroutineDefinition] = [:]
     var linePositions: [Int]
 
-    init(tokens: [QASMToken]) {
+    init(tokens: [QASMToken], skipLineComputation: Bool = false) {
         self.tokens = tokens
-        linePositions = Self.computeLinePositions(tokens)
+        linePositions = skipLineComputation ? [] : Self.computeLinePositions(tokens)
     }
 
     /// Compute a per-token array of source line numbers.
     private static func computeLinePositions(_ tokens: [QASMToken]) -> [Int] {
-        var positions = [Int]()
-        positions.reserveCapacity(tokens.count)
-        var line = 1
-        for token in tokens {
-            positions.append(line)
-            if token == .newline { line += 1 }
+        let count = tokens.count
+        return [Int](unsafeUninitializedCapacity: count) { buffer, initializedCount in
+            var line = 1
+            for i in 0 ..< count {
+                buffer[i] = line
+                if tokens[i] == .newline { line += 1 }
+            }
+            initializedCount = count
         }
-        return positions
     }
 }
 
 /// Return the token at the current parser position.
+@inline(__always)
 private func currentToken(_ state: inout ParserState) -> QASMToken {
     guard state.position < state.tokens.count else { return .eof }
     return state.tokens[state.position]
 }
 
 /// Return the source line number at the current parser position.
+@inline(__always)
 private func currentLine(_ state: inout ParserState) -> Int {
     guard state.position < state.linePositions.count else { return 1 }
     return state.linePositions[state.position]
@@ -136,6 +130,7 @@ private func currentLine(_ state: inout ParserState) -> Int {
 
 /// Consume the current token and advance the parser position.
 @discardableResult
+@inline(__always)
 private func advance(_ state: inout ParserState) -> QASMToken {
     let token = currentToken(&state)
     if state.position < state.tokens.count { state.position += 1 }
@@ -143,6 +138,7 @@ private func advance(_ state: inout ParserState) -> QASMToken {
 }
 
 /// Skip over any consecutive newline tokens.
+@inline(__always)
 private func skipNewlines(_ state: inout ParserState) {
     while currentToken(&state) == .newline {
         advance(&state)
@@ -439,12 +435,12 @@ private func parseGateDefinition(_ state: inout ParserState) {
     )
 }
 
-/// Parse a subroutine definition with parameter declarations and qubit arguments.
+/// Parse a subroutine definition and skip its body.
 private func parseSubroutineDefinition(_ state: inout ParserState) {
     advance(&state)
     skipNewlines(&state)
 
-    guard case let .identifier(name) = currentToken(&state) else {
+    guard case .identifier = currentToken(&state) else {
         addError(&state, "expected subroutine name")
         synchronize(&state)
         return
@@ -452,29 +448,23 @@ private func parseSubroutineDefinition(_ state: inout ParserState) {
     advance(&state)
     skipNewlines(&state)
 
-    var paramNames: [String] = []
     if case .symbol("(") = currentToken(&state) {
         advance(&state)
-        paramNames = parseParameterDeclList(&state)
+        _ = parseParameterDeclList(&state)
         expect(&state, symbol: ")")
     }
 
     skipNewlines(&state)
-    var qubitNames: [String] = []
-    var qubitSizes: [Int] = []
     while case .keyword("qubit") = currentToken(&state) {
         advance(&state)
-        var size = 1
         if case .symbol("[") = currentToken(&state) {
             advance(&state)
-            size = parseIntegerLiteral(&state)
+            _ = parseIntegerLiteral(&state)
             expect(&state, symbol: "]")
         }
         skipNewlines(&state)
-        if case let .identifier(qName) = currentToken(&state) {
+        if case .identifier = currentToken(&state) {
             advance(&state)
-            qubitNames.append(qName)
-            qubitSizes.append(size)
         }
         skipNewlines(&state)
         if case .symbol(",") = currentToken(&state) {
@@ -484,16 +474,8 @@ private func parseSubroutineDefinition(_ state: inout ParserState) {
     }
 
     skipNewlines(&state)
-
     skipArrowIfPresent(&state)
-
-    let bodyTokens = parseBracedBody(&state)
-    state.subroutines[name] = SubroutineDefinition(
-        parameterNames: paramNames,
-        qubitNames: qubitNames,
-        qubitSizes: qubitSizes,
-        bodyTokens: bodyTokens,
-    )
+    _ = parseBracedBody(&state)
 }
 
 /// Skip a return-type arrow token sequence if present.
@@ -715,12 +697,6 @@ private func parseOpaqueDeclaration(_ state: inout ParserState) {
 
 /// Parse an identifier-led statement as either a gate call or an assignment.
 private func parseIdentifierStatement(_ state: inout ParserState) {
-    guard case .identifier = currentToken(&state) else {
-        addError(&state, "expected identifier")
-        synchronize(&state)
-        return
-    }
-
     let savedPos = state.position
     advance(&state)
     skipNewlines(&state)
@@ -852,7 +828,7 @@ private func parseGateCall(_ state: inout ParserState, modifiers: [GateModifier]
         return
     }
 
-    let resolvedGate = resolveGate(gateName, params: params, state: &state)
+    let resolvedGate = resolveGate(gateName, params: params)
 
     guard let baseGateResolved = resolvedGate else {
         addError(&state, "unknown gate '\(gateName)'")
@@ -860,12 +836,14 @@ private func parseGateCall(_ state: inout ParserState, modifiers: [GateModifier]
     }
 
     var gate = baseGateResolved
+    var hasCtrl = false
 
     for modifier in modifiers.reversed() {
         switch modifier {
         case .inv:
             gate = gate.inverse
         case let .ctrl(count):
+            hasCtrl = true
             if count == 1, qubitArgs.count >= 2 {
                 let controlQubits = [qubitArgs[0]]
                 gate = .controlled(gate: gate, controls: controlQubits)
@@ -874,10 +852,15 @@ private func parseGateCall(_ state: inout ParserState, modifiers: [GateModifier]
                 gate = .controlled(gate: gate, controls: controlQubits)
             }
         case let .negctrl(count):
+            hasCtrl = true
             addWarning(&state, "negctrl modifier approximated as ctrl")
             let controlQubits = Array(qubitArgs.prefix(count))
             gate = .controlled(gate: gate, controls: controlQubits)
         case let .pow(exponent):
+            guard exponent.isFinite else {
+                addWarning(&state, "non-finite pow exponent ignored")
+                continue
+            }
             let intExp = Int(exponent)
             if exponent == Double(intExp), intExp > 0 {
                 let baseGate = gate
@@ -890,7 +873,6 @@ private func parseGateCall(_ state: inout ParserState, modifiers: [GateModifier]
         }
     }
 
-    let hasCtrl = modifiers.contains { if case .ctrl = $0 { return true }; if case .negctrl = $0 { return true }; return false }
     if hasCtrl {
         let (baseGate, controls) = gate.flattenControlled()
         let targetQubits = qubitArgs.filter { !controls.contains($0) }
@@ -902,17 +884,16 @@ private func parseGateCall(_ state: inout ParserState, modifiers: [GateModifier]
 }
 
 /// Resolve a gate name to a parameterized QuantumGate using the gate name mapping.
-private func resolveGate(_ name: String, params: [Double], state _: inout ParserState) -> QuantumGate? {
-    if let templateGate = GateNameMapping.gate(forQASMName: name, version: .v3) {
-        return applyParameters(to: templateGate, params: params)
+@_effects(readonly)
+private func resolveGate(_ name: String, params: [Double]) -> QuantumGate? {
+    guard let templateGate = GateNameMapping.gate(forQASMName: name, version: .v3) else {
+        return nil
     }
-    if let templateGate = GateNameMapping.gate(forQASMName: name, version: .v2) {
-        return applyParameters(to: templateGate, params: params)
-    }
-    return nil
+    return applyParameters(to: templateGate, params: params)
 }
 
 /// Apply numeric parameter values to a template gate.
+@_effects(readonly)
 private func applyParameters(to gate: QuantumGate, params: [Double]) -> QuantumGate {
     guard !params.isEmpty else { return gate }
 
@@ -961,17 +942,17 @@ private func expandGateDefinition(
     params: [Double],
     qubits: [Int],
 ) {
-    var paramBindings: [String: Double] = [:]
-    for (i, pName) in definition.parameterNames.enumerated() where i < params.count {
-        paramBindings[pName] = params[i]
-    }
+    let paramBindings = Dictionary(uniqueKeysWithValues: zip(
+        definition.parameterNames.prefix(params.count),
+        params.prefix(definition.parameterNames.count)
+    ))
 
-    var qubitBindings: [String: [Int]] = [:]
-    for (i, qName) in definition.qubitNames.enumerated() where i < qubits.count {
-        qubitBindings[qName] = [qubits[i]]
-    }
+    let qubitBindings = Dictionary(uniqueKeysWithValues: zip(
+        definition.qubitNames.prefix(qubits.count),
+        qubits.prefix(definition.qubitNames.count).map { [$0] }
+    ))
 
-    var subState = ParserState(tokens: definition.bodyTokens)
+    var subState = ParserState(tokens: definition.bodyTokens, skipLineComputation: true)
     subState.qubitDeclarations = state.qubitDeclarations
     subState.bitDeclarations = state.bitDeclarations
     subState.totalQubits = state.totalQubits
@@ -992,8 +973,7 @@ private func expandGateDefinition(
         var innerParams: [Double] = []
         if case .symbol("(") = currentToken(&subState) {
             advance(&subState)
-            let rawParams = parseExpressionListWithBindings(&subState, bindings: paramBindings)
-            innerParams = rawParams
+            innerParams = parseExpressionListWithBindings(&subState, bindings: paramBindings)
             expect(&subState, symbol: ")")
         }
 
@@ -1031,7 +1011,7 @@ private func expandGateDefinition(
         }
         if case .symbol(";") = currentToken(&subState) { advance(&subState) }
 
-        if let resolved = resolveGate(innerGateName, params: innerParams, state: &state) {
+        if let resolved = resolveGate(innerGateName, params: innerParams) {
             state.operations.append(.gate(resolved, qubits: innerQubits))
         }
     }
@@ -1040,6 +1020,7 @@ private func expandGateDefinition(
 /// Parse a comma-separated list of qubit arguments into resolved indices.
 private func parseQubitArgList(_ state: inout ParserState) -> [Int] {
     var qubits: [Int] = []
+    qubits.reserveCapacity(4)
     skipNewlines(&state)
 
     while true {
@@ -1062,13 +1043,7 @@ private func parseQubitArgList(_ state: inout ParserState) -> [Int] {
                 }
             } else {
                 if let decl = state.qubitDeclarations[name] {
-                    if decl.size == 1 {
-                        qubits.append(decl.offset)
-                    } else {
-                        for i in 0 ..< decl.size {
-                            qubits.append(decl.offset + i)
-                        }
-                    }
+                    qubits.append(contentsOf: decl.offset ..< decl.offset + decl.size)
                 } else {
                     addError(&state, "undeclared qubit register '\(name)'")
                 }

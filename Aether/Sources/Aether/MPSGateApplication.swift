@@ -11,36 +11,58 @@
 /// **Example:**
 /// ```swift
 /// var mps = MatrixProductState(qubits: 10, maxBondDimension: 32)
-/// MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-/// MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
-/// MPSGateApplication.applyToffoli(control1: 0, control2: 1, target: 2, mps: &mps)
+/// MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+/// MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
+/// MPSGateApplication.apply(.toffoli, to: [0, 1, 2], mps: &mps)
 /// ```
 ///
 /// - SeeAlso: ``MatrixProductState``
 /// - SeeAlso: ``MPSTensor``
 /// - SeeAlso: ``SVDDecomposition``
 public enum MPSGateApplication {
-    /// Apply single-qubit gate to MPS site.
+    /// Apply quantum gate to MPS at specified qubit indices.
     ///
-    /// Contracts gate 2x2 matrix with physical index of tensor at specified site.
-    /// Bond dimensions remain unchanged since single-qubit gates do not increase entanglement.
-    /// Computes A'[alpha,i',beta] = Sum_i U[i',i] * A[alpha,i,beta] for all bond indices.
+    /// Routes to single-qubit, two-qubit, or Toffoli implementation based on qubit count.
+    /// Single-qubit gates preserve bond dimension via O(chi^2) contraction. Two-qubit gates
+    /// perform SVD truncation at O(chi^3). Non-adjacent two-qubit gates use SWAP networks.
     ///
     /// **Example:**
     /// ```swift
-    /// var mps = MatrixProductState(qubits: 5, maxBondDimension: 16)
-    /// MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-    /// MPSGateApplication.applySingleQubitGate(.rotationY(.pi / 4), to: 2, mps: &mps)
+    /// var mps = MatrixProductState(qubits: 10, maxBondDimension: 32)
+    /// MPSGateApplication.apply(.hadamard, to: [0], mps: &mps)
+    /// MPSGateApplication.apply(.cnot, to: [0, 1], mps: &mps)
+    /// MPSGateApplication.apply(.toffoli, to: [0, 1, 2], mps: &mps)
     /// ```
     ///
     /// - Parameters:
-    ///   - gate: Single-qubit quantum gate to apply
-    ///   - site: Site index in MPS (0 to qubits-1)
+    ///   - gate: Quantum gate to apply
+    ///   - qubits: Target qubit indices (1 for single-qubit, 2 for two-qubit, 3 for Toffoli)
     ///   - mps: Matrix Product State to modify
-    /// - Complexity: O(chi^2) where chi is the bond dimension at the site
-    /// - Precondition: gate must be single-qubit, site must be valid index
+    /// - Complexity: O(chi^2) single-qubit, O(chi^3) two-qubit, O(d * chi^3) non-adjacent
+    /// - Precondition: 0 <= qubit < mps.qubits for all qubit indices
+    /// - Precondition: All qubit indices must be distinct
+    /// - Precondition: qubits.count must match gate qubit requirement (1, 2, or 3)
     @_optimize(speed)
-    public static func applySingleQubitGate(
+    public static func apply(
+        _ gate: QuantumGate,
+        to qubits: [Int],
+        mps: inout MatrixProductState,
+    ) {
+        switch qubits.count {
+        case 1:
+            applySingleQubitGate(gate, to: qubits[0], mps: &mps)
+        case 2:
+            applyTwoQubitGate(gate, control: qubits[0], target: qubits[1], mps: &mps)
+        case 3:
+            applyToffoli(control1: qubits[0], control2: qubits[1], target: qubits[2], mps: &mps)
+        default:
+            ValidationUtilities.validateArrayCount(qubits, expected: gate.qubitsRequired, name: "Qubit array")
+        }
+    }
+
+    /// Contract gate 2x2 matrix with physical index of tensor at specified site.
+    @_optimize(speed)
+    private static func applySingleQubitGate(
         _ gate: QuantumGate,
         to site: Int,
         mps: inout MatrixProductState,
@@ -84,30 +106,9 @@ public enum MPSGateApplication {
         ))
     }
 
-    /// Apply two-qubit gate to MPS sites.
-    ///
-    /// For adjacent sites: contracts tensors, applies 4x4 gate matrix, performs SVD decomposition
-    /// with truncation to maxBondDimension, and splits back into two tensors.
-    /// For non-adjacent sites: uses SWAP network to bring qubits adjacent, applies gate, then
-    /// SWAPs back to restore qubit ordering.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// var mps = MatrixProductState(qubits: 5, maxBondDimension: 32)
-    /// MPSGateApplication.applySingleQubitGate(.hadamard, to: 0, mps: &mps)
-    /// MPSGateApplication.applyTwoQubitGate(.cnot, control: 0, target: 1, mps: &mps)
-    /// MPSGateApplication.applyTwoQubitGate(.cz, control: 0, target: 3, mps: &mps)
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - gate: Two-qubit quantum gate to apply
-    ///   - control: Control qubit index (first qubit for symmetric gates)
-    ///   - target: Target qubit index (second qubit for symmetric gates)
-    ///   - mps: Matrix Product State to modify
-    /// - Complexity: O(chi^3) for adjacent sites, O(d * chi^3) for distance d apart
-    /// - Precondition: gate must be two-qubit, control and target must be distinct valid indices
+    /// Route two-qubit gate to adjacent or non-adjacent implementation.
     @_optimize(speed)
-    public static func applyTwoQubitGate(
+    private static func applyTwoQubitGate(
         _ gate: QuantumGate,
         control: Int,
         target: Int,
@@ -129,29 +130,9 @@ public enum MPSGateApplication {
         }
     }
 
-    /// Apply Toffoli gate via decomposition into two-qubit gates.
-    ///
-    /// Decomposes Toffoli (CCNOT) into a sequence of CNOT, T, T-dagger, and Hadamard gates
-    /// following the standard decomposition. This allows application to MPS without requiring
-    /// three-site tensor contraction.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// var mps = MatrixProductState(qubits: 5, maxBondDimension: 32)
-    /// MPSGateApplication.applySingleQubitGate(.pauliX, to: 0, mps: &mps)
-    /// MPSGateApplication.applySingleQubitGate(.pauliX, to: 1, mps: &mps)
-    /// MPSGateApplication.applyToffoli(control1: 0, control2: 1, target: 2, mps: &mps)
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - control1: First control qubit index
-    ///   - control2: Second control qubit index
-    ///   - target: Target qubit index
-    ///   - mps: Matrix Product State to modify
-    /// - Complexity: O(d * chi^3) where d is max distance between qubits
-    /// - Precondition: All qubit indices must be distinct and valid
+    /// Decompose Toffoli into CNOT, T, T-dagger, and Hadamard sequence.
     @_optimize(speed)
-    public static func applyToffoli(
+    private static func applyToffoli(
         control1: Int,
         control2: Int,
         target: Int,
@@ -179,6 +160,7 @@ public enum MPSGateApplication {
         applyTwoQubitGate(.cnot, control: control1, target: control2, mps: &mps)
     }
 
+    /// Contract two adjacent MPS tensors, apply 4x4 gate, and split via SVD truncation.
     @_optimize(speed)
     private static func applyAdjacentTwoQubitGate(
         _ gate: QuantumGate,
@@ -194,27 +176,28 @@ public enum MPSGateApplication {
         let chiM = tensorA.rightBondDimension
         let chiR = tensorB.rightBondDimension
 
-        var combined = [Complex<Double>](repeating: .zero, count: chiL * 2 * 2 * chiR)
-
-        for alpha in 0 ..< chiL {
-            for i in 0 ..< 2 {
-                for j in 0 ..< 2 {
-                    for gamma in 0 ..< chiR {
-                        var sum: Complex<Double> = .zero
-                        for beta in 0 ..< chiM {
-                            sum = sum + tensorA[alpha, i, beta] * tensorB[beta, j, gamma]
+        let combinedCount = chiL * 2 * 2 * chiR
+        var combined = [Complex<Double>](unsafeUninitializedCapacity: combinedCount) { buffer, count in
+            for alpha in 0 ..< chiL {
+                for i in 0 ..< 2 {
+                    for j in 0 ..< 2 {
+                        for gamma in 0 ..< chiR {
+                            var sum: Complex<Double> = .zero
+                            for beta in 0 ..< chiM {
+                                sum = sum + tensorA[alpha, i, beta] * tensorB[beta, j, gamma]
+                            }
+                            let idx = alpha * (4 * chiR) + i * (2 * chiR) + j * chiR + gamma
+                            buffer[idx] = sum
                         }
-                        let idx = alpha * (4 * chiR) + i * (2 * chiR) + j * chiR + gamma
-                        combined[idx] = sum
                     }
                 }
             }
+            count = combinedCount
         }
 
         let gateMatrix = gate.matrix()
-        var transformed = [Complex<Double>](repeating: .zero, count: chiL * 2 * 2 * chiR)
-
-        for alpha in 0 ..< chiL {
+        var transformed = [Complex<Double>](unsafeUninitializedCapacity: combinedCount) { buffer, count in
+            for alpha in 0 ..< chiL {
             for gamma in 0 ..< chiR {
                 for iPrime in 0 ..< 2 {
                     for jPrime in 0 ..< 2 {
@@ -229,10 +212,12 @@ public enum MPSGateApplication {
                             }
                         }
                         let outIdx = alpha * (4 * chiR) + iPrime * (2 * chiR) + jPrime * chiR + gamma
-                        transformed[outIdx] = sum
+                        buffer[outIdx] = sum
                     }
                 }
             }
+        }
+            count = combinedCount
         }
 
         let rows = chiL * 2
@@ -304,6 +289,7 @@ public enum MPSGateApplication {
         ))
     }
 
+    /// SWAP network to bring qubits adjacent, apply gate, then SWAP back.
     @_optimize(speed)
     private static func applyNonAdjacentTwoQubitGate(
         _ gate: QuantumGate,
@@ -326,6 +312,7 @@ public enum MPSGateApplication {
         }
     }
 
+    /// Apply SWAP gate between adjacent sites for qubit routing.
     @_optimize(speed)
     private static func applyAdjacentSwap(site: Int, mps: inout MatrixProductState) {
         applyAdjacentTwoQubitGate(.swap, leftSite: site, controlIsLeft: true, mps: &mps)
@@ -340,48 +327,47 @@ public enum MPSGateApplication {
 /// **Example:**
 /// ```swift
 /// var mps = MatrixProductState(qubits: 10, maxBondDimension: 32)
-/// mps.applySingleQubitGate(.hadamard, to: 0)
-/// mps.applyTwoQubitGate(.cnot, control: 0, target: 1)
+/// mps.apply(.hadamard, to: 0)
+/// mps.apply(.cnot, to: [0, 1])
 ///
 /// let result = mps
 ///     .applying(.hadamard, to: 2)
 ///     .applying(.cnot, to: [2, 3])
 /// ```
 public extension MatrixProductState {
+    /// Apply quantum gate to this MPS in place.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var mps = MatrixProductState(qubits: 5, maxBondDimension: 32)
+    /// mps.apply(.hadamard, to: [0])
+    /// mps.apply(.cnot, to: [0, 1])
+    /// mps.apply(.toffoli, to: [0, 1, 2])
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - gate: Quantum gate to apply
+    ///   - qubits: Target qubit indices
+    /// - Complexity: O(chi^2) single-qubit, O(chi^3) two-qubit
+    mutating func apply(_ gate: QuantumGate, to qubits: [Int]) {
+        MPSGateApplication.apply(gate, to: qubits, mps: &self)
+    }
+
     /// Apply single-qubit gate to this MPS in place.
     ///
     /// **Example:**
     /// ```swift
     /// var mps = MatrixProductState(qubits: 5, maxBondDimension: 16)
-    /// mps.applySingleQubitGate(.hadamard, to: 0)
-    /// mps.applySingleQubitGate(.rotationZ(.pi / 4), to: 1)
+    /// mps.apply(.hadamard, to: 0)
+    /// mps.apply(.rotationZ(.pi / 4), to: 1)
     /// ```
     ///
     /// - Parameters:
     ///   - gate: Single-qubit quantum gate to apply
-    ///   - site: Site index (0 to qubits-1)
+    ///   - qubit: Target qubit index
     /// - Complexity: O(chi^2)
-    mutating func applySingleQubitGate(_ gate: QuantumGate, to site: Int) {
-        MPSGateApplication.applySingleQubitGate(gate, to: site, mps: &self)
-    }
-
-    /// Apply two-qubit gate to this MPS in place.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// var mps = MatrixProductState(qubits: 5, maxBondDimension: 32)
-    /// mps.applySingleQubitGate(.hadamard, to: 0)
-    /// mps.applyTwoQubitGate(.cnot, control: 0, target: 1)
-    /// mps.applyTwoQubitGate(.cz, control: 0, target: 3)
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - gate: Two-qubit quantum gate to apply
-    ///   - control: Control qubit index
-    ///   - target: Target qubit index
-    /// - Complexity: O(chi^3) for adjacent, O(d * chi^3) for distance d
-    mutating func applyTwoQubitGate(_ gate: QuantumGate, control: Int, target: Int) {
-        MPSGateApplication.applyTwoQubitGate(gate, control: control, target: target, mps: &self)
+    mutating func apply(_ gate: QuantumGate, to qubit: Int) {
+        MPSGateApplication.apply(gate, to: [qubit], mps: &self)
     }
 
     /// Return new MPS with gate applied to specified qubits.
@@ -406,16 +392,7 @@ public extension MatrixProductState {
     @_eagerMove
     func applying(_ gate: QuantumGate, to qubits: [Int]) -> MatrixProductState {
         var copy = self
-        switch qubits.count {
-        case 1:
-            MPSGateApplication.applySingleQubitGate(gate, to: qubits[0], mps: &copy)
-        case 2:
-            MPSGateApplication.applyTwoQubitGate(gate, control: qubits[0], target: qubits[1], mps: &copy)
-        case 3:
-            MPSGateApplication.applyToffoli(control1: qubits[0], control2: qubits[1], target: qubits[2], mps: &copy)
-        default:
-            ValidationUtilities.validateArrayCount(qubits, expected: gate.qubitsRequired, name: "Qubit array")
-        }
+        MPSGateApplication.apply(gate, to: qubits, mps: &copy)
         return copy
     }
 
