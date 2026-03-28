@@ -184,14 +184,14 @@ public actor QAOA {
         let costFunction: @Sendable ([Double]) async -> Double
         if let sparseH = sparseHamiltonian {
             costFunction = { params in
-                let concreteCircuit = self.parameterBinder.binding(parameters: params)
+                let concreteCircuit = self.parameterBinder.bound(parameters: params)
                 let state = await self.simulator.execute(concreteCircuit)
                 return await sparseH.expectationValue(of: state)
             }
         } else {
             let observable = costHamiltonian
             costFunction = { params in
-                let concreteCircuit = self.parameterBinder.binding(parameters: params)
+                let concreteCircuit = self.parameterBinder.bound(parameters: params)
                 let state = await self.simulator.execute(concreteCircuit)
                 return observable.expectationValue(of: state)
             }
@@ -215,7 +215,7 @@ public actor QAOA {
             progress: optimizerProgress,
         )
 
-        let finalCircuit: QuantumCircuit = parameterBinder.binding(parameters: optimizerResult.parameters)
+        let finalCircuit: QuantumCircuit = parameterBinder.bound(parameters: optimizerResult.parameters)
         let finalState: QuantumState = await simulator.execute(finalCircuit)
         let solutionProbabilities: [Int: Double] = extractSolutionProbabilities(state: finalState)
 

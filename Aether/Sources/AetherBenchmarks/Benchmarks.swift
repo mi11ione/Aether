@@ -437,7 +437,7 @@ func benchmarkVQE() async -> [BenchmarkResult] {
         ansatz: ansatz2q,
         optimizer: optimizer,
         convergence: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 10),
-        useSparseBackend: false,
+        isSparseEnabled: false,
     )
 
     let result1 = await runBenchmark(
@@ -464,7 +464,7 @@ func benchmarkVQE() async -> [BenchmarkResult] {
         ansatz: ansatz4q,
         optimizer: optimizer,
         convergence: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 10),
-        useSparseBackend: true,
+        isSparseEnabled: true,
     )
     let initialParams4q = [Double](repeating: 0.1, count: ansatz4q.parameterCount)
 
@@ -490,7 +490,7 @@ func benchmarkVQE() async -> [BenchmarkResult] {
         ansatz: ansatz6q,
         optimizer: optimizer,
         convergence: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 10),
-        useSparseBackend: true,
+        isSparseEnabled: true,
     )
     let initialParams6q = [Double](repeating: 0.1, count: ansatz6q.parameterCount)
 
@@ -1065,7 +1065,7 @@ func benchmarkVQECI() async -> [CIBenchmarkResult] {
     let vqe2q = VQE(
         hamiltonian: hamiltonian2q, ansatz: ansatz2q, optimizer: optimizer,
         convergence: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 10),
-        useSparseBackend: false,
+        isSparseEnabled: false,
     )
     let result1 = await runBenchmark(name: "2q", iterations: 20) {
         _ = await vqe2q.run(from: [0.1, 0.2, 0.3, 0.4])
@@ -1087,7 +1087,7 @@ func benchmarkVQECI() async -> [CIBenchmarkResult] {
     let vqe4q = VQE(
         hamiltonian: hamiltonian4q, ansatz: ansatz4q, optimizer: optimizer,
         convergence: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 10),
-        useSparseBackend: true,
+        isSparseEnabled: true,
     )
     let initialParams4q = [Double](repeating: 0.1, count: ansatz4q.parameterCount)
     let result2 = await runBenchmark(name: "4q", iterations: 10) {
@@ -1111,7 +1111,7 @@ func benchmarkVQECI() async -> [CIBenchmarkResult] {
     let vqe6q = VQE(
         hamiltonian: hamiltonian6q, ansatz: ansatz6q, optimizer: optimizer,
         convergence: ConvergenceCriteria(energyTolerance: 1e-6, maxIterations: 10),
-        useSparseBackend: true,
+        isSparseEnabled: true,
     )
     let initialParams6q = [Double](repeating: 0.1, count: ansatz6q.parameterCount)
     let result3 = await runBenchmark(name: "6q", iterations: 5) {

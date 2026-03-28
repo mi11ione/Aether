@@ -148,25 +148,11 @@ struct QuantumCountingConfigInitializationTests {
         #expect(config.precisionQubits == 8, "Default precisionQubits should be 8")
     }
 
-    @Test("Default useIterative is false")
-    func defaultUseIterative() {
-        let config = QuantumCountingConfig(searchQubits: 3)
-
-        #expect(config.useIterative == false, "Default useIterative should be false")
-    }
-
     @Test("Explicit precisionQubits overrides default")
     func explicitPrecisionQubits() {
         let config = QuantumCountingConfig(searchQubits: 4, precisionQubits: 12)
 
         #expect(config.precisionQubits == 12, "Explicit precisionQubits should be 12")
-    }
-
-    @Test("Explicit useIterative overrides default")
-    func explicitUseIterative() {
-        let config = QuantumCountingConfig(searchQubits: 4, precisionQubits: 6, useIterative: true)
-
-        #expect(config.useIterative == true, "Explicit useIterative should be true")
     }
 
     @Test("Config stores searchQubits correctly")
@@ -192,11 +178,10 @@ struct QuantumCountingConfigInitializationTests {
 
     @Test("Config with all parameters specified")
     func configWithAllParameters() {
-        let config = QuantumCountingConfig(searchQubits: 4, precisionQubits: 8, useIterative: true)
+        let config = QuantumCountingConfig(searchQubits: 4, precisionQubits: 8)
 
         #expect(config.searchQubits == 4, "searchQubits should be 4")
         #expect(config.precisionQubits == 8, "precisionQubits should be 8")
-        #expect(config.useIterative == true, "useIterative should be true")
     }
 }
 

@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -364,6 +364,87 @@ struct TTNTopologyEquatableTests {
         let binary = TreeTensorNetwork.Topology.binary(depth: 1)
         let custom = TreeTensorNetwork.Topology.custom(adjacency: [[1, 2], [], []])
         #expect(binary != custom, "Binary and custom topologies should not be equal")
+    }
+}
+
+/// Tests contraction with large bond dimensions triggering BLAS path.
+/// Validates that the accelerated contraction produces correct results
+/// when tensor dimensions exceed the BLAS dispatch threshold.
+@Suite("TTN Large Dimension Contraction")
+struct TTNLargeDimensionContractionTests {
+    @Test("Contraction with bond dimension 4 triggers BLAS path")
+    func contractionWithBondDim4TriggersBLAS() {
+        var ttn = TreeTensorNetwork(topology: .binary(depth: 1))
+
+        var leafElements0 = [Complex<Double>](repeating: .zero, count: 4)
+        leafElements0[0] = .one
+        let leaf0 = TreeTensorNode.leaf(physicalDimension: 4, elements: leafElements0)
+
+        var leafElements1 = [Complex<Double>](repeating: .zero, count: 4)
+        leafElements1[0] = .one
+        let leaf1 = TreeTensorNode.leaf(physicalDimension: 4, elements: leafElements1)
+
+        var internalElements = [Complex<Double>](repeating: .zero, count: 16)
+        for i in 0 ..< 4 {
+            internalElements[i * 4 + i] = .one
+        }
+        let root = TreeTensorNode.internal(childBondDimensions: [4, 4], elements: internalElements)
+
+        ttn.setNode(at: 0, tensor: root)
+        ttn.setNode(at: 1, tensor: leaf0)
+        ttn.setNode(at: 2, tensor: leaf1)
+
+        let result = ttn.contract()
+        #expect(
+            abs(result.real - 1.0) < 1e-10,
+            "Identity contraction with dim-4 tensors should produce 1.0, got \(result.real)",
+        )
+        #expect(
+            abs(result.imaginary) < 1e-10,
+            "Imaginary part should be zero, got \(result.imaginary)",
+        )
+    }
+
+    @Test("BLAS path produces same result as scalar path")
+    func blasPathMatchesScalarPath() {
+        var ttnSmall = TreeTensorNetwork(topology: .binary(depth: 1))
+        var ttnLarge = TreeTensorNetwork(topology: .binary(depth: 1))
+
+        let smallLeaf = TreeTensorNode.leaf(physicalDimension: 2, elements: [Complex(0.6, 0.0), Complex(0.8, 0.0)])
+        let smallRoot = TreeTensorNode.internal(
+            childBondDimensions: [2, 2],
+            elements: [Complex(1, 0), Complex(0, 1), Complex(0, -1), Complex(1, 0)],
+        )
+        ttnSmall.setNode(at: 0, tensor: smallRoot)
+        ttnSmall.setNode(at: 1, tensor: smallLeaf)
+        ttnSmall.setNode(at: 2, tensor: smallLeaf)
+        let smallResult = ttnSmall.contract()
+
+        var largeLeafElements = [Complex<Double>](repeating: .zero, count: 4)
+        largeLeafElements[0] = Complex(0.6, 0.0)
+        largeLeafElements[1] = Complex(0.8, 0.0)
+        let largeLeaf = TreeTensorNode.leaf(physicalDimension: 4, elements: largeLeafElements)
+
+        var largeInternalElements = [Complex<Double>](repeating: .zero, count: 16)
+        largeInternalElements[0] = Complex(1, 0)
+        largeInternalElements[1] = Complex(0, 1)
+        largeInternalElements[4] = Complex(0, -1)
+        largeInternalElements[5] = Complex(1, 0)
+        let largeRoot = TreeTensorNode.internal(childBondDimensions: [4, 4], elements: largeInternalElements)
+
+        ttnLarge.setNode(at: 0, tensor: largeRoot)
+        ttnLarge.setNode(at: 1, tensor: largeLeaf)
+        ttnLarge.setNode(at: 2, tensor: largeLeaf)
+        let largeResult = ttnLarge.contract()
+
+        #expect(
+            abs(smallResult.real - largeResult.real) < 1e-10,
+            "BLAS and scalar paths should produce same real part: scalar=\(smallResult.real), blas=\(largeResult.real)",
+        )
+        #expect(
+            abs(smallResult.imaginary - largeResult.imaginary) < 1e-10,
+            "BLAS and scalar paths should produce same imaginary part: scalar=\(smallResult.imaginary), blas=\(largeResult.imaginary)",
+        )
     }
 }
 

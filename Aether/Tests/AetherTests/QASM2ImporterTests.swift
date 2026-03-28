@@ -2170,5 +2170,4 @@ struct QASM2MalformedExpressionCoverageTests {
         let result = QASM2Importer.parse(source)
         #expect(!result.diagnostics.isEmpty, "Trailing comma in qubit args should produce diagnostics")
     }
-
 }

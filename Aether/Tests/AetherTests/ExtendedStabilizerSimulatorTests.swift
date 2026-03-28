@@ -226,7 +226,7 @@ struct ExtendedStabilizerSimulatorTests {
     }
 
     @Test("simulator respects maxRank parameter")
-    func simulatorRespectsMaxRank() async {
+    func simulatorRespectsMaxRank() {
         let simulator = ExtendedStabilizerSimulator(maxRank: 16)
 
         #expect(

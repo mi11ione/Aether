@@ -125,15 +125,15 @@ struct QWCGroupingTests {
             terms: [(coefficient: 2.0, pauliString: ps1), (coefficient: -3.5, pauliString: ps2)],
             measurementBasis: [0: .x, 1: .y],
         )
-        #expect(abs(group.weight - 5.5) < 1e-10)
+        #expect(abs(group.weight - 5.5) < 1e-10, "Weight should be sum of absolute coefficients")
     }
 
     @Test("Grouping single Pauli term")
     func groupingSingleTerm() {
         let ps = PauliString(.x(0))
         let groups = QWCGrouper.group([(coefficient: 1.0, pauliString: ps)])
-        #expect(groups.count == 1)
-        #expect(groups[0].terms.count == 1)
+        #expect(groups.count == 1, "Single term should produce one group")
+        #expect(groups[0].terms.count == 1, "Group should contain the single term")
     }
 
     @Test("Grouping QWC terms into single group")
@@ -142,8 +142,8 @@ struct QWCGroupingTests {
         let ps2 = PauliString(.x(0), .y(1))
         let ps3 = PauliString(.y(1))
         let groups = QWCGrouper.group([(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3)])
-        #expect(groups.count == 1)
-        #expect(groups[0].terms.count == 3)
+        #expect(groups.count == 1, "All QWC terms should be in one group")
+        #expect(groups[0].terms.count == 3, "Group should contain all three terms")
     }
 
     @Test("Grouping non-QWC terms into multiple groups")
@@ -152,7 +152,7 @@ struct QWCGroupingTests {
         let ps2 = PauliString(.y(0))
         let ps3 = PauliString(.z(0))
         let groups = QWCGrouper.group([(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3)])
-        #expect(groups.count == 3)
+        #expect(groups.count == 3, "Non-QWC terms on same qubit need separate groups")
     }
 
     @Test("Grouping mixed QWC and non-QWC terms")
@@ -162,13 +162,13 @@ struct QWCGroupingTests {
         let ps3 = PauliString(.y(0))
         let ps4 = PauliString(.y(1))
         let groups = QWCGrouper.group([(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2), (coefficient: 3.0, pauliString: ps3), (coefficient: 4.0, pauliString: ps4)])
-        #expect(groups.count == 2)
+        #expect(groups.count == 2, "Mixed terms should partition into two groups")
     }
 
     @Test("Grouping empty terms array")
     func groupingEmptyTerms() {
         let groups = QWCGrouper.group([])
-        #expect(groups.isEmpty)
+        #expect(groups.isEmpty, "Empty input should produce empty output")
     }
 
     @Test("Each group has valid measurement basis")
@@ -177,7 +177,7 @@ struct QWCGroupingTests {
         let ps2 = PauliString(.y(0))
         let groups = QWCGrouper.group([(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
         for group in groups {
-            #expect(!group.measurementBasis.isEmpty)
+            #expect(!group.measurementBasis.isEmpty, "Each group should have a measurement basis")
         }
     }
 
@@ -186,10 +186,10 @@ struct QWCGroupingTests {
         let ps = PauliString(.x(0))
         let groups = [QWCGroup(terms: [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps), (coefficient: 3.0, pauliString: ps)], measurementBasis: [0: .x])]
         let stats = QWCGrouper.statistics(for: groups)
-        #expect(stats.numTerms == 3)
-        #expect(stats.numGroups == 1)
-        #expect(stats.largestGroupSize == 3)
-        #expect(abs(stats.averageGroupSize - 3.0) < 1e-10)
+        #expect(stats.numTerms == 3, "Should count all terms")
+        #expect(stats.numGroups == 1, "Should count one group")
+        #expect(stats.largestGroupSize == 3, "Largest group has 3 terms")
+        #expect(abs(stats.averageGroupSize - 3.0) < 1e-10, "Average should be 3.0")
     }
 
     @Test("Grouping statistics for multiple groups")
@@ -198,17 +198,17 @@ struct QWCGroupingTests {
         let ps2 = PauliString(.y(0))
         let groups = QWCGrouper.group([(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps1), (coefficient: 3.0, pauliString: ps2)])
         let stats = QWCGrouper.statistics(for: groups)
-        #expect(stats.numTerms == 3)
-        #expect(stats.numGroups == 2)
-        #expect(stats.reductionFactor == 1.5)
+        #expect(stats.numTerms == 3, "Should count all terms")
+        #expect(stats.numGroups == 2, "Should have two groups")
+        #expect(stats.reductionFactor == 1.5, "Reduction factor should be 3/2")
     }
 
     @Test("Grouping statistics for empty groups")
     func statisticsEmptyGroups() {
         let stats = QWCGrouper.statistics(for: [])
-        #expect(stats.numTerms == 0)
-        #expect(stats.numGroups == 0)
-        #expect(stats.largestGroupSize == 0)
+        #expect(stats.numTerms == 0, "Empty input should have zero terms")
+        #expect(stats.numGroups == 0, "Empty input should have zero groups")
+        #expect(stats.largestGroupSize == 0, "Empty input should have zero largest group")
     }
 
     @Test("Grouping statistics description format")
@@ -217,9 +217,9 @@ struct QWCGroupingTests {
         let groups = [QWCGroup(terms: [(coefficient: 1.0, pauliString: ps)], measurementBasis: [0: .x])]
         let stats = QWCGrouper.statistics(for: groups)
         let description = stats.description
-        #expect(description.contains("QWC Grouping Statistics"))
-        #expect(description.contains("Terms:"))
-        #expect(description.contains("Groups:"))
+        #expect(description.contains("QWC Grouping Statistics"), "Description should contain header")
+        #expect(description.contains("Terms:"), "Description should contain terms count")
+        #expect(description.contains("Groups:"), "Description should contain groups count")
     }
 
     @Test("DSATUR handles chromatic number exceeding 64 colors")
@@ -246,8 +246,8 @@ struct QWCGroupingTests {
         }
 
         let stats = QWCGrouper.statistics(for: groups)
-        #expect(stats.numTerms == 65)
-        #expect(stats.numGroups == 65)
+        #expect(stats.numTerms == 65, "All 65 terms should be counted")
+        #expect(stats.numGroups == 65, "Complete graph needs 65 groups")
         #expect(abs(stats.reductionFactor - 1.0) < 1e-10, "No reduction possible for complete graph")
     }
 }
@@ -263,31 +263,31 @@ struct ShotAllocationTests {
         let ps = PauliString(.x(0))
         let terms = [(coefficient: 0.0, pauliString: ps), (coefficient: 0.0, pauliString: ps), (coefficient: 0.0, pauliString: ps)]
         let allocation = allocator.allocate(for: terms, totalShots: 300, state: nil)
-        #expect(allocation.count == 3)
+        #expect(allocation.count == 3, "Should allocate for all three terms")
         for shots in allocation.values {
-            #expect(shots >= 90)
-            #expect(shots <= 110)
+            #expect(shots >= 90, "Each term should get roughly equal shots")
+            #expect(shots <= 110, "Each term should get roughly equal shots")
         }
     }
 
     @Test("Weighted allocation based on coefficients")
-    func weightedAllocation() {
+    func weightedAllocation() throws {
         let allocator = ShotAllocator()
         let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps), (coefficient: 3.0, pauliString: ps)]
         let allocation = allocator.allocate(for: terms, totalShots: 600, state: nil)
-        #expect(allocation[2]! > allocation[1]!)
-        #expect(allocation[1]! > allocation[0]!)
+        #expect(try #require(allocation[2]) > allocation[1]!, "Highest-weight term should get most shots")
+        #expect(try #require(allocation[1]) > allocation[0]!, "Medium-weight term should get more than lowest")
     }
 
     @Test("Minimum shots per term enforced")
-    func minimumShotsEnforced() {
+    func minimumShotsEnforced() throws {
         let allocator = ShotAllocator(minShotsPerTerm: 50)
         let ps = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 100.0, pauliString: ps)]
         let allocation = allocator.allocate(for: terms, totalShots: 200, state: nil)
-        #expect(allocation[0]! >= 50)
-        #expect(allocation[1]! >= 50)
+        #expect(try #require(allocation[0]) >= 50, "Low-weight term should still meet minimum")
+        #expect(try #require(allocation[1]) >= 50, "High-weight term should meet minimum")
     }
 
     @Test("Total allocated shots equals requested total")
@@ -297,19 +297,19 @@ struct ShotAllocationTests {
         let terms = [(coefficient: 1.0, pauliString: ps), (coefficient: 2.0, pauliString: ps), (coefficient: 3.0, pauliString: ps), (coefficient: 4.0, pauliString: ps)]
         let allocation = allocator.allocate(for: terms, totalShots: 1000, state: nil)
         let total = allocation.values.reduce(0, +)
-        #expect(abs(total - 1000) <= 4)
+        #expect(abs(total - 1000) <= 4, "Total should be within rounding tolerance of requested shots")
     }
 
     @Test("Allocation for QWC groups")
-    func allocationForGroups() {
+    func allocationForGroups() throws {
         let allocator = ShotAllocator()
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let group1 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps1)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 3.0, pauliString: ps2)], measurementBasis: [0: .y])
         let allocation = allocator.allocate(forGroups: [group1, group2], totalShots: 400, state: nil)
-        #expect(allocation.count == 2)
-        #expect(allocation[1]! > allocation[0]!)
+        #expect(allocation.count == 2, "Should allocate for both groups")
+        #expect(try #require(allocation[1]) > allocation[0]!, "Higher-weight group should get more shots")
     }
 
     @Test("Variance reduction estimation")
@@ -323,15 +323,15 @@ struct ShotAllocationTests {
             using: allocation,
             comparedTo: 500,
         )
-        #expect(reduction >= 1.0)
+        #expect(reduction >= 1.0, "Optimal allocation should not be worse than uniform")
     }
 
     @Test("Custom configuration")
-    func customConfiguration() {
+    func customConfiguration() throws {
         let allocator = ShotAllocator(minShotsPerTerm: 100)
         let ps = PauliString(.x(0))
         let allocation = allocator.allocate(for: [(coefficient: 1.0, pauliString: ps)], totalShots: 500, state: nil)
-        #expect(allocation[0]! >= 100)
+        #expect(try #require(allocation[0]) >= 100, "Single term should receive at least minimum shots")
     }
 
     @Test("Allocation enforces effective minimum to prevent over-allocation")
@@ -342,10 +342,10 @@ struct ShotAllocationTests {
         let allocation = allocator.allocate(for: terms, totalShots: 500, state: nil)
 
         for shots in allocation.values {
-            #expect(shots >= 250)
+            #expect(shots >= 250, "Each term should get at least effective minimum")
         }
         let total = allocation.values.reduce(0, +)
-        #expect(total <= 500)
+        #expect(total <= 500, "Total should not exceed budget")
     }
 
     @Test("Shot reduction when minShots causes over-allocation")
@@ -364,10 +364,10 @@ struct ShotAllocationTests {
         let allocation = allocator.allocate(for: terms, totalShots: 100, state: nil)
 
         let total = allocation.values.reduce(0, +)
-        #expect(total == 100)
+        #expect(total == 100, "Total should exactly match requested shots after reduction")
 
         for shots in allocation.values {
-            #expect(shots >= 20)
+            #expect(shots >= 20, "Each term should receive at least effective minimum")
         }
     }
 
@@ -382,10 +382,10 @@ struct ShotAllocationTests {
         let allocation = allocator.allocate(for: terms, totalShots: 200, state: nil)
 
         let total = allocation.values.reduce(0, +)
-        #expect(total == 200)
+        #expect(total == 200, "Total should match requested shots")
 
         for shots in allocation.values {
-            #expect(shots > 0)
+            #expect(shots > 0, "Every term should receive at least one shot")
         }
     }
 
@@ -403,10 +403,10 @@ struct ShotAllocationTests {
         let allocation = allocator.allocate(forGroups: [group1, group2, group3], totalShots: 100, state: nil)
 
         let total = allocation.values.reduce(0, +)
-        #expect(total == 100)
+        #expect(total == 100, "Total should match requested shots")
 
         for shots in allocation.values {
-            #expect(shots >= 30)
+            #expect(shots >= 30, "Each group should receive at least effective minimum")
         }
     }
 
@@ -426,10 +426,10 @@ struct ShotAllocationTests {
         let allocation = allocator.allocate(for: terms, totalShots: 150, state: nil)
 
         let total = allocation.values.reduce(0, +)
-        #expect(total == 150)
+        #expect(total == 150, "Total should match requested shots")
 
         for shots in allocation.values {
-            #expect(shots >= 30)
+            #expect(shots >= 30, "Each term should respect minimum shot constraint")
         }
     }
 
@@ -450,7 +450,7 @@ struct ShotAllocationTests {
 
         let allocation = allocator.allocate(for: mixedTerms, totalShots: 100, state: nil)
         let total = allocation.values.reduce(0, +)
-        #expect(total == 100)
+        #expect(total == 100, "Total should match requested shots")
     }
 }
 
@@ -469,7 +469,7 @@ struct UnitaryPartitioningTests {
         )
         let ps = PauliString(.x(0))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)])
-        #expect(partitions.count >= 1)
+        #expect(partitions.count >= 1, "Single term should produce at least one partition")
     }
 
     @Test("Partition QWC terms into single partition")
@@ -483,22 +483,22 @@ struct UnitaryPartitioningTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.x(0), .y(1))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
-        #expect(partitions.count >= 1)
+        #expect(partitions.count >= 1, "QWC terms should produce at least one partition")
     }
 
     @Test("Partition empty terms")
     func partitionEmptyTerms() {
         let partitioner = UnitaryPartitioner()
         let partitions = partitioner.partition(terms: [])
-        #expect(partitions.isEmpty)
+        #expect(partitions.isEmpty, "Empty terms should produce empty partitions")
     }
 
     @Test("Default configuration values")
     func defaultConfiguration() {
         let partitioner = UnitaryPartitioner()
-        #expect(partitioner.maxIterations > 0)
-        #expect(partitioner.convergenceTolerance > 0)
-        #expect(partitioner.circuitDepth > 0)
+        #expect(partitioner.maxIterations > 0, "Default maxIterations should be positive")
+        #expect(partitioner.convergenceTolerance > 0, "Default convergenceTolerance should be positive")
+        #expect(partitioner.circuitDepth > 0, "Default circuitDepth should be positive")
     }
 
     @Test("Custom configuration")
@@ -511,7 +511,7 @@ struct UnitaryPartitioningTests {
         )
         let ps = PauliString(.x(0))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)])
-        #expect(!partitions.isEmpty)
+        #expect(!partitions.isEmpty, "Custom config should produce non-empty partitions")
     }
 
     @Test("Partition has unitary matrix")
@@ -522,8 +522,8 @@ struct UnitaryPartitioningTests {
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
                             [Complex(0.0, 0.0), Complex(1.0, 0.0)]],
         )
-        #expect(partition.unitaryMatrix.count == 2)
-        #expect(partition.unitaryMatrix[0].count == 2)
+        #expect(partition.unitaryMatrix.count == 2, "Unitary matrix should have 2 rows")
+        #expect(partition.unitaryMatrix[0].count == 2, "Unitary matrix should have 2 columns")
     }
 
     @Test("Multiple partitions preserve all terms")
@@ -541,7 +541,7 @@ struct UnitaryPartitioningTests {
                             [Complex(0.0, 0.0), Complex(1.0, 0.0)]],
         )
         let totalTerms = partition1.terms.count + partition2.terms.count
-        #expect(totalTerms == 2)
+        #expect(totalTerms == 2, "Two partitions should preserve both terms")
     }
 
     @Test("Partition matrix dimensions match qubit count")
@@ -567,7 +567,7 @@ struct UnitaryPartitioningTests {
         let inputTerms = [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)]
         let partitions = partitioner.partition(terms: inputTerms)
         let totalTerms = partitions.reduce(0) { $0 + $1.terms.count }
-        #expect(totalTerms == inputTerms.count)
+        #expect(totalTerms == inputTerms.count, "Partitions should preserve total term count")
     }
 
     @Test("Unitary partition qubits property")
@@ -591,8 +591,8 @@ struct UnitaryPartitioningTests {
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
                             [Complex(0.0, 0.0), Complex(1.0, 0.0)]],
         )
-        #expect(partition.terms.count == 1)
-        #expect(abs(partition.terms[0].coefficient - 1.0) < 1e-10)
+        #expect(partition.terms.count == 1, "Partition should store one term")
+        #expect(abs(partition.terms[0].coefficient - 1.0) < 1e-10, "Coefficient should be preserved")
     }
 
     @Test("Unitary partition measurement basis property")
@@ -619,7 +619,7 @@ struct UnitaryPartitioningTests {
             unitaryMatrix: [[Complex(1.0, 0.0), Complex(0.0, 0.0)],
                             [Complex(0.0, 0.0), Complex(1.0, 0.0)]],
         )
-        #expect(abs(partition.weight - 5.5) < 1e-10)
+        #expect(abs(partition.weight() - 5.5) < 1e-10, "Weight should be sum of absolute coefficients")
     }
 
     @Test("Partition with adaptive depth enabled")
@@ -633,7 +633,7 @@ struct UnitaryPartitioningTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.y(0))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)])
-        #expect(!partitions.isEmpty)
+        #expect(!partitions.isEmpty, "Adaptive depth should produce non-empty partitions")
     }
 
     @Test("Partition with multiple qubits")
@@ -647,7 +647,7 @@ struct UnitaryPartitioningTests {
         let ps1 = PauliString(.x(0), .y(1))
         let ps2 = PauliString(.y(0), .x(1))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2)])
-        #expect(!partitions.isEmpty)
+        #expect(!partitions.isEmpty, "Multi-qubit partition should produce non-empty result")
     }
 
     @Test("Partition with high ansatz depth")
@@ -660,7 +660,7 @@ struct UnitaryPartitioningTests {
         )
         let ps = PauliString(.z(0))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)])
-        #expect(!partitions.isEmpty)
+        #expect(!partitions.isEmpty, "High ansatz depth should produce non-empty partitions")
     }
 }
 
@@ -1039,7 +1039,7 @@ struct MeasurementOptimizationIntegrationTests {
         let ps1 = PauliString(.x(0))
         let ps2 = PauliString(.x(0), .y(1))
         let observable = Observable(terms: [(coefficient: 1.0, pauliString: ps1), (coefficient: 2.0, pauliString: ps2)])
-        let allocation = await observable.allocateShotsForGroups(totalShots: 1000, state: nil)
+        let allocation = await observable.allocateShots(forGroups: 1000, state: nil)
         #expect(!allocation.isEmpty, "Should produce non-empty group allocation")
     }
 
@@ -1243,7 +1243,7 @@ struct MeasurementOptimizationIntegrationTests {
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
         let allocation = observable.allocateShots(totalShots: 1000, state: state)
-        #expect(allocation.count == 2)
+        #expect(allocation.count == 2, "Should allocate for both terms with state")
     }
 
     @Test("Shot allocation for groups with state")
@@ -1254,8 +1254,8 @@ struct MeasurementOptimizationIntegrationTests {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
         let state = circuit.execute()
-        let allocation = await observable.allocateShotsForGroups(totalShots: 1000, state: state)
-        #expect(!allocation.isEmpty)
+        let allocation = await observable.allocateShots(forGroups: 1000, state: state)
+        #expect(!allocation.isEmpty, "Group allocation with state should be non-empty")
     }
 
     @Test("Automatic strategy selection for large Hamiltonian with small qubits")
@@ -1274,7 +1274,7 @@ struct MeasurementOptimizationIntegrationTests {
         }
         let observable = Observable(terms: terms)
         let count = await observable.circuitCount(for: .automatic)
-        #expect(count >= 1)
+        #expect(count >= 1, "Automatic strategy should produce at least one circuit")
     }
 
     @Test("Shot allocation with remaining shots distribution")
@@ -1285,9 +1285,9 @@ struct MeasurementOptimizationIntegrationTests {
         let ps3 = PauliString(.z(0))
         let terms = [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3)]
         let allocation = allocator.allocate(for: terms, totalShots: 100, state: nil)
-        #expect(allocation.count == 3)
+        #expect(allocation.count == 3, "Should allocate for all three terms")
         let total = allocation.values.reduce(0, +)
-        #expect(total == 100)
+        #expect(total == 100, "Total should match requested shots")
     }
 
     @Test("Shot allocation distributes exact remainder evenly")
@@ -1299,9 +1299,9 @@ struct MeasurementOptimizationIntegrationTests {
         let ps4 = PauliString(.x(0))
         let terms = [(coefficient: 1.0, pauliString: ps1), (coefficient: 1.0, pauliString: ps2), (coefficient: 1.0, pauliString: ps3), (coefficient: 1.0, pauliString: ps4)]
         let allocation = allocator.allocate(for: terms, totalShots: 97, state: nil)
-        #expect(allocation.count == 4)
+        #expect(allocation.count == 4, "Should allocate for all four terms")
         let total = allocation.values.reduce(0, +)
-        #expect(total == 97)
+        #expect(total == 97, "Total should match requested shots including remainder")
     }
 
     @Test("Shot allocation for groups with remaining shots distribution")
@@ -1314,9 +1314,9 @@ struct MeasurementOptimizationIntegrationTests {
         let group2 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps2)], measurementBasis: [0: .y])
         let group3 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps3)], measurementBasis: [0: .z])
         let allocation = allocator.allocate(forGroups: [group1, group2, group3], totalShots: 100, state: nil)
-        #expect(allocation.count == 3)
+        #expect(allocation.count == 3, "Should allocate for all three groups")
         let total = allocation.values.reduce(0, +)
-        #expect(total == 100)
+        #expect(total == 100, "Total should match requested shots")
     }
 
     @Test("Shot allocation for groups distributes exact remainder")
@@ -1329,20 +1329,20 @@ struct MeasurementOptimizationIntegrationTests {
         let group4 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps)], measurementBasis: [0: .x])
         let group5 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps)], measurementBasis: [0: .y])
         let allocation = allocator.allocate(forGroups: [group1, group2, group3, group4, group5], totalShots: 102, state: nil)
-        #expect(allocation.count == 5)
+        #expect(allocation.count == 5, "Should allocate for all five groups")
         let total = allocation.values.reduce(0, +)
-        #expect(total == 102)
+        #expect(total == 102, "Total should match requested shots including remainder")
     }
 
     @Test("Shot allocation for groups with zero total weight")
-    func shotAllocationGroupsZeroWeight() {
+    func shotAllocationGroupsZeroWeight() throws {
         let allocator = ShotAllocator()
         let ps = PauliString(.x(0))
         let group1 = QWCGroup(terms: [(coefficient: 0.0, pauliString: ps)], measurementBasis: [0: .x])
         let group2 = QWCGroup(terms: [(coefficient: 0.0, pauliString: ps)], measurementBasis: [0: .y])
         let allocation = allocator.allocate(forGroups: [group1, group2], totalShots: 1000, state: nil)
-        #expect(allocation.count == 2)
-        #expect(allocation[0]! + allocation[1]! == 1000)
+        #expect(allocation.count == 2, "Should allocate for both groups")
+        #expect(try #require(allocation[0]) + allocation[1]! == 1000, "Zero-weight groups should still receive all shots")
     }
 
     @Test("Shot allocation for groups enforces effective minimum to prevent over-allocation")
@@ -1354,13 +1354,13 @@ struct MeasurementOptimizationIntegrationTests {
         let group2 = QWCGroup(terms: [(coefficient: 1.0, pauliString: ps2)], measurementBasis: [0: .y])
         let allocation = allocator.allocate(forGroups: [group1, group2], totalShots: 500, state: nil)
 
-        #expect(allocation.count == 2)
+        #expect(allocation.count == 2, "Should allocate for both groups")
         for shots in allocation.values {
-            #expect(shots >= 250)
+            #expect(shots >= 250, "Each group should receive at least effective minimum")
         }
 
         let total = allocation.values.reduce(0, +)
-        #expect(total <= 500)
+        #expect(total <= 500, "Total should not exceed budget")
     }
 
     @Test("Unitary partitioning with variational optimization")
@@ -1595,7 +1595,7 @@ struct MeasurementOptimizationIntegrationTests {
             state: state,
         )
 
-        #expect(reduction >= 1.0)
+        #expect(reduction >= 1.0, "Optimal allocation should not be worse than uniform")
     }
 
     @Test("Variance reduction without state uses conservative estimate")
@@ -1611,7 +1611,7 @@ struct MeasurementOptimizationIntegrationTests {
             state: nil,
         )
 
-        #expect(reduction >= 1.0)
+        #expect(reduction >= 1.0, "Conservative estimate should still show improvement")
     }
 
     @Test("Unitary partitioning caches Pauli matrices during optimization")
@@ -1641,13 +1641,13 @@ struct MeasurementOptimizationIntegrationTests {
         let terms = Array(repeating: (coefficient: 1.0, pauliString: ps), count: 10)
         let allocation = allocator.allocate(for: terms, totalShots: 1000, state: nil)
 
-        #expect(allocation.count == 10)
+        #expect(allocation.count == 10, "Should allocate for all ten terms")
         let total = allocation.values.reduce(0, +)
-        #expect(total <= 1000)
+        #expect(total <= 1000, "Total should not exceed budget")
 
         for shots in allocation.values {
-            #expect(shots >= 100)
-            #expect(shots <= 100)
+            #expect(shots >= 100, "Each term should get exactly equal share")
+            #expect(shots <= 100, "Each term should get exactly equal share")
         }
     }
 

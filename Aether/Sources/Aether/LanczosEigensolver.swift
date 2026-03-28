@@ -265,7 +265,7 @@ public enum LanczosEigensolver {
         let count = v1.count
         for i in 0 ..< count {
             result = Double.fusedMultiplyAdd(v1[i].real, v2[i].real,
-                     Double.fusedMultiplyAdd(v1[i].imaginary, v2[i].imaginary, result))
+                                             Double.fusedMultiplyAdd(v1[i].imaginary, v2[i].imaginary, result))
         }
         return result
     }
@@ -277,7 +277,7 @@ public enum LanczosEigensolver {
         var sumSquared = 0.0
         for element in v {
             sumSquared = Double.fusedMultiplyAdd(element.real, element.real,
-                         Double.fusedMultiplyAdd(element.imaginary, element.imaginary, sumSquared))
+                                                 Double.fusedMultiplyAdd(element.imaginary, element.imaginary, sumSquared))
         }
         return Double.squareRoot(of: sumSquared)
     }
@@ -290,7 +290,7 @@ public enum LanczosEigensolver {
         for i in 0 ..< count {
             target[i] = Complex(
                 Double.fusedMultiplyAdd(negScalar, source[i].real, target[i].real),
-                Double.fusedMultiplyAdd(negScalar, source[i].imaginary, target[i].imaginary)
+                Double.fusedMultiplyAdd(negScalar, source[i].imaginary, target[i].imaginary),
             )
         }
     }
@@ -304,7 +304,7 @@ public enum LanczosEigensolver {
             let srcR = source[i].real, srcI = source[i].imaginary
             target[i] = Complex(
                 Double.fusedMultiplyAdd(sr, srcR, Double.fusedMultiplyAdd(-si, srcI, target[i].real)),
-                Double.fusedMultiplyAdd(sr, srcI, Double.fusedMultiplyAdd(si, srcR, target[i].imaginary))
+                Double.fusedMultiplyAdd(sr, srcI, Double.fusedMultiplyAdd(si, srcR, target[i].imaginary)),
             )
         }
     }
@@ -360,7 +360,7 @@ public enum LanczosEigensolver {
             let srcR = source[i].real, srcI = source[i].imaginary
             target[i] = Complex(
                 Double.fusedMultiplyAdd(-sr, srcR, Double.fusedMultiplyAdd(si, srcI, target[i].real)),
-                Double.fusedMultiplyAdd(-sr, srcI, Double.fusedMultiplyAdd(-si, srcR, target[i].imaginary))
+                Double.fusedMultiplyAdd(-sr, srcI, Double.fusedMultiplyAdd(-si, srcR, target[i].imaginary)),
             )
         }
     }

@@ -246,7 +246,8 @@ public struct TreeTensorNetwork: Sendable {
             )
         }
 
-        var result = [Complex<Double>](unsafeUninitializedCapacity: 1) { buffer, count in
+        var result = [Complex<Double>](unsafeUninitializedCapacity: 1) {
+            buffer, count in
             buffer[0] = .zero
             count = 1
         }

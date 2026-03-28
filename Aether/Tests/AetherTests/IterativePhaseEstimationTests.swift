@@ -355,8 +355,13 @@ struct IterativePhaseEstimationRunTests {
     func progressCallbackInvoked() async {
         actor Counter {
             var count = 0
-            func increment() { count += 1 }
-            func value() -> Int { count }
+            func increment() {
+                count += 1
+            }
+
+            func value() -> Int {
+                count
+            }
         }
         let ipe = IterativePhaseEstimation(unitary: .pauliZ, eigenstateQubits: 1, precisionBits: 3)
         let counter = Counter()

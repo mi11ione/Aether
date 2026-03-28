@@ -24,7 +24,7 @@ public extension QuantumState {
     ///
     /// Prepares state with only basis state |i⟩ having amplitude 1, all others zero.
     /// Uses little-endian binary encoding where qubit k corresponds to bit k of the index.
-    /// More efficient than circuit-based preparation for simulation.
+    /// Constructs the statevector directly without intermediate circuit representation.
     ///
     /// - Parameters:
     ///   - qubits: Number of qubits (n)
@@ -105,8 +105,7 @@ public extension QuantumState {
 
     // MARK: - Dicke State Preparation
 
-    /// Compute binomial coefficient C(n, k) = n! / (k! * (n-k)!)
-    /// Uses multiplicative formula to avoid overflow: C(n,k) = ∏(i=1 to k) (n-k+i)/i
+    /// Computes binomial coefficient C(n, k) using multiplicative formula to avoid overflow.
     @_optimize(speed)
     @_effects(readonly)
     private static func binomialCoefficient(_ n: Int, _ k: Int) -> Int {
@@ -158,21 +157,18 @@ public extension QuantumState {
         let termCount = binomialCoefficient(qubits, ones)
         let amplitude = Complex<Double>(1.0 / sqrt(Double(termCount)), 0.0)
 
-        var amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+        let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
             buffer.initialize(repeating: .zero)
+            Self.enumerateCombinations(n: qubits, k: ones) { state in
+                buffer[state] = amplitude
+            }
             count = stateSpaceSize
-        }
-
-        enumerateCombinations(n: qubits, k: ones) { state in
-            amplitudes[state] = amplitude
         }
 
         return QuantumState(qubits: qubits, amplitudes: amplitudes)
     }
 
-    /// Enumerate all n-bit integers with exactly k bits set
-    /// Calls closure for each combination in lexicographic order
-    /// Uses Gosper's hack for O(1) per combination
+    /// Enumerates all n-bit integers with exactly k bits set via Gosper's hack.
     @_optimize(speed)
     private static func enumerateCombinations(n: Int, k: Int, body: (Int) -> Void) {
         guard k > 0 else {
@@ -212,6 +208,7 @@ public extension QuantumCircuit {
     /// let p11 = state.probability(of: 0b11)  // 0.5
     /// ```
     ///
+    /// - Complexity: O(1)
     /// - SeeAlso: ``bellPhiMinus()``
     /// - SeeAlso: ``bellPsiPlus()``
     /// - SeeAlso: ``bellPsiMinus()``
@@ -237,6 +234,7 @@ public extension QuantumCircuit {
     /// let p00 = state.probability(of: 0b00)  // 0.5
     /// ```
     ///
+    /// - Complexity: O(1)
     /// - SeeAlso: ``bellPhiPlus()``
     /// - SeeAlso: ``bellPsiPlus()``
     /// - SeeAlso: ``bellPsiMinus()``
@@ -264,6 +262,7 @@ public extension QuantumCircuit {
     /// let p01 = state.probability(of: 0b01)  // 0.5
     /// ```
     ///
+    /// - Complexity: O(1)
     /// - SeeAlso: ``bellPhiPlus()``
     /// - SeeAlso: ``bellPhiMinus()``
     /// - SeeAlso: ``bellPsiMinus()``
@@ -291,6 +290,7 @@ public extension QuantumCircuit {
     /// let p01 = state.probability(of: 0b01)  // 0.5
     /// ```
     ///
+    /// - Complexity: O(1)
     /// - SeeAlso: ``bellPhiPlus()``
     /// - SeeAlso: ``bellPhiMinus()``
     /// - SeeAlso: ``bellPsiPlus()``
@@ -341,10 +341,11 @@ public extension QuantumCircuit {
 
         var circuit = QuantumCircuit(qubits: qubits)
 
-        for qubit in 0 ..< qubits {
-            if (state >> qubit) & 1 == 1 {
-                circuit.append(.pauliX, to: qubit)
-            }
+        var bits = state
+        while bits != 0 {
+            let qubit = bits.trailingZeroBitCount
+            circuit.append(.pauliX, to: qubit)
+            bits &= bits - 1
         }
 
         return circuit

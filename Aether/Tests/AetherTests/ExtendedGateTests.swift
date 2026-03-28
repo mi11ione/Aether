@@ -23,8 +23,8 @@ struct ExtendedGateTests {
         let expected00 = 0.5
         let expected11 = 0.5
 
-        #expect(abs(state.probability(of: 0) - expected00) < 1e-10)
-        #expect(abs(state.probability(of: 3) - expected11) < 1e-10)
+        #expect(abs(state.probability(of: 0) - expected00) < 1e-10, "CZ Bell variant should have 0.5 probability for |00>")
+        #expect(abs(state.probability(of: 3) - expected11) < 1e-10, "CZ Bell variant should have 0.5 probability for |11>")
     }
 
     @Test("CZ gate is symmetric")
@@ -40,14 +40,14 @@ struct ExtendedGateTests {
         let state1 = circuit1.execute()
         let state2 = circuit2.execute()
 
-        #expect(state1 == state2)
+        #expect(state1 == state2, "CZ should be symmetric under qubit swap")
     }
 
     @Test("CY gate matrix is unitary")
     func cYUnitary() {
         let gate = QuantumGate.cy
         let matrix = gate.matrix()
-        #expect(QuantumGate.isUnitary(matrix))
+        #expect(QuantumGate.isUnitary(matrix), "CY matrix should be unitary")
     }
 
     @Test("CH gate creates controlled superposition")
@@ -61,8 +61,8 @@ struct ExtendedGateTests {
         let prob0 = state.probability(of: 1)
         let prob1 = state.probability(of: 3)
 
-        #expect(abs(prob0 - 0.5) < 1e-10)
-        #expect(abs(prob1 - 0.5) < 1e-10)
+        #expect(abs(prob0 - 0.5) < 1e-10, "CH should create 0.5 probability for control-on target-0")
+        #expect(abs(prob1 - 0.5) < 1e-10, "CH should create 0.5 probability for control-on target-1")
     }
 }
 
@@ -77,7 +77,7 @@ struct IDMUniversalGateTests {
         let state = QuantumState(qubit: 1)
         let transformed = GateApplication.apply(.u1(lambda: lambda), to: 0, state: state)
 
-        #expect(abs(transformed.probability(of: 1) - 1.0) < 1e-10)
+        #expect(abs(transformed.probability(of: 1) - 1.0) < 1e-10, "U1 on |1> should preserve probability at |1>")
     }
 
     @Test("U2 gate creates superposition")
@@ -87,8 +87,8 @@ struct IDMUniversalGateTests {
         let state = QuantumState(qubit: 0)
         let transformed = GateApplication.apply(.u2(phi: phi, lambda: lambda), to: 0, state: state)
 
-        #expect(abs(transformed.probability(of: 0) - 0.5) < 1e-10)
-        #expect(abs(transformed.probability(of: 1) - 0.5) < 1e-10)
+        #expect(abs(transformed.probability(of: 0) - 0.5) < 1e-10, "U2(0,0) on |0> should give 0.5 probability for |0>")
+        #expect(abs(transformed.probability(of: 1) - 0.5) < 1e-10, "U2(0,0) on |0> should give 0.5 probability for |1>")
     }
 
     @Test("U3 gate can implement any single-qubit gate")
@@ -100,14 +100,14 @@ struct IDMUniversalGateTests {
             state: state,
         )
 
-        #expect(abs(transformed.probability(of: 1) - 1.0) < 1e-10)
+        #expect(abs(transformed.probability(of: 1) - 1.0) < 1e-10, "U3(pi,0,pi) on |0> should flip to |1>")
     }
 
     @Test("U3 matrix is unitary")
     func u3Unitary() {
         let gate = QuantumGate.u3(theta: 1.23, phi: 2.34, lambda: 3.45)
         let matrix = gate.matrix()
-        #expect(QuantumGate.isUnitary(matrix))
+        #expect(QuantumGate.isUnitary(matrix), "U3 matrix should be unitary")
     }
 }
 
@@ -122,7 +122,7 @@ struct SquareRootGatesTests {
         state = GateApplication.apply(.sx, to: 0, state: state)
         state = GateApplication.apply(.sx, to: 0, state: state)
 
-        #expect(abs(state.probability(of: 1) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 1) - 1.0) < 1e-10, "SX squared should flip |0> to |1>")
     }
 
     @Test("SY gate squared equals Y")
@@ -131,7 +131,7 @@ struct SquareRootGatesTests {
         state = GateApplication.apply(.sy, to: 0, state: state)
         state = GateApplication.apply(.sy, to: 0, state: state)
 
-        #expect(abs(state.probability(of: 1) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 1) - 1.0) < 1e-10, "SY squared should flip |0> to |1>")
     }
 
     @Test("√SWAP gate squared equals SWAP")
@@ -143,14 +143,14 @@ struct SquareRootGatesTests {
         state = GateApplication.apply(.sqrtSwap, to: [0, 1], state: state)
         state = GateApplication.apply(.sqrtSwap, to: [0, 1], state: state)
 
-        #expect(abs(state.probability(of: 2) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 2) - 1.0) < 1e-10, "sqrtSWAP squared should swap qubits")
     }
 
     @Test("√SWAP matrix is unitary")
     func sqrtSWAPUnitary() {
         let gate = QuantumGate.sqrtSwap
         let matrix = gate.matrix()
-        #expect(QuantumGate.isUnitary(matrix))
+        #expect(QuantumGate.isUnitary(matrix), "sqrtSWAP matrix should be unitary")
     }
 }
 
@@ -169,7 +169,7 @@ struct ControlledRotationGatesTests {
             state: state,
         )
 
-        #expect(transformed == state)
+        #expect(transformed == state, "CRx with control=0 should not change state")
     }
 
     @Test("CRx gate with control=1 rotates target")
@@ -185,14 +185,14 @@ struct ControlledRotationGatesTests {
             state: state,
         )
 
-        #expect(abs(state.probability(of: 3) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 3) - 1.0) < 1e-10, "CRx(pi) with control=1 should rotate target to |1>")
     }
 
     @Test("CRy gate matrix is unitary")
     func cRyUnitary() {
         let gate = QuantumGate.controlledRotationY(1.23)
         let matrix = gate.matrix()
-        #expect(QuantumGate.isUnitary(matrix))
+        #expect(QuantumGate.isUnitary(matrix), "CRy matrix should be unitary")
     }
 
     @Test("CRz gate applies phase rotation")
@@ -208,7 +208,7 @@ struct ControlledRotationGatesTests {
             state: state,
         )
 
-        #expect(abs(state.probability(of: 3) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 3) - 1.0) < 1e-10, "CRz should preserve |11> probability")
     }
 }
 
@@ -225,7 +225,7 @@ struct CustomUnitaryGatesTests {
         ]
 
         let gate = QuantumGate.custom(matrix: validMatrix)
-        #expect(gate.qubitsRequired == 1)
+        #expect(gate.qubitsRequired == 1, "Custom 2x2 gate should require 1 qubit")
     }
 
     @Test("Custom two-qubit gate validates unitarity")
@@ -238,7 +238,7 @@ struct CustomUnitaryGatesTests {
         ]
 
         let gate = QuantumGate.custom(matrix: validMatrix)
-        #expect(gate.qubitsRequired == 2)
+        #expect(gate.qubitsRequired == 2, "Custom 4x4 gate should require 2 qubits")
     }
 
     @Test("Custom gate works in circuit")
@@ -256,8 +256,8 @@ struct CustomUnitaryGatesTests {
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(of: 0) - 0.5) < 1e-10)
-        #expect(abs(state.probability(of: 1) - 0.5) < 1e-10)
+        #expect(abs(state.probability(of: 0) - 0.5) < 1e-10, "Custom Hadamard should give 0.5 probability for |0>")
+        #expect(abs(state.probability(of: 1) - 0.5) < 1e-10, "Custom Hadamard should give 0.5 probability for |1>")
     }
 }
 
@@ -276,8 +276,8 @@ struct MultiControlledGatesTests {
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(of: 3) - 0.5) < 1e-10)
-        #expect(abs(state.probability(of: 7) - 0.5) < 1e-10)
+        #expect(abs(state.probability(of: 3) - 0.5) < 1e-10, "Multi-controlled H should give 0.5 probability for |011>")
+        #expect(abs(state.probability(of: 7) - 0.5) < 1e-10, "Multi-controlled H should give 0.5 probability for |111>")
     }
 
     @Test("Multi-controlled U with arbitrary gate")
@@ -290,7 +290,7 @@ struct MultiControlledGatesTests {
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(of: 3) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 3) - 1.0) < 1e-10, "Multi-controlled T should preserve |011> probability")
     }
 
     @Test("Multi-controlled U with pauliX")
@@ -303,7 +303,7 @@ struct MultiControlledGatesTests {
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(of: 7) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 7) - 1.0) < 1e-10, "Multi-controlled X should flip target to |111>")
     }
 
     @Test("Multi-controlled U with pauliY")
@@ -316,7 +316,7 @@ struct MultiControlledGatesTests {
 
         let state = circuit.execute()
 
-        #expect(abs(state.probability(of: 7) - 1.0) < 1e-10)
+        #expect(abs(state.probability(of: 7) - 1.0) < 1e-10, "Multi-controlled Y should flip target to |111>")
     }
 }
 
@@ -327,16 +327,16 @@ struct MultiControlledGatesTests {
 struct GatePropertyTests {
     @Test("All new gates have correct qubit requirements")
     func qubitRequirements() {
-        #expect(QuantumGate.sx.qubitsRequired == 1)
-        #expect(QuantumGate.sy.qubitsRequired == 1)
-        #expect(QuantumGate.u1(lambda: 0.5).qubitsRequired == 1)
-        #expect(QuantumGate.u2(phi: 0.5, lambda: 0.5).qubitsRequired == 1)
-        #expect(QuantumGate.u3(theta: 0.5, phi: 0.5, lambda: 0.5).qubitsRequired == 1)
-        #expect(QuantumGate.cz.qubitsRequired == 2)
-        #expect(QuantumGate.cy.qubitsRequired == 2)
-        #expect(QuantumGate.ch.qubitsRequired == 2)
-        #expect(QuantumGate.sqrtSwap.qubitsRequired == 2)
-        #expect(QuantumGate.controlledRotationX(0.5).qubitsRequired == 2)
+        #expect(QuantumGate.sx.qubitsRequired == 1, "SX should require 1 qubit")
+        #expect(QuantumGate.sy.qubitsRequired == 1, "SY should require 1 qubit")
+        #expect(QuantumGate.u1(lambda: 0.5).qubitsRequired == 1, "U1 should require 1 qubit")
+        #expect(QuantumGate.u2(phi: 0.5, lambda: 0.5).qubitsRequired == 1, "U2 should require 1 qubit")
+        #expect(QuantumGate.u3(theta: 0.5, phi: 0.5, lambda: 0.5).qubitsRequired == 1, "U3 should require 1 qubit")
+        #expect(QuantumGate.cz.qubitsRequired == 2, "CZ should require 2 qubits")
+        #expect(QuantumGate.cy.qubitsRequired == 2, "CY should require 2 qubits")
+        #expect(QuantumGate.ch.qubitsRequired == 2, "CH should require 2 qubits")
+        #expect(QuantumGate.sqrtSwap.qubitsRequired == 2, "sqrtSwap should require 2 qubits")
+        #expect(QuantumGate.controlledRotationX(0.5).qubitsRequired == 2, "CRx should require 2 qubits")
     }
 
     @Test("All new gate matrices are unitary")
@@ -364,26 +364,26 @@ struct GatePropertyTests {
 
     @Test("Gate descriptions are correct")
     func gateDescriptions() {
-        #expect(QuantumGate.sx.description == "SX")
-        #expect(QuantumGate.sy.description == "SY")
-        #expect(QuantumGate.cz.description == "CZ")
-        #expect(QuantumGate.cy.description == "CY")
-        #expect(QuantumGate.ch.description == "CH")
-        #expect(QuantumGate.u1(lambda: 1.234).description.contains("U1"))
-        #expect(QuantumGate.u2(phi: 1.5, lambda: 2.5).description.contains("U2"))
-        #expect(QuantumGate.u3(theta: 1.0, phi: 2.0, lambda: 3.0).description.contains("U3"))
-        #expect(QuantumGate.sqrtSwap.description.contains("√SWAP"))
-        #expect(QuantumGate.cnot.description.contains("CNOT"))
-        #expect(QuantumGate.controlledRotationX(1.5).description.contains("CRx"))
-        #expect(QuantumGate.controlledRotationY(1.5).description.contains("CRy"))
-        #expect(QuantumGate.controlledRotationZ(1.5).description.contains("CRz"))
+        #expect(QuantumGate.sx.description == "SX", "SX description should be SX")
+        #expect(QuantumGate.sy.description == "SY", "SY description should be SY")
+        #expect(QuantumGate.cz.description == "CZ", "CZ description should be CZ")
+        #expect(QuantumGate.cy.description == "CY", "CY description should be CY")
+        #expect(QuantumGate.ch.description == "CH", "CH description should be CH")
+        #expect(QuantumGate.u1(lambda: 1.234).description.contains("U1"), "U1 description should contain U1")
+        #expect(QuantumGate.u2(phi: 1.5, lambda: 2.5).description.contains("U2"), "U2 description should contain U2")
+        #expect(QuantumGate.u3(theta: 1.0, phi: 2.0, lambda: 3.0).description.contains("U3"), "U3 description should contain U3")
+        #expect(QuantumGate.sqrtSwap.description.contains("√SWAP"), "sqrtSwap description should contain √SWAP")
+        #expect(QuantumGate.cnot.description.contains("CNOT"), "CNOT description should contain CNOT")
+        #expect(QuantumGate.controlledRotationX(1.5).description.contains("CRx"), "CRx description should contain CRx")
+        #expect(QuantumGate.controlledRotationY(1.5).description.contains("CRy"), "CRy description should contain CRy")
+        #expect(QuantumGate.controlledRotationZ(1.5).description.contains("CRz"), "CRz description should contain CRz")
 
         let customSingleMatrix: [[Complex<Double>]] = [
             [.zero, .one],
             [.one, .zero],
         ]
         let customSingleGate = QuantumGate.custom(matrix: customSingleMatrix)
-        #expect(customSingleGate.description == "CustomU(2x2)")
+        #expect(customSingleGate.description == "CustomU(2x2)", "Custom 2x2 description should be CustomU(2x2)")
 
         let customTwoMatrix: [[Complex<Double>]] = [
             [.one, .zero, .zero, .zero],
@@ -392,7 +392,7 @@ struct GatePropertyTests {
             [.zero, .zero, .one, .zero],
         ]
         let customTwoGate = QuantumGate.custom(matrix: customTwoMatrix)
-        #expect(customTwoGate.description.contains("CustomU"))
+        #expect(customTwoGate.description.contains("CustomU"), "Custom 4x4 description should contain CustomU")
     }
 }
 
@@ -427,7 +427,7 @@ struct NumericalPrecisionTests {
         var state2 = QuantumState(qubit: 0)
         state2 = GateApplication.apply(.u3(theta: 0.0, phi: 0.0, lambda: 1.23), to: 0, state: state2)
 
-        #expect(abs(state1.probability(of: 0) - state2.probability(of: 0)) < 1e-10)
+        #expect(abs(state1.probability(of: 0) - state2.probability(of: 0)) < 1e-10, "U1(lambda) should match U3(0,0,lambda)")
     }
 }
 

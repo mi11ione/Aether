@@ -165,7 +165,7 @@ struct FromHoppingsTests {
     @Test("Triangle topology creates three bonds")
     func triangleTopologyThreeBonds() {
         let triangleHoppings = [(0, 1, 1.0), (1, 2, 1.0), (0, 2, 1.0)]
-        let model = HubbardHamiltonian.fromHoppings( triangleHoppings, U: 0.0, sites: 3)
+        let model = HubbardHamiltonian.fromHoppings(triangleHoppings, U: 0.0, sites: 3)
         #expect(model.sites == 3, "Triangle should have 3 sites")
         #expect(model.qubits == 6, "Triangle should have 6 qubits")
         #expect(model.observable.terms.count == 12, "Triangle with U=0 should have 12 terms: 3 bonds x 2 spins x 2 Pauli strings")
@@ -174,33 +174,33 @@ struct FromHoppingsTests {
     @Test("Non-uniform hopping strengths preserved in terms")
     func nonUniformHoppingStrengths() {
         let hoppings = [(0, 1, 1.0), (1, 2, 2.0)]
-        let model = HubbardHamiltonian.fromHoppings( hoppings, U: 0.0, sites: 3)
+        let model = HubbardHamiltonian.fromHoppings(hoppings, U: 0.0, sites: 3)
         #expect(abs(model.t - 1.5) < 1e-10, "Average hopping should be 1.5")
     }
 
     @Test("Empty hoppings with U=0 gives empty observable")
     func emptyHoppingsNoInteraction() {
-        let model = HubbardHamiltonian.fromHoppings( [], U: 0.0, sites: 2)
+        let model = HubbardHamiltonian.fromHoppings([], U: 0.0, sites: 2)
         #expect(model.observable.terms.isEmpty, "No hoppings and U=0 should give empty observable")
     }
 
     @Test("Empty hoppings with U>0 gives only interaction terms")
     func emptyHoppingsWithInteraction() {
-        let model = HubbardHamiltonian.fromHoppings( [], U: 4.0, sites: 2)
+        let model = HubbardHamiltonian.fromHoppings([], U: 4.0, sites: 2)
         #expect(model.observable.terms.count > 0, "No hoppings but U>0 should give interaction terms")
     }
 
     @Test("Custom graph preserves site count")
     func customGraphPreservesSiteCount() {
         let hoppings = [(0, 1, 1.0)]
-        let model = HubbardHamiltonian.fromHoppings( hoppings, U: 4.0, sites: 5)
+        let model = HubbardHamiltonian.fromHoppings(hoppings, U: 4.0, sites: 5)
         #expect(model.sites == 5, "Site count should match input even if not all sites have hoppings")
     }
 
     @Test("Average hopping computed correctly for multiple bonds")
     func averageHoppingComputed() {
         let hoppings = [(0, 1, 2.0), (1, 2, 4.0), (2, 3, 6.0)]
-        let model = HubbardHamiltonian.fromHoppings( hoppings, U: 0.0, sites: 4)
+        let model = HubbardHamiltonian.fromHoppings(hoppings, U: 0.0, sites: 4)
         #expect(abs(model.t - 4.0) < 1e-10, "Average hopping should be (2+4+6)/3 = 4.0")
     }
 }
@@ -250,11 +250,11 @@ struct JordanWignerTransformationTests {
     }
 
     @Test("Interaction identity term has positive coefficient")
-    func interactionIdentityPositive() {
+    func interactionIdentityPositive() throws {
         let terms = HubbardHamiltonian.jordanWignerInteraction(upQubit: 0, downQubit: 2, U: 4.0)
         let identityTerm = terms.first { $0.1.operators.isEmpty }
         #expect(identityTerm != nil, "Should have identity term")
-        #expect(identityTerm!.0 > 0, "Identity term coefficient should be positive (U/4)")
+        #expect(try #require(identityTerm?.0) > 0, "Identity term coefficient should be positive (U/4)")
     }
 
     @Test("Interaction single-Z terms have negative coefficient")
@@ -268,11 +268,11 @@ struct JordanWignerTransformationTests {
     }
 
     @Test("Interaction ZZ term has positive coefficient")
-    func interactionZZPositive() {
+    func interactionZZPositive() throws {
         let terms = HubbardHamiltonian.jordanWignerInteraction(upQubit: 0, downQubit: 2, U: 4.0)
         let zzTerm = terms.first { $0.1.operators.count == 2 }
         #expect(zzTerm != nil, "Should have ZZ term")
-        #expect(zzTerm!.0 > 0, "ZZ term coefficient should be positive (U/4)")
+        #expect(try #require(zzTerm?.0) > 0, "ZZ term coefficient should be positive (U/4)")
     }
 
     @Test("Interaction coefficients sum to U/4 for n_up * n_down expansion")
@@ -316,9 +316,9 @@ struct QubitMappingTests {
     }
 
     @Test("Interaction couples spin-up and spin-down at same site")
-    func interactionCouplesSameSite() {
+    func interactionCouplesSameSite() throws {
         let terms = HubbardHamiltonian.jordanWignerInteraction(upQubit: 0, downQubit: 3, U: 4.0)
-        let zzTerm = terms.first { $0.1.operators.count == 2 }!
+        let zzTerm = try #require(terms.first { $0.1.operators.count == 2 })
         let qubits = zzTerm.1.operators.map(\.qubit)
         #expect(qubits.contains(0), "Interaction should involve spin-up qubit 0")
         #expect(qubits.contains(3), "Interaction should involve spin-down qubit 3")

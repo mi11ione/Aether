@@ -106,7 +106,7 @@ public struct LCUDecomposition: Sendable {
 /// ])
 /// let decomposition = LCU.decompose(hamiltonian)
 /// let prepCircuit = LCU.prepareCircuit(decomposition: decomposition, ancillaStart: 2)
-/// let selectCircuit = LCU.selectCircuit(decomposition: decomposition, systemQubits: 2, ancillaStart: 2)
+/// let selectCircuit = LCU.selectCircuit(decomposition: decomposition, ancillaStart: 2)
 /// ```
 public enum LCU {
     /// Threshold below which coefficients are treated as zero.
@@ -246,7 +246,6 @@ public enum LCU {
     ///
     /// - Parameters:
     ///   - decomposition: LCU decomposition containing Pauli string unitaries
-    ///   - systemQubits: Number of qubits in the system register
     ///   - ancillaStart: Starting qubit index for ancilla register
     /// - Returns: Quantum circuit implementing the SELECT oracle
     /// - Complexity: O(L·n) gates where L is term count and n is system qubits
@@ -256,7 +255,6 @@ public enum LCU {
     /// let decomposition = LCU.decompose(hamiltonian)
     /// let select = LCU.selectCircuit(
     ///     decomposition: decomposition,
-    ///     systemQubits: 2,
     ///     ancillaStart: 2
     /// )
     /// ```
@@ -264,7 +262,6 @@ public enum LCU {
     @_eagerMove
     public static func selectCircuit(
         decomposition: LCUDecomposition,
-        systemQubits: Int,
         ancillaStart: Int,
     ) -> QuantumCircuit {
         let numAncilla = decomposition.ancillaQubits
@@ -302,7 +299,6 @@ public enum LCU {
     ///
     /// - Parameters:
     ///   - decomposition: LCU decomposition of the Hamiltonian
-    ///   - systemQubits: Number of qubits in the system register
     ///   - ancillaStart: Starting qubit index for ancilla register
     /// - Returns: Quantum circuit implementing the block-encoded Hamiltonian
     /// - Complexity: O(L·n) gates where L is term count and n is system qubits
@@ -312,7 +308,6 @@ public enum LCU {
     /// let decomposition = LCU.decompose(hamiltonian)
     /// let blockCircuit = LCU.blockEncodingCircuit(
     ///     decomposition: decomposition,
-    ///     systemQubits: 2,
     ///     ancillaStart: 2
     /// )
     /// let state = blockCircuit.execute()
@@ -321,7 +316,6 @@ public enum LCU {
     @_eagerMove
     public static func blockEncodingCircuit(
         decomposition: LCUDecomposition,
-        systemQubits: Int,
         ancillaStart: Int,
     ) -> QuantumCircuit {
         let numAncilla = decomposition.ancillaQubits
@@ -335,21 +329,20 @@ public enum LCU {
 
         let prepareCircuit = prepareCircuit(decomposition: decomposition, ancillaStart: ancillaStart)
         for op in prepareCircuit.operations {
-            circuit.addOperation(op)
+            circuit.append(op)
         }
 
         let selectCircuit = selectCircuit(
             decomposition: decomposition,
-            systemQubits: systemQubits,
             ancillaStart: ancillaStart,
         )
         for op in selectCircuit.operations {
-            circuit.addOperation(op)
+            circuit.append(op)
         }
 
-        let prepareInverse = prepareCircuit.inverse()
+        let prepareInverse = prepareCircuit.inversed()
         for op in prepareInverse.operations {
-            circuit.addOperation(op)
+            circuit.append(op)
         }
 
         return circuit

@@ -221,7 +221,6 @@ public struct EdgeNoiseParameters: Sendable, Equatable, Hashable {
         self.twoQubitErrorRate = twoQubitErrorRate
         self.gateTime = gateTime
     }
-
 }
 
 // MARK: - Hardware Noise Profile
@@ -527,7 +526,8 @@ public struct HardwareNoiseProfile: Sendable {
             twoQubitNoise: TwoQubitDepolarizingChannel(errorProbability: cachedAverageTwoQubitError),
             measurementError: MeasurementErrorModel(
                 p0Given1: sumReadout0Given1 * invCount,
-                p1Given0: sumReadout1Given0 * invCount),
+                p1Given0: sumReadout1Given0 * invCount,
+            ),
         )
     }
 

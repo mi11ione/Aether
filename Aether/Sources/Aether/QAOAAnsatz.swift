@@ -134,7 +134,8 @@ enum QAOAAnsatz {
         let operatorCount = pauliString.operators.count
         guard operatorCount > 0 else { return }
 
-        var targetQubits = [Int](unsafeUninitializedCapacity: operatorCount) { buffer, count in
+        var targetQubits = [Int](unsafeUninitializedCapacity: operatorCount) {
+            buffer, count in
             for i in 0 ..< operatorCount {
                 let op = pauliString.operators[i]
                 buffer[i] = op.qubit
@@ -233,7 +234,7 @@ struct QAOAParameterBinder: Sendable {
     /// ```swift
     /// let ansatz = QuantumCircuit.qaoa(cost: cost, mixer: mixer, qubits: 3, depth: 1)
     /// let binder = QAOAParameterBinder(ansatz: ansatz)
-    /// let circuit = binder.binding(parameters: [0.5, 0.3])
+    /// let circuit = binder.bound(parameters: [0.5, 0.3])
     /// ```
     ///
     /// - Parameter parameters: Array of [γ₀, β₀, γ₁, β₁, ..., γₚ₋₁, βₚ₋₁]
@@ -243,12 +244,12 @@ struct QAOAParameterBinder: Sendable {
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
-    func binding(parameters: [Double]) -> QuantumCircuit {
+    func bound(parameters: [Double]) -> QuantumCircuit {
         let bindings = Dictionary(uniqueKeysWithValues: parameterInfo.lazy.map { info in
             (info.name, parameters[info.baseIndex] * info.coefficient)
         })
 
-        return ansatz.binding(bindings)
+        return ansatz.bound(bindings)
     }
 }
 

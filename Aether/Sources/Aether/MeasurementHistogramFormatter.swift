@@ -6,9 +6,9 @@ import Foundation
 /// Measurement outcome histogram renderer for text-based visualization of quantum measurement distributions.
 ///
 /// Formats an array of per-basis-state counts into a horizontal bar chart string using full-block
-/// Unicode characters (U+2588). Bars scale proportionally to ``barWidth``, entries can be sorted
-/// by state index or count, and sparse distributions can be filtered via ``threshold``. When an
-/// ``expected`` probability array is supplied, each line appends the theoretical count and a
+/// Unicode characters (U+2588). Bars scale proportionally to `barWidth`, entries can be sorted
+/// by state index or count, and sparse distributions can be filtered via `threshold`. When an
+/// `expected` probability array is supplied, each line appends the theoretical count and a
 /// chi-squared goodness-of-fit summary is appended at the bottom.
 ///
 /// **Example:**
@@ -39,8 +39,8 @@ public enum MeasurementHistogramFormatter: Sendable {
     ///
     /// Produces a human-readable histogram where each row shows a ket label, a proportional
     /// bar of full-block characters, the raw count, and the percentage of total shots. Rows
-    /// with counts below ``threshold`` are omitted for clarity in sparse distributions. When
-    /// ``expected`` probabilities are provided, each row appends the theoretical expected count
+    /// with counts below `threshold` are omitted for clarity in sparse distributions. When
+    /// `expected` probabilities are provided, each row appends the theoretical expected count
     /// and a chi-squared summary line is appended at the end.
     ///
     /// **Example:**
@@ -243,13 +243,12 @@ public enum MeasurementHistogramFormatter: Sendable {
         let thousandths = Int((chiSq * 1000.0).rounded())
         let chiIntPart = thousandths / 1000
         let chiFracPart = thousandths % 1000
-        let chiFracStr: String
-        if chiFracPart < 10 {
-            chiFracStr = "00" + String(chiFracPart)
+        let chiFracStr = if chiFracPart < 10 {
+            "00" + String(chiFracPart)
         } else if chiFracPart < 100 {
-            chiFracStr = "0" + String(chiFracPart)
+            "0" + String(chiFracPart)
         } else {
-            chiFracStr = String(chiFracPart)
+            String(chiFracPart)
         }
         return "χ² = " + String(chiIntPart) + "." + chiFracStr + ", df = " + String(df)
     }

@@ -16,7 +16,7 @@ import Foundation
 ///     (0.5, PauliString(.z(0), .z(1))),
 ///     (-0.3, PauliString(.x(0)))
 /// ])
-/// let result = TimeEvolution.evolve(
+/// let result = await TimeEvolution.evolve(
 ///     hamiltonian: hamiltonian,
 ///     initialState: .groundState(qubits: 2),
 ///     time: 1.0,
@@ -61,7 +61,7 @@ public struct TimeEvolutionResult: Sendable {
 ///     (-0.5, PauliString(.x(0)))
 /// ])
 /// let mps = MatrixProductState(qubits: 50)
-/// let result = await TimeEvolution.evolveMPS(
+/// let result = await TimeEvolution.evolve(
 ///     hamiltonian: hamiltonian,
 ///     initialState: mps,
 ///     time: 1.0,
@@ -154,14 +154,14 @@ public enum TimeEvolutionMethod: Sendable {
 ///
 /// **Example:**
 /// ```swift
-/// let ground = InitialStateSpecification.groundState(qubits: 4)
-/// let basis = InitialStateSpecification.basisState(0b1010, qubits: 4)
-/// let custom = InitialStateSpecification.quantumState(myState)
+/// let ground = InitialState.groundState(qubits: 4)
+/// let basis = InitialState.basisState(0b1010, qubits: 4)
+/// let custom = InitialState.quantumState(myState)
 /// ```
 ///
 /// - SeeAlso: ``TimeEvolution``
 @frozen
-public enum InitialStateSpecification: Sendable {
+public enum InitialState: Sendable {
     /// All-zeros ground state |00...0⟩.
     ///
     /// - Parameter qubits: Number of qubits in the system
@@ -225,6 +225,9 @@ public enum InitialStateSpecification: Sendable {
 /// - SeeAlso: ``TimeEvolutionMethod``
 /// - SeeAlso: ``TimeEvolutionResult``
 public enum TimeEvolution {
+    /// Numerical zero threshold for floating-point comparisons.
+    private static let epsilon: Double = 1e-15
+
     /// Evolve a quantum state under Hamiltonian time evolution.
     ///
     /// Computes |ψ(t)⟩ = exp(-iHt)|ψ(0)⟩ using the specified evolution method. The method
@@ -264,7 +267,7 @@ public enum TimeEvolution {
     @_eagerMove
     public static func evolve(
         hamiltonian: Observable,
-        initialState: InitialStateSpecification,
+        initialState: InitialState,
         time: Double,
         method: TimeEvolutionMethod,
     ) async -> TimeEvolutionResult {
@@ -310,7 +313,7 @@ public enum TimeEvolution {
             }
 
             let defaultSteps = max(10, Int(time * 10))
-            let mpsResult = await evolveMPS(
+            let mpsResult = await evolve(
                 hamiltonian: hamiltonian,
                 initialState: mpsState,
                 time: time,
@@ -349,7 +352,7 @@ public enum TimeEvolution {
     /// ])
     ///
     /// let mps = MatrixProductState(qubits: 100)
-    /// let result = await TimeEvolution.evolveMPS(
+    /// let result = await TimeEvolution.evolve(
     ///     hamiltonian: ising,
     ///     initialState: mps,
     ///     time: 1.0,
@@ -364,11 +367,15 @@ public enum TimeEvolution {
     ///   - time: Total evolution time
     ///   - steps: Number of Trotter steps
     ///   - maxBondDimension: Maximum bond dimension for SVD truncation
-    /// - Returns: MPSTimeEvolutionResult with final MPS and truncation statistics
+    /// - Returns: ``MPSTimeEvolutionResult`` with final MPS and truncation statistics
+    /// - Precondition: Hamiltonian must have at least one term
+    /// - Precondition: Time must be non-negative
+    /// - Precondition: Steps must be positive
+    /// - Precondition: Max bond dimension must be positive
     /// - Complexity: O(steps * n * chi^3) where n = qubits, chi = bond dimension
     @_optimize(speed)
     @_eagerMove
-    public static func evolveMPS(
+    public static func evolve(
         hamiltonian: Observable,
         initialState: MatrixProductState,
         time: Double,
@@ -412,11 +419,8 @@ public enum TimeEvolution {
     /// rigorous Trotter error bounds. The error scales as O((αt)^(p+1)/n^p) where α is the
     /// Hamiltonian 1-norm, p is the Trotter order, and n is the number of steps.
     ///
-    /// Error bounds by order:
-    /// - First order: O((αt)² / steps)
-    /// - Second order: O((αt)³ / steps²)
-    /// - Fourth order: O((αt)⁵ / steps⁴)
-    /// - Sixth order: O((αt)⁷ / steps⁶)
+    /// First-order error is O((αt)²/steps), second-order is O((αt)³/steps²),
+    /// fourth-order is O((αt)⁵/steps⁴), and sixth-order is O((αt)⁷/steps⁶).
     ///
     /// **Example:**
     /// ```swift
@@ -439,6 +443,9 @@ public enum TimeEvolution {
     ///   - order: Trotter decomposition order
     ///   - steps: Number of Trotter steps
     /// - Returns: Upper bound on simulation error
+    /// - Precondition: Hamiltonian must have at least one term
+    /// - Precondition: Time must be non-negative
+    /// - Precondition: Steps must be positive
     /// - Complexity: O(k) where k = number of Hamiltonian terms
     @_effects(readonly)
     public static func estimateTrotterError(
@@ -460,18 +467,20 @@ public enum TimeEvolution {
 
         case .second:
             let alphaT3 = alphaT * alphaT * alphaT
-            let steps2 = Double(steps * steps)
-            return alphaT3 / steps2
+            let dSteps = Double(steps)
+            return alphaT3 / (dSteps * dSteps)
 
         case .fourth:
             let alphaT5 = alphaT * alphaT * alphaT * alphaT * alphaT
-            let steps4 = Double(steps * steps * steps * steps)
-            return alphaT5 / steps4
+            let dSteps = Double(steps)
+            let steps2 = dSteps * dSteps
+            return alphaT5 / (steps2 * steps2)
 
         case .sixth:
             let alphaT7 = alphaT * alphaT * alphaT * alphaT * alphaT * alphaT * alphaT
-            let steps6 = Double(steps * steps * steps * steps * steps * steps)
-            return alphaT7 / steps6
+            let dSteps = Double(steps)
+            let steps2 = dSteps * dSteps
+            return alphaT7 / (steps2 * steps2 * steps2)
         }
     }
 
@@ -480,11 +489,9 @@ public enum TimeEvolution {
     /// Computes the expected number of queries to the Hamiltonian oracle required to
     /// achieve error at most epsilon. Query complexity varies significantly by method:
     ///
-    /// - Trotter-Suzuki (1st order): O(α²t²/ε)
-    /// - Trotter-Suzuki (2nd order): O((αt)^(3/2)/ε^(1/2))
-    /// - Trotter-Suzuki (4th order): O((αt)^(5/4)/ε^(1/4))
-    /// - Qubitization: O(αt + log(1/ε)) - optimal
-    /// - LCU: O(αt log(αt/ε) / log log(αt/ε))
+    /// Trotter-Suzuki scales as O(α²t²/ε) for first order, O((αt)^(3/2)/ε^(1/2)) for second,
+    /// and O((αt)^(5/4)/ε^(1/4)) for fourth. Qubitization achieves optimal O(αt + log(1/ε))
+    /// while LCU achieves O(αt log(αt/ε) / log log(αt/ε)).
     ///
     /// **Example:**
     /// ```swift
@@ -514,6 +521,9 @@ public enum TimeEvolution {
     ///   - epsilon: Target error tolerance
     ///   - method: Evolution method for complexity estimation
     /// - Returns: Estimated number of oracle queries
+    /// - Precondition: Hamiltonian must have at least one term
+    /// - Precondition: Time must be non-negative
+    /// - Precondition: Error tolerance must be positive
     /// - Complexity: O(k) where k = number of Hamiltonian terms
     @_effects(readonly)
     public static func estimateQueryComplexity(
@@ -564,37 +574,17 @@ public enum TimeEvolution {
         }
     }
 
+    /// Performs Trotter-Suzuki time evolution returning result with error bound.
     @_optimize(speed)
+    @_eagerMove
     private static func evolveTrotterSuzuki(
         hamiltonian: Observable,
-        initialState: InitialStateSpecification,
+        initialState: InitialState,
         time: Double,
         order: TrotterOrder,
         steps: Int,
     ) -> TimeEvolutionResult {
-        let state: QuantumState
-        let qubits: Int
-
-        switch initialState {
-        case let .groundState(n):
-            qubits = n
-            state = QuantumState(qubits: n)
-
-        case let .basisState(index, n):
-            qubits = n
-            var basisState = QuantumState(qubits: n)
-            basisState.setAmplitude(0, to: .zero)
-            basisState.setAmplitude(index, to: .one)
-            state = basisState
-
-        case let .quantumState(existingState):
-            qubits = existingState.qubits
-            state = existingState
-
-        case let .mps(mpsState):
-            qubits = mpsState.qubits
-            state = mpsState.toQuantumState()
-        }
+        let (state, qubits) = resolveInitialState(initialState)
 
         let config = TrotterConfiguration(order: order, steps: steps)
         let circuit = TrotterSuzuki.evolve(hamiltonian, time: time, qubits: qubits, config: config)
@@ -618,6 +608,7 @@ public enum TimeEvolution {
         )
     }
 
+    /// Computes the 1-norm of a Hamiltonian's coefficients.
     @_effects(readonly)
     private static func computeOneNorm(_ hamiltonian: Observable) -> Double {
         var sum = 0.0
@@ -627,43 +618,21 @@ public enum TimeEvolution {
         return sum
     }
 
+    /// Performs LCU-based Hamiltonian simulation with ancilla projection.
     @_optimize(speed)
     private static func evolveLCU(
         hamiltonian: Observable,
-        initialState: InitialStateSpecification,
+        initialState: InitialState,
         time: Double,
         ancillaQubits: Int,
     ) async -> TimeEvolutionResult {
-        let state: QuantumState
-        let systemQubits: Int
-
-        switch initialState {
-        case let .groundState(n):
-            systemQubits = n
-            state = QuantumState(qubits: n)
-
-        case let .basisState(index, n):
-            systemQubits = n
-            var basisState = QuantumState(qubits: n)
-            basisState.setAmplitude(0, to: .zero)
-            basisState.setAmplitude(index, to: .one)
-            state = basisState
-
-        case let .quantumState(existingState):
-            systemQubits = existingState.qubits
-            state = existingState
-
-        case let .mps(mpsState):
-            systemQubits = mpsState.qubits
-            state = mpsState.toQuantumState()
-        }
+        let (state, systemQubits) = resolveInitialState(initialState)
 
         let decomposition = LCU.decompose(hamiltonian)
         let totalQubits = systemQubits + max(decomposition.ancillaQubits, ancillaQubits)
 
         let circuit = LCU.blockEncodingCircuit(
             decomposition: decomposition,
-            systemQubits: systemQubits,
             ancillaStart: systemQubits,
         )
 
@@ -676,7 +645,7 @@ public enum TimeEvolution {
         )
 
         let oneNorm = decomposition.oneNorm
-        let errorBound = oneNorm > 1e-15 ? 1.0 / oneNorm : 1.0
+        let errorBound = oneNorm > epsilon ? 1.0 / oneNorm : 1.0
 
         return TimeEvolutionResult(
             finalState: projectedState,
@@ -688,36 +657,15 @@ public enum TimeEvolution {
         )
     }
 
+    /// Performs qubitization-based Hamiltonian simulation via quantum signal processing.
     @_optimize(speed)
     private static func evolveQubitization(
         hamiltonian: Observable,
-        initialState: InitialStateSpecification,
+        initialState: InitialState,
         time: Double,
         polynomialDegree: Int,
     ) async -> TimeEvolutionResult {
-        let state: QuantumState
-        let systemQubits: Int
-
-        switch initialState {
-        case let .groundState(n):
-            systemQubits = n
-            state = QuantumState(qubits: n)
-
-        case let .basisState(index, n):
-            systemQubits = n
-            var basisState = QuantumState(qubits: n)
-            basisState.setAmplitude(0, to: .zero)
-            basisState.setAmplitude(index, to: .one)
-            state = basisState
-
-        case let .quantumState(existingState):
-            systemQubits = existingState.qubits
-            state = existingState
-
-        case let .mps(mpsState):
-            systemQubits = mpsState.qubits
-            state = mpsState.toQuantumState()
-        }
+        let (state, systemQubits) = resolveInitialState(initialState)
 
         let epsilon = polynomialDegree > 0 ? pow(10.0, -Double(polynomialDegree) / 10.0) : 1e-6
 
@@ -738,6 +686,7 @@ public enum TimeEvolution {
         )
     }
 
+    /// Derives two-site and single-site TEBD gates from Hamiltonian terms.
     @_optimize(speed)
     @_effects(readonly)
     private static func deriveTEBDGates(
@@ -784,14 +733,14 @@ public enum TimeEvolution {
         }
 
         let twoSiteGate: [[Complex<Double>]]
-        if abs(xxCoeff) > 1e-15, abs(yyCoeff) > 1e-15, abs(zzCoeff) > 1e-15 {
+        if abs(xxCoeff) > epsilon, abs(yyCoeff) > epsilon, abs(zzCoeff) > epsilon {
             let avgXY = (xxCoeff + yyCoeff) / 2.0
             twoSiteGate = TEBDGates.heisenbergXXZ(angle: avgXY * dt, delta: zzCoeff / avgXY)
-        } else if abs(zzCoeff) > 1e-15 {
+        } else if abs(zzCoeff) > epsilon {
             twoSiteGate = TEBDGates.zzEvolution(angle: zzCoeff * dt)
-        } else if abs(xxCoeff) > 1e-15 {
+        } else if abs(xxCoeff) > epsilon {
             twoSiteGate = TEBDGates.xxEvolution(angle: xxCoeff * dt)
-        } else if abs(yyCoeff) > 1e-15 {
+        } else if abs(yyCoeff) > epsilon {
             twoSiteGate = TEBDGates.yyEvolution(angle: yyCoeff * dt)
         } else {
             twoSiteGate = [
@@ -806,11 +755,11 @@ public enum TimeEvolution {
         var hasSingleSite = false
 
         for site in 0 ..< qubits {
-            if abs(xCoeffs[site]) > 1e-15 {
+            if abs(xCoeffs[site]) > epsilon {
                 hasSingleSite = true
                 break
             }
-            if abs(zCoeffs[site]) > 1e-15 {
+            if abs(zCoeffs[site]) > epsilon {
                 hasSingleSite = true
                 break
             }
@@ -819,9 +768,9 @@ public enum TimeEvolution {
         if hasSingleSite {
             singleSiteGates.reserveCapacity(qubits)
             for site in 0 ..< qubits {
-                if abs(xCoeffs[site]) > 1e-15 {
+                if abs(xCoeffs[site]) > epsilon {
                     singleSiteGates.append(TEBDGates.xEvolution(angle: xCoeffs[site] * dt))
-                } else if abs(zCoeffs[site]) > 1e-15 {
+                } else if abs(zCoeffs[site]) > epsilon {
                     singleSiteGates.append(TEBDGates.zEvolution(angle: zCoeffs[site] * dt))
                 } else {
                     singleSiteGates.append([[.one, .zero], [.zero, .one]])
@@ -832,43 +781,72 @@ public enum TimeEvolution {
         return (twoSiteGate, singleSiteGates)
     }
 
+    /// Resolves an initial state specification into a concrete quantum state.
+    private static func resolveInitialState(_ spec: InitialState) -> (state: QuantumState, qubits: Int) {
+        switch spec {
+        case let .groundState(qubits):
+            return (QuantumState(qubits: qubits), qubits)
+
+        case let .basisState(index, qubits):
+            var basisState = QuantumState(qubits: qubits)
+            basisState.setAmplitude(0, to: .zero)
+            basisState.setAmplitude(index, to: .one)
+            return (basisState, qubits)
+
+        case let .quantumState(existingState):
+            return (existingState, existingState.qubits)
+
+        case let .mps(mpsState):
+            return (mpsState.toQuantumState(), mpsState.qubits)
+        }
+    }
+
+    /// Extends a quantum state with zero-initialized ancilla qubits.
     @_optimize(speed)
+    @_effects(readonly)
     @_eagerMove
     private static func extendStateWithAncillas(_ state: QuantumState, totalQubits: Int) -> QuantumState {
         let newSize = 1 << totalQubits
         let oldSize = state.stateSpaceSize
 
-        var newAmplitudes = [Complex<Double>](repeating: .zero, count: newSize)
-
-        for i in 0 ..< oldSize {
-            newAmplitudes[i] = state.amplitudes[i]
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: newSize) { buffer, count in
+            for i in 0 ..< oldSize {
+                buffer.initializeElement(at: i, to: state.amplitudes[i])
+            }
+            if newSize > oldSize {
+                // Safe: buffer.baseAddress! non-nil because newSize > 0
+                buffer.baseAddress!.advanced(by: oldSize).initialize(repeating: .zero, count: newSize - oldSize)
+            }
+            count = newSize
         }
 
         return QuantumState(qubits: totalQubits, amplitudes: newAmplitudes)
     }
 
+    /// Projects an extended state back to system qubits by tracing out ancillas.
     @_optimize(speed)
+    @_effects(readonly)
     @_eagerMove
     private static func projectToSystemQubits(state: QuantumState, systemQubits: Int) -> QuantumState {
         let systemSize = 1 << systemQubits
         let ancillaSize = state.stateSpaceSize / systemSize
 
-        var projectedAmplitudes = [Complex<Double>](repeating: .zero, count: systemSize)
-
-        for i in 0 ..< systemSize {
-            var sumSquared = 0.0
-            for a in 0 ..< ancillaSize {
-                let fullIndex = i + a * systemSize
-                if fullIndex < state.stateSpaceSize {
-                    sumSquared += state.amplitude(of: fullIndex).magnitudeSquared
+        let projectedAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: systemSize) { buffer, count in
+            for i in 0 ..< systemSize {
+                var sumSquared = 0.0
+                for a in 0 ..< ancillaSize {
+                    sumSquared += state.amplitude(of: i + a * systemSize).magnitudeSquared
+                }
+                let amplitude = state.amplitude(of: i)
+                let norm = sqrt(sumSquared)
+                if norm > epsilon {
+                    let scale = norm / sqrt(amplitude.magnitudeSquared)
+                    buffer.initializeElement(at: i, to: Complex(amplitude.real * scale, amplitude.imaginary * scale))
+                } else {
+                    buffer.initializeElement(at: i, to: .zero)
                 }
             }
-            let amplitude = state.amplitude(of: i)
-            let norm = sqrt(sumSquared)
-            if norm > 1e-15 {
-                let phase = amplitude / Complex(sqrt(amplitude.magnitudeSquared), 0.0)
-                projectedAmplitudes[i] = Complex(norm, 0.0) * phase
-            }
+            count = systemSize
         }
 
         return QuantumState(qubits: systemQubits, amplitudes: projectedAmplitudes)

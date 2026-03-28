@@ -3,6 +3,13 @@
 
 import Accelerate
 
+/// Tolerance for normalization checks.
+private let normalizationTolerance: Double = 1e-10
+/// Minimum norm squared for safe normalization division.
+private let normalizationMinimum: Double = 1e-15
+/// Minimum amplitude magnitude squared for display.
+private let displayThreshold: Double = 1e-6
+
 /// Quantum state represented as complex amplitude vector |ψ⟩ = Σᵢ cᵢ|i⟩ in 2^n-dimensional Hilbert space.
 ///
 /// Each computational basis state |i⟩ has complex amplitude cᵢ with measurement probability |cᵢ|² (Born rule).
@@ -31,8 +38,6 @@ import Accelerate
 /// - SeeAlso: ``Measurement`` for Born rule sampling
 @frozen
 public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
-    // MARK: - Properties
-
     /// Array of complex amplitudes representing quantum state
     ///
     /// Contains 2^n complex coefficients for n-qubit system in computational basis ordering.
@@ -65,9 +70,9 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// ```
     ///
     /// - Complexity: O(1)
-    public var stateSpaceSize: Int { 1 << qubits }
-
-    // MARK: - Initialization
+    public var stateSpaceSize: Int {
+        1 << qubits
+    }
 
     /// Initialize ground state: all qubits in |0⟩
     ///
@@ -123,7 +128,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         self.amplitudes = amplitudes
 
         let sumSquared = computeNormSquared()
-        if abs(sumSquared - 1.0) > 1e-10, sumSquared > 1e-15 {
+        if abs(sumSquared - 1.0) > normalizationTolerance, sumSquared > normalizationMinimum {
             let invNorm = 1.0 / sqrt(sumSquared)
             self.amplitudes = [Complex<Double>](unsafeUninitializedCapacity: amplitudes.count) { buffer, count in
                 for i in amplitudes.indices {
@@ -155,12 +160,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         if state == 0 { amplitudes = [.one, .zero] } else { amplitudes = [.zero, .one] }
     }
 
-    /// Compute magnitude squared for all amplitudes
-    ///
-    /// Private implementation detail for probability calculations. Uses vDSP for hardware acceleration.
-    ///
-    /// - Returns: Array of |cᵢ|² values
-    /// - Complexity: O(2^n) with SIMD vectorization
+    /// Computes magnitude squared for all amplitudes using vDSP vectorization.
     @_effects(readonly)
     @_eagerMove
     private func computeMagnitudesSquaredVectorized() -> [Double] {
@@ -175,10 +175,12 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
 
         return [Double](unsafeUninitializedCapacity: n) { magPtr, count in
             interleavedAmps.withUnsafeBufferPointer { interleavedPtr in
+                // safety: interleavedAmps is non-empty (n >= 1 for valid quantum states)
                 var splitComplex = DSPDoubleSplitComplex(
                     realp: UnsafeMutablePointer(mutating: interleavedPtr.baseAddress!),
                     imagp: UnsafeMutablePointer(mutating: interleavedPtr.baseAddress! + 1),
                 )
+                // safety: magPtr from unsafeUninitializedCapacity is always valid for count n
                 vDSP_zvmagsD(&splitComplex, 2, magPtr.baseAddress!, 1, vDSP_Length(n))
             }
             count = n
@@ -264,8 +266,14 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// - SeeAlso: ``probabilities()`` for full distribution
     @_optimize(speed)
     @_effects(readonly)
-    @inlinable
     public func mostProbableState() -> (index: Int, probability: Double) {
+        if stateSpaceSize >= 64 {
+            let mags = computeMagnitudesSquaredVectorized()
+            var maxValue = 0.0
+            var maxIndex: vDSP_Length = 0
+            vDSP_maxviD(mags, 1, &maxValue, &maxIndex, vDSP_Length(mags.count))
+            return (Int(maxIndex), maxValue)
+        }
         var maxIndex = 0
         var maxProb = amplitudes[0].magnitudeSquared
 
@@ -325,16 +333,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         return (p0, p1)
     }
 
-    // MARK: - Normalization
-
-    /// Compute sum of squared magnitudes Σᵢ |cᵢ|²
-    ///
-    /// Private implementation detail shared by normalization checking and enforcement.
-    /// Uses Accelerate framework (vDSP) for states with ≥64 amplitudes, falling back to
-    /// scalar computation for smaller states.
-    ///
-    /// - Returns: Σᵢ |cᵢ|² (should equal 1.0 for normalized states)
-    /// - Complexity: O(2^n) with SIMD vectorization for large states
+    /// Computes sum of squared magnitudes for normalization checking.
     @_optimize(speed)
     @_effects(readonly)
     private func computeNormSquared() -> Double {
@@ -342,6 +341,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
             let magnitudesSquared: [Double] = computeMagnitudesSquaredVectorized()
             var sum = 0.0
             magnitudesSquared.withUnsafeBufferPointer { ptr in
+                // safety: magnitudesSquared is non-empty (amplitudes.count >= 64)
                 vDSP_sveD(ptr.baseAddress!, 1, &sum, vDSP_Length(magnitudesSquared.count))
             }
             return sum
@@ -367,7 +367,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     @_effects(readonly)
     public func isNormalized() -> Bool {
         let sum: Double = computeNormSquared()
-        return abs(sum - 1.0) < 1e-10
+        return abs(sum - 1.0) < normalizationTolerance
     }
 
     /// Normalize quantum state to satisfy Σ|cᵢ|² = 1
@@ -397,8 +397,6 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
             count = n
         }
     }
-
-    // MARK: - State Access
 
     /// Get complex amplitude of specific basis state
     ///
@@ -444,12 +442,11 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// - Precondition: stateIndex must be in range [0, 2^n-1]
     /// - Note: May denormalize state - call ``normalize()`` after bulk modifications
     /// - SeeAlso: ``amplitude(of:)`` for reading amplitudes
+    @inline(__always)
     public mutating func setAmplitude(_ stateIndex: Int, to amplitude: Complex<Double>) {
         ValidationUtilities.validateIndexInBounds(stateIndex, bound: stateSpaceSize, name: "Basis state index")
         amplitudes[stateIndex] = amplitude
     }
-
-    // MARK: - CustomStringConvertible
 
     /// String representation showing significant amplitudes
     ///
@@ -467,7 +464,7 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     /// - Complexity: O(2^n)
     /// - Note: Filters amplitudes below 1e-6 threshold for readability
     public var description: String {
-        let threshold = 1e-6
+        let threshold = displayThreshold
         var terms: [String] = []
         terms.reserveCapacity(min(amplitudes.count, 16))
 

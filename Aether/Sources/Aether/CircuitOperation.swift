@@ -52,7 +52,7 @@ public enum NonUnitaryOperation: Equatable, Hashable, Sendable {
 /// a uniform interface for circuit construction, parameter management, and introspection.
 /// Each operation records the qubits it acts on and an optional timestamp for scheduling
 /// in time-ordered circuit representations. The ``gate`` case wraps a ``QuantumGate`` with
-/// its target qubits, while the ``reset`` case represents a mid-circuit qubit reset.
+/// its target qubits, while the `reset` case represents a mid-circuit qubit reset.
 ///
 /// Parameter management delegates to the underlying ``QuantumGate`` for gate operations,
 /// enabling variational circuit workflows where symbolic parameters are bound to concrete

@@ -83,10 +83,9 @@ public struct BlockEncodingConfiguration: Sendable {
 /// PREPARE and SELECT oracles. The block encoding embeds H/alpha in the top-left block of a
 /// larger unitary operator, enabling optimal Hamiltonian simulation via quantum signal processing.
 ///
-/// The block encoding circuit structure is:
-/// - PREPARE: |0⟩_a -> sum_i sqrt(|alpha_i|/alpha) |i⟩_a
-/// - SELECT: |i⟩_a |psi⟩_s -> |i⟩_a U_i |psi⟩_s
-/// - Combined: (PREPARE^dagger)(SELECT)(PREPARE) block-encodes H/alpha
+/// The PREPARE oracle maps |0⟩_a to a superposition encoding coefficient magnitudes,
+/// SELECT applies controlled unitaries |i⟩_a|ψ⟩_s → |i⟩_aUᵢ|ψ⟩_s, and the combined
+/// circuit (PREPARE†)(SELECT)(PREPARE) block-encodes H/alpha.
 ///
 /// - SeeAlso: ``BlockEncodingConfiguration``
 /// - SeeAlso: ``QubitizedWalkOperator``
@@ -116,7 +115,9 @@ public struct BlockEncoding: Sendable {
     /// Total qubits required including ancillas.
     ///
     /// Equals systemQubits + configuration.ancillaQubits.
-    @inlinable public var totalQubits: Int { systemQubits + configuration.ancillaQubits }
+    @inlinable public var totalQubits: Int {
+        systemQubits + configuration.ancillaQubits
+    }
 
     /// LCU decomposition of the Hamiltonian.
     private let decomposition: LCUDecomposition
@@ -136,6 +137,8 @@ public struct BlockEncoding: Sendable {
     /// let encoding = BlockEncoding(hamiltonian: H, systemQubits: 2)
     /// print(encoding.totalQubits)
     /// ```
+    ///
+    /// - Precondition: systemQubits > 0
     public init(hamiltonian: Observable, systemQubits: Int) {
         ValidationUtilities.validatePositiveQubits(systemQubits)
 
@@ -160,9 +163,12 @@ public struct BlockEncoding: Sendable {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
     /// let encoding = BlockEncoding(hamiltonian: H, systemQubits: 2)
     /// let prepare = encoding.prepareCircuit()
     /// ```
+    ///
+    /// - Complexity: O(L) where L is the number of LCU terms
     @_optimize(speed)
     @_eagerMove
     public func prepareCircuit() -> QuantumCircuit {
@@ -178,15 +184,17 @@ public struct BlockEncoding: Sendable {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
     /// let encoding = BlockEncoding(hamiltonian: H, systemQubits: 2)
     /// let select = encoding.selectCircuit()
     /// ```
+    ///
+    /// - Complexity: O(L × n) where L is LCU terms and n is system qubits
     @_optimize(speed)
     @_eagerMove
     public func selectCircuit() -> QuantumCircuit {
         LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: systemQubits,
             ancillaStart: systemQubits,
         )
     }
@@ -199,15 +207,17 @@ public struct BlockEncoding: Sendable {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
     /// let encoding = BlockEncoding(hamiltonian: H, systemQubits: 2)
     /// let blockCircuit = encoding.blockEncodingCircuit()
     /// ```
+    ///
+    /// - Complexity: O(L × n) where L is LCU terms and n is system qubits
     @_optimize(speed)
     @_eagerMove
     public func blockEncodingCircuit() -> QuantumCircuit {
         LCU.blockEncodingCircuit(
             decomposition: decomposition,
-            systemQubits: systemQubits,
             ancillaStart: systemQubits,
         )
     }
@@ -343,6 +353,9 @@ public struct QSPPhaseAngles: Sendable {
 ///
 /// **Example:**
 /// ```swift
+/// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
+/// let encoding = BlockEncoding(hamiltonian: H, systemQubits: 2)
+/// let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
 /// let phases = QuantumSignalProcessing.computePhaseAngles(
 ///     for: .timeEvolution(time: 1.0),
 ///     degree: 10,
@@ -355,6 +368,9 @@ public struct QSPPhaseAngles: Sendable {
 /// )
 /// ```
 public enum QuantumSignalProcessing {
+    private static let besselNearZeroThreshold = 1e-10
+    private static let besselConvergenceEpsilon = 1e-15
+    private static let besselMaxIterations = 50
     /// Computes QSP phase angles for the specified target function.
     ///
     /// Determines the optimal polynomial degree and computes phase angles that approximate
@@ -376,6 +392,10 @@ public enum QuantumSignalProcessing {
     /// )
     /// print(phases.polynomialDegree)
     /// ```
+    ///
+    /// - Complexity: O(degree)
+    /// - Precondition: degree > 0
+    /// - Precondition: epsilon > 0
     @_optimize(speed)
     @_effects(readonly)
     public static func computePhaseAngles(
@@ -420,12 +440,19 @@ public enum QuantumSignalProcessing {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
+    /// let encoding = BlockEncoding(hamiltonian: H, systemQubits: 2)
+    /// let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
+    /// let phases = QuantumSignalProcessing.computePhaseAngles(for: .timeEvolution(time: 1.0), degree: 10, epsilon: 1e-6)
     /// let circuit = QuantumSignalProcessing.buildCircuit(
     ///     walkOperator: walkOp,
     ///     phaseAngles: phases,
     ///     signalQubit: 4
     /// )
     /// ```
+    ///
+    /// - Complexity: O(degree x walkCircuitSize)
+    /// - Precondition: signalQubit >= 0
     @_optimize(speed)
     @_eagerMove
     public static func buildCircuit(
@@ -440,21 +467,21 @@ public enum QuantumSignalProcessing {
 
         var circuit = QuantumCircuit(qubits: totalQubits)
 
-        let phases = phaseAngles.phases
-        let numPhases = phases.count
+        let phaseValues = phaseAngles.phases
+        let numPhases = phaseValues.count
 
         if numPhases == 0 {
             return circuit
         }
 
-        circuit.append(.rotationZ(2.0 * phases[0]), to: signalQubit)
+        circuit.append(.rotationZ(2.0 * phaseValues[0]), to: signalQubit)
 
         for i in 1 ..< numPhases {
             for op in walkCircuit.operations {
-                circuit.addOperation(op)
+                circuit.append(op)
             }
 
-            circuit.append(.rotationZ(2.0 * phases[i]), to: signalQubit)
+            circuit.append(.rotationZ(2.0 * phaseValues[i]), to: signalQubit)
         }
 
         return circuit
@@ -474,6 +501,10 @@ public enum QuantumSignalProcessing {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
+    /// let encoding = BlockEncoding(hamiltonian: H, systemQubits: 2)
+    /// let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
+    /// let phases = QuantumSignalProcessing.computePhaseAngles(for: .timeEvolution(time: 1.0), degree: 10, epsilon: 1e-6)
     /// let controlled = QuantumSignalProcessing.buildControlledCircuit(
     ///     walkOperator: walkOp,
     ///     phaseAngles: phases,
@@ -481,6 +512,10 @@ public enum QuantumSignalProcessing {
     ///     controlQubit: 0
     /// )
     /// ```
+    ///
+    /// - Complexity: O(degree x controlledWalkSize)
+    /// - Precondition: signalQubit >= 0
+    /// - Precondition: controlQubit >= 0
     @_optimize(speed)
     @_eagerMove
     public static func buildControlledCircuit(
@@ -497,26 +532,27 @@ public enum QuantumSignalProcessing {
 
         var circuit = QuantumCircuit(qubits: totalQubits)
 
-        let phases = phaseAngles.phases
-        let numPhases = phases.count
+        let phaseValues = phaseAngles.phases
+        let numPhases = phaseValues.count
 
         if numPhases == 0 {
             return circuit
         }
 
-        circuit.append(.controlledRotationZ(2.0 * phases[0]), to: [controlQubit, signalQubit])
+        circuit.append(.controlledRotationZ(2.0 * phaseValues[0]), to: [controlQubit, signalQubit])
 
         for i in 1 ..< numPhases {
             for op in controlledWalk.operations {
-                circuit.addOperation(op)
+                circuit.append(op)
             }
 
-            circuit.append(.controlledRotationZ(2.0 * phases[i]), to: [controlQubit, signalQubit])
+            circuit.append(.controlledRotationZ(2.0 * phaseValues[i]), to: [controlQubit, signalQubit])
         }
 
         return circuit
     }
 
+    /// Computes QSP phases for time evolution via Jacobi-Anger expansion.
     @_optimize(speed)
     @_effects(readonly)
     private static func computeTimeEvolutionPhases(
@@ -540,11 +576,12 @@ public enum QuantumSignalProcessing {
 
         var chebyshevCoeffs = [Double](repeating: 0.0, count: effectiveDegree + 1)
 
-        for k in 0 ... effectiveDegree {
+        chebyshevCoeffs[0] = approximateBessel(order: 0, argument: absTime)
+        var sign = -1.0
+        for k in 1 ... effectiveDegree {
             let bessel = approximateBessel(order: k, argument: absTime)
-            let sign = (k % 2 == 0) ? 1.0 : -1.0
-            let multiplier = (k == 0) ? 1.0 : 2.0
-            chebyshevCoeffs[k] = sign * multiplier * bessel
+            chebyshevCoeffs[k] = sign * 2.0 * bessel
+            sign = -sign
         }
 
         let phases = chebyshevToQSPPhases(coefficients: chebyshevCoeffs, targetDegree: effectiveDegree)
@@ -564,6 +601,7 @@ public enum QuantumSignalProcessing {
         )
     }
 
+    /// Computes QSP phases for sign function approximation.
     @_optimize(speed)
     @_effects(readonly)
     private static func computeSignFunctionPhases(
@@ -589,6 +627,7 @@ public enum QuantumSignalProcessing {
         )
     }
 
+    /// Computes QSP phases for matrix inversion approximation.
     @_optimize(speed)
     @_effects(readonly)
     private static func computeInverseFunctionPhases(
@@ -615,6 +654,7 @@ public enum QuantumSignalProcessing {
         )
     }
 
+    /// Computes QSP phases for a Chebyshev polynomial of given degree.
     @_optimize(speed)
     @_effects(readonly)
     private static func computeChebyshevPhases(degree: Int) -> QSPPhaseAngles {
@@ -631,6 +671,7 @@ public enum QuantumSignalProcessing {
         )
     }
 
+    /// Computes QSP phases from custom Chebyshev coefficients.
     @_optimize(speed)
     @_effects(readonly)
     private static func computeCustomPhases(
@@ -649,6 +690,7 @@ public enum QuantumSignalProcessing {
         )
     }
 
+    /// Converts Chebyshev coefficients to QSP phase angles.
     @_optimize(speed)
     @_effects(readonly)
     private static func chebyshevToQSPPhases(
@@ -684,10 +726,11 @@ public enum QuantumSignalProcessing {
         return phases
     }
 
+    /// Approximates the Bessel function J_n(x) via power series.
     @_optimize(speed)
     @_effects(readonly)
     private static func approximateBessel(order: Int, argument: Double) -> Double {
-        if argument < 1e-10 {
+        if argument < besselNearZeroThreshold {
             return order == 0 ? 1.0 : 0.0
         }
 
@@ -703,10 +746,11 @@ public enum QuantumSignalProcessing {
         var currentTerm = term
         let argSquaredOver4 = -halfArg * halfArg
 
-        for m in 1 ... 50 {
-            currentTerm *= argSquaredOver4 / (Double(m) * Double(m + order))
+        for m in 1 ... besselMaxIterations {
+            let reciprocal = 1.0 / (Double(m) * Double(m + order))
+            currentTerm *= argSquaredOver4 * reciprocal
             sum += currentTerm
-            if abs(currentTerm) < 1e-15 * abs(sum) {
+            if abs(currentTerm) < besselConvergenceEpsilon * abs(sum) {
                 break
             }
         }
@@ -730,6 +774,7 @@ public enum QuantumSignalProcessing {
 ///
 /// **Example:**
 /// ```swift
+/// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
 /// let encoding = BlockEncoding(hamiltonian: H, systemQubits: 2)
 /// let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
 /// let circuit = walkOp.buildWalkCircuit()
@@ -755,10 +800,10 @@ public struct QubitizedWalkOperator: Sendable {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
     /// let encoding = BlockEncoding(hamiltonian: H, systemQubits: 2)
     /// let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
     /// print(walkOp.systemQubits)
-    /// print(walkOp.ancillaQubits)
     /// ```
     public init(blockEncoding: BlockEncoding) {
         self.blockEncoding = blockEncoding
@@ -779,6 +824,8 @@ public struct QubitizedWalkOperator: Sendable {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
+    /// let encoding = BlockEncoding(hamiltonian: H, systemQubits: 2)
     /// let walkOp = QubitizedWalkOperator(
     ///     blockEncoding: encoding,
     ///     ancillaQubits: [4, 5],
@@ -793,10 +840,8 @@ public struct QubitizedWalkOperator: Sendable {
 
     /// Builds the walk operator circuit W = R * SELECT * PREPARE^dagger.
     ///
-    /// Constructs the complete walk operator by composing:
-    /// 1. PREPARE^dagger (inverse state preparation)
-    /// 2. SELECT (controlled unitaries)
-    /// 3. R = 2|0><0|_a tensor I_s - I (reflection on ancilla)
+    /// Composes PREPARE inverse, SELECT controlled unitaries, and the ancilla
+    /// reflection R = 2|0><0|_a ⊗ I_s - I.
     ///
     /// The reflection R is implemented as X^n * MCZ * X^n on the ancilla qubits.
     ///
@@ -804,9 +849,13 @@ public struct QubitizedWalkOperator: Sendable {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
+    /// let encoding = BlockEncoding(hamiltonian: H, systemQubits: 2)
     /// let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
     /// let circuit = walkOp.buildWalkCircuit()
     /// ```
+    ///
+    /// - Complexity: O(L x n) where L is the number of LCU terms and n is the number of system qubits
     @_optimize(speed)
     @_eagerMove
     public func buildWalkCircuit() -> QuantumCircuit {
@@ -815,14 +864,14 @@ public struct QubitizedWalkOperator: Sendable {
         var circuit = QuantumCircuit(qubits: totalQubits)
 
         let prepareCircuit = blockEncoding.prepareCircuit()
-        let prepareInverse = prepareCircuit.inverse()
+        let prepareInverse = prepareCircuit.inversed()
         for op in prepareInverse.operations {
-            circuit.addOperation(op)
+            circuit.append(op)
         }
 
         let selectCircuit = blockEncoding.selectCircuit()
         for op in selectCircuit.operations {
-            circuit.addOperation(op)
+            circuit.append(op)
         }
 
         appendReflection(to: &circuit)
@@ -840,9 +889,14 @@ public struct QubitizedWalkOperator: Sendable {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
+    /// let encoding = BlockEncoding(hamiltonian: H, systemQubits: 2)
     /// let walkOp = QubitizedWalkOperator(blockEncoding: encoding)
     /// let controlled = walkOp.buildControlledWalkCircuit(controlQubit: 0)
     /// ```
+    ///
+    /// - Complexity: O(L x n) where L is the number of LCU terms
+    /// - Precondition: controlQubit >= 0
     @_optimize(speed)
     @_eagerMove
     public func buildControlledWalkCircuit(controlQubit: Int) -> QuantumCircuit {
@@ -853,7 +907,7 @@ public struct QubitizedWalkOperator: Sendable {
         var circuit = QuantumCircuit(qubits: totalQubits)
 
         let prepareCircuit = blockEncoding.prepareCircuit()
-        let prepareInverse = prepareCircuit.inverse()
+        let prepareInverse = prepareCircuit.inversed()
         for op in prepareInverse.operations {
             if case let .gate(g, qubits, _) = op {
                 appendControlledGate(to: &circuit, gate: g, qubits: qubits, control: controlQubit)
@@ -872,6 +926,7 @@ public struct QubitizedWalkOperator: Sendable {
         return circuit
     }
 
+    /// Appends the ancilla reflection R = 2|0><0| - I to the circuit.
     @_optimize(speed)
     private func appendReflection(to circuit: inout QuantumCircuit) {
         for qubit in ancillaQubits {
@@ -885,6 +940,7 @@ public struct QubitizedWalkOperator: Sendable {
         }
     }
 
+    /// Appends a controlled ancilla reflection to the circuit.
     @_optimize(speed)
     private func appendControlledReflection(to circuit: inout QuantumCircuit, controlQubit: Int) {
         circuit.append(.cnot, to: [controlQubit, ancillaQubits[0]])
@@ -893,7 +949,9 @@ public struct QubitizedWalkOperator: Sendable {
             circuit.append(.pauliX, to: qubit)
         }
 
-        var allControls = [controlQubit]
+        var allControls = [Int]()
+        allControls.reserveCapacity(1 + ancillaQubits.count)
+        allControls.append(controlQubit)
         allControls.append(contentsOf: ancillaQubits)
         appendMultiControlledZ(to: &circuit, controlQubits: allControls)
 
@@ -904,6 +962,7 @@ public struct QubitizedWalkOperator: Sendable {
         circuit.append(.cnot, to: [controlQubit, ancillaQubits[0]])
     }
 
+    /// Appends a multi-controlled Z gate decomposition to the circuit.
     @_optimize(speed)
     private func appendMultiControlledZ(to circuit: inout QuantumCircuit, controlQubits: [Int]) {
         let n = controlQubits.count
@@ -931,6 +990,7 @@ public struct QubitizedWalkOperator: Sendable {
         }
     }
 
+    /// Appends a controlled version of a gate to the circuit.
     @_optimize(speed)
     private func appendControlledGate(
         to circuit: inout QuantumCircuit,
@@ -1056,7 +1116,7 @@ public struct QubitizationEigenvalueResult: Sendable {
 /// **Example:**
 /// ```swift
 /// let result = QubitizationEvolutionResult(
-///     evolvedState: state,
+///     evolvedState: QuantumState(qubits: 2),
 ///     time: 1.0,
 ///     epsilon: 1e-6,
 ///     walkOperatorCalls: 15,
@@ -1098,7 +1158,7 @@ public struct QubitizationEvolutionResult: Sendable {
     /// **Example:**
     /// ```swift
     /// let result = QubitizationEvolutionResult(
-    ///     evolvedState: finalState,
+    ///     evolvedState: QuantumState(qubits: 2),
     ///     time: 2.0,
     ///     epsilon: 1e-8,
     ///     walkOperatorCalls: 30,
@@ -1130,12 +1190,10 @@ public struct QubitizationEvolutionResult: Sendable {
 /// evolution time, and epsilon is target error. Combines block encoding via LCU, the
 /// qubitized walk operator, and Quantum Signal Processing.
 ///
-/// Qubitization achieves optimal complexity by:
-/// 1. Block-encoding H/alpha via LCU decomposition
-/// 2. Constructing walk operator W with eigenvalues e^(+/- i*arccos(lambda/alpha))
-/// 3. Using QSP to implement polynomial approximations of e^(-it*arccos(x))
-///
-/// This replaces Trotter-based methods that have polynomial overhead in precision.
+/// Qubitization achieves optimal complexity by block-encoding H/alpha via LCU decomposition,
+/// constructing a walk operator W whose eigenvalues are e^(±i·arccos(λ/α)), and using QSP
+/// to implement polynomial approximations of e^(-it·arccos(x)). This replaces Trotter-based
+/// methods that have polynomial overhead in precision.
 ///
 /// - SeeAlso: ``BlockEncoding``
 /// - SeeAlso: ``QubitizedWalkOperator``
@@ -1172,6 +1230,8 @@ public actor Qubitization {
     /// Number of system qubits.
     public let systemQubits: Int
 
+    private static let amplitudeThreshold = 1e-15
+
     /// Creates a Qubitization engine for the given Hamiltonian.
     ///
     /// Constructs the block encoding and walk operator for optimal Hamiltonian simulation.
@@ -1185,6 +1245,8 @@ public actor Qubitization {
     /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
     /// let qubitization = Qubitization(hamiltonian: H, systemQubits: 2)
     /// ```
+    ///
+    /// - Precondition: systemQubits > 0
     public init(hamiltonian: Observable, systemQubits: Int) {
         ValidationUtilities.validatePositiveQubits(systemQubits)
 
@@ -1199,10 +1261,9 @@ public actor Qubitization {
     /// Implements e^(-iHt) by computing QSP phase angles that approximate the time evolution
     /// operator and applying the resulting polynomial transformation to the walk operator.
     ///
-    /// The algorithm:
-    /// 1. Computes polynomial degree d = O(alpha*t + log(1/epsilon))
-    /// 2. Finds QSP phase angles for Jacobi-Anger expansion of e^(-it*arccos(x))
-    /// 3. Builds and executes the QSP circuit with d walk operator applications
+    /// The algorithm computes polynomial degree d = O(alpha*t + log(1/epsilon)), finds QSP
+    /// phase angles via Jacobi-Anger expansion, and executes the QSP circuit with d walk
+    /// operator applications.
     ///
     /// - Parameters:
     ///   - initialState: Initial quantum state to evolve (system qubits only)
@@ -1212,6 +1273,7 @@ public actor Qubitization {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
     /// let qubitization = Qubitization(hamiltonian: H, systemQubits: 2)
     /// let initial = QuantumState(qubits: 2)
     /// let result = await qubitization.simulateEvolution(
@@ -1219,9 +1281,11 @@ public actor Qubitization {
     ///     time: 2.0,
     ///     epsilon: 1e-8
     /// )
-    /// print("Final state: \(result.evolvedState)")
-    /// print("Queries: \(result.walkOperatorCalls)")
     /// ```
+    ///
+    /// - Complexity: O(alpha x t + log(1/epsilon))
+    /// - Precondition: epsilon > 0
+    /// - Precondition: initialState must have exactly systemQubits qubits
     @_optimize(speed)
     public func simulateEvolution(
         initialState: QuantumState,
@@ -1257,7 +1321,7 @@ public actor Qubitization {
 
         let evolvedExtended = qspCircuit.execute(on: extendedInitial)
 
-        let finalState = projectToSystemQubits(state: evolvedExtended, systemQubits: systemQubits)
+        let finalState = projectToSystemQubits(state: evolvedExtended)
 
         let actualDegree = phaseAngles.polynomialDegree
         let walkCalls = actualDegree
@@ -1287,15 +1351,18 @@ public actor Qubitization {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
     /// let qubitization = Qubitization(hamiltonian: H, systemQubits: 2)
-    /// let groundState = prepareGroundState()
+    /// let groundState = QuantumState(qubits: 2)
     /// let result = await qubitization.estimateEigenvalue(
     ///     eigenstate: groundState,
     ///     precisionBits: 8
     /// )
-    /// print("Eigenvalue: \(result.eigenvalue)")
-    /// print("Confidence: \(result.confidenceInterval)")
     /// ```
+    ///
+    /// - Complexity: O(2^precisionBits x walkCircuitSize)
+    /// - Precondition: precisionBits > 0
+    /// - Precondition: eigenstate must have exactly systemQubits qubits
     @_optimize(speed)
     public func estimateEigenvalue(
         eigenstate: QuantumState,
@@ -1325,48 +1392,58 @@ public actor Qubitization {
             let controlQubit = precisionBits - 1 - k
             let power = 1 << k
 
-            for _ in 0 ..< power {
-                for op in basicWalkCircuit.operations {
-                    if case let .gate(g, qubits, _) = op {
-                        let shiftedQubits = qubits.map { $0 + precisionBits }
+            var controlledOps: [(QuantumGate, [Int])] = []
+            for op in basicWalkCircuit.operations {
+                if case let .gate(g, qubits, _) = op {
+                    var shiftedQubits = [Int]()
+                    shiftedQubits.reserveCapacity(qubits.count)
+                    for q in qubits {
+                        shiftedQubits.append(q + precisionBits)
+                    }
 
-                        if shiftedQubits.count == 1 {
-                            let decomposition = ControlledGateDecomposer.decompose(
-                                gate: g,
-                                controls: [controlQubit],
-                                target: shiftedQubits[0],
-                            )
-                            for (dg, dq) in decomposition {
-                                circuit.append(dg, to: dq)
-                            }
-                        } else if shiftedQubits.count == 2 {
-                            switch g {
-                            case .cnot:
-                                circuit.append(.toffoli, to: [controlQubit, shiftedQubits[0], shiftedQubits[1]])
-                            case .cz:
-                                circuit.append(.hadamard, to: shiftedQubits[1])
-                                circuit.append(.toffoli, to: [controlQubit, shiftedQubits[0], shiftedQubits[1]])
-                                circuit.append(.hadamard, to: shiftedQubits[1])
-                            default:
-                                for q in shiftedQubits {
-                                    circuit.append(.cnot, to: [controlQubit, q])
-                                }
+                    if shiftedQubits.count == 1 {
+                        let decomposition = ControlledGateDecomposer.decompose(
+                            gate: g,
+                            controls: [controlQubit],
+                            target: shiftedQubits[0],
+                        )
+                        for (dg, dq) in decomposition {
+                            controlledOps.append((dg, dq))
+                        }
+                    } else if shiftedQubits.count == 2 {
+                        switch g {
+                        case .cnot:
+                            controlledOps.append((.toffoli, [controlQubit, shiftedQubits[0], shiftedQubits[1]]))
+                        case .cz:
+                            controlledOps.append((.hadamard, [shiftedQubits[1]]))
+                            controlledOps.append((.toffoli, [controlQubit, shiftedQubits[0], shiftedQubits[1]]))
+                            controlledOps.append((.hadamard, [shiftedQubits[1]]))
+                        default:
+                            for q in shiftedQubits {
+                                controlledOps.append((.cnot, [controlQubit, q]))
                             }
                         }
                     }
+                }
+            }
+
+            for _ in 0 ..< power {
+                for (g, q) in controlledOps {
+                    circuit.append(g, to: q)
                 }
             }
         }
 
         let inverseQFT = QuantumCircuit.inverseQFT(qubits: precisionBits)
         for op in inverseQFT.operations {
-            circuit.addOperation(op)
+            circuit.append(op)
         }
 
         var fullInitial = QuantumState(qubits: totalQubits)
-        for i in 0 ..< preparedEigenstate.stateSpaceSize where i < fullInitial.stateSpaceSize {
+        let stateLimit = min(preparedEigenstate.stateSpaceSize, fullInitial.stateSpaceSize)
+        for i in 0 ..< stateLimit {
             let amplitude = preparedEigenstate.amplitude(of: i)
-            if amplitude.magnitudeSquared > 1e-15 {
+            if amplitude.magnitudeSquared > Self.amplitudeThreshold {
                 fullInitial.setAmplitude(i, to: amplitude)
             }
         }
@@ -1395,15 +1472,6 @@ public actor Qubitization {
     }
 
     /// Computes the theoretical optimal polynomial degree for time evolution.
-    ///
-    /// The optimal degree is O(alpha*t + log(1/epsilon)) based on Jacobi-Anger expansion
-    /// truncation error analysis.
-    ///
-    /// - Parameters:
-    ///   - alpha: 1-norm of the Hamiltonian
-    ///   - time: Evolution time
-    ///   - epsilon: Target error
-    /// - Returns: Optimal polynomial degree
     @_optimize(speed)
     @_effects(readonly)
     private func computeOptimalDegree(alpha: Double, time: Double, epsilon: Double) -> Int {
@@ -1414,11 +1482,6 @@ public actor Qubitization {
     }
 
     /// Extends a system state to include ancilla qubits in |0> state.
-    ///
-    /// - Parameters:
-    ///   - state: Original system state
-    ///   - toQubits: Target total qubit count
-    /// - Returns: Extended state with ancillas in ground state
     @_optimize(speed)
     @_eagerMove
     private func extendState(_ state: QuantumState, toQubits totalQubits: Int) -> QuantumState {
@@ -1439,14 +1502,10 @@ public actor Qubitization {
     }
 
     /// Projects an extended state back to system qubits by partial trace.
-    ///
-    /// - Parameters:
-    ///   - state: Extended state including ancillas
-    ///   - systemQubits: Number of system qubits to keep
-    /// - Returns: Projected state on system register
     @_optimize(speed)
     @_eagerMove
-    private func projectToSystemQubits(state: QuantumState, systemQubits: Int) -> QuantumState {
+    private func projectToSystemQubits(state: QuantumState) -> QuantumState {
+        let systemQubits = systemQubits
         let systemSize = 1 << systemQubits
         let ancillaSize = state.stateSpaceSize / systemSize
 
@@ -1462,8 +1521,14 @@ public actor Qubitization {
             }
             let amplitude = state.amplitude(of: i)
             let norm = sqrt(sumSquared)
-            if norm > 1e-15 {
-                projectedAmplitudes[i] = Complex(norm, 0.0) * (amplitude.magnitudeSquared > 1e-15 ? amplitude / Complex(sqrt(amplitude.magnitudeSquared), 0.0) : .one)
+            if norm > Self.amplitudeThreshold {
+                let ampMagSq = amplitude.magnitudeSquared
+                if ampMagSq > Self.amplitudeThreshold {
+                    let invMag = 1.0 / sqrt(ampMagSq)
+                    projectedAmplitudes[i] = Complex(norm * amplitude.real * invMag, norm * amplitude.imaginary * invMag)
+                } else {
+                    projectedAmplitudes[i] = Complex(norm, 0.0)
+                }
             }
         }
 
@@ -1606,6 +1671,14 @@ public enum QubitizationComplexity {
 ///
 /// - SeeAlso: ``Qubitization``
 /// - SeeAlso: ``QuantumSignalProcessing``
+///
+/// **Example:**
+/// ```swift
+/// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
+/// let circuit = QubitizationCircuits.buildTimeEvolutionCircuit(
+///     hamiltonian: H, systemQubits: 2, time: 1.0, epsilon: 1e-6
+/// )
+/// ```
 public enum QubitizationCircuits {
     /// Builds a complete time evolution circuit using Qubitization.
     ///
@@ -1621,6 +1694,7 @@ public enum QubitizationCircuits {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
     /// let circuit = QubitizationCircuits.buildTimeEvolutionCircuit(
     ///     hamiltonian: H,
     ///     systemQubits: 2,
@@ -1628,6 +1702,9 @@ public enum QubitizationCircuits {
     ///     epsilon: 1e-6
     /// )
     /// ```
+    ///
+    /// - Precondition: systemQubits > 0
+    /// - Precondition: epsilon > 0
     @_optimize(speed)
     @_eagerMove
     public static func buildTimeEvolutionCircuit(
@@ -1662,7 +1739,7 @@ public enum QubitizationCircuits {
         )
 
         for op in qspCircuit.operations {
-            circuit.addOperation(op)
+            circuit.append(op)
         }
 
         return circuit
@@ -1680,11 +1757,14 @@ public enum QubitizationCircuits {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
     /// let walkCircuit = QubitizationCircuits.buildWalkOperatorCircuit(
     ///     hamiltonian: H,
     ///     systemQubits: 2
     /// )
     /// ```
+    ///
+    /// - Precondition: systemQubits > 0
     @_optimize(speed)
     @_eagerMove
     public static func buildWalkOperatorCircuit(
@@ -1710,11 +1790,14 @@ public enum QubitizationCircuits {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
     /// let blockCircuit = QubitizationCircuits.buildBlockEncodingCircuit(
     ///     hamiltonian: H,
     ///     systemQubits: 2
     /// )
     /// ```
+    ///
+    /// - Precondition: systemQubits > 0
     @_optimize(speed)
     @_eagerMove
     public static func buildBlockEncodingCircuit(
@@ -1740,14 +1823,16 @@ public enum QubitizationCircuits {
     ///
     /// **Example:**
     /// ```swift
+    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
     /// let (qubits, gates, depth) = QubitizationCircuits.estimateResources(
     ///     hamiltonian: H,
     ///     systemQubits: 4,
     ///     time: 2.0,
     ///     epsilon: 1e-8
     /// )
-    /// print("Qubits: \(qubits), Gates: \(gates)")
     /// ```
+    ///
+    /// - Complexity: O(L) where L is the number of Hamiltonian terms
     @_effects(readonly)
     public static func estimateResources(
         hamiltonian: Observable,
@@ -1776,102 +1861,5 @@ public enum QubitizationCircuits {
         let depthEstimate = degree * (ancillaQubits + termCount) + degree + 1
 
         return (totalQubits, totalGates, depthEstimate)
-    }
-}
-
-public extension QuantumCircuit {
-    /// Creates a qubitized time evolution circuit for Hamiltonian simulation.
-    ///
-    /// Factory method providing convenient access to Qubitization-based evolution circuits.
-    /// Achieves optimal query complexity O(alpha*t + log(1/epsilon)).
-    ///
-    /// - Parameters:
-    ///   - hamiltonian: Observable representing the Hamiltonian
-    ///   - systemQubits: Number of system qubits
-    ///   - time: Evolution time t
-    ///   - epsilon: Target approximation error
-    /// - Returns: Circuit implementing e^(-iHt) via Qubitization
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let H = Observable(terms: [(0.5, PauliString(.z(0))), (-0.3, PauliString(.x(1)))])
-    /// let circuit = QuantumCircuit.qubitizedEvolution(
-    ///     hamiltonian: H,
-    ///     systemQubits: 2,
-    ///     time: 1.0,
-    ///     epsilon: 1e-6
-    /// )
-    /// let state = circuit.execute()
-    /// ```
-    @_optimize(speed)
-    @_eagerMove
-    static func qubitizedEvolution(
-        hamiltonian: Observable,
-        systemQubits: Int,
-        time: Double,
-        epsilon: Double,
-    ) -> QuantumCircuit {
-        QubitizationCircuits.buildTimeEvolutionCircuit(
-            hamiltonian: hamiltonian,
-            systemQubits: systemQubits,
-            time: time,
-            epsilon: epsilon,
-        )
-    }
-
-    /// Creates a qubitized walk operator circuit.
-    ///
-    /// Factory method for the fundamental walk operator W = R * SELECT * PREPARE^dagger.
-    ///
-    /// - Parameters:
-    ///   - hamiltonian: Observable to encode
-    ///   - systemQubits: Number of system qubits
-    /// - Returns: Walk operator circuit
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let walkCircuit = QuantumCircuit.qubitizedWalkOperator(
-    ///     hamiltonian: H,
-    ///     systemQubits: 2
-    /// )
-    /// ```
-    @_optimize(speed)
-    @_eagerMove
-    static func qubitizedWalkOperator(
-        hamiltonian: Observable,
-        systemQubits: Int,
-    ) -> QuantumCircuit {
-        QubitizationCircuits.buildWalkOperatorCircuit(
-            hamiltonian: hamiltonian,
-            systemQubits: systemQubits,
-        )
-    }
-
-    /// Creates a block encoding circuit for a Hamiltonian.
-    ///
-    /// Factory method for LCU-based block encoding.
-    ///
-    /// - Parameters:
-    ///   - hamiltonian: Observable to encode
-    ///   - systemQubits: Number of system qubits
-    /// - Returns: Block encoding circuit
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let blockCircuit = QuantumCircuit.blockEncoding(
-    ///     hamiltonian: H,
-    ///     systemQubits: 2
-    /// )
-    /// ```
-    @_optimize(speed)
-    @_eagerMove
-    static func blockEncoding(
-        hamiltonian: Observable,
-        systemQubits: Int,
-    ) -> QuantumCircuit {
-        QubitizationCircuits.buildBlockEncodingCircuit(
-            hamiltonian: hamiltonian,
-            systemQubits: systemQubits,
-        )
     }
 }

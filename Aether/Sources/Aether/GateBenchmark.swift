@@ -217,7 +217,6 @@ public struct GateBenchmarkResult: Sendable, Equatable, CustomStringConvertible 
         let stdDevStr = formatDouble(stdDevNs)
         return "\(gateName): mean=\(meanStr)ns, min=\(minStr)ns, max=\(maxStr)ns, stddev=\(stdDevStr)ns (\(iterations) iterations)"
     }
-
 }
 
 private extension GateBenchmarkResult {

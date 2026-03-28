@@ -189,7 +189,9 @@ public extension Observable {
     /// ```
     ///
     /// - Complexity: O(1)
-    static func clearGroupingCaches() async { await cache.clear() }
+    static func clearGroupingCaches() async {
+        await cache.clear()
+    }
 
     // MARK: - Measurement Strategies
 
@@ -201,7 +203,7 @@ public extension Observable {
     /// let count = await hamiltonian.circuitCount(for: strategy)
     /// ```
     @frozen
-    public enum MeasurementStrategy: Sendable {
+    enum MeasurementStrategy: Sendable {
         /// Measure each term independently without optimization.
         case termByTerm
 
@@ -289,7 +291,7 @@ public extension Observable {
     /// variance determined from constituent terms.
     ///
     /// - Parameters:
-    ///   - totalShots: Total measurement shots available
+    ///   - totalShots: Total measurement shots to distribute across groups
     ///   - minShotsPerTerm: Minimum shots per term (avoid zero allocation)
     ///   - state: Quantum state for variance estimation (optional)
     /// - Returns: Shot allocation mapping group indices to shot counts
@@ -297,14 +299,14 @@ public extension Observable {
     ///
     /// **Example:**
     /// ```swift
-    /// let allocation = await hamiltonian.allocateShotsForGroups(
-    ///     totalShots: 10000,
+    /// let allocation = await hamiltonian.allocateShots(
+    ///     forGroups: 10000,
     ///     state: currentState
     /// )
     /// ```
     @_optimize(speed)
-    func allocateShotsForGroups(
-        totalShots: Int,
+    func allocateShots(
+        forGroups totalShots: Int,
         minShotsPerTerm: Int = 10,
         state: QuantumState? = nil,
     ) async -> [Int: Int] {
@@ -323,7 +325,7 @@ public extension Observable {
     /// print("QWC reduces circuits by \(stats.qwcReduction)x")
     /// ```
     @frozen
-    public struct MeasurementOptimizationStats: CustomStringConvertible {
+    struct MeasurementOptimizationStats: CustomStringConvertible {
         /// Number of Hamiltonian terms.
         public let numTerms: Int
 

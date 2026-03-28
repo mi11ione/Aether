@@ -11,13 +11,13 @@ import Testing
 @Suite("MPSMetalAcceleration")
 struct MPSMetalAccelerationTests {
     @Test("Actor initializes successfully")
-    func initializeAccelerator() async {
+    func initializeAccelerator() {
         let accelerator = MPSMetalAcceleration()
         _ = accelerator.isAvailable
     }
 
     @Test("isAvailable property is accessible")
-    func isAvailableAccessible() async {
+    func isAvailableAccessible() {
         let accelerator = MPSMetalAcceleration()
         let available1 = accelerator.isAvailable
         let available2 = accelerator.isAvailable
@@ -550,9 +550,9 @@ struct MPSMetalAccelerationTests {
         let tensor2 = MPSTensor.groundState(site: 2, qubits: 3, maxBondDimension: 16)
 
         let matrices = [
-            tensor0.matrix(forPhysical:0),
-            tensor1.matrix(forPhysical:0),
-            tensor2.matrix(forPhysical:0),
+            tensor0.matrix(forPhysical: 0),
+            tensor1.matrix(forPhysical: 0),
+            tensor2.matrix(forPhysical: 0),
         ]
 
         let result = await accelerator.multiply(chain: matrices)
@@ -609,7 +609,7 @@ struct MPSMetalAccelerationTests {
 
         #expect((contracted01[0][physBits[0]][physBits[1]][0] - .one).magnitude < 1e-10, "Contracted amplitude for correct bits should be 1")
 
-        let matrix2 = tensor2.matrix(forPhysical:physBits[2])
+        let matrix2 = tensor2.matrix(forPhysical: physBits[2])
         let finalMatrix = [[contracted01[0][physBits[0]][physBits[1]][0]]]
 
         let finalResult = await accelerator.multiply(chain: [finalMatrix, matrix2])

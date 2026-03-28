@@ -356,6 +356,38 @@ struct CircuitDiagramASCIIGateVariantTests {
     }
 }
 
+/// Validates qubit label width computation for circuits with 10+ qubits.
+/// Ensures the multi-digit qubit label path in CircuitDiagramUtilities.qubitLabelWidth
+/// is exercised when rendering circuits with double-digit qubit indices.
+@Suite("CircuitDiagramASCII - Double Digit Qubit Labels")
+struct CircuitDiagramASCIIDoubleDigitLabelTests {
+    @Test("Circuit with 11 qubits renders double-digit qubit labels")
+    func doubleDigitQubitLabels() {
+        var circuit = QuantumCircuit(qubits: 11)
+        circuit.append(.hadamard, to: 10)
+        let diagram = CircuitDiagramASCII.render(circuit)
+        #expect(diagram.contains("q10"), "Diagram should contain double-digit qubit label 'q10'")
+    }
+}
+
+/// Validates customSingleQubit gate renders through shared utilities label path.
+/// Ensures the CircuitDiagramUtilities.label(for:) .customSingleQubit case
+/// is exercised via the public render API.
+@Suite("CircuitDiagramASCII - Custom Single Qubit Gate")
+struct CircuitDiagramASCIICustomSingleQubitTests {
+    @Test("Custom single-qubit gate renders U label")
+    func customSingleQubitRendering() {
+        var circuit = QuantumCircuit(qubits: 1)
+        let matrix: [[Complex<Double>]] = [
+            [Complex(1.0, 0.0), Complex(0.0, 0.0)],
+            [Complex(0.0, 0.0), Complex(1.0, 0.0)],
+        ]
+        circuit.append(.customSingleQubit(matrix: matrix), to: 0)
+        let diagram = CircuitDiagramASCII.render(circuit)
+        #expect(diagram.contains("U"), "Custom single-qubit gate should render with 'U' label")
+    }
+}
+
 /// Validates that controlled gates wrapping multi-qubit inner gates
 /// render correctly with proper symbol ordering across
 /// control and target qubit wires.

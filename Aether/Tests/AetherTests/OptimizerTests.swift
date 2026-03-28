@@ -148,8 +148,13 @@ struct NelderMeadOptimizerTests {
     func progressCallbackCalled() async {
         actor Counter {
             var count = 0
-            func increment() { count += 1 }
-            func get() -> Int { count }
+            func increment() {
+                count += 1
+            }
+
+            func get() -> Int {
+                count
+            }
         }
 
         let optimizer = NelderMeadOptimizer(tolerance: 1e-3)
@@ -708,8 +713,13 @@ struct SPSAOptimizerTests {
     func usesOnly2EvaluationsPerIteration() async {
         actor Counter {
             var count = 0
-            func increment() { count += 1 }
-            func get() -> Int { count }
+            func increment() {
+                count += 1
+            }
+
+            func get() -> Int {
+                count
+            }
         }
 
         let optimizer = SPSAOptimizer()
@@ -919,8 +929,13 @@ struct COBYLAOptimizerTests {
     func progressCallbackCalled() async {
         actor Counter {
             var count = 0
-            func increment() { count += 1 }
-            func get() -> Int { count }
+            func increment() {
+                count += 1
+            }
+
+            func get() -> Int {
+                count
+            }
         }
 
         let optimizer = COBYLAOptimizer(minTrustRadius: 1e-3)
@@ -1151,8 +1166,13 @@ struct COBYLAOptimizerTests {
     func functionEvaluationsCountIsAccurate() async {
         actor Counter {
             var count = 0
-            func increment() { count += 1 }
-            func get() -> Int { count }
+            func increment() {
+                count += 1
+            }
+
+            func get() -> Int {
+                count
+            }
         }
 
         let optimizer = COBYLAOptimizer(initialTrustRadius: 0.5, minTrustRadius: 1e-3)

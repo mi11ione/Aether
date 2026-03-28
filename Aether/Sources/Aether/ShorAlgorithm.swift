@@ -16,8 +16,10 @@ import Foundation
 /// let inverse = NumberTheory.modularInverse(3, modulus: 7)  // 5 (since 3*5 = 15 = 1 mod 7)
 /// let isPrime = NumberTheory.isPrime(17)  // true
 /// ```
-@frozen
 public enum NumberTheory {
+    @usableFromInline
+    static let millerRabinWitnesses = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
+
     /// Computes greatest common divisor using Euclidean algorithm.
     ///
     /// Handles negative inputs by taking absolute values. Returns 0 only when both inputs are 0.
@@ -101,6 +103,8 @@ public enum NumberTheory {
     ///   - modulus: Modulus (must be positive)
     /// - Returns: base^exponent mod modulus
     /// - Complexity: O(log exponent)
+    /// - Precondition: exponent >= 0
+    /// - Precondition: modulus > 0
     @inlinable
     @_optimize(speed)
     @_effects(readonly)
@@ -143,6 +147,7 @@ public enum NumberTheory {
     ///   - modulus: Modulus (must be positive)
     /// - Returns: Modular inverse if it exists, nil otherwise
     /// - Complexity: O(log modulus)
+    /// - Precondition: modulus > 0
     @inlinable
     @_optimize(speed)
     @_effects(readonly)
@@ -174,6 +179,8 @@ public enum NumberTheory {
     ///   - maxTerms: Maximum number of terms to compute
     /// - Returns: Array of partial quotients
     /// - Complexity: O(log(min(numerator, denominator)))
+    /// - Precondition: denominator > 0
+    /// - Precondition: maxTerms > 0
     @inlinable
     @_optimize(speed)
     @_effects(readonly)
@@ -334,8 +341,6 @@ public enum NumberTheory {
         guard n > 3 else { return true }
         guard n % 2 != 0 else { return false }
 
-        let witnesses = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
-
         var d = n - 1
         var r = 0
         while d % 2 == 0 {
@@ -343,7 +348,7 @@ public enum NumberTheory {
             r += 1
         }
 
-        for a in witnesses {
+        for a in millerRabinWitnesses {
             guard a < n else { continue }
             if !millerRabinWitness(a: a, d: d, n: n, r: r) {
                 return false
@@ -387,6 +392,7 @@ public enum NumberTheory {
     /// - Parameter n: The modulus (must be >= 3)
     /// - Returns: Random coprime base in [2, n-1]
     /// - Complexity: O(log n) expected
+    /// - Precondition: n >= 3
     @inlinable
     @_optimize(speed)
     public static func randomCoprimeBase(for n: Int) -> Int {
@@ -600,7 +606,7 @@ public struct ShorPeriodResult: Sendable, CustomStringConvertible {
 ///     period: 4,
 ///     base: 7,
 ///     attempts: 1,
-///     success: true,
+///     isSuccessful: true,
 ///     failureReason: nil
 /// )
 /// print(result)  // "ShorResult(15 = 3 * 5, period: 4, base: 7, attempts: 1)"
@@ -623,7 +629,7 @@ public struct ShorResult: Sendable, CustomStringConvertible {
     public let attempts: Int
 
     /// Whether factorization was successful.
-    public let success: Bool
+    public let isSuccessful: Bool
 
     /// Reason for failure if unsuccessful.
     public let failureReason: ShorFailureReason?
@@ -747,11 +753,9 @@ public extension QuantumCircuit {
     ///
     /// Implements quantum phase estimation to find the period r of a^x mod N.
     ///
-    /// Circuit structure:
-    /// 1. Precision register: qubits 0..<precisionQubits (initialized to superposition)
-    /// 2. Work register: qubits precisionQubits..<total (initialized to |1>)
-    /// 3. Controlled modular multiplications
-    /// 4. Inverse QFT on precision register
+    /// The circuit uses precision register qubits 0..<precisionQubits in superposition,
+    /// work register qubits initialized to |1>, controlled modular multiplications, and
+    /// an inverse QFT on the precision register.
     ///
     /// **Example:**
     /// ```swift
@@ -808,6 +812,7 @@ public extension QuantumCircuit {
             }
 
             var allQubits: [Int] = []
+            allQubits.reserveCapacity(workBits + 1)
             for w in 0 ..< workBits {
                 allQubits.append(precisionQubits + w)
             }
@@ -828,6 +833,7 @@ public extension QuantumCircuit {
     @_optimize(speed)
     private static func inverseQFTGatesForRange(start: Int, count: Int) -> [(gate: QuantumGate, qubits: [Int])] {
         var gates: [(gate: QuantumGate, qubits: [Int])] = []
+        gates.reserveCapacity(count / 2 + count + count * (count - 1) / 2)
 
         let swapCount = count / 2
         for i in 0 ..< swapCount {
@@ -892,6 +898,8 @@ public extension QuantumState {
     @_optimize(speed)
     @_effects(readonly)
     func shorPeriodResult(config: ShorConfiguration, base: Int) -> ShorPeriodResult {
+        let probabilityThreshold = 1e-6
+        let maxTopOutcomes = 10
         let precisionQubits = config.effectivePrecisionQubits
         let precisionStateSize = 1 << precisionQubits
 
@@ -904,13 +912,14 @@ public extension QuantumState {
         }
 
         var probWithIndex: [(prob: Double, index: Int)] = []
+        probWithIndex.reserveCapacity(precisionStateSize)
         for i in 0 ..< precisionStateSize {
-            if precisionProbabilities[i] > 1e-6 {
+            if precisionProbabilities[i] > probabilityThreshold {
                 probWithIndex.append((precisionProbabilities[i], i))
             }
         }
         probWithIndex.sort { $0.prob > $1.prob }
-        let topIndices = probWithIndex.prefix(10)
+        let topIndices = probWithIndex.prefix(maxTopOutcomes)
 
         var allCandidates: Set<Int> = []
         for (_, index) in topIndices {
@@ -993,10 +1002,9 @@ public actor ShorFactorization {
 
     /// Runs the Shor factorization algorithm.
     ///
-    /// Algorithm:
-    /// 1. Classical pre-checks (even, prime, perfect power)
-    /// 2. Quantum period finding with random coprime bases
-    /// 3. Classical factor extraction from period
+    /// The algorithm performs classical pre-checks (even, prime, perfect power), then
+    /// quantum period finding with random coprime bases, and finally classical factor
+    /// extraction from the period.
     ///
     /// **Example:**
     /// ```swift
@@ -1022,7 +1030,7 @@ public actor ShorFactorization {
                 period: nil,
                 base: 0,
                 attempts: 0,
-                success: false,
+                isSuccessful: false,
                 failureReason: .inputTooSmall,
             )
         }
@@ -1035,7 +1043,7 @@ public actor ShorFactorization {
                 period: nil,
                 base: 0,
                 attempts: 0,
-                success: true,
+                isSuccessful: true,
                 failureReason: nil,
             )
         }
@@ -1047,16 +1055,12 @@ public actor ShorFactorization {
                 period: nil,
                 base: 0,
                 attempts: 0,
-                success: false,
+                isSuccessful: false,
                 failureReason: .inputPrime,
             )
         }
 
-        if let (base, exp) = NumberTheory.isPerfectPower(n) {
-            var factor = base
-            for _ in 1 ..< exp - 1 {
-                factor *= base
-            }
+        if let (base, _) = NumberTheory.isPerfectPower(n) {
             let other = n / base
             return ShorResult(
                 numberToFactor: n,
@@ -1064,7 +1068,7 @@ public actor ShorFactorization {
                 period: nil,
                 base: 0,
                 attempts: 0,
-                success: true,
+                isSuccessful: true,
                 failureReason: nil,
             )
         }
@@ -1109,7 +1113,7 @@ public actor ShorFactorization {
                     period: r,
                     base: a,
                     attempts: attempt,
-                    success: true,
+                    isSuccessful: true,
                     failureReason: nil,
                 )
             }
@@ -1122,7 +1126,7 @@ public actor ShorFactorization {
                     period: r,
                     base: a,
                     attempts: attempt,
-                    success: true,
+                    isSuccessful: true,
                     failureReason: nil,
                 )
             }
@@ -1134,7 +1138,7 @@ public actor ShorFactorization {
             period: nil,
             base: 0,
             attempts: configuration.maxAttempts,
-            success: false,
+            isSuccessful: false,
             failureReason: .maxAttemptsExceeded,
         )
     }

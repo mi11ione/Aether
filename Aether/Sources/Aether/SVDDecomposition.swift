@@ -62,12 +62,11 @@ import Accelerate
     case none
 }
 
-/// Singular value decomposition using LAPACK divide-and-conquer algorithm
+/// Singular value decomposition using divide-and-conquer algorithm
 ///
-/// Wraps LAPACK zgesdd_ (complex double-precision SVD with divide-and-conquer) providing
-/// efficient decomposition A = U * diag(S) * V-dagger. Supports truncation strategies for
-/// MPS tensor network compression. Uses two-stage pattern: workspace query followed by
-/// computation with optimal workspace allocation.
+/// Decomposes complex double-precision matrices into A = U * diag(S) * V-dagger using
+/// a divide-and-conquer approach. Supports truncation strategies for MPS tensor network
+/// compression via ``SVDTruncation``.
 ///
 /// **Example:**
 /// ```swift
@@ -80,16 +79,17 @@ import Accelerate
 public enum SVDDecomposition {
     /// Computes SVD decomposition with optional truncation
     ///
-    /// Decomposes input matrix A (m x n) into A = U * diag(S) * V-dagger using LAPACK zgesdd_
-    /// divide-and-conquer algorithm. Computes thin SVD (reduced form) where U is m x k,
-    /// S has k elements, and V-dagger is k x n with k = min(m, n). Applies specified truncation
-    /// strategy to reduce bond dimension.
+    /// Decomposes input matrix A (m x n) into A = U * diag(S) * V-dagger using a divide-and-conquer
+    /// algorithm. Computes thin SVD (reduced form) where U is m x k, S has k elements, and
+    /// V-dagger is k x n with k = min(m, n). Applies specified truncation strategy to reduce
+    /// bond dimension.
     ///
     /// - Parameters:
     ///   - matrix: Input complex matrix (m x n) to decompose
     ///   - truncation: Truncation strategy for bond dimension control (default: .none)
-    /// - Returns: SVDResult containing U, singular values, V-dagger, and truncation error
-    /// - Precondition: Matrix must be non-empty with consistent row lengths
+    /// - Returns: ``SVDResult`` containing U, singular values, V-dagger, and truncation error
+    /// - Precondition: Matrix must be non-empty
+    /// - Precondition: Matrix must have at least one column
     /// - Complexity: O(min(m,n) * m * n) for divide-and-conquer SVD
     ///
     /// **Example:**
@@ -116,11 +116,17 @@ public enum SVDDecomposition {
 
         var a = convertToColumnMajorInterleaved(matrix, rows: m, cols: n)
 
-        var singularValues = [Double](unsafeUninitializedCapacity: minDim) { _, count in count = minDim }
-        var uMatrix = [Double](unsafeUninitializedCapacity: 2 * m * minDim) { _, count in count = 2 * m * minDim }
-        var vtMatrix = [Double](unsafeUninitializedCapacity: 2 * minDim * n) { _, count in count = 2 * minDim * n }
+        var singularValues = [Double](unsafeUninitializedCapacity: minDim) {
+            _, count in count = minDim
+        }
+        var uMatrix = [Double](unsafeUninitializedCapacity: 2 * m * minDim) {
+            _, count in count = 2 * m * minDim
+        }
+        var vtMatrix = [Double](unsafeUninitializedCapacity: 2 * minDim * n) {
+            _, count in count = 2 * minDim * n
+        }
 
-        var jobz = CChar(Character("S").asciiValue!)
+        var jobz = CChar(Character("S").asciiValue!) // Safe: "S" is ASCII
         var mm = __LAPACK_int(m)
         var nn = __LAPACK_int(n)
         var lda = __LAPACK_int(m)
@@ -130,12 +136,18 @@ public enum SVDDecomposition {
         var info = __LAPACK_int(0)
 
         let rworkSize = computeRworkSize(minDim: minDim)
-        var rwork = [Double](unsafeUninitializedCapacity: rworkSize) { _, count in count = rworkSize }
+        var rwork = [Double](unsafeUninitializedCapacity: rworkSize) {
+            _, count in count = rworkSize
+        }
 
         let iworkSize = 8 * minDim
-        var iwork = [__LAPACK_int](unsafeUninitializedCapacity: iworkSize) { _, count in count = iworkSize }
+        var iwork = [__LAPACK_int](unsafeUninitializedCapacity: iworkSize) {
+            _, count in count = iworkSize
+        }
 
-        var workQuery = [Double](unsafeUninitializedCapacity: 2) { _, count in count = 2 }
+        var workQuery = [Double](unsafeUninitializedCapacity: 2) {
+            _, count in count = 2
+        }
 
         a.withUnsafeMutableBytes { aPtr in
             singularValues.withUnsafeMutableBufferPointer { sPtr in
@@ -144,6 +156,7 @@ public enum SVDDecomposition {
                         workQuery.withUnsafeMutableBytes { workPtr in
                             rwork.withUnsafeMutableBufferPointer { rworkPtr in
                                 iwork.withUnsafeMutableBufferPointer { iworkPtr in
+                                    // Safe: workPtr.baseAddress! non-nil because buffer has non-zero capacity
                                     zgesdd_(
                                         &jobz, &mm, &nn,
                                         OpaquePointer(aPtr.baseAddress),
@@ -171,7 +184,9 @@ public enum SVDDecomposition {
 
         let optimalWorkSize = max(1, Int(workQuery[0]))
         lwork = __LAPACK_int(optimalWorkSize)
-        var work = [Double](unsafeUninitializedCapacity: 2 * optimalWorkSize) { _, count in count = 2 * optimalWorkSize }
+        var work = [Double](unsafeUninitializedCapacity: 2 * optimalWorkSize) {
+            _, count in count = 2 * optimalWorkSize
+        }
 
         a.withUnsafeMutableBytes { aPtr in
             singularValues.withUnsafeMutableBufferPointer { sPtr in
@@ -180,6 +195,7 @@ public enum SVDDecomposition {
                         work.withUnsafeMutableBytes { workPtr in
                             rwork.withUnsafeMutableBufferPointer { rworkPtr in
                                 iwork.withUnsafeMutableBufferPointer { iworkPtr in
+                                    // Safe: workPtr.baseAddress! non-nil because buffer has non-zero capacity
                                     zgesdd_(
                                         &jobz, &mm, &nn,
                                         OpaquePointer(aPtr.baseAddress),
@@ -209,9 +225,9 @@ public enum SVDDecomposition {
 
         let truncationError = computeTruncationError(singularValues: singularValues, keepCount: keepCount)
 
-        let uResult = convertUFromColumnMajor(uMatrix, rows: m, cols: minDim, keepCols: keepCount)
+        let uResult = convertUFromColumnMajor(uMatrix, rows: m, keepCols: keepCount)
         let vDaggerResult = convertVtFromColumnMajor(vtMatrix, rows: minDim, cols: n, keepRows: keepCount)
-        let truncatedSingularValues = Array(singularValues.prefix(keepCount))
+        let truncatedSingularValues = keepCount == singularValues.count ? singularValues : Array(singularValues.prefix(keepCount))
 
         return SVDResult(
             u: uResult,
@@ -221,6 +237,8 @@ public enum SVDDecomposition {
         )
     }
 
+    /// Converts 2D complex matrix to column-major interleaved doubles.
+    @_optimize(speed)
     @_effects(readonly)
     private static func convertToColumnMajorInterleaved(
         _ matrix: [[Complex<Double>]],
@@ -228,23 +246,27 @@ public enum SVDDecomposition {
         cols: Int,
     ) -> [Double] {
         [Double](unsafeUninitializedCapacity: 2 * rows * cols) { buffer, count in
-            for col in 0 ..< cols {
-                let colOffset = 2 * col * rows
-                for row in 0 ..< rows {
-                    let idx = colOffset + 2 * row
-                    buffer[idx] = matrix[row][col].real
-                    buffer[idx + 1] = matrix[row][col].imaginary
+            for row in 0 ..< rows {
+                let matrixRow = matrix[row]
+                for col in 0 ..< cols {
+                    let idx = 2 * (col * rows + row)
+                    buffer[idx] = matrixRow[col].real
+                    buffer[idx + 1] = matrixRow[col].imaginary
                 }
             }
             count = 2 * rows * cols
         }
     }
 
+    /// Computes required rwork buffer size for SVD decomposition.
+    @inline(__always)
     @_effects(readonly)
     private static func computeRworkSize(minDim: Int) -> Int {
         max(1, 5 * minDim * minDim + 5 * minDim)
     }
 
+    /// Determines how many singular values to retain based on truncation strategy.
+    @_optimize(speed)
     @_effects(readonly)
     private static func computeKeepCount(singularValues: [Double], truncation: SVDTruncation) -> Int {
         let total = singularValues.count
@@ -270,13 +292,14 @@ public enum SVDDecomposition {
             return max(1, keepCount)
 
         case let .cumulativeWeight(epsilon):
-            let totalWeight = singularValues.reduce(0.0) { $0 + $1 * $1 }
+            var totalWeight = 0.0
+            vDSP_svesqD(singularValues, 1, &totalWeight, vDSP_Length(singularValues.count))
             guard totalWeight > 0 else { return total }
             let targetWeight = (1.0 - epsilon) * totalWeight
             var accumulated = 0.0
             var keepCount = 0
             for sv in singularValues {
-                accumulated += sv * sv
+                accumulated = accumulated.addingProduct(sv, sv)
                 keepCount += 1
                 if accumulated >= targetWeight {
                     break
@@ -286,30 +309,35 @@ public enum SVDDecomposition {
         }
     }
 
+    /// Computes sum of squared discarded singular values.
+    @_optimize(speed)
     @_effects(readonly)
     private static func computeTruncationError(singularValues: [Double], keepCount: Int) -> Double {
         guard keepCount < singularValues.count else { return 0.0 }
         var error = 0.0
-        for i in keepCount ..< singularValues.count {
-            let sv = singularValues[i]
-            error += sv * sv
+        singularValues.withUnsafeBufferPointer { buf in
+            // Safe: buf.baseAddress! non-nil because guard above ensures non-empty tail
+            vDSP_svesqD(buf.baseAddress! + keepCount, 1, &error, vDSP_Length(singularValues.count - keepCount))
         }
         return error
     }
 
+    /// Converts column-major U matrix to row-major complex arrays.
+    @_optimize(speed)
     @_effects(readonly)
     private static func convertUFromColumnMajor(
         _ uMatrix: [Double],
         rows: Int,
-        cols _: Int,
         keepCols: Int,
     ) -> [[Complex<Double>]] {
         [[Complex<Double>]](unsafeUninitializedCapacity: rows) { rowBuffer, rowCount in
             for row in 0 ..< rows {
                 rowBuffer[row] = [Complex<Double>](unsafeUninitializedCapacity: keepCols) { colBuffer, colCount in
+                    let stride = 2 * rows
+                    var idx = 2 * row
                     for col in 0 ..< keepCols {
-                        let idx = 2 * (col * rows + row)
                         colBuffer[col] = Complex(uMatrix[idx], uMatrix[idx + 1])
+                        idx += stride
                     }
                     colCount = keepCols
                 }
@@ -318,6 +346,8 @@ public enum SVDDecomposition {
         }
     }
 
+    /// Converts column-major V-transpose matrix to row-major complex arrays.
+    @_optimize(speed)
     @_effects(readonly)
     private static func convertVtFromColumnMajor(
         _ vtMatrix: [Double],
@@ -328,9 +358,11 @@ public enum SVDDecomposition {
         [[Complex<Double>]](unsafeUninitializedCapacity: keepRows) { rowBuffer, rowCount in
             for row in 0 ..< keepRows {
                 rowBuffer[row] = [Complex<Double>](unsafeUninitializedCapacity: cols) { colBuffer, colCount in
+                    let stride = 2 * rows
+                    var idx = 2 * row
                     for col in 0 ..< cols {
-                        let idx = 2 * (col * rows + row)
                         colBuffer[col] = Complex(vtMatrix[idx], vtMatrix[idx + 1])
+                        idx += stride
                     }
                     colCount = cols
                 }

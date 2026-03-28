@@ -224,11 +224,11 @@ struct NumberTheoryModularInverseTests {
     }
 
     @Test("Modular inverse result is in valid range")
-    func modularInverseInRange() {
+    func modularInverseInRange() throws {
         let modulus = 17
         let inverse = NumberTheory.modularInverse(5, modulus: modulus)
         #expect(inverse != nil, "Inverse should exist")
-        #expect(inverse! >= 0 && inverse! < modulus, "Inverse should be in [0, modulus)")
+        #expect(try #require(inverse) >= 0 && inverse! < modulus, "Inverse should be in [0, modulus)")
     }
 }
 
@@ -311,10 +311,10 @@ struct NumberTheoryConvergentsTests {
     }
 
     @Test("Final convergent equals original fraction")
-    func convergentsFinalEqualsOriginal() {
+    func convergentsFinalEqualsOriginal() throws {
         let expansion = NumberTheory.continuedFractionExpansion(355, 113, maxTerms: 10)
         let convs = NumberTheory.convergents(of: expansion)
-        let final = convs.last!
+        let final = try #require(convs.last)
         #expect(final.p == 355 && final.q == 113, "Final convergent should be 355/113")
     }
 }
@@ -328,21 +328,21 @@ struct NumberTheoryIsPerfectPowerTests {
     func isPerfectPowerCube() {
         let result = NumberTheory.isPerfectPower(27)
         #expect(result != nil, "27 should be detected as perfect power")
-        #expect(result!.base == 3 && result!.exp == 3, "27 = 3^3")
+        #expect(result?.base == 3 && result!.exp == 3, "27 = 3^3")
     }
 
     @Test("16 is a perfect power: 2^4")
     func isPerfectPowerFourth() {
         let result = NumberTheory.isPerfectPower(16)
         #expect(result != nil, "16 should be detected as perfect power")
-        #expect(result!.base == 2 && result!.exp == 4, "16 = 2^4")
+        #expect(result?.base == 2 && result!.exp == 4, "16 = 2^4")
     }
 
     @Test("25 is a perfect power: 5^2")
     func isPerfectPowerSquare() {
         let result = NumberTheory.isPerfectPower(25)
         #expect(result != nil, "25 should be detected as perfect power")
-        #expect(result!.base == 5 && result!.exp == 2, "25 = 5^2")
+        #expect(result?.base == 5 && result!.exp == 2, "25 = 5^2")
     }
 
     @Test("15 is not a perfect power")
@@ -367,14 +367,14 @@ struct NumberTheoryIsPerfectPowerTests {
     func isPerfectPowerHighestExponent() {
         let result = NumberTheory.isPerfectPower(64)
         #expect(result != nil, "64 should be detected as perfect power")
-        #expect(result!.base == 2 && result!.exp == 6, "64 = 2^6 (highest exponent)")
+        #expect(result?.base == 2 && result!.exp == 6, "64 = 2^6 (highest exponent)")
     }
 
     @Test("81 is 3^4")
     func isPerfectPower81() {
         let result = NumberTheory.isPerfectPower(81)
         #expect(result != nil, "81 should be detected as perfect power")
-        #expect(result!.base == 3 && result!.exp == 4, "81 = 3^4")
+        #expect(result?.base == 3 && result!.exp == 4, "81 = 3^4")
     }
 }
 
@@ -670,12 +670,12 @@ struct ShorResultPropertiesTests {
             period: 4,
             base: 7,
             attempts: 1,
-            success: true,
+            isSuccessful: true,
             failureReason: nil,
         )
-        #expect(result.success, "Should be successful")
+        #expect(result.isSuccessful, "Should be successful")
         #expect(result.factors != nil, "Should have factors")
-        #expect(result.factors!.p == 3 && result.factors!.q == 5, "Factors should be (3, 5)")
+        #expect(result.factors?.p == 3 && result.factors!.q == 5, "Factors should be (3, 5)")
         #expect(result.period == 4, "Period should be 4")
         #expect(result.base == 7, "Base should be 7")
         #expect(result.failureReason == nil, "Should have no failure reason")
@@ -689,10 +689,10 @@ struct ShorResultPropertiesTests {
             period: nil,
             base: 0,
             attempts: 10,
-            success: false,
+            isSuccessful: false,
             failureReason: .inputPrime,
         )
-        #expect(!result.success, "Should not be successful")
+        #expect(!result.isSuccessful, "Should not be successful")
         #expect(result.factors == nil, "Should have no factors")
         #expect(result.failureReason == .inputPrime, "Should have inputPrime failure reason")
     }
@@ -705,7 +705,7 @@ struct ShorResultPropertiesTests {
             period: 4,
             base: 7,
             attempts: 1,
-            success: true,
+            isSuccessful: true,
             failureReason: nil,
         )
         let desc = result.description
@@ -722,7 +722,7 @@ struct ShorResultPropertiesTests {
             period: nil,
             base: 0,
             attempts: 0,
-            success: false,
+            isSuccessful: false,
             failureReason: .inputPrime,
         )
         let desc = result.description
@@ -821,14 +821,14 @@ struct ShorCircuitQubitCalculationTests {
 @Suite("Shor Integration - Classical Pre-checks")
 struct ShorIntegrationClassicalPrechecksTests {
     @Test("Even number N returns trivial factor 2")
-    func evenNumberPrecheck() async {
+    func evenNumberPrecheck() async throws {
         let config = ShorConfiguration(numberToFactor: 18)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        #expect(result.success, "Even number should succeed with classical factoring")
+        #expect(result.isSuccessful, "Even number should succeed with classical factoring")
         #expect(result.factors != nil, "Should find factors")
-        let factors = result.factors!
+        let factors = try #require(result.factors)
         #expect(factors.p == 2 || factors.q == 2, "One factor should be 2")
         #expect(factors.p * factors.q == 18, "Factors should multiply to 18")
     }
@@ -839,19 +839,19 @@ struct ShorIntegrationClassicalPrechecksTests {
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        #expect(!result.success, "Prime number should fail")
+        #expect(!result.isSuccessful, "Prime number should fail")
         #expect(result.failureReason == .inputPrime, "Failure reason should be inputPrime")
     }
 
     @Test("Perfect power N succeeds with classical factoring")
-    func perfectPowerPrecheck() async {
+    func perfectPowerPrecheck() async throws {
         let config = ShorConfiguration(numberToFactor: 27)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        #expect(result.success, "Perfect power should succeed with classical factoring")
+        #expect(result.isSuccessful, "Perfect power should succeed with classical factoring")
         #expect(result.factors != nil, "Should find factors")
-        let factors = result.factors!
+        let factors = try #require(result.factors)
         #expect(factors.p == 3 || factors.q == 3, "3 should be a factor of 27")
     }
 
@@ -861,7 +861,7 @@ struct ShorIntegrationClassicalPrechecksTests {
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        #expect(!result.success, "Number < 15 should fail")
+        #expect(!result.isSuccessful, "Number < 15 should fail")
         #expect(result.failureReason == .inputTooSmall, "Failure reason should be inputTooSmall")
     }
 }
@@ -871,31 +871,31 @@ struct ShorIntegrationClassicalPrechecksTests {
 @Suite("Shor Result - Factor Ordering")
 struct ShorResultFactorOrderingTests {
     @Test("Factors in result are ordered p <= q")
-    func factorsAreOrdered() {
+    func factorsAreOrdered() throws {
         let result = ShorResult(
             numberToFactor: 15,
             factors: (3, 5),
             period: 4,
             base: 7,
             attempts: 1,
-            success: true,
+            isSuccessful: true,
             failureReason: nil,
         )
-        #expect(result.factors!.p <= result.factors!.q, "Factors should be ordered p <= q")
+        #expect(try #require(result.factors?.p) <= result.factors!.q, "Factors should be ordered p <= q")
     }
 
     @Test("Factors multiply to original number")
-    func factorsMultiplyToOriginal() {
+    func factorsMultiplyToOriginal() throws {
         let result = ShorResult(
             numberToFactor: 21,
             factors: (3, 7),
             period: 6,
             base: 2,
             attempts: 2,
-            success: true,
+            isSuccessful: true,
             failureReason: nil,
         )
-        #expect(result.factors!.p * result.factors!.q == 21, "Factors should multiply to 21")
+        #expect(try #require(result.factors?.p) * result.factors!.q == 21, "Factors should multiply to 21")
     }
 
     @Test("Attempts count is preserved in result")
@@ -906,7 +906,7 @@ struct ShorResultFactorOrderingTests {
             period: 4,
             base: 7,
             attempts: 5,
-            success: true,
+            isSuccessful: true,
             failureReason: nil,
         )
         #expect(result.attempts == 5, "Attempts count should be preserved")
@@ -1150,14 +1150,14 @@ struct ShorCircuitExecutionFactorizationTests {
 @Suite("ShorFactorization - Quantum Period Finding Loop")
 struct ShorFactorizationQuantumLoopTests {
     @Test("run() with lucky GCD finding returns early success")
-    func luckyGCDFinding() async {
+    func luckyGCDFinding() async throws {
         let config = ShorConfiguration(numberToFactor: 15, precisionQubits: 6, maxAttempts: 5)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
         #expect(result.numberToFactor == 15, "Result should be for factoring 15")
-        if result.success, result.factors != nil {
-            let factors = result.factors!
+        if result.isSuccessful, result.factors != nil {
+            let factors = try #require(result.factors)
             #expect(factors.p * factors.q == 15, "Factors should multiply to 15")
         }
     }
@@ -1200,53 +1200,53 @@ struct ShorFactorizationQuantumLoopTests {
     }
 
     @Test("run() handles odd period by continuing to next attempt")
-    func oddPeriodContinuation() async {
+    func oddPeriodContinuation() async throws {
         let config = ShorConfiguration(numberToFactor: 21, precisionQubits: 5, maxAttempts: 5)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
         #expect(result.numberToFactor == 21, "Should attempt to factor 21")
-        if result.success {
-            let factors = result.factors!
+        if result.isSuccessful {
+            let factors = try #require(result.factors)
             #expect(factors.p * factors.q == 21, "Found factors should multiply to 21")
         }
     }
 
     @Test("run() extracts factors from valid even period")
-    func factorExtractionFromEvenPeriod() async {
+    func factorExtractionFromEvenPeriod() async throws {
         let config = ShorConfiguration(numberToFactor: 15, precisionQubits: 6, maxAttempts: 5)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        if result.success, result.period != nil {
-            let period = result.period!
+        if result.isSuccessful, result.period != nil {
+            let period = try #require(result.period)
             #expect(period % 2 == 0, "Successfully found period should be even")
-            let factors = result.factors!
+            let factors = try #require(result.factors)
             #expect(factors.p * factors.q == 15, "Factors should multiply to 15")
         }
     }
 
     @Test("run() skips trivial root x = n-1")
-    func trivialRootSkipped() async {
+    func trivialRootSkipped() async throws {
         let config = ShorConfiguration(numberToFactor: 15, precisionQubits: 6, maxAttempts: 10)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        if result.success {
-            let factors = result.factors!
+        if result.isSuccessful {
+            let factors = try #require(result.factors)
             #expect(factors.p > 1 && factors.p < 15, "First factor should be non-trivial")
             #expect(factors.q > 1 && factors.q < 15, "Second factor should be non-trivial")
         }
     }
 
     @Test("run() uses factor1 or factor2 from GCD calculations")
-    func gcdFactorExtraction() async {
+    func gcdFactorExtraction() async throws {
         let config = ShorConfiguration(numberToFactor: 15, precisionQubits: 6, maxAttempts: 5)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        if result.success, result.factors != nil {
-            let factors = result.factors!
+        if result.isSuccessful, result.factors != nil {
+            let factors = try #require(result.factors)
             let gcd1 = NumberTheory.gcd(factors.p, 15)
             let gcd2 = NumberTheory.gcd(factors.q, 15)
             #expect(gcd1 == factors.p || gcd2 == factors.q, "Factors should be obtained via GCD")
@@ -1307,14 +1307,14 @@ struct NumberTheoryIsPerfectPowerOverflowTests {
     func isPerfectPower32RootPath() {
         let result = NumberTheory.isPerfectPower(32)
         #expect(result != nil, "32 should be detected as perfect power")
-        #expect(result!.base == 2 && result!.exp == 5, "32 = 2^5")
+        #expect(result?.base == 2 && result!.exp == 5, "32 = 2^5")
     }
 
     @Test("isPerfectPower 243 matches via root path")
     func isPerfectPower243() {
         let result = NumberTheory.isPerfectPower(243)
         #expect(result != nil, "243 should be detected as perfect power")
-        #expect(result!.base == 3 && result!.exp == 5, "243 = 3^5")
+        #expect(result?.base == 3 && result!.exp == 5, "243 = 3^5")
     }
 
     @Test("isPerfectPower 999 returns nil after many overflow breaks")
@@ -1327,21 +1327,21 @@ struct NumberTheoryIsPerfectPowerOverflowTests {
     func isPerfectPower128() {
         let result = NumberTheory.isPerfectPower(128)
         #expect(result != nil, "128 should be detected as perfect power")
-        #expect(result!.base == 2 && result!.exp == 7, "128 = 2^7")
+        #expect(result?.base == 2 && result!.exp == 7, "128 = 2^7")
     }
 
     @Test("isPerfectPower 4 returns (2, 2) checking highest exponent first")
     func isPerfectPower4() {
         let result = NumberTheory.isPerfectPower(4)
         #expect(result != nil, "4 should be detected as perfect power")
-        #expect(result!.base == 2 && result!.exp == 2, "4 = 2^2")
+        #expect(result?.base == 2 && result!.exp == 2, "4 = 2^2")
     }
 
     @Test("isPerfectPower 9 triggers overflow breaks before finding 3^2")
     func isPerfectPower9() {
         let result = NumberTheory.isPerfectPower(9)
         #expect(result != nil, "9 should be detected as perfect power")
-        #expect(result!.base == 3 && result!.exp == 2, "9 = 3^2")
+        #expect(result?.base == 3 && result!.exp == 2, "9 = 3^2")
     }
 }
 
@@ -1400,7 +1400,7 @@ struct ShorResultDescriptionEdgeCasesTests {
             period: nil,
             base: 0,
             attempts: 0,
-            success: true,
+            isSuccessful: true,
             failureReason: nil,
         )
         let desc = result.description
@@ -1418,7 +1418,7 @@ struct ShorResultDescriptionEdgeCasesTests {
             period: nil,
             base: 0,
             attempts: 3,
-            success: false,
+            isSuccessful: false,
             failureReason: nil,
         )
         let desc = result.description
@@ -1435,7 +1435,7 @@ struct ShorResultDescriptionEdgeCasesTests {
             period: 6,
             base: 2,
             attempts: 1,
-            success: true,
+            isSuccessful: true,
             failureReason: nil,
         )
         let desc = result.description
@@ -1444,6 +1444,8 @@ struct ShorResultDescriptionEdgeCasesTests {
 }
 
 /// Test suite for QuantumState.shorPeriodResult phase edge cases.
+/// Validates edge cases in phase extraction including concentrated
+/// states, zero-index probability, and minimal circuits.
 @Suite("ShorPeriodResult - Phase Edge Cases")
 struct ShorPeriodResultPhaseEdgeCasesTests {
     @Test("shorPeriodResult with concentrated state in work register")
@@ -1497,38 +1499,38 @@ struct ShorPeriodResultPhaseEdgeCasesTests {
 @Suite("ShorFactorization - Even Number Factoring")
 struct ShorFactorizationEvenNumberTests {
     @Test("Even N=16 returns (2, 8)")
-    func evenNumber16() async {
+    func evenNumber16() async throws {
         let config = ShorConfiguration(numberToFactor: 16)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        #expect(result.success, "Even number should succeed")
+        #expect(result.isSuccessful, "Even number should succeed")
         #expect(result.factors != nil, "Should have factors")
-        let factors = result.factors!
+        let factors = try #require(result.factors)
         #expect(factors.p == 2 && factors.q == 8, "16 should factor as (2, 8)")
     }
 
     @Test("Even N=18 returns (2, 9)")
-    func evenNumber18() async {
+    func evenNumber18() async throws {
         let config = ShorConfiguration(numberToFactor: 18)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        #expect(result.success, "Even number should succeed")
+        #expect(result.isSuccessful, "Even number should succeed")
         #expect(result.factors != nil, "Should have factors from even handling")
-        let factors = result.factors!
+        let factors = try #require(result.factors)
         #expect(factors.p == 2 && factors.q == 9, "18 should factor as (2, 9) via even branch")
     }
 
     @Test("Even N=100 with larger numbers")
-    func evenNumber100() async {
+    func evenNumber100() async throws {
         let config = ShorConfiguration(numberToFactor: 100)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        #expect(result.success, "Even number should succeed")
+        #expect(result.isSuccessful, "Even number should succeed")
         #expect(result.factors != nil, "Should have factors")
-        let factors = result.factors!
+        let factors = try #require(result.factors)
         #expect(factors.p == 2 && factors.q == 50, "100 should factor as (2, 50)")
     }
 
@@ -1576,14 +1578,14 @@ struct ShorFactorizationPeriodVerificationTests {
     }
 
     @Test("Continue when period is odd")
-    func continueWhenPeriodOdd() async {
+    func continueWhenPeriodOdd() async throws {
         let config = ShorConfiguration(numberToFactor: 21, precisionQubits: 5, maxAttempts: 10)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
         #expect(result.numberToFactor == 21, "Should be factoring 21")
-        if result.success, result.period != nil {
-            #expect(result.period! % 2 == 0, "Found period should be even after skipping odd ones")
+        if result.isSuccessful, result.period != nil {
+            #expect(try #require(result.period) % 2 == 0, "Found period should be even after skipping odd ones")
         }
     }
 
@@ -1619,7 +1621,7 @@ struct ShorFactorizationFactor2PathTests {
             let simulator = QuantumSimulator()
             let shor = ShorFactorization(configuration: config, simulator: simulator)
             let result = await shor.run()
-            if result.success, result.factors != nil, result.period != nil {
+            if result.isSuccessful, result.factors != nil, result.period != nil {
                 usedFactor2Path = true
                 break
             }
@@ -1628,28 +1630,28 @@ struct ShorFactorizationFactor2PathTests {
     }
 
     @Test("Factorization finds non-trivial factor via either GCD path")
-    func findNonTrivialFactor() async {
+    func findNonTrivialFactor() async throws {
         let config = ShorConfiguration(numberToFactor: 15, precisionQubits: 8, maxAttempts: 20)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        if result.success, result.factors != nil {
-            let factors = result.factors!
+        if result.isSuccessful, result.factors != nil {
+            let factors = try #require(result.factors)
             #expect(factors.p > 1 && factors.p < 15, "First factor should be non-trivial")
             #expect(factors.q > 1 && factors.q < 15, "Second factor should be non-trivial")
         }
     }
 
     @Test("Factor1 and factor2 paths both produce valid factors")
-    func bothPathsProduceValidFactors() async {
+    func bothPathsProduceValidFactors() async throws {
         var successCount = 0
         for _ in 0 ..< 30 {
             let config = ShorConfiguration(numberToFactor: 15, precisionQubits: 7, maxAttempts: 1)
             let simulator = QuantumSimulator()
             let shor = ShorFactorization(configuration: config, simulator: simulator)
             let result = await shor.run()
-            if result.success, result.factors != nil {
-                let factors = result.factors!
+            if result.isSuccessful, result.factors != nil {
+                let factors = try #require(result.factors)
                 #expect(factors.p * factors.q == 15, "Factors should multiply to 15")
                 successCount += 1
             }
@@ -1658,13 +1660,13 @@ struct ShorFactorizationFactor2PathTests {
     }
 
     @Test("Factor extraction maintains correct ordering from either path")
-    func factorExtractionOrdering() async {
+    func factorExtractionOrdering() async throws {
         let config = ShorConfiguration(numberToFactor: 21, precisionQubits: 8, maxAttempts: 15)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        if result.success, result.factors != nil {
-            let factors = result.factors!
+        if result.isSuccessful, result.factors != nil {
+            let factors = try #require(result.factors)
             #expect(factors.p <= factors.q, "Factors should be ordered p <= q")
             #expect(factors.p * factors.q == 21, "Factors should multiply to 21")
         }
@@ -1677,13 +1679,13 @@ struct ShorFactorizationFactor2PathTests {
 @Suite("ShorFactorization - Factor Extraction Paths")
 struct ShorFactorizationFactorExtractionTests {
     @Test("Successful factorization has ordered factors p <= q")
-    func factorsOrdered() async {
+    func factorsOrdered() async throws {
         let config = ShorConfiguration(numberToFactor: 15, precisionQubits: 6, maxAttempts: 5)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        if result.success, result.factors != nil {
-            let factors = result.factors!
+        if result.isSuccessful, result.factors != nil {
+            let factors = try #require(result.factors)
             #expect(factors.p <= factors.q, "Factors should be ordered p <= q")
         }
     }
@@ -1694,20 +1696,20 @@ struct ShorFactorizationFactorExtractionTests {
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        if result.success, result.period != nil {
+        if result.isSuccessful, result.period != nil {
             #expect(result.base >= 2 && result.base < 15, "Base should be in valid range [2, N-1]")
             #expect(NumberTheory.gcd(result.base, 15) == 1, "Base should be coprime to N")
         }
     }
 
     @Test("Factorization records period in successful quantum attempt")
-    func periodRecorded() async {
+    func periodRecorded() async throws {
         let config = ShorConfiguration(numberToFactor: 15, precisionQubits: 6, maxAttempts: 5)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        if result.success, result.period != nil {
-            let period = result.period!
+        if result.isSuccessful, result.period != nil {
+            let period = try #require(result.period)
             #expect(period > 0, "Period should be positive")
             #expect(period % 2 == 0, "Period should be even for successful factorization")
         }
@@ -1724,13 +1726,13 @@ struct ShorFactorizationFactorExtractionTests {
     }
 
     @Test("factor2 path used when factor1 is trivial")
-    func factor2PathUsed() async {
+    func factor2PathUsed() async throws {
         let config = ShorConfiguration(numberToFactor: 15, precisionQubits: 6, maxAttempts: 5)
         let simulator = QuantumSimulator()
         let shor = ShorFactorization(configuration: config, simulator: simulator)
         let result = await shor.run()
-        if result.success, result.factors != nil {
-            let factors = result.factors!
+        if result.isSuccessful, result.factors != nil {
+            let factors = try #require(result.factors)
             #expect(factors.p * factors.q == 15, "Factors should multiply to 15")
             #expect(factors.p == 3 || factors.p == 5, "Factor p should be 3 or 5")
             #expect(factors.q == 3 || factors.q == 5, "Factor q should be 3 or 5")

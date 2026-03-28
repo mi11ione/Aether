@@ -61,7 +61,9 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
     /// Dimension of the superoperator matrix (d^2 where d = 2^qubits).
     ///
     /// - Complexity: O(1)
-    @inlinable public var dimension: Int { 1 << (2 * qubits) }
+    @inlinable public var dimension: Int {
+        1 << (2 * qubits)
+    }
 
     /// Creates superoperator from a noise channel.
     ///
@@ -325,7 +327,9 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
     /// Dimension of the Choi matrix (d^2 where d = 2^qubits).
     ///
     /// - Complexity: O(1)
-    @inlinable public var dimension: Int { 1 << (2 * qubits) }
+    @inlinable public var dimension: Int {
+        1 << (2 * qubits)
+    }
 
     /// Creates Choi matrix from a noise channel.
     ///
@@ -565,7 +569,9 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
     /// Dimension of the Chi matrix (d^2 where d = 2^qubits).
     ///
     /// - Complexity: O(1)
-    @inlinable public var dimension: Int { 1 << (2 * qubits) }
+    @inlinable public var dimension: Int {
+        1 << (2 * qubits)
+    }
 
     /// Creates Chi matrix from a noise channel.
     ///

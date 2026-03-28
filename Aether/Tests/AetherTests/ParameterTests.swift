@@ -279,7 +279,7 @@ struct ParameterValueTests {
         let negated = exprValue.negated
         let bindings = ["theta": 2.0]
         let result = negated.evaluate(using: bindings)
-        #expect(abs(result - (-2.0)) < 1e-10, "Negated expression should evaluate to negated value")
+        #expect(abs(result - -2.0) < 1e-10, "Negated expression should evaluate to negated value")
     }
 
     @Test("Negated parameter hashability")

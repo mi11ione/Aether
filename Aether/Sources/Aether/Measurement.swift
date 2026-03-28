@@ -562,7 +562,8 @@ public enum Measurement {
         }
 
         let numOutcomes = 1 << qubits.count
-        var probabilities = [Double](unsafeUninitializedCapacity: numOutcomes) { buffer, count in
+        var probabilities = [Double](unsafeUninitializedCapacity: numOutcomes) {
+            buffer, count in
             buffer.initialize(repeating: 0.0)
             count = numOutcomes
         }
@@ -866,7 +867,8 @@ public enum Measurement {
     public static func histogram(outcomes: [Int], qubits: Int) -> [Int] {
         let stateSpaceSize = 1 << qubits
 
-        var counts = [Int](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+        var counts = [Int](unsafeUninitializedCapacity: stateSpaceSize) {
+            buffer, count in
             buffer.initialize(repeating: 0)
             count = stateSpaceSize
         }
@@ -904,7 +906,8 @@ public enum Measurement {
 
         let stateSpaceSize = maxOutcome + 1
 
-        var counts = [Int](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
+        var counts = [Int](unsafeUninitializedCapacity: stateSpaceSize) {
+            buffer, count in
             buffer.initialize(repeating: 0)
             count = stateSpaceSize
         }
@@ -1042,11 +1045,11 @@ public enum Measurement {
 
     // MARK: - Internal Helpers
 
+    /// Constructs deterministic basis state |outcome⟩ for given qubit count.
     @_optimize(speed)
     @_effects(readonly)
     @inlinable
     @_eagerMove
-    /// Constructs deterministic basis state |outcome⟩ for given qubit count.
     static func collapseToOutcome(_ outcome: Int, qubits: Int) -> QuantumState {
         let stateSpaceSize = 1 << qubits
         let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSpaceSize) { buffer, count in
@@ -1058,10 +1061,10 @@ public enum Measurement {
         return QuantumState(qubits: qubits, amplitudes: amplitudes)
     }
 
+    /// Collapses state by zeroing incompatible amplitudes and renormalizing.
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
-    /// Collapses state by zeroing incompatible amplitudes and renormalizing.
     static func multiQubitCollapse(
         qubits: [Int],
         outcomes: [Int],
@@ -1088,10 +1091,10 @@ public enum Measurement {
         return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 
+    /// Rotates qubit from Pauli eigenbasis to computational basis for measurement.
     @_effects(readonly)
     @inlinable
     @_eagerMove
-    /// Rotates qubit from Pauli eigenbasis to computational basis for measurement.
     static func rotateToPauliBasis(qubit: Int, basis: PauliBasis, state: QuantumState) -> QuantumState {
         switch basis {
         case .x:
@@ -1105,10 +1108,10 @@ public enum Measurement {
         }
     }
 
+    /// Rotates qubit back from computational basis to original Pauli eigenbasis.
     @_effects(readonly)
     @inlinable
     @_eagerMove
-    /// Rotates qubit back from computational basis to original Pauli eigenbasis.
     static func rotateFromPauliBasis(qubit: Int, basis: PauliBasis, state: QuantumState) -> QuantumState {
         switch basis {
         case .x:
@@ -1122,15 +1125,15 @@ public enum Measurement {
         }
     }
 
-    @usableFromInline
     /// Samples a single outcome from probability distribution using optional seed.
+    @usableFromInline
     static func sampleOutcome(probabilities: [Double], seed: UInt64?) -> Int {
         var rng = createRNG(seed: seed)
         return sampleOutcome(probabilities: probabilities, rng: &rng)
     }
 
-    @usableFromInline
     /// Samples a single outcome via roulette wheel selection over probabilities.
+    @usableFromInline
     static func sampleOutcome(probabilities: [Double], rng: inout any RandomNumberGenerator) -> Int {
         ValidationUtilities.validateProbabilityDistribution(probabilities)
 
@@ -1147,8 +1150,8 @@ public enum Measurement {
         return probabilities.count - 1
     }
 
-    @usableFromInline
     /// Creates a seeded Mersenne Twister RNG or system random generator.
+    @usableFromInline
     static func createRNG(seed: UInt64?) -> any RandomNumberGenerator {
         if let seed {
             let source = GKMersenneTwisterRandomSource(seed: seed)
@@ -1158,8 +1161,8 @@ public enum Measurement {
         }
     }
 
-    @usableFromInline
     /// Wraps GKMersenneTwisterRandomSource as Swift RandomNumberGenerator.
+    @usableFromInline
     struct RandomNumberGeneratorWrapper: RandomNumberGenerator {
         let source: GKMersenneTwisterRandomSource
 

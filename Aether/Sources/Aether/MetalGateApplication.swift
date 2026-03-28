@@ -126,7 +126,8 @@ public actor MetalGateApplication {
     private static func toGPUAmplitudes(_ amplitudes: [Complex<Double>]) -> [(Float, Float)] {
         guard !amplitudes.isEmpty else { return [] }
         let n = amplitudes.count
-        var result = [(Float, Float)](unsafeUninitializedCapacity: n) { _, count in
+        var result = [(Float, Float)](unsafeUninitializedCapacity: n) {
+            _, count in
             count = n
         }
 
@@ -147,7 +148,8 @@ public actor MetalGateApplication {
     @inline(__always)
     private static func fromGPUAmplitudes(_ pointer: UnsafePointer<(Float, Float)>, count: Int) -> [Complex<Double>] {
         guard count > 0 else { return [] }
-        var result = [Complex<Double>](unsafeUninitializedCapacity: count) { _, outCount in
+        var result = [Complex<Double>](unsafeUninitializedCapacity: count) {
+            _, outCount in
             outCount = count
         }
 
@@ -543,7 +545,6 @@ public actor MetalGateApplication {
 
         return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
-
 }
 
 // MARK: - Hybrid CPU/GPU Gate Application

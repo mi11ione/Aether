@@ -363,7 +363,8 @@ public extension QuantumState {
 
         let precisionStateSize = 1 << precisionQubits
 
-        var precisionProbabilities = [Double](unsafeUninitializedCapacity: precisionStateSize) { buffer, count in
+        var precisionProbabilities = [Double](unsafeUninitializedCapacity: precisionStateSize) {
+            buffer, count in
             buffer.initialize(repeating: 0.0)
             count = precisionStateSize
         }

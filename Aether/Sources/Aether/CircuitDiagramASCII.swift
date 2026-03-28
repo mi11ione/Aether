@@ -226,7 +226,7 @@ public enum CircuitDiagramASCII: Sendable {
     @_effects(readonly)
     @usableFromInline
     static func singleGateLabel(_ gate: QuantumGate) -> String {
-        if let shared = CircuitDiagramUtilities.gateLabel(gate) {
+        if let shared = CircuitDiagramUtilities.label(for: gate) {
             return shared
         }
         return switch gate {
@@ -253,7 +253,8 @@ public enum CircuitDiagramASCII: Sendable {
     @_effects(readonly)
     @usableFromInline
     static func computeColumnWidths(symbolGrid: [[String]], layerCount: Int, qubitCount: Int) -> [Int] {
-        var widths = [Int](unsafeUninitializedCapacity: layerCount) { buffer, count in
+        var widths = [Int](unsafeUninitializedCapacity: layerCount) {
+            buffer, count in
             buffer.initialize(repeating: 3)
             count = layerCount
         }

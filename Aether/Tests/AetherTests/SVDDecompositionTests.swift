@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -1054,7 +1054,7 @@ struct ZeroMatrixTruncationEdgeCasesTests {
             [.zero, .zero],
         ]
         let result = SVDDecomposition.decompose(matrix: zeroMatrix, truncation: .relativeThreshold(0.5))
-        #expect(result.singularValues.allSatisfy { $0 < 1e-10 }, "Zero matrix should have zero singular values")
+        #expect(result.singularValues.allSatisfy { $0 < 1e-10 }, "Zero matrix should have zero singular values, got \(result.singularValues)")
     }
 
     @Test("Cumulative weight with zero matrix returns all")
@@ -1064,7 +1064,7 @@ struct ZeroMatrixTruncationEdgeCasesTests {
             [.zero, .zero],
         ]
         let result = SVDDecomposition.decompose(matrix: zeroMatrix, truncation: .cumulativeWeight(epsilon: 0.1))
-        #expect(result.singularValues.allSatisfy { $0 < 1e-10 }, "Zero matrix should have zero singular values")
+        #expect(result.singularValues.allSatisfy { $0 < 1e-10 }, "Zero matrix should have zero singular values, got \(result.singularValues)")
     }
 
     @Test("Relative threshold zero matrix keeps all singular values")

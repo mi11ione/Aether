@@ -177,7 +177,8 @@ public enum MPSGateApplication {
         let chiR = tensorB.rightBondDimension
 
         let combinedCount = chiL * 2 * 2 * chiR
-        var combined = [Complex<Double>](unsafeUninitializedCapacity: combinedCount) { buffer, count in
+        let combined = [Complex<Double>](unsafeUninitializedCapacity: combinedCount) {
+            buffer, count in
             for alpha in 0 ..< chiL {
                 for i in 0 ..< 2 {
                     for j in 0 ..< 2 {
@@ -196,27 +197,28 @@ public enum MPSGateApplication {
         }
 
         let gateMatrix = gate.matrix()
-        var transformed = [Complex<Double>](unsafeUninitializedCapacity: combinedCount) { buffer, count in
+        let transformed = [Complex<Double>](unsafeUninitializedCapacity: combinedCount) {
+            buffer, count in
             for alpha in 0 ..< chiL {
-            for gamma in 0 ..< chiR {
-                for iPrime in 0 ..< 2 {
-                    for jPrime in 0 ..< 2 {
-                        var sum: Complex<Double> = .zero
-                        for i in 0 ..< 2 {
-                            for j in 0 ..< 2 {
-                                let (gateRow, gateCol) = controlIsLeft
-                                    ? (iPrime * 2 + jPrime, i * 2 + j)
-                                    : (jPrime * 2 + iPrime, j * 2 + i)
-                                let combIdx = alpha * (4 * chiR) + i * (2 * chiR) + j * chiR + gamma
-                                sum = sum + gateMatrix[gateRow][gateCol] * combined[combIdx]
+                for gamma in 0 ..< chiR {
+                    for iPrime in 0 ..< 2 {
+                        for jPrime in 0 ..< 2 {
+                            var sum: Complex<Double> = .zero
+                            for i in 0 ..< 2 {
+                                for j in 0 ..< 2 {
+                                    let (gateRow, gateCol) = controlIsLeft
+                                        ? (iPrime * 2 + jPrime, i * 2 + j)
+                                        : (jPrime * 2 + iPrime, j * 2 + i)
+                                    let combIdx = alpha * (4 * chiR) + i * (2 * chiR) + j * chiR + gamma
+                                    sum = sum + gateMatrix[gateRow][gateCol] * combined[combIdx]
+                                }
                             }
+                            let outIdx = alpha * (4 * chiR) + iPrime * (2 * chiR) + jPrime * chiR + gamma
+                            buffer[outIdx] = sum
                         }
-                        let outIdx = alpha * (4 * chiR) + iPrime * (2 * chiR) + jPrime * chiR + gamma
-                        buffer[outIdx] = sum
                     }
                 }
             }
-        }
             count = combinedCount
         }
 

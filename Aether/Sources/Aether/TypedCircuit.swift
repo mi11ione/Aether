@@ -7,7 +7,7 @@
 /// distinct types. Conforming enums (``Q1`` through ``Q8``, ``Q16``) carry a static ``count``
 /// that ``TypedCircuit`` reads at initialization to construct the underlying ``QuantumCircuit``
 /// with the correct number of qubits. The compiler rejects mismatched circuit compositions
-/// because ``TypedCircuit<Q2>`` and ``TypedCircuit<Q3>`` are unrelated types, catching
+/// because `TypedCircuit<Q2>` and `TypedCircuit<Q3>` are unrelated types, catching
 /// dimension errors before runtime.
 ///
 /// **Example:**
@@ -34,7 +34,9 @@ public protocol QubitSize: Sendable {
 /// ```
 public enum Q1: QubitSize {
     @inlinable
-    public static var count: Int { 1 }
+    public static var count: Int {
+        1
+    }
 }
 
 /// Phantom type representing a two-qubit register.
@@ -47,7 +49,9 @@ public enum Q1: QubitSize {
 /// ```
 public enum Q2: QubitSize {
     @inlinable
-    public static var count: Int { 2 }
+    public static var count: Int {
+        2
+    }
 }
 
 /// Phantom type representing a three-qubit register.
@@ -60,7 +64,9 @@ public enum Q2: QubitSize {
 /// ```
 public enum Q3: QubitSize {
     @inlinable
-    public static var count: Int { 3 }
+    public static var count: Int {
+        3
+    }
 }
 
 /// Phantom type representing a four-qubit register.
@@ -73,7 +79,9 @@ public enum Q3: QubitSize {
 /// ```
 public enum Q4: QubitSize {
     @inlinable
-    public static var count: Int { 4 }
+    public static var count: Int {
+        4
+    }
 }
 
 /// Phantom type representing a five-qubit register.
@@ -86,7 +94,9 @@ public enum Q4: QubitSize {
 /// ```
 public enum Q5: QubitSize {
     @inlinable
-    public static var count: Int { 5 }
+    public static var count: Int {
+        5
+    }
 }
 
 /// Phantom type representing a six-qubit register.
@@ -99,7 +109,9 @@ public enum Q5: QubitSize {
 /// ```
 public enum Q6: QubitSize {
     @inlinable
-    public static var count: Int { 6 }
+    public static var count: Int {
+        6
+    }
 }
 
 /// Phantom type representing a seven-qubit register.
@@ -112,7 +124,9 @@ public enum Q6: QubitSize {
 /// ```
 public enum Q7: QubitSize {
     @inlinable
-    public static var count: Int { 7 }
+    public static var count: Int {
+        7
+    }
 }
 
 /// Phantom type representing an eight-qubit register.
@@ -125,7 +139,9 @@ public enum Q7: QubitSize {
 /// ```
 public enum Q8: QubitSize {
     @inlinable
-    public static var count: Int { 8 }
+    public static var count: Int {
+        8
+    }
 }
 
 /// Phantom type representing a sixteen-qubit register.
@@ -138,7 +154,9 @@ public enum Q8: QubitSize {
 /// ```
 public enum Q16: QubitSize {
     @inlinable
-    public static var count: Int { 16 }
+    public static var count: Int {
+        16
+    }
 }
 
 /// Type-level addition of two ``QubitSize`` types for tensor product composition.
@@ -159,14 +177,16 @@ public enum Q16: QubitSize {
 /// - SeeAlso: ``TypedCircuit/composing(_:_:)``
 public enum QubitSum<A: QubitSize, B: QubitSize>: QubitSize {
     @inlinable
-    public static var count: Int { A.count + B.count }
+    public static var count: Int {
+        A.count + B.count
+    }
 }
 
 /// Compile-time qubit-count-safe wrapper around ``QuantumCircuit``.
 ///
 /// ``TypedCircuit`` parameterizes a quantum circuit by a ``QubitSize`` phantom type so the
 /// Swift type checker prevents combining circuits with incompatible qubit counts. The
-/// underlying ``QuantumCircuit`` is constructed with exactly ``Size/count`` qubits, and the
+/// underlying ``QuantumCircuit`` is constructed with exactly `Size.count` qubits, and the
 /// ``composing(_:_:)`` factory method uses ``QubitSum`` to produce a correctly-sized output
 /// type without any runtime branching.
 ///
@@ -182,12 +202,12 @@ public enum QubitSum<A: QubitSize, B: QubitSize>: QubitSize {
 /// - SeeAlso: ``QuantumCircuit``
 @frozen
 public struct TypedCircuit<Size: QubitSize>: Sendable {
-    /// The underlying quantum circuit with ``Size/count`` qubits.
+    /// The underlying quantum circuit with `Size.count` qubits.
     public let circuit: QuantumCircuit
 
     /// Creates a typed circuit by building operations from a ``QuantumCircuitBuilder`` closure.
     ///
-    /// The circuit is constructed with ``Size/count`` qubits and populated with the gate steps
+    /// The circuit is constructed with `Size.count` qubits and populated with the gate steps
     /// produced by the result builder. Each ``GateStep`` is converted to a ``CircuitOperation``
     /// and appended in declaration order.
     ///
@@ -211,7 +231,7 @@ public struct TypedCircuit<Size: QubitSize>: Sendable {
 
     /// Creates a typed circuit by wrapping an existing ``QuantumCircuit``.
     ///
-    /// Validates at runtime that the circuit's qubit count matches ``Size/count``. Use this
+    /// Validates at runtime that the circuit's qubit count matches `Size.count`. Use this
     /// initializer when interfacing with untyped circuit APIs where the qubit count is known
     /// but not encoded in the type system.
     ///
@@ -222,7 +242,7 @@ public struct TypedCircuit<Size: QubitSize>: Sendable {
     /// let typed = TypedCircuit<Q2>(qc)
     /// ```
     ///
-    /// - Parameter circuit: Quantum circuit whose qubit count must equal ``Size/count``
+    /// - Parameter circuit: Quantum circuit whose qubit count must equal `Size.count`
     /// - Precondition: circuit.qubits == Size.count
     /// - Complexity: O(1)
     public init(_ circuit: QuantumCircuit) {
@@ -250,6 +270,7 @@ public struct TypedCircuit<Size: QubitSize>: Sendable {
     /// - Returns: Final quantum state after all circuit operations
     /// - Precondition: Circuit must contain only concrete parameters
     /// - Complexity: O(n x 2^q) where n = operation count, q = qubit count
+    /// - SeeAlso: ``execute(on:)``
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -274,6 +295,7 @@ public struct TypedCircuit<Size: QubitSize>: Sendable {
     /// - Precondition: initialState.qubits == Size.count
     /// - Precondition: Circuit must contain only concrete parameters
     /// - Complexity: O(n x 2^q) where n = operation count, q = qubit count
+    /// - SeeAlso: ``execute()``
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -285,9 +307,9 @@ public struct TypedCircuit<Size: QubitSize>: Sendable {
     /// whose qubit count is the sum of the two inputs.
     ///
     /// Operations from the first circuit retain their original qubit indices. Operations
-    /// from the second circuit have their qubit indices shifted upward by ``A/count`` so
+    /// from the second circuit have their qubit indices shifted upward by `A.count` so
     /// the two circuits occupy disjoint qubit registers in the combined system. The result
-    /// type ``TypedCircuit<QubitSum<A, B>>`` encodes the total qubit count at compile time.
+    /// type `TypedCircuit<QubitSum<A, B>>` encodes the total qubit count at compile time.
     ///
     /// **Example:**
     /// ```swift
@@ -315,11 +337,11 @@ public struct TypedCircuit<Size: QubitSize>: Sendable {
         var combined = QuantumCircuit(qubits: totalQubits)
 
         for operation in a.circuit.operations {
-            combined.addOperation(operation)
+            combined.append(operation)
         }
 
         for operation in b.circuit.operations {
-            combined.addOperation(operation.shifted(by: shift))
+            combined.append(operation.shifted(by: shift))
         }
 
         return TypedCircuit<QubitSum<A, B>>(combined)

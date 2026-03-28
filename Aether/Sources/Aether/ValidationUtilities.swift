@@ -111,8 +111,6 @@ public enum ValidationUtilities {
         )
     }
 
-    // MARK: - Numeric Validations
-
     /// Validate that complex number denominator is non-zero for division
     ///
     /// - Parameters:
@@ -261,8 +259,6 @@ public enum ValidationUtilities {
         precondition(value > min && value < max, "\(name) must be in (\(min), \(max)) (got \(value))")
     }
 
-    // MARK: - Array Validations
-
     /// Validate that array is not empty
     ///
     /// - Parameters:
@@ -379,8 +375,6 @@ public enum ValidationUtilities {
         )
     }
 
-    // MARK: - Matrix Validations
-
     /// Validates that matrix has non-zero row and column dimensions.
     @_effects(readonly)
     @inlinable
@@ -457,8 +451,6 @@ public enum ValidationUtilities {
         )
     }
 
-    // MARK: - Probability Validations
-
     /// Validate that probability array sums to 1.0 (within tolerance)
     ///
     /// - Parameters:
@@ -474,8 +466,6 @@ public enum ValidationUtilities {
         let sum = probabilities.reduce(0.0, +)
         precondition(abs(sum - 1.0) < tolerance, "Probabilities must sum to 1.0 (got \(sum))")
     }
-
-    // MARK: - Quantum-Specific Validations
 
     /// Validate that value is binary (0 or 1)
     ///
@@ -592,8 +582,6 @@ public enum ValidationUtilities {
         )
     }
 
-    // MARK: - String Validations
-
     /// Validate that string is not empty
     ///
     /// - Parameters:
@@ -608,13 +596,18 @@ public enum ValidationUtilities {
         precondition(!string.isEmpty, "\(name) cannot be empty")
     }
 
-    // MARK: - Circuit Validations
-
     /// Validate that a circuit contains only Clifford gates.
     ///
     /// Uses ``CliffordGateClassifier`` to analyze the circuit and ensures no non-Clifford
     /// gates (T, arbitrary rotations) are present. Required for ``CliffordSimulator`` which
     /// uses stabilizer formalism that only supports Clifford operations.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var circuit = QuantumCircuit(qubits: 2)
+    /// circuit.append(.hadamard, to: 0)
+    /// ValidationUtilities.validateCliffordCircuit(circuit)
+    /// ```
     ///
     /// - Parameter circuit: Quantum circuit to validate
     /// - Precondition: Circuit must contain only Clifford gates
@@ -681,8 +674,6 @@ public enum ValidationUtilities {
         precondition(qubitsRequired == 2, "KAK decomposition requires two-qubit gate (got \(qubitsRequired)-qubit gate)")
     }
 
-    // MARK: - Educational Algorithm Validations
-
     /// Validate qubit count for educational algorithms
     ///
     /// Many educational algorithms have practical qubit limits for simulation.
@@ -714,8 +705,6 @@ public enum ValidationUtilities {
     static func validateMinimumQubits(_ qubits: Int, min: Int, algorithmName: String) {
         precondition(qubits >= min, "\(algorithmName) requires at least \(min) qubit\(min > 1 ? "s" : "") (got \(qubits))")
     }
-
-    // MARK: - Optimizer Validations
 
     /// Validate trust region radius relationships
     ///
@@ -760,8 +749,6 @@ public enum ValidationUtilities {
         )
     }
 
-    // MARK: - Graph Validations
-
     /// Validate that graph edge connects two distinct vertices
     ///
     /// Self-loops (edges from a vertex to itself) are invalid in graph problems
@@ -781,8 +768,6 @@ public enum ValidationUtilities {
             "Self-loop edge (\(vertex1), \(vertex1)) is invalid. Edges must connect distinct vertices.",
         )
     }
-
-    // MARK: - Density Matrix Validations
 
     /// Validate that number of qubits is within density matrix memory limits
     ///
@@ -997,8 +982,6 @@ public enum ValidationUtilities {
         }
     }
 
-    // MARK: - Qubit Count Validations
-
     /// Validate that two qubit counts are equal.
     ///
     /// - Parameters:
@@ -1037,8 +1020,6 @@ public enum ValidationUtilities {
         )
     }
 
-    // MARK: - Special Validations
-
     /// Validate that allocation dictionary contains required index
     ///
     /// - Parameters:
@@ -1070,8 +1051,6 @@ public enum ValidationUtilities {
         )
     }
 
-    // MARK: - Parameter Vector Validations
-
     /// Validate parameter vector length matches expected count
     ///
     /// Used for VQE/QAOA parameter binding where vector length must match
@@ -1092,8 +1071,6 @@ public enum ValidationUtilities {
             "\(name) length must be \(expected) (got \(actual))",
         )
     }
-
-    // MARK: - Matrix Size Validations
 
     /// Validate that parameter exists in circuit's parameter set
     ///
@@ -1284,8 +1261,6 @@ public enum ValidationUtilities {
         )
     }
 
-    // MARK: - Error Mitigation Validations
-
     /// Validate ZNE scale factors array.
     ///
     /// - Parameter scaleFactors: Array of noise scale factors
@@ -1312,8 +1287,6 @@ public enum ValidationUtilities {
         precondition(probability >= 0 && probability < 0.75,
                      "PEC error probability must be in [0, 0.75)")
     }
-
-    // MARK: - MPS Tensor Validations
 
     /// Validate that MPS tensor element count matches bond dimensions.
     ///
@@ -1477,8 +1450,6 @@ public enum ValidationUtilities {
         precondition(!unitaries.isEmpty, "Multiplexor unitaries array must not be empty")
     }
 
-    // MARK: - Subsystem Validations
-
     /// Validate that two subsystem qubit arrays have no common elements
     ///
     /// Ensures subsystem A and subsystem B are disjoint, which is required for
@@ -1531,11 +1502,14 @@ public enum ValidationUtilities {
         )
     }
 
-    // MARK: - Constraint Validations
-
-    /// Validate bounded constraint parameters
+    /// Validate bounded constraint parameters.
     ///
     /// Ensures minimum bound is strictly less than maximum bound for valid interval constraints.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// ValidationUtilities.validateBoundedConstraint(min: 0.0, max: 2.0 * .pi)
+    /// ```
     ///
     /// - Parameters:
     ///   - min: Minimum bound value
@@ -1551,9 +1525,14 @@ public enum ValidationUtilities {
         precondition(min < max, "\(namePrefix)Bounded constraint requires min < max (got min=\(min), max=\(max))")
     }
 
-    /// Validate periodic constraint parameter
+    /// Validate periodic constraint parameter.
     ///
     /// Ensures period is strictly positive for valid periodic constraints.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// ValidationUtilities.validatePeriodicConstraint(period: 2.0 * .pi)
+    /// ```
     ///
     /// - Parameters:
     ///   - period: Period value to validate
@@ -1568,9 +1547,15 @@ public enum ValidationUtilities {
         precondition(period > 0, "\(namePrefix)Periodic constraint requires period > 0 (got \(period))")
     }
 
-    /// Validate parameter binding completeness for expression
+    /// Validate parameter binding completeness for expression.
     ///
     /// Ensures all parameters in the set have corresponding bindings in the dictionary.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let theta = Parameter(name: "theta")
+    /// ValidationUtilities.validateExpressionBinding(["theta": 0.5], for: [theta])
+    /// ```
     ///
     /// - Parameters:
     ///   - bindings: Dictionary of parameter name to value bindings
@@ -1587,10 +1572,16 @@ public enum ValidationUtilities {
         precondition(missingParams.isEmpty, "\(namePrefix)Missing bindings for parameters: \(missingParams.joined(separator: ", "))")
     }
 
-    /// Validate that an evaluated expression result is not NaN
+    /// Validate that an evaluated expression result is not NaN.
     ///
     /// Used during controlled gate decomposition to ensure symbolic expressions
     /// have been fully evaluated before proceeding with numeric operations.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let result = expression.evaluate(with: bindings)
+    /// ValidationUtilities.validateEvaluatedExpression(result)
+    /// ```
     ///
     /// - Parameter value: Evaluated expression result to validate
     /// - Precondition: !value.isNaN
@@ -1600,5 +1591,13 @@ public enum ValidationUtilities {
     @inline(__always)
     public static func validateEvaluatedExpression(_ value: Double) {
         precondition(!value.isNaN, "Cannot decompose symbolic expression without bindings")
+    }
+
+    /// Validate that expression is concrete (no unbound parameters).
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateConcreteExpression(_ isSymbolic: Bool) {
+        precondition(!isSymbolic, "Expression contains unbound parameters")
     }
 }

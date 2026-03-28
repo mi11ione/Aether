@@ -341,11 +341,9 @@ struct SelectCircuitTests {
             (coefficient: 0.3, pauliString: PauliString(.x(1))),
         ])
         let decomposition = LCU.decompose(hamiltonian)
-        let systemQubits = 2
         let ancillaStart = 2
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: systemQubits,
             ancillaStart: ancillaStart,
         )
 
@@ -359,7 +357,7 @@ struct SelectCircuitTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -376,7 +374,7 @@ struct SelectCircuitTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -392,7 +390,7 @@ struct SelectCircuitTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -409,7 +407,7 @@ struct SelectCircuitTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -429,11 +427,9 @@ struct BlockEncodingCircuitTests {
             (coefficient: 0.3, pauliString: PauliString(.x(1))),
         ])
         let decomposition = LCU.decompose(hamiltonian)
-        let systemQubits = 2
         let ancillaStart = 2
         let circuit = LCU.blockEncodingCircuit(
             decomposition: decomposition,
-            systemQubits: systemQubits,
             ancillaStart: ancillaStart,
         )
 
@@ -447,7 +443,7 @@ struct BlockEncodingCircuitTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.blockEncodingCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -465,12 +461,12 @@ struct BlockEncodingCircuitTests {
         let prepareCircuit = LCU.prepareCircuit(decomposition: decomposition, ancillaStart: 2)
         let selectCircuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
         let blockCircuit = LCU.blockEncodingCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -488,7 +484,7 @@ struct BlockEncodingCircuitTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.blockEncodingCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -503,12 +499,12 @@ struct BlockEncodingCircuitTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.blockEncodingCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
         let prepCircuit = LCU.prepareCircuit(decomposition: decomposition, ancillaStart: 1)
-        let selCircuit = LCU.selectCircuit(decomposition: decomposition, systemQubits: 1, ancillaStart: 1)
+        let selCircuit = LCU.selectCircuit(decomposition: decomposition, ancillaStart: 1)
         let expectedGates = prepCircuit.operations.count * 2 + selCircuit.operations.count
         #expect(circuit.operations.count == expectedGates, "Block encoding for single term should have PREPARE + SELECT + PREPARE-inverse gates")
     }
@@ -639,7 +635,7 @@ struct MultiQubitPauliStringTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -863,7 +859,7 @@ struct MultiControlledGateTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -880,7 +876,7 @@ struct MultiControlledGateTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -897,7 +893,7 @@ struct MultiControlledGateTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -915,7 +911,7 @@ struct MultiControlledGateTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -933,7 +929,7 @@ struct MultiControlledGateTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -955,7 +951,7 @@ struct ControlledPhaseTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -972,7 +968,7 @@ struct ControlledPhaseTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -991,7 +987,7 @@ struct ControlledPhaseTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -1009,7 +1005,7 @@ struct ControlledPhaseTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.blockEncodingCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -1030,7 +1026,7 @@ struct UncontrolledPauliTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -1045,7 +1041,7 @@ struct UncontrolledPauliTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -1060,7 +1056,7 @@ struct UncontrolledPauliTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -1075,7 +1071,7 @@ struct UncontrolledPauliTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 1,
+
             ancillaStart: 1,
         )
 
@@ -1097,7 +1093,7 @@ struct SingleControlledPauliTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -1114,7 +1110,7 @@ struct SingleControlledPauliTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -1130,7 +1126,7 @@ struct SingleControlledPauliTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -1207,7 +1203,7 @@ struct SingleControlledPauliTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -1226,7 +1222,7 @@ struct SingleControlledPauliTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 
@@ -1245,7 +1241,7 @@ struct SingleControlledPauliTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.blockEncodingCircuit(
             decomposition: decomposition,
-            systemQubits: 3,
+
             ancillaStart: 3,
         )
 
@@ -1279,7 +1275,7 @@ struct SingleControlledPauliTests {
         let decomposition = LCU.decompose(hamiltonian)
         let circuit = LCU.selectCircuit(
             decomposition: decomposition,
-            systemQubits: 2,
+
             ancillaStart: 2,
         )
 

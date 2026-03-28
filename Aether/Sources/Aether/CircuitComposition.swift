@@ -184,7 +184,8 @@ public extension QuantumCircuit {
                 }
 
                 for i in 0 ..< gateSize {
-                    var row = [Complex<Double>](unsafeUninitializedCapacity: controlledDimension) { buffer, count in
+                    var row = [Complex<Double>](unsafeUninitializedCapacity: controlledDimension) {
+                        buffer, count in
                         for j in 0 ..< controlledDimension {
                             buffer[j] = .zero
                         }
@@ -210,7 +211,7 @@ public extension QuantumCircuit {
                     let innerControlled = innerCircuit.controlled(by: remainingControls)
 
                     for innerOp in innerControlled.operations {
-                        result.addOperation(innerOp)
+                        result.append(innerOp)
                     }
                 }
             }
@@ -228,8 +229,8 @@ public extension QuantumCircuit {
 
 /// Composes two quantum circuits in series by concatenating their operations sequentially.
 ///
-/// Composes two circuits in series, equivalent to applying the unitary of ``lhs`` followed
-/// by ``rhs``. The resulting circuit has qubit count equal to the maximum of the two input
+/// Composes two circuits in series, equivalent to applying the unitary of `lhs` followed
+/// by `rhs`. The resulting circuit has qubit count equal to the maximum of the two input
 /// circuits. All operations from the left-hand circuit execute first, followed by all
 /// operations from the right-hand circuit. Qubit labels are merged with right-hand labels
 /// taking precedence on index collision.
@@ -278,7 +279,7 @@ public func + (lhs: QuantumCircuit, rhs: QuantumCircuit) -> QuantumCircuit {
 
 /// Composes two quantum circuits in parallel via tensor product across disjoint qubit registers.
 ///
-/// Constructs the tensor product U_A ⊗ U_B, applying ``lhs`` and ``rhs`` independently on
+/// Constructs the tensor product U_A ⊗ U_B, applying `lhs` and `rhs` independently on
 /// disjoint qubit registers. The resulting circuit has qubit count equal to the sum of the two
 /// input circuits. Operations from the left-hand circuit retain their original qubit indices.
 /// Operations from the right-hand circuit have all qubit indices shifted upward by the

@@ -491,7 +491,7 @@ public extension QuantumCircuit {
             circuit.append(gate, to: qubits)
         }
 
-        let phaseCorrectionEpsilon: Double = 1e-12
+        let phaseCorrectionEpsilon = 1e-12
         if abs(phaseCorrection) > phaseCorrectionEpsilon {
             circuit.append(.rotationZ(-phaseCorrection), to: ancillaQubit)
         }

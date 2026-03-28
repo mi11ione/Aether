@@ -54,7 +54,9 @@ public actor MPSMetalAcceleration {
     /// let accelerator = MPSMetalAcceleration()
     /// if accelerator.isAvailable { print("GPU ready") }
     /// ```
-    public nonisolated var isAvailable: Bool { device != nil }
+    public nonisolated var isAvailable: Bool {
+        device != nil
+    }
 
     /// Creates GPU accelerator using system default Metal device.
     ///
@@ -104,10 +106,10 @@ public actor MPSMetalAcceleration {
 
         ValidationUtilities.validateBondDimensionMatch(left.rightBondDimension, right.leftBondDimension)
 
-        let leftMatrix0 = left.matrix(forPhysical:0)
-        let leftMatrix1 = left.matrix(forPhysical:1)
-        let rightMatrix0 = right.matrix(forPhysical:0)
-        let rightMatrix1 = right.matrix(forPhysical:1)
+        let leftMatrix0 = left.matrix(forPhysical: 0)
+        let leftMatrix1 = left.matrix(forPhysical: 1)
+        let rightMatrix0 = right.matrix(forPhysical: 0)
+        let rightMatrix1 = right.matrix(forPhysical: 1)
 
         let c00 = multiply(leftMatrix0, rightMatrix0)
         let c01 = multiply(leftMatrix0, rightMatrix1)
@@ -219,7 +221,8 @@ public actor MPSMetalAcceleration {
             return multiplyCPU(a, b, m: m, k: k, n: n)
         }
 
-        var aReal = [Float](unsafeUninitializedCapacity: m * k) { buffer, count in
+        var aReal = [Float](unsafeUninitializedCapacity: m * k) {
+            buffer, count in
             for i in 0 ..< m {
                 for j in 0 ..< k {
                     buffer[i * k + j] = Float(a[i][j].real)
@@ -228,7 +231,8 @@ public actor MPSMetalAcceleration {
             count = m * k
         }
 
-        var aImag = [Float](unsafeUninitializedCapacity: m * k) { buffer, count in
+        var aImag = [Float](unsafeUninitializedCapacity: m * k) {
+            buffer, count in
             for i in 0 ..< m {
                 for j in 0 ..< k {
                     buffer[i * k + j] = Float(a[i][j].imaginary)
@@ -237,7 +241,8 @@ public actor MPSMetalAcceleration {
             count = m * k
         }
 
-        var bReal = [Float](unsafeUninitializedCapacity: k * n) { buffer, count in
+        var bReal = [Float](unsafeUninitializedCapacity: k * n) {
+            buffer, count in
             for i in 0 ..< k {
                 for j in 0 ..< n {
                     buffer[i * n + j] = Float(b[i][j].real)
@@ -246,7 +251,8 @@ public actor MPSMetalAcceleration {
             count = k * n
         }
 
-        var bImag = [Float](unsafeUninitializedCapacity: k * n) { buffer, count in
+        var bImag = [Float](unsafeUninitializedCapacity: k * n) {
+            buffer, count in
             for i in 0 ..< k {
                 for j in 0 ..< n {
                     buffer[i * n + j] = Float(b[i][j].imaginary)
@@ -293,7 +299,8 @@ public actor MPSMetalAcceleration {
 
         guard let matMulInit = cachedMatMulInit,
               let matMulSubtract = cachedMatMulSubtract,
-              let matMulAdd = cachedMatMulAdd else {
+              let matMulAdd = cachedMatMulAdd
+        else {
             return multiplyCPU(a, b, m: m, k: k, n: n)
         }
 
@@ -352,7 +359,8 @@ public actor MPSMetalAcceleration {
         let kn2 = k * n * 2
         let mn2 = m * n * 2
 
-        var aInterleaved = [Double](unsafeUninitializedCapacity: mk2) { buffer, count in
+        var aInterleaved = [Double](unsafeUninitializedCapacity: mk2) {
+            buffer, count in
             for col in 0 ..< k {
                 for row in 0 ..< m {
                     let idx = (col * m + row) * 2
@@ -363,7 +371,8 @@ public actor MPSMetalAcceleration {
             count = mk2
         }
 
-        var bInterleaved = [Double](unsafeUninitializedCapacity: kn2) { buffer, count in
+        var bInterleaved = [Double](unsafeUninitializedCapacity: kn2) {
+            buffer, count in
             for col in 0 ..< n {
                 for row in 0 ..< k {
                     let idx = (col * k + row) * 2
@@ -374,7 +383,8 @@ public actor MPSMetalAcceleration {
             count = kn2
         }
 
-        var resultInterleaved = [Double](unsafeUninitializedCapacity: mn2) { _, count in
+        var resultInterleaved = [Double](unsafeUninitializedCapacity: mn2) {
+            _, count in
             count = mn2
         }
 
@@ -408,7 +418,7 @@ public actor MPSMetalAcceleration {
             }
         }
 
-        let result = (0 ..< m).map { row in
+        return (0 ..< m).map { row in
             [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
                 for col in 0 ..< n {
                     let idx = (col * m + row) * 2
@@ -417,7 +427,5 @@ public actor MPSMetalAcceleration {
                 count = n
             }
         }
-
-        return result
     }
 }

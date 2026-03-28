@@ -364,7 +364,7 @@ struct ToffoliLadderDecompositionTests {
     }
 
     @Test("Three controls allocates correct ancilla")
-    func threeControlsAllocatesCorrectAncilla() {
+    func threeControlsAllocatesCorrectAncilla() throws {
         let result = ControlledGateDecomposer.toffoliLadder(
             gate: .pauliX,
             controls: [0, 1, 2],
@@ -372,7 +372,7 @@ struct ToffoliLadderDecompositionTests {
         )
 
         let allQubits = result.flatMap(\.qubits)
-        let maxQubit = allQubits.max()!
+        let maxQubit = try #require(allQubits.max())
 
         #expect(maxQubit == 4, "Three controls should use ancilla at qubit 4 (max+1)")
     }
@@ -754,7 +754,7 @@ struct MathematicalValidationTests {
 
         var circuit1 = QuantumCircuit(qubits: 3)
         for op in testCircuit.operations {
-            circuit1.addOperation(op)
+            circuit1.append(op)
         }
         for (gate, qubits) in result {
             circuit1.append(gate, to: qubits)
@@ -763,7 +763,7 @@ struct MathematicalValidationTests {
 
         var circuit2 = QuantumCircuit(qubits: 3)
         for op in testCircuit.operations {
-            circuit2.addOperation(op)
+            circuit2.append(op)
         }
         circuit2.append(.toffoli, to: [0, 1, 2])
         let directState = circuit2.execute()
@@ -788,7 +788,7 @@ struct MathematicalValidationTests {
 
         var decomposedCircuit = QuantumCircuit(qubits: 2)
         for op in prepCircuit.operations {
-            decomposedCircuit.addOperation(op)
+            decomposedCircuit.append(op)
         }
         for (gate, qubits) in result {
             decomposedCircuit.append(gate, to: qubits)
@@ -797,7 +797,7 @@ struct MathematicalValidationTests {
 
         var directCircuit = QuantumCircuit(qubits: 2)
         for op in prepCircuit.operations {
-            directCircuit.addOperation(op)
+            directCircuit.append(op)
         }
         directCircuit.append(.cz, to: [0, 1])
         let directState = directCircuit.execute()
@@ -888,14 +888,14 @@ struct MathematicalValidationTests {
             circuit.append(gate, to: qubits)
         }
 
-        let inverse = circuit.inverse()
+        let inverse = circuit.inversed()
 
         var combined = QuantumCircuit(qubits: 2)
         for op in circuit.operations {
-            combined.addOperation(op)
+            combined.append(op)
         }
         for op in inverse.operations {
-            combined.addOperation(op)
+            combined.append(op)
         }
 
         let state = combined.execute()
@@ -926,14 +926,14 @@ struct UnitarityPreservationTests {
                 circuit.append(g, to: qubits)
             }
 
-            let inverse = circuit.inverse()
+            let inverse = circuit.inversed()
 
             var combined = QuantumCircuit(qubits: 2)
             for op in circuit.operations {
-                combined.addOperation(op)
+                combined.append(op)
             }
             for op in inverse.operations {
-                combined.addOperation(op)
+                combined.append(op)
             }
 
             let state = combined.execute()
@@ -956,14 +956,14 @@ struct UnitarityPreservationTests {
             circuit.append(gate, to: qubits)
         }
 
-        let inverse = circuit.inverse()
+        let inverse = circuit.inversed()
 
         var combined = QuantumCircuit(qubits: 3)
         for op in circuit.operations {
-            combined.addOperation(op)
+            combined.append(op)
         }
         for op in inverse.operations {
-            combined.addOperation(op)
+            combined.append(op)
         }
 
         let state = combined.execute()
@@ -985,14 +985,14 @@ struct UnitarityPreservationTests {
             circuit.append(gate, to: qubits)
         }
 
-        let inverse = circuit.inverse()
+        let inverse = circuit.inversed()
 
         var combined = QuantumCircuit(qubits: 5)
         for op in circuit.operations {
-            combined.addOperation(op)
+            combined.append(op)
         }
         for op in inverse.operations {
-            combined.addOperation(op)
+            combined.append(op)
         }
 
         let state = combined.execute()
@@ -1015,14 +1015,14 @@ struct UnitarityPreservationTests {
             circuit.append(gate, to: qubits)
         }
 
-        let inverse = circuit.inverse()
+        let inverse = circuit.inversed()
 
         var combined = QuantumCircuit(qubits: 2)
         for op in circuit.operations {
-            combined.addOperation(op)
+            combined.append(op)
         }
         for op in inverse.operations {
-            combined.addOperation(op)
+            combined.append(op)
         }
 
         let state = combined.execute()
@@ -1051,7 +1051,7 @@ struct DecomposerEdgeCasesTests {
     }
 
     @Test("High qubit index decomposition allocates ancillas correctly")
-    func highQubitIndexDecompositionAllocatesAncillasCorrectly() {
+    func highQubitIndexDecompositionAllocatesAncillasCorrectly() throws {
         let result = ControlledGateDecomposer.decompose(
             gate: .pauliX,
             controls: [100, 101, 102],
@@ -1059,7 +1059,7 @@ struct DecomposerEdgeCasesTests {
         )
 
         let allQubits = result.flatMap(\.qubits)
-        let maxQubit = allQubits.max()!
+        let maxQubit = try #require(allQubits.max())
 
         #expect(maxQubit == 104, "Ancilla should be at 104 (max+1)")
     }
@@ -1200,14 +1200,14 @@ struct ControlledU3DecompositionTests {
             circuit.append(gate, to: qubits)
         }
 
-        let inverse = circuit.inverse()
+        let inverse = circuit.inversed()
 
         var combined = QuantumCircuit(qubits: 2)
         for op in circuit.operations {
-            combined.addOperation(op)
+            combined.append(op)
         }
         for op in inverse.operations {
-            combined.addOperation(op)
+            combined.append(op)
         }
 
         let state = combined.execute()

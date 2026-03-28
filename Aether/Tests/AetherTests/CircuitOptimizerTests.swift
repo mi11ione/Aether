@@ -846,14 +846,14 @@ struct GateCountAnalysisTests {
         #expect(count == 6, "Toffoli should count as 6 CNOT-equivalents")
     }
 
-    @Test("QuantumCircuit.gateCount property matches function")
+    @Test("QuantumCircuit.gateCounts() method matches function")
     func circuitGateCountPropertyMatches() {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
 
-        #expect(circuit.gateCount == CircuitOptimizer.gateCount(circuit),
-                "Circuit gateCount property should match function")
+        #expect(circuit.gateCounts() == CircuitOptimizer.gateCount(circuit),
+                "Circuit gateCounts() method should match function")
     }
 
     @Test("QuantumCircuit.cnotCount property matches function")
@@ -875,7 +875,7 @@ struct InverseCircuitTests {
     @Test("Empty circuit inverse is empty")
     func emptyInverseEmpty() {
         let circuit = QuantumCircuit(qubits: 2)
-        let inverse = circuit.inverse()
+        let inverse = circuit.inversed()
 
         #expect(inverse.count == 0, "Inverse of empty circuit should be empty")
     }
@@ -885,7 +885,7 @@ struct InverseCircuitTests {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.hadamard, to: 0)
 
-        let inverse = circuit.inverse()
+        let inverse = circuit.inversed()
 
         #expect(inverse.operations.first == .gate(.hadamard, qubits: [0]), "H† = H")
     }
@@ -897,7 +897,7 @@ struct InverseCircuitTests {
         circuit.append(.cnot, to: [0, 1])
         circuit.append(.pauliZ, to: 1)
 
-        let inverse = circuit.inverse()
+        let inverse = circuit.inversed()
 
         #expect(inverse.operations[0] == .gate(.pauliZ, qubits: [1]), "First gate in inverse should be Z†=Z")
         #expect(inverse.operations[1] == .gate(.cnot, qubits: [0, 1]), "Second gate in inverse should be CNOT†=CNOT")
@@ -909,7 +909,7 @@ struct InverseCircuitTests {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.rotationZ(.pi / 4), to: 0)
 
-        let inverse = circuit.inverse()
+        let inverse = circuit.inversed()
 
         if let invGate = inverse.operations.first?.gate,
            case let .rotationZ(angle) = invGate,
@@ -926,14 +926,14 @@ struct InverseCircuitTests {
         circuit.append(.cnot, to: [0, 1])
         circuit.append(.rotationY(.pi / 3), to: 1)
 
-        let inverse = circuit.inverse()
+        let inverse = circuit.inversed()
 
         var combined = QuantumCircuit(qubits: 2)
         for op in circuit.operations {
-            combined.addOperation(op)
+            combined.append(op)
         }
         for op in inverse.operations {
-            combined.addOperation(op)
+            combined.append(op)
         }
 
         let state = combined.execute()
@@ -947,7 +947,7 @@ struct InverseCircuitTests {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.sGate, to: 0)
 
-        let inverse = circuit.inverse()
+        let inverse = circuit.inversed()
         if let inverseGate = inverse.operations.first?.gate {
             if case let .phase(angle) = inverseGate, case let .value(v) = angle {
                 #expect(abs(v + .pi / 2) < 1e-10, "S† = P(-π/2)")
@@ -960,7 +960,7 @@ struct InverseCircuitTests {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.tGate, to: 0)
 
-        let inverse = circuit.inverse()
+        let inverse = circuit.inversed()
 
         if let inverseGate = inverse.operations.first?.gate {
             if case let .phase(angle) = inverseGate, case let .value(v) = angle {
@@ -1163,7 +1163,7 @@ struct EdgeCasesTests {
 
     @Test("Auto-optimize flag on circuit append")
     func autoOptimizeFlagWorks() {
-        var circuit = QuantumCircuit(qubits: 1, autoOptimize: true)
+        var circuit = QuantumCircuit(qubits: 1, isAutoOptimizing: true)
         circuit.append(.hadamard, to: 0)
         circuit.append(.hadamard, to: 0)
 

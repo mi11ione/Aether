@@ -33,8 +33,6 @@ import Foundation
 /// - SeeAlso: ``ConvergenceCriteria``
 /// - SeeAlso: ``PrecisionPolicy``
 public actor VQE {
-    // MARK: - Configuration
-
     /// Hamiltonian to minimize
     private let hamiltonian: Observable
 
@@ -54,17 +52,13 @@ public actor VQE {
     private let simulator: QuantumSimulator
 
     /// Precision policy controlling GPU/CPU backend selection.
-    public let precisionPolicy: PrecisionPolicy
-
-    // MARK: - State
+    public nonisolated let precisionPolicy: PrecisionPolicy
 
     /// Current optimization iteration
     private var currentIteration: Int = 0
 
     /// Current best energy
     private var currentEnergy: Double = 0.0
-
-    // MARK: - Initialization
 
     /// Creates VQE optimizer with specified Hamiltonian and ansatz.
     ///
@@ -87,7 +81,7 @@ public actor VQE {
     ///   - ansatz: Parameterized quantum circuit
     ///   - optimizer: Classical optimization algorithm
     ///   - convergence: Termination criteria
-    ///   - useSparseBackend: Enable sparse matrix acceleration
+    ///   - isSparseEnabled: Enable sparse matrix acceleration
     ///   - precisionPolicy: Precision policy governing GPU threshold (default: `.fast`)
     /// - Complexity: O(hamiltonian_construction)
     /// - SeeAlso: ``PrecisionPolicy``
@@ -96,7 +90,7 @@ public actor VQE {
         ansatz: HardwareEfficientAnsatz,
         optimizer: Optimizer,
         convergence: ConvergenceCriteria = .init(),
-        useSparseBackend: Bool = true,
+        isSparseEnabled: Bool = true,
         precisionPolicy: PrecisionPolicy = .fast,
     ) {
         self.hamiltonian = hamiltonian
@@ -104,11 +98,9 @@ public actor VQE {
         self.optimizer = optimizer
         self.convergence = convergence
         self.precisionPolicy = precisionPolicy
-        sparseHamiltonian = useSparseBackend ? SparseHamiltonian(observable: hamiltonian, precisionPolicy: precisionPolicy) : nil
+        sparseHamiltonian = isSparseEnabled ? SparseHamiltonian(observable: hamiltonian, precisionPolicy: precisionPolicy) : nil
         simulator = QuantumSimulator(precisionPolicy: precisionPolicy)
     }
-
-    // MARK: - Execution
 
     /// Executes VQE optimization from initial parameters.
     ///
@@ -146,13 +138,11 @@ public actor VQE {
 
             let state: QuantumState = await self.simulator.execute(concreteCircuit)
 
-            let energy: Double = if let sparseH = self.sparseHamiltonian {
+            return if let sparseH = self.sparseHamiltonian {
                 await sparseH.expectationValue(of: state)
             } else {
                 self.hamiltonian.expectationValue(of: state)
             }
-
-            return energy
         }
 
         let optimizerProgressCallback: @Sendable (Int, Double) async -> Void = { iteration, energy in
@@ -176,8 +166,6 @@ public actor VQE {
             functionEvaluations: optimizerResult.evaluations,
         )
     }
-
-    // MARK: - State Queries
 
     /// Current optimization progress.
     ///
@@ -203,16 +191,12 @@ public actor VQE {
         }
     }
 
-    // MARK: - Private Helpers
-
     /// Updates current iteration and energy state.
     @inline(__always)
     private func updateProgress(iteration: Int, energy: Double) {
         currentIteration = iteration
         currentEnergy = energy
     }
-
-    // MARK: - Nested Types
 
     /// Optimization state snapshot.
     ///
@@ -271,6 +255,19 @@ public actor VQE {
         /// Total function evaluations (includes gradient computations)
         public let functionEvaluations: Int
 
+        /// Creates a VQE result with optimization outcome data.
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let result = VQE.Result(
+        ///     optimalEnergy: -1.137, optimalParameters: [0.1],
+        ///     energyHistory: [-1.0, -1.137], iterations: 10,
+        ///     convergenceReason: .converged, functionEvaluations: 42
+        /// )
+        /// ```
+        ///
+        /// - Complexity: O(1)
+        @inlinable
         public init(
             optimalEnergy: Double,
             optimalParameters: [Double],
@@ -288,6 +285,14 @@ public actor VQE {
         }
 
         /// Multi-line formatted summary of optimization results.
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let result = await vqe.run(from: params)
+        /// print(result.description)
+        /// ```
+        ///
+        /// - Complexity: O(n) where n is the parameter count
         public var description: String {
             let paramStr = optimalParameters.prefix(3)
                 .map { String(format: "%.4f", $0) }

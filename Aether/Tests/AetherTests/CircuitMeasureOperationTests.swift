@@ -165,31 +165,31 @@ struct MeasureUnitarityTests {
 @Suite("CircuitJSONEncoder Measure")
 struct CircuitJSONEncoderMeasureTests {
     @Test("Encode circuit with measure produces valid JSON containing measurement type")
-    func encodeMeasureOperation() {
+    func encodeMeasureOperation() throws {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.measure, to: 0)
         let data = CircuitJSONEncoder.encode(circuit)
-        let jsonString = String(data: data, encoding: .utf8)!
+        let jsonString = try #require(String(data: data, encoding: .utf8))
         #expect(jsonString.contains("\"measurement\""), "Encoded JSON should contain measurement operation type")
     }
 
     @Test("Encoded measure JSON contains qubit index")
-    func encodedMeasureContainsQubit() {
+    func encodedMeasureContainsQubit() throws {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.measure, to: 1)
         let data = CircuitJSONEncoder.encode(circuit)
-        let jsonString = String(data: data, encoding: .utf8)!
+        let jsonString = try #require(String(data: data, encoding: .utf8))
         #expect(jsonString.contains("\"qubits\""), "Encoded JSON should contain qubits field")
         #expect(jsonString.contains("1"), "Encoded JSON should contain qubit index 1")
     }
 
     @Test("Encoded measure JSON contains classicalBits field")
-    func encodedMeasureContainsClassicalBits() {
+    func encodedMeasureContainsClassicalBits() throws {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.measure, to: 0)
         let data = CircuitJSONEncoder.encode(circuit)
-        let jsonString = String(data: data, encoding: .utf8)!
+        let jsonString = try #require(String(data: data, encoding: .utf8))
         #expect(jsonString.contains("\"classicalBits\""), "Encoded JSON should contain classicalBits field for measurement")
     }
 }
@@ -481,11 +481,11 @@ struct QuantumCircuitMeasureBuildingTests {
         #expect(circuit.operations[1].isUnitary == false, "Inserted measure at index 1 should be non-unitary")
     }
 
-    @Test("addOperation with measure CircuitOperation adds to circuit")
-    func addOperationMeasure() {
+    @Test("append with measure CircuitOperation adds to circuit")
+    func appendOperationMeasure() {
         var circuit = QuantumCircuit(qubits: 2)
-        circuit.addOperation(.measure(qubit: 0))
-        #expect(circuit.count == 1, "Circuit should have 1 operation after addOperation with measure")
+        circuit.append(.measure(qubit: 0))
+        #expect(circuit.count == 1, "Circuit should have 1 operation after append with measure")
     }
 
     @Test("Append measure auto-expands qubit count")
@@ -628,7 +628,7 @@ struct DensityMatrixMeasureApplicationTests {
 @Suite("CircuitJSONDecoder Measure Guard Failure")
 struct CircuitJSONDecoderMeasureGuardFailureTests {
     @Test("Decode measurement with empty qubits array produces error diagnostic")
-    func decodeMeasurementMissingQubits() {
+    func decodeMeasurementMissingQubits() throws {
         let json = """
         {
             "version": 1,
@@ -643,13 +643,13 @@ struct CircuitJSONDecoderMeasureGuardFailureTests {
             ]
         }
         """
-        let data = json.data(using: .utf8)!
+        let data = try #require(json.data(using: .utf8))
         let result = CircuitJSONDecoder.decode(from: data)
         #expect(result.succeeded == false, "Decoding measurement with empty qubits should produce an error diagnostic")
     }
 
     @Test("Decode measurement with empty qubits skips the operation")
-    func decodeMeasurementMissingQubitsSkipsOperation() {
+    func decodeMeasurementMissingQubitsSkipsOperation() throws {
         let json = """
         {
             "version": 1,
@@ -664,13 +664,13 @@ struct CircuitJSONDecoderMeasureGuardFailureTests {
             ]
         }
         """
-        let data = json.data(using: .utf8)!
+        let data = try #require(json.data(using: .utf8))
         let result = CircuitJSONDecoder.decode(from: data)
         #expect(result.circuit.count == 0, "Circuit should have 0 operations when measurement is skipped due to missing qubits")
     }
 
     @Test("Decode measurement with empty qubits diagnostic mentions missing qubit")
-    func decodeMeasurementMissingQubitsDiagnosticMessage() {
+    func decodeMeasurementMissingQubitsDiagnosticMessage() throws {
         let json = """
         {
             "version": 1,
@@ -685,14 +685,14 @@ struct CircuitJSONDecoderMeasureGuardFailureTests {
             ]
         }
         """
-        let data = json.data(using: .utf8)!
+        let data = try #require(json.data(using: .utf8))
         let result = CircuitJSONDecoder.decode(from: data)
         let hasQubitError = result.diagnostics.contains { $0.message.contains("missing qubit") }
         #expect(hasQubitError, "Diagnostic should mention 'missing qubit' for measurement with empty qubits array")
     }
 
     @Test("Decode valid measurement alongside empty-qubit measurement recovers partial circuit")
-    func decodeMixedValidAndInvalidMeasurements() {
+    func decodeMixedValidAndInvalidMeasurements() throws {
         let json = """
         {
             "version": 1,
@@ -717,7 +717,7 @@ struct CircuitJSONDecoderMeasureGuardFailureTests {
             ]
         }
         """
-        let data = json.data(using: .utf8)!
+        let data = try #require(json.data(using: .utf8))
         let result = CircuitJSONDecoder.decode(from: data)
         #expect(result.circuit.count == 2, "Circuit should have 2 operations: valid gate and valid measurement, skipping invalid measurement")
     }

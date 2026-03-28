@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -109,7 +109,7 @@ struct MPSTimeEvolutionResultPropertiesTests {
             (-0.5, PauliString(.x(0))),
         ])
         let mps = MatrixProductState(qubits: 3, maxBondDimension: 4)
-        let result = await TimeEvolution.evolveMPS(
+        let result = await TimeEvolution.evolve(
             hamiltonian: hamiltonian,
             initialState: mps,
             time: 0.5,
@@ -125,7 +125,7 @@ struct MPSTimeEvolutionResultPropertiesTests {
             (1.0, PauliString(.z(0), .z(1))),
         ])
         let mps = MatrixProductState(qubits: 2, maxBondDimension: 4)
-        let result = await TimeEvolution.evolveMPS(
+        let result = await TimeEvolution.evolve(
             hamiltonian: hamiltonian,
             initialState: mps,
             time: 1.5,
@@ -141,7 +141,7 @@ struct MPSTimeEvolutionResultPropertiesTests {
             (-1.0, PauliString(.z(0), .z(1))),
         ])
         let mps = MatrixProductState(qubits: 2, maxBondDimension: 4)
-        let result = await TimeEvolution.evolveMPS(
+        let result = await TimeEvolution.evolve(
             hamiltonian: hamiltonian,
             initialState: mps,
             time: 0.5,
@@ -157,7 +157,7 @@ struct MPSTimeEvolutionResultPropertiesTests {
             (1.0, PauliString(.z(0), .z(1))),
         ])
         let mps = MatrixProductState(qubits: 2, maxBondDimension: 8)
-        let result = await TimeEvolution.evolveMPS(
+        let result = await TimeEvolution.evolve(
             hamiltonian: hamiltonian,
             initialState: mps,
             time: 0.5,
@@ -208,14 +208,14 @@ struct TimeEvolutionMethodEnumCasesTests {
     }
 }
 
-/// Test suite for InitialStateSpecification enum cases.
+/// Test suite for InitialState enum cases.
 /// Validates that all initial state variants can be constructed
 /// and their associated values are correctly stored.
-@Suite("InitialStateSpecification Enum Cases")
-struct InitialStateSpecificationEnumCasesTests {
+@Suite("InitialState Enum Cases")
+struct InitialStateEnumCasesTests {
     @Test("groundState case stores qubit count")
     func groundStateCaseStoresQubitCount() {
-        let spec = InitialStateSpecification.groundState(qubits: 4)
+        let spec = InitialState.groundState(qubits: 4)
         if case let .groundState(qubits) = spec {
             #expect(qubits == 4, "Qubits should be 4")
         }
@@ -223,7 +223,7 @@ struct InitialStateSpecificationEnumCasesTests {
 
     @Test("basisState case stores index and qubit count")
     func basisStateCaseStoresIndexAndQubitCount() {
-        let spec = InitialStateSpecification.basisState(0b1010, qubits: 4)
+        let spec = InitialState.basisState(0b1010, qubits: 4)
         if case let .basisState(index, qubits) = spec {
             #expect(index == 0b1010, "Index should be 0b1010")
             #expect(qubits == 4, "Qubits should be 4")
@@ -233,7 +233,7 @@ struct InitialStateSpecificationEnumCasesTests {
     @Test("quantumState case stores existing state")
     func quantumStateCaseStoresExistingState() {
         let state = QuantumState(qubits: 2)
-        let spec = InitialStateSpecification.quantumState(state)
+        let spec = InitialState.quantumState(state)
         if case let .quantumState(storedState) = spec {
             #expect(storedState.qubits == 2, "Stored state should have 2 qubits")
         }
@@ -242,7 +242,7 @@ struct InitialStateSpecificationEnumCasesTests {
     @Test("mps case stores existing MPS")
     func mpsCaseStoresExistingMPS() {
         let mps = MatrixProductState(qubits: 5, maxBondDimension: 8)
-        let spec = InitialStateSpecification.mps(mps)
+        let spec = InitialState.mps(mps)
         if case let .mps(storedMPS) = spec {
             #expect(storedMPS.qubits == 5, "Stored MPS should have 5 qubits")
         }
@@ -908,7 +908,7 @@ struct ErrorBoundsScalingTests {
     }
 }
 
-/// Test suite for MPS evolution via TimeEvolution.evolveMPS().
+/// Test suite for MPS evolution via TimeEvolution.evolve().
 /// Validates that MPS-based time evolution produces valid states
 /// with correct normalization and reasonable truncation behavior.
 @Suite("TimeEvolution MPS Evolution")
@@ -919,7 +919,7 @@ struct TimeEvolutionMPSEvolutionTests {
             (-1.0, PauliString(.z(0), .z(1))),
         ])
         let mps = MatrixProductState(qubits: 4, maxBondDimension: 8)
-        let result = await TimeEvolution.evolveMPS(
+        let result = await TimeEvolution.evolve(
             hamiltonian: hamiltonian,
             initialState: mps,
             time: 0.5,
@@ -939,7 +939,7 @@ struct TimeEvolutionMPSEvolutionTests {
             (-0.5, PauliString(.x(2))),
         ])
         let mps = MatrixProductState(qubits: 3, maxBondDimension: 8)
-        let result = await TimeEvolution.evolveMPS(
+        let result = await TimeEvolution.evolve(
             hamiltonian: hamiltonian,
             initialState: mps,
             time: 0.5,
@@ -957,7 +957,7 @@ struct TimeEvolutionMPSEvolutionTests {
             (-0.5, PauliString(.x(0))),
         ])
         let mps = MatrixProductState(qubits: 2, maxBondDimension: 4)
-        let result = await TimeEvolution.evolveMPS(
+        let result = await TimeEvolution.evolve(
             hamiltonian: hamiltonian,
             initialState: mps,
             time: 0.5,
@@ -1265,7 +1265,7 @@ struct TimeEvolutionMPSXXYYCouplingTests {
             (0.5, PauliString(.z(0), .z(1))),
         ])
         let mps = MatrixProductState(qubits: 2, maxBondDimension: 4)
-        let result = await TimeEvolution.evolveMPS(
+        let result = await TimeEvolution.evolve(
             hamiltonian: hamiltonian,
             initialState: mps,
             time: 0.5,
@@ -1281,7 +1281,7 @@ struct TimeEvolutionMPSXXYYCouplingTests {
             (1.0, PauliString(.x(0), .x(1))),
         ])
         let mps = MatrixProductState(qubits: 2, maxBondDimension: 4)
-        let result = await TimeEvolution.evolveMPS(
+        let result = await TimeEvolution.evolve(
             hamiltonian: hamiltonian,
             initialState: mps,
             time: 0.5,
@@ -1297,7 +1297,7 @@ struct TimeEvolutionMPSXXYYCouplingTests {
             (1.0, PauliString(.y(0), .y(1))),
         ])
         let mps = MatrixProductState(qubits: 2, maxBondDimension: 4)
-        let result = await TimeEvolution.evolveMPS(
+        let result = await TimeEvolution.evolve(
             hamiltonian: hamiltonian,
             initialState: mps,
             time: 0.5,

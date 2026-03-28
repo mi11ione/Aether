@@ -2308,12 +2308,12 @@ struct QASM3ImporterResidualCoverageTests {
     @Test("Subroutine with non-arrow dash resets parser position")
     func nonArrowDashInSubroutine() {
         let source = """
-            OPENQASM 3.0;
-            include "stdgates.inc";
-            qubit[1] q;
-            def foo() -x { }
-            h q[0];
-            """
+        OPENQASM 3.0;
+        include "stdgates.inc";
+        qubit[1] q;
+        def foo() -x { }
+        h q[0];
+        """
         let result = QASM3Importer.parse(source)
         #expect(result.circuit.count >= 1, "parser must recover from malformed return-type arrow and parse subsequent gates")
     }
@@ -2321,12 +2321,12 @@ struct QASM3ImporterResidualCoverageTests {
     @Test("Indexed qubit without assignment falls through to gate call")
     func indexedQubitGateCall() {
         let source = """
-            OPENQASM 3.0;
-            include "stdgates.inc";
-            qubit[2] q;
-            h q[0];
-            cx q[0], q[1];
-            """
+        OPENQASM 3.0;
+        include "stdgates.inc";
+        qubit[2] q;
+        h q[0];
+        cx q[0], q[1];
+        """
         let result = QASM3Importer.parse(source)
         #expect(result.circuit.count == 2, "indexed qubit gate calls must parse as gate operations")
     }
@@ -2334,11 +2334,11 @@ struct QASM3ImporterResidualCoverageTests {
     @Test("Modifier loop exits on gate name identifier")
     func modifierLoopExitOnGateName() {
         let source = """
-            OPENQASM 3.0;
-            include "stdgates.inc";
-            qubit[2] q;
-            ctrl @ cx q[0], q[1];
-            """
+        OPENQASM 3.0;
+        include "stdgates.inc";
+        qubit[2] q;
+        ctrl @ cx q[0], q[1];
+        """
         let result = QASM3Importer.parse(source)
         #expect(result.circuit.count == 1, "modifier loop must exit when encountering gate name identifier")
     }
@@ -2346,11 +2346,11 @@ struct QASM3ImporterResidualCoverageTests {
     @Test("Non-finite pow exponent produces warning")
     func nonFinitePowExponent() {
         let source = """
-            OPENQASM 3.0;
-            include "stdgates.inc";
-            qubit[1] q;
-            pow(1e308*1e308) @ x q[0];
-            """
+        OPENQASM 3.0;
+        include "stdgates.inc";
+        qubit[1] q;
+        pow(1e308*1e308) @ x q[0];
+        """
         let result = QASM3Importer.parse(source)
         let hasWarning = result.diagnostics.contains { $0.message.contains("non-finite") }
         #expect(hasWarning, "non-finite pow exponent must produce a warning diagnostic")
@@ -2359,12 +2359,12 @@ struct QASM3ImporterResidualCoverageTests {
     @Test("Gate body with non-identifier token in qubit position")
     func gateBodyNonIdentifierQubit() {
         let source = """
-            OPENQASM 3.0;
-            include "stdgates.inc";
-            qubit[1] q;
-            gate mygate a { x 0; }
-            mygate q[0];
-            """
+        OPENQASM 3.0;
+        include "stdgates.inc";
+        qubit[1] q;
+        gate mygate a { x 0; }
+        mygate q[0];
+        """
         let result = QASM3Importer.parse(source)
         #expect(result.diagnostics.isEmpty || result.circuit.count <= 1, "gate body with non-identifier qubit token must parse without crashing")
     }
@@ -2372,12 +2372,12 @@ struct QASM3ImporterResidualCoverageTests {
     @Test("Gate definition with bound parameters expands correctly")
     func boundParameterExpansion() {
         let source = """
-            OPENQASM 3.0;
-            include "stdgates.inc";
-            qubit[1] q;
-            gate myrot(theta) a { rz(theta) a; }
-            myrot(1.57) q[0];
-            """
+        OPENQASM 3.0;
+        include "stdgates.inc";
+        qubit[1] q;
+        gate myrot(theta) a { rz(theta) a; }
+        myrot(1.57) q[0];
+        """
         let result = QASM3Importer.parse(source)
         #expect(result.circuit.count == 1, "parameterized gate definition must expand with bound parameter values")
     }
@@ -2385,11 +2385,11 @@ struct QASM3ImporterResidualCoverageTests {
     @Test("Indexed identifier without assignment resets parser position")
     func indexedIdentifierNoAssignment() {
         let source = """
-            OPENQASM 3.0;
-            include "stdgates.inc";
-            qubit[2] q;
-            q[0];
-            """
+        OPENQASM 3.0;
+        include "stdgates.inc";
+        qubit[2] q;
+        q[0];
+        """
         let result = QASM3Importer.parse(source)
         #expect(!result.diagnostics.isEmpty, "bare indexed identifier must produce diagnostic when no matching gate found")
     }
@@ -2397,12 +2397,12 @@ struct QASM3ImporterResidualCoverageTests {
     @Test("Gate body with unbound identifier falls through to expression parser")
     func unboundIdentifierInGateBody() {
         let source = """
-            OPENQASM 3.0;
-            include "stdgates.inc";
-            qubit[1] q;
-            gate myrot(theta) a { rz(theta+pi) a; }
-            myrot(0.5) q[0];
-            """
+        OPENQASM 3.0;
+        include "stdgates.inc";
+        qubit[1] q;
+        gate myrot(theta) a { rz(theta+pi) a; }
+        myrot(0.5) q[0];
+        """
         let result = QASM3Importer.parse(source)
         #expect(result.circuit.count == 1, "gate body with unbound identifier must fall through to expression parser")
     }

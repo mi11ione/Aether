@@ -789,7 +789,9 @@ public enum GateApplication {
         let targetCount = gate.qubitsRequired
 
         let targetMasks = [Int](unsafeUninitializedCapacity: targetCount) { buffer, count in
-            for idx in 0 ..< targetCount { buffer[idx] = BitUtilities.bitMask(qubit: targetQubits[idx]) }
+            for idx in 0 ..< targetCount {
+                buffer[idx] = BitUtilities.bitMask(qubit: targetQubits[idx])
+            }
             count = targetCount
         }
 
@@ -845,7 +847,9 @@ public enum GateApplication {
 
         let qubitCount = qubits.count
         let masks = [Int](unsafeUninitializedCapacity: qubitCount) { buffer, count in
-            for idx in 0 ..< qubitCount { buffer[idx] = BitUtilities.bitMask(qubit: qubits[idx]) }
+            for idx in 0 ..< qubitCount {
+                buffer[idx] = BitUtilities.bitMask(qubit: qubits[idx])
+            }
             count = qubitCount
         }
 

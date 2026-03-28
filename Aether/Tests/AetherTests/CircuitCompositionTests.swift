@@ -224,7 +224,7 @@ struct ControlledByTests {
         var setupAndControlled = QuantumCircuit(qubits: 2)
         setupAndControlled.append(.pauliX, to: 0)
         for op in controlled.operations {
-            setupAndControlled.addOperation(op)
+            setupAndControlled.append(op)
         }
 
         let cnotState = cnotCircuit.execute()

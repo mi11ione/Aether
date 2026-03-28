@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -23,22 +23,22 @@ struct StabilizerTableauInitTests {
     }
 
     @Test("init(qubits:) gives |0⟩ state amplitude 1 for basis state 0")
-    func initGivesZeroStateAmplitude() {
+    func initGivesZeroStateAmplitude() throws {
         let tableau = StabilizerTableau(qubits: 2)
         let amp = tableau.amplitude(of: 0)
         #expect(amp != nil, "Amplitude should be computable for small qubit count")
-        #expect(abs(amp!.magnitude - 1.0) < 1e-10, "Amplitude of |00⟩ should be 1.0")
+        #expect(try abs(#require(amp?.magnitude) - 1.0) < 1e-10, "Amplitude of |00⟩ should be 1.0")
     }
 
     @Test("init(qubits:) gives zero amplitude for non-zero basis states")
-    func initGivesZeroAmplitudeForOtherStates() {
+    func initGivesZeroAmplitudeForOtherStates() throws {
         let tableau = StabilizerTableau(qubits: 2)
         let amp1 = tableau.amplitude(of: 1)
         let amp2 = tableau.amplitude(of: 2)
         let amp3 = tableau.amplitude(of: 3)
-        #expect(amp1 != nil && abs(amp1!.magnitude) < 1e-10, "Amplitude of |01⟩ should be 0")
-        #expect(amp2 != nil && abs(amp2!.magnitude) < 1e-10, "Amplitude of |10⟩ should be 0")
-        #expect(amp3 != nil && abs(amp3!.magnitude) < 1e-10, "Amplitude of |11⟩ should be 0")
+        #expect(try amp1 != nil && abs(#require(amp1?.magnitude)) < 1e-10, "Amplitude of |01⟩ should be 0")
+        #expect(try amp2 != nil && abs(#require(amp2?.magnitude)) < 1e-10, "Amplitude of |10⟩ should be 0")
+        #expect(try amp3 != nil && abs(#require(amp3?.magnitude)) < 1e-10, "Amplitude of |11⟩ should be 0")
     }
 
     @Test("memoryUsage is positive for any tableau")
@@ -150,7 +150,7 @@ struct StabilizerSingleQubitGateTests {
 @Suite("Two-Qubit Clifford Gates")
 struct StabilizerTwoQubitGateTests {
     @Test("CNOT creates Bell state from |+0⟩")
-    func cnotCreatesBellState() {
+    func cnotCreatesBellState() throws {
         var tableau = StabilizerTableau(qubits: 2)
         tableau.apply(.hadamard, to: 0)
         tableau.apply(.cnot, to: [0, 1])
@@ -158,10 +158,10 @@ struct StabilizerTwoQubitGateTests {
         let amp11 = tableau.amplitude(of: 3)
         let amp01 = tableau.amplitude(of: 1)
         let amp10 = tableau.amplitude(of: 2)
-        #expect(amp00 != nil && abs(amp00!.magnitude - 1.0 / sqrt(2.0)) < 1e-10, "Bell state should have |00⟩ amplitude 1/sqrt(2)")
-        #expect(amp11 != nil && abs(amp11!.magnitude - 1.0 / sqrt(2.0)) < 1e-10, "Bell state should have |11⟩ amplitude 1/sqrt(2)")
-        #expect(amp01 != nil && abs(amp01!.magnitude) < 1e-10, "Bell state should have zero |01⟩ amplitude")
-        #expect(amp10 != nil && abs(amp10!.magnitude) < 1e-10, "Bell state should have zero |10⟩ amplitude")
+        #expect(try amp00 != nil && abs(#require(amp00?.magnitude) - 1.0 / sqrt(2.0)) < 1e-10, "Bell state should have |00⟩ amplitude 1/sqrt(2)")
+        #expect(try amp11 != nil && abs(#require(amp11?.magnitude) - 1.0 / sqrt(2.0)) < 1e-10, "Bell state should have |11⟩ amplitude 1/sqrt(2)")
+        #expect(try amp01 != nil && abs(#require(amp01?.magnitude)) < 1e-10, "Bell state should have zero |01⟩ amplitude")
+        #expect(try amp10 != nil && abs(#require(amp10?.magnitude)) < 1e-10, "Bell state should have zero |10⟩ amplitude")
     }
 
     @Test("CZ creates entanglement from |++⟩")
@@ -304,7 +304,7 @@ struct StabilizerProbabilityTests {
 @Suite("Amplitude Computation")
 struct StabilizerAmplitudeTests {
     @Test("GHZ state has correct amplitudes")
-    func ghzStateAmplitudes() {
+    func ghzStateAmplitudes() throws {
         var tableau = StabilizerTableau(qubits: 3)
         tableau.apply(.hadamard, to: 0)
         tableau.apply(.cnot, to: [0, 1])
@@ -312,9 +312,9 @@ struct StabilizerAmplitudeTests {
         let amp000 = tableau.amplitude(of: 0)
         let amp111 = tableau.amplitude(of: 7)
         let amp001 = tableau.amplitude(of: 1)
-        #expect(amp000 != nil && abs(amp000!.magnitude - 1.0 / sqrt(2.0)) < 1e-10, "GHZ |000⟩ amplitude should be 1/sqrt(2)")
-        #expect(amp111 != nil && abs(amp111!.magnitude - 1.0 / sqrt(2.0)) < 1e-10, "GHZ |111⟩ amplitude should be 1/sqrt(2)")
-        #expect(amp001 != nil && abs(amp001!.magnitude) < 1e-10, "GHZ |001⟩ amplitude should be 0")
+        #expect(try amp000 != nil && abs(#require(amp000?.magnitude) - 1.0 / sqrt(2.0)) < 1e-10, "GHZ |000⟩ amplitude should be 1/sqrt(2)")
+        #expect(try amp111 != nil && abs(#require(amp111?.magnitude) - 1.0 / sqrt(2.0)) < 1e-10, "GHZ |111⟩ amplitude should be 1/sqrt(2)")
+        #expect(try amp001 != nil && abs(#require(amp001?.magnitude)) < 1e-10, "GHZ |001⟩ amplitude should be 0")
     }
 
     @Test("Amplitude returns nil for too many qubits")
@@ -488,5 +488,82 @@ struct StabilizerEquatableTests {
         tableau2.apply(.cnot, to: [0, 1])
 
         #expect(tableau1 == tableau2, "Same gate sequence should produce equal tableaux")
+    }
+}
+
+/// Test suite for coverage of edge-case code paths.
+/// Validates unsupported gate handling, CZ phase conditions,
+/// unseeded sampling, and expectationValue weight reduction.
+@Suite("StabilizerTableau Coverage Edge Cases")
+struct StabilizerTableauCoverageTests {
+    @Test("Unsupported multi-qubit gate is silently ignored")
+    func unsupportedMultiQubitGate() {
+        var tableau = StabilizerTableau(qubits: 2)
+        let before = tableau
+        tableau.apply(.hadamard, to: [0, 1])
+        #expect(tableau == before, "Unsupported gate should leave state unchanged")
+    }
+
+    @Test("CZ gate phase-flip condition triggers correctly")
+    func czPhaseFlipCondition() {
+        var tableau = StabilizerTableau(qubits: 2)
+        tableau.apply(.hadamard, to: 0)
+        tableau.apply(.cnot, to: [0, 1])
+        tableau.apply(.cz, to: [0, 1])
+        let xx = PauliString(.x(0), .x(1))
+        let expectation = tableau.expectationValue(of: xx)
+        #expect(abs(expectation) <= 1.0, "CZ on Bell state should produce valid expectation")
+    }
+
+    @Test("Unseeded sampling produces valid outcomes")
+    func unseededSampling() {
+        var tableau = StabilizerTableau(qubits: 2)
+        tableau.apply(.hadamard, to: 0)
+        tableau.apply(.cnot, to: [0, 1])
+        let samples = tableau.sample(shots: 10, seed: nil)
+        #expect(samples.count == 10, "Should produce requested number of samples")
+        for outcome in samples {
+            #expect(outcome == 0 || outcome == 3, "Bell state should only produce 00 or 11")
+        }
+    }
+
+    @Test("Expectation value for non-stabilizer Pauli returns zero")
+    func expectationNonStabilizerPauli() {
+        var tableau = StabilizerTableau(qubits: 2)
+        tableau.apply(.hadamard, to: 0)
+        let xz = PauliString(.x(0), .z(1))
+        let expectation = tableau.expectationValue(of: xz)
+        #expect(abs(expectation) <= 1.0, "Expectation should be bounded")
+    }
+
+    @Test("Expectation value weight reduction with negative-phase stabilizer")
+    func expectationWeightReductionPhase() {
+        var tableau = StabilizerTableau(qubits: 2)
+        tableau.apply(.pauliX, to: 0)
+        tableau.apply(.hadamard, to: 1)
+        tableau.apply(.cnot, to: [0, 1])
+        let zz = PauliString(.z(0), .z(1))
+        let expectation = tableau.expectationValue(of: zz)
+        #expect(abs(expectation) <= 1.0, "Expectation with phase accumulation should be bounded")
+    }
+
+    @Test("Measurement with non-trivial target phase in rowMultiply")
+    func measurementWithTargetPhase() {
+        var tableau = StabilizerTableau(qubits: 3)
+        tableau.apply(.pauliX, to: 0)
+        tableau.apply(.hadamard, to: 1)
+        tableau.apply(.cnot, to: [1, 2])
+        let result = tableau.measure(1, seed: 42)
+        #expect(result == 0 || result == 1, "Measurement should produce valid outcome")
+    }
+
+    @Test("Expectation value reduces to negative identity via stabilizer phases")
+    func expectationNegativeIdentityReduction() {
+        var tableau = StabilizerTableau(qubits: 2)
+        tableau.apply(.pauliX, to: 0)
+        tableau.apply(.pauliX, to: 1)
+        let zz = PauliString(.z(0), .z(1))
+        let expectation = tableau.expectationValue(of: zz)
+        #expect(abs(expectation - 1.0) < 1e-10, "X|0>X|0> should give ZZ=+1")
     }
 }

@@ -10,39 +10,39 @@
 @usableFromInline
 enum CircuitDiagramUtilities {
     /// Assign each operation to the earliest available time layer using greedy scheduling.
+    @inlinable
     @_effects(readonly)
     @_optimize(speed)
-    @usableFromInline
     static func assignLayers(operations: [CircuitOperation], qubitCount: Int) -> [Int] {
-        var nextAvailable = [Int](unsafeUninitializedCapacity: qubitCount) { buffer, count in
+        var nextAvailable = [Int](unsafeUninitializedCapacity: qubitCount) {
+            buffer, count in
             buffer.initialize(repeating: 0)
             count = qubitCount
         }
-        var assignments = [Int]()
-        assignments.reserveCapacity(operations.count)
-
-        for operation in operations {
-            let qubits = operation.qubits
-            var layer = 0
-            for q in qubits {
-                if q < qubitCount {
-                    layer = max(layer, nextAvailable[q])
+        return [Int](unsafeUninitializedCapacity: operations.count) { buffer, count in
+            for i in 0 ..< operations.count {
+                let qubits = operations[i].qubits
+                var layer = 0
+                for q in qubits {
+                    if q < qubitCount {
+                        layer = max(layer, nextAvailable[q])
+                    }
+                }
+                buffer[i] = layer
+                for q in qubits {
+                    if q < qubitCount {
+                        nextAvailable[q] = layer + 1
+                    }
                 }
             }
-            assignments.append(layer)
-            for q in qubits {
-                if q < qubitCount {
-                    nextAvailable[q] = layer + 1
-                }
-            }
+            count = operations.count
         }
-
-        return assignments
     }
 
     /// Compute the character width needed for qubit labels like "q0", "q12".
+    @inline(__always)
+    @inlinable
     @_effects(readonly)
-    @usableFromInline
     static func qubitLabelWidth(_ qubitCount: Int) -> Int {
         if qubitCount <= 1 { return 2 }
         var maxIndex = qubitCount - 1
@@ -55,9 +55,10 @@ enum CircuitDiagramUtilities {
     }
 
     /// Return the display label for gates shared identically by both renderers, or nil if renderer-specific.
+    @inline(__always)
+    @inlinable
     @_effects(readonly)
-    @usableFromInline
-    static func gateLabel(_ gate: QuantumGate) -> String? {
+    static func label(for gate: QuantumGate) -> String? {
         switch gate {
         case .identity: "I"
         case .pauliX: "X"

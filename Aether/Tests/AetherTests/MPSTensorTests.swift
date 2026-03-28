@@ -635,8 +635,8 @@ struct MPSTensorMatrixSliceTests {
     func matrixPhysicalZeroGroundState() {
         let tensor = MPSTensor.groundState(site: 0, qubits: 4, maxBondDimension: 16)
 
-        let matrix0 = tensor.matrix(forPhysical:0)
-        let matrix1 = tensor.matrix(forPhysical:1)
+        let matrix0 = tensor.matrix(forPhysical: 0)
+        let matrix1 = tensor.matrix(forPhysical: 1)
 
         #expect(
             matrix0.count == 1,
@@ -665,8 +665,8 @@ struct MPSTensorMatrixSliceTests {
         }
         let tensor = MPSTensor(leftBondDimension: 2, rightBondDimension: 3, site: 1, elements: elements)
 
-        let matrix0 = tensor.matrix(forPhysical:0)
-        let matrix1 = tensor.matrix(forPhysical:1)
+        let matrix0 = tensor.matrix(forPhysical: 0)
+        let matrix1 = tensor.matrix(forPhysical: 1)
 
         #expect(
             matrix0.count == 2,
@@ -705,8 +705,8 @@ struct MPSTensorMatrixSliceTests {
         ]
         let tensor = MPSTensor(leftBondDimension: 1, rightBondDimension: 1, site: 0, elements: elements)
 
-        let matrix0 = tensor.matrix(forPhysical:0)
-        let matrix1 = tensor.matrix(forPhysical:1)
+        let matrix0 = tensor.matrix(forPhysical: 0)
+        let matrix1 = tensor.matrix(forPhysical: 1)
 
         #expect(
             abs(matrix0[0][0].real - 1.0) < 1e-10 && abs(matrix0[0][0].imaginary - 2.0) < 1e-10,
@@ -1183,7 +1183,7 @@ struct MPSTensorConsistencyTests {
         let tensor = MPSTensor(leftBondDimension: 2, rightBondDimension: 2, site: 1, elements: elements)
 
         for physical in 0 ..< 2 {
-            let matrix = tensor.matrix(forPhysical:physical)
+            let matrix = tensor.matrix(forPhysical: physical)
             for alpha in 0 ..< 2 {
                 for beta in 0 ..< 2 {
                     let matrixValue = matrix[alpha][beta]

@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Testing
 
 /// Test suite for VariationalQuantumEigensolver.
@@ -19,11 +19,11 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            useSparseBackend: false,
+            isSparseEnabled: false,
         )
 
         let backendInfo = await vqe.backendInfo
-        #expect(backendInfo.contains("Observable"))
+        #expect(backendInfo.contains("Observable"), "Observable backend should be used when sparse disabled")
     }
 
     @Test("VQE finds ground state of simple Hamiltonian")
@@ -41,9 +41,9 @@ struct VariationalQuantumEigensolverTests {
 
         let result = await vqe.run(from: [0.1])
 
-        #expect(result.optimalEnergy < 0.0)
-        #expect(result.optimalEnergy > -1.1)
-        #expect(result.iterations > 0)
+        #expect(result.optimalEnergy < 0.0, "Ground state energy should be negative")
+        #expect(result.optimalEnergy > -1.1, "Energy should be close to -1.0")
+        #expect(result.iterations > 0, "Should perform at least one iteration")
     }
 
     @Test("VQE with progress callback")
@@ -56,8 +56,13 @@ struct VariationalQuantumEigensolverTests {
                 lastEnergy = energy
             }
 
-            func getCount() -> Int { count }
-            func getLastEnergy() -> Double { lastEnergy }
+            func getCount() -> Int {
+                count
+            }
+
+            func getLastEnergy() -> Double {
+                lastEnergy
+            }
         }
 
         let hamiltonian = Observable(coefficient: 1.0, pauliString: PauliString(.z(0)))
@@ -80,8 +85,8 @@ struct VariationalQuantumEigensolverTests {
         let callbackCount = await state.getCount()
         let lastEnergy = await state.getLastEnergy()
 
-        #expect(callbackCount > 0)
-        #expect(abs(lastEnergy - result.optimalEnergy) < 1e-6)
+        #expect(callbackCount > 0, "Progress callback should be called at least once")
+        #expect(abs(lastEnergy - result.optimalEnergy) < 1e-6, "Last callback energy should match final result")
     }
 
     @Test("VQE tracks progress")
@@ -123,8 +128,8 @@ struct VariationalQuantumEigensolverTests {
 
         let result = await vqe.run(from: [0.1, 0.1])
 
-        #expect(result.optimalEnergy < -1.5)
-        #expect(result.optimalEnergy > -2.1)
+        #expect(result.optimalEnergy < -1.5, "Two-qubit ground state should be below -1.5")
+        #expect(result.optimalEnergy > -2.1, "Energy should be close to -2.0")
     }
 
     @Test("VQE convergence via energy tolerance")
@@ -142,7 +147,7 @@ struct VariationalQuantumEigensolverTests {
 
         let result = await vqe.run(from: [0.1])
 
-        #expect(result.convergenceReason == .energyConverged)
+        #expect(result.convergenceReason == .energyConverged, "Should converge via energy tolerance")
     }
 
     @Test("VQE with gradient descent optimizer")
@@ -163,7 +168,7 @@ struct VariationalQuantumEigensolverTests {
 
         let result = await vqe.run(from: [2.0])
 
-        #expect(result.optimalEnergy < 0.0)
+        #expect(result.optimalEnergy < 0.0, "Gradient descent should find negative energy")
     }
 
     @Test("VQE with L-BFGS-B optimizer")
@@ -184,7 +189,7 @@ struct VariationalQuantumEigensolverTests {
 
         let result = await vqe.run(from: [2.0])
 
-        #expect(result.optimalEnergy < 0.0)
+        #expect(result.optimalEnergy < 0.0, "L-BFGS-B should find negative energy")
     }
 
     @Test("VQE with SPSA optimizer")
@@ -202,7 +207,7 @@ struct VariationalQuantumEigensolverTests {
 
         let result = await vqe.run(from: [2.0])
 
-        #expect(result.optimalEnergy < 0.0)
+        #expect(result.optimalEnergy < 0.0, "SPSA should find negative energy")
     }
 
     @Test("VQE backend info with sparse")
@@ -215,11 +220,11 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            useSparseBackend: true,
+            isSparseEnabled: true,
         )
 
         let backendInfo = await vqe.backendInfo
-        #expect(backendInfo.contains("Sparse") || backendInfo.contains("Observable"))
+        #expect(backendInfo.contains("Sparse") || backendInfo.contains("Observable"), "Backend info should mention Sparse or Observable")
     }
 
     @Test("VQE backend info without sparse")
@@ -232,12 +237,12 @@ struct VariationalQuantumEigensolverTests {
             hamiltonian: hamiltonian,
             ansatz: ansatz,
             optimizer: optimizer,
-            useSparseBackend: false,
+            isSparseEnabled: false,
         )
 
         let backendInfo = await vqe.backendInfo
-        #expect(backendInfo.contains("Observable"))
-        #expect(backendInfo.contains("1 term"))
+        #expect(backendInfo.contains("Observable"), "Should use Observable backend")
+        #expect(backendInfo.contains("1 term"), "Should report 1 term")
     }
 
     @Test("VQE without Metal acceleration")
@@ -256,7 +261,7 @@ struct VariationalQuantumEigensolverTests {
 
         let result = await vqe.run(from: [0.1])
 
-        #expect(result.optimalEnergy < 0.0)
+        #expect(result.optimalEnergy < 0.0, "Accurate policy should find negative energy")
     }
 
     @Test("VQE runs with Observable backend when sparse disabled")
@@ -270,7 +275,7 @@ struct VariationalQuantumEigensolverTests {
             ansatz: ansatz,
             optimizer: optimizer,
             convergence: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 100),
-            useSparseBackend: false,
+            isSparseEnabled: false,
         )
 
         let result = await vqe.run(from: [0.1])
@@ -294,7 +299,7 @@ struct VariationalQuantumEigensolverTests {
 
         let result = await vqe.run(from: [0.1])
 
-        #expect(result.functionEvaluations > result.iterations)
+        #expect(result.functionEvaluations > result.iterations, "Function evaluations should exceed iterations")
     }
 }
 
@@ -314,12 +319,12 @@ struct VQEResultTests {
             functionEvaluations: 15,
         )
 
-        #expect(result.optimalEnergy == -1.234)
-        #expect(result.optimalParameters == [0.5, 1.0, 1.5])
-        #expect(result.energyHistory == [-2.0, -1.5, -1.234])
-        #expect(result.iterations == 3)
-        #expect(result.convergenceReason == .energyConverged)
-        #expect(result.functionEvaluations == 15)
+        #expect(result.optimalEnergy == -1.234, "Optimal energy should be preserved")
+        #expect(result.optimalParameters == [0.5, 1.0, 1.5], "Parameters should be preserved")
+        #expect(result.energyHistory == [-2.0, -1.5, -1.234], "Energy history should be preserved")
+        #expect(result.iterations == 3, "Iterations should be preserved")
+        #expect(result.convergenceReason == .energyConverged, "Convergence reason should be preserved")
+        #expect(result.functionEvaluations == 15, "Function evaluations should be preserved")
     }
 
     @Test("VQE result description")
@@ -335,11 +340,11 @@ struct VQEResultTests {
 
         let description = result.description
 
-        #expect(description.contains("Ground State Energy"))
-        #expect(description.contains("-1.234"))
-        #expect(description.contains("10"))
-        #expect(description.contains("50"))
-        #expect(description.contains("Energy tolerance"))
+        #expect(description.contains("Ground State Energy"), "Description should contain energy label")
+        #expect(description.contains("-1.234"), "Description should contain energy value")
+        #expect(description.contains("10"), "Description should contain iteration count")
+        #expect(description.contains("50"), "Description should contain evaluation count")
+        #expect(description.contains("Energy tolerance"), "Description should contain convergence reason")
     }
 
     @Test("VQE result description with many parameters")
@@ -355,7 +360,7 @@ struct VQEResultTests {
 
         let description = result.description
 
-        #expect(description.contains("..."))
+        #expect(description.contains("..."), "Description should truncate long parameter lists")
     }
 
     @Test("VQE result with gradient norm convergence")
@@ -369,7 +374,7 @@ struct VQEResultTests {
             functionEvaluations: 25,
         )
 
-        #expect(result.convergenceReason == .gradientConverged)
-        #expect(result.description.contains("Gradient"))
+        #expect(result.convergenceReason == .gradientConverged, "Should store gradient convergence reason")
+        #expect(result.description.contains("Gradient"), "Description should mention gradient convergence")
     }
 }

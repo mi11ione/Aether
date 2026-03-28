@@ -360,7 +360,7 @@ public struct NoiseModel: Sendable {
     public static let typicalNISQ = NoiseModel(
         singleQubitNoise: DepolarizingChannel(errorProbability: 0.001),
         twoQubitNoise: TwoQubitDepolarizingChannel(errorProbability: 0.01),
-        measurementError: MeasurementErrorModel(p0Given1: 0.02, p1Given0: 0.01)
+        measurementError: MeasurementErrorModel(p0Given1: 0.02, p1Given0: 0.01),
     )
 
     /// Create realistic NISQ device noise model with idle decoherence.
@@ -375,7 +375,7 @@ public struct NoiseModel: Sendable {
         singleQubitNoise: DepolarizingChannel(errorProbability: 0.001),
         twoQubitNoise: TwoQubitDepolarizingChannel(errorProbability: 0.01),
         measurementError: MeasurementErrorModel(p0Given1: 0.02, p1Given0: 0.01),
-        idleNoiseConfig: IdleNoiseConfig(t1: 100_000, t2: 80000, timings: .ibmDefault)
+        idleNoiseConfig: IdleNoiseConfig(t1: 100_000, t2: 80000, timings: .ibmDefault),
     )
 
     /// Create amplitude damping noise model for T₁-limited devices.
@@ -426,13 +426,13 @@ public struct NoiseModel: Sendable {
         let idleConfig: IdleNoiseConfig? = includeIdleNoise ? IdleNoiseConfig(
             t1: profile.averageT1,
             t2: profile.averageT2,
-            timings: profile.gateTimings
+            timings: profile.gateTimings,
         ) : nil
         self.init(
             singleQubitNoise: base.singleQubitNoise,
             twoQubitNoise: base.twoQubitNoise,
             measurementError: base.measurementError,
-            idleNoiseConfig: idleConfig
+            idleNoiseConfig: idleConfig,
         )
     }
 }
@@ -635,15 +635,15 @@ public struct IdleNoiseConfig: Sendable, Equatable {
     }
 }
 
-extension IdleNoiseConfig {
+private extension IdleNoiseConfig {
     /// Apply T₁/T₂ decay to non-active qubits during gate execution.
     @_optimize(speed)
     @_eagerMove
-    fileprivate func applyDecay(
+    func applyDecay(
         to matrix: DensityMatrix,
         activeQubits: [Int],
         gateTime: Double,
-        totalQubits: Int
+        totalQubits: Int,
     ) -> DensityMatrix {
         var result = matrix
 
@@ -695,7 +695,7 @@ public extension NoiseModel {
         after gate: QuantumGate,
         targetQubits: [Int],
         to matrix: DensityMatrix,
-        totalQubits: Int
+        totalQubits: Int,
     ) -> DensityMatrix {
         var result = matrix
 
@@ -718,7 +718,7 @@ public extension NoiseModel {
                 to: result,
                 activeQubits: targetQubits,
                 gateTime: gateTime,
-                totalQubits: totalQubits
+                totalQubits: totalQubits,
             )
         }
 
@@ -834,13 +834,13 @@ public struct TimingAwareNoiseModel: Sendable {
     public func applyIdleNoise(
         activeQubits: [Int],
         gateTime: Double,
-        to matrix: DensityMatrix
+        to matrix: DensityMatrix,
     ) -> DensityMatrix {
         idleConfig.applyDecay(
             to: matrix,
             activeQubits: activeQubits,
             gateTime: gateTime,
-            totalQubits: profile.qubitCount
+            totalQubits: profile.qubitCount,
         )
     }
 

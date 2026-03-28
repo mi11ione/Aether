@@ -310,11 +310,7 @@ struct QuantumSignalProcessingComputeTests {
             degree: 10,
             epsilon: 1e-6,
         )
-        if case let .timeEvolution(time) = phases.targetFunction {
-            #expect(abs(time - 2.0) < 1e-10, "Time should be 2.0")
-        } else {
-            #expect(Bool(false), "Target function should be timeEvolution")
-        }
+        #expect(phases.targetFunction == .timeEvolution(time: 2.0), "Target function should be timeEvolution with time 2.0")
     }
 
     @Test("Sign function phase angles are computed")
@@ -781,7 +777,7 @@ struct QuantumCircuitQubitizationExtensionsTests {
             (0.5, PauliString(.z(0))),
             (-0.3, PauliString(.x(1))),
         ])
-        let circuit = QuantumCircuit.qubitizedEvolution(
+        let circuit = QubitizationCircuits.buildTimeEvolutionCircuit(
             hamiltonian: hamiltonian,
             systemQubits: 2,
             time: 1.0,
@@ -796,7 +792,7 @@ struct QuantumCircuitQubitizationExtensionsTests {
             (0.5, PauliString(.z(0))),
             (-0.3, PauliString(.x(1))),
         ])
-        let circuit = QuantumCircuit.qubitizedWalkOperator(
+        let circuit = QubitizationCircuits.buildWalkOperatorCircuit(
             hamiltonian: hamiltonian,
             systemQubits: 2,
         )
@@ -809,7 +805,7 @@ struct QuantumCircuitQubitizationExtensionsTests {
             (0.5, PauliString(.z(0))),
             (-0.3, PauliString(.x(1))),
         ])
-        let circuit = QuantumCircuit.blockEncoding(
+        let circuit = QubitizationCircuits.buildBlockEncodingCircuit(
             hamiltonian: hamiltonian,
             systemQubits: 2,
         )
@@ -1480,7 +1476,7 @@ struct QubitizationEigenvalueEstimationTests {
             eigenstate: eigenstate,
             precisionBits: precisionBits,
         )
-        #expect(result.phase >= 0.0 || result.phase < 0.0, "Phase should be a valid number")
+        #expect(!result.phase.isNaN, "Phase should be a valid number")
         #expect(result.walkOperatorCalls == 31, "Walk operator calls should be 2^5 - 1 = 31")
     }
 

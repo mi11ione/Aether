@@ -288,7 +288,7 @@ struct BackendDispatchExecuteTests {
     func mpsHandlesResetOperation() async {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
-        circuit.addOperation(.reset(qubit: 0))
+        circuit.append(.reset(qubit: 0))
         circuit.append(.pauliX, to: 1)
 
         let result = await BackendDispatch.execute(circuit, backend: .mps(bondDimension: 32))
@@ -301,8 +301,8 @@ struct BackendDispatchExecuteTests {
         var circuit = QuantumCircuit(qubits: 3)
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
-        circuit.addOperation(.measure(qubit: 0))
-        circuit.addOperation(.measure(qubit: 1))
+        circuit.append(.measure(qubit: 0))
+        circuit.append(.measure(qubit: 1))
 
         let result = await BackendDispatch.execute(circuit, backend: .mps(bondDimension: 32))
 

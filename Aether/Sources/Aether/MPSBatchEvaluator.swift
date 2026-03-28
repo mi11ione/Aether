@@ -262,7 +262,8 @@ public actor MPSBatchEvaluator {
         states: [QuantumState],
         hamiltonian: SparseHamiltonian,
     ) async -> [Double] {
-        var energies = [Double](unsafeUninitializedCapacity: states.count) { _, count in
+        var energies = [Double](unsafeUninitializedCapacity: states.count) {
+            _, count in
             count = states.count
         }
 
@@ -291,10 +292,12 @@ public actor MPSBatchEvaluator {
         let dimension = 1 << qubits
         let matrixElements = batchSize * dimension * dimension
 
-        var realMatrices = [Float](unsafeUninitializedCapacity: matrixElements) { _, count in
+        var realMatrices = [Float](unsafeUninitializedCapacity: matrixElements) {
+            _, count in
             count = matrixElements
         }
-        var imagMatrices = [Float](unsafeUninitializedCapacity: matrixElements) { _, count in
+        var imagMatrices = [Float](unsafeUninitializedCapacity: matrixElements) {
+            _, count in
             count = matrixElements
         }
 
@@ -303,18 +306,23 @@ public actor MPSBatchEvaluator {
             for row in unitary {
                 row.withUnsafeBytes { srcBytes in
                     let srcDoubles = srcBytes.bindMemory(to: Double.self)
-                    // Safety: baseAddress! safe — row is non-empty (dimension >= 1 validated)
-                    vDSP_vdpsp(srcDoubles.baseAddress!, 2, &realMatrices + idx, 1, vDSP_Length(dimension))
-                    vDSP_vdpsp(srcDoubles.baseAddress! + 1, 2, &imagMatrices + idx, 1, vDSP_Length(dimension))
+                    realMatrices.withUnsafeMutableBufferPointer { realBuf in
+                        imagMatrices.withUnsafeMutableBufferPointer { imagBuf in
+                            vDSP_vdpsp(srcDoubles.baseAddress!, 2, realBuf.baseAddress! + idx, 1, vDSP_Length(dimension))
+                            vDSP_vdpsp(srcDoubles.baseAddress! + 1, 2, imagBuf.baseAddress! + idx, 1, vDSP_Length(dimension))
+                        }
+                    }
                 }
                 idx += dimension
             }
         }
 
-        var realState = [Float](unsafeUninitializedCapacity: dimension) { _, count in
+        var realState = [Float](unsafeUninitializedCapacity: dimension) {
+            _, count in
             count = dimension
         }
-        var imagState = [Float](unsafeUninitializedCapacity: dimension) { _, count in
+        var imagState = [Float](unsafeUninitializedCapacity: dimension) {
+            _, count in
             count = dimension
         }
 
@@ -478,10 +486,12 @@ public actor MPSBatchEvaluator {
         var resultStates = [QuantumState]()
         resultStates.reserveCapacity(batchSize)
 
-        var realDouble = [Double](unsafeUninitializedCapacity: dimension) { _, count in
+        var realDouble = [Double](unsafeUninitializedCapacity: dimension) {
+            _, count in
             count = dimension
         }
-        var imagDouble = [Double](unsafeUninitializedCapacity: dimension) { _, count in
+        var imagDouble = [Double](unsafeUninitializedCapacity: dimension) {
+            _, count in
             count = dimension
         }
 
@@ -515,10 +525,12 @@ public actor MPSBatchEvaluator {
         var resultStates: [QuantumState] = []
         resultStates.reserveCapacity(unitaries.count)
 
-        var matrixInterleaved = [Double](unsafeUninitializedCapacity: dimension * dimension * 2) { _, count in
+        var matrixInterleaved = [Double](unsafeUninitializedCapacity: dimension * dimension * 2) {
+            _, count in
             count = dimension * dimension * 2
         }
-        var result = [Complex<Double>](unsafeUninitializedCapacity: dimension) { _, count in
+        var result = [Complex<Double>](unsafeUninitializedCapacity: dimension) {
+            _, count in
             count = dimension
         }
         var alpha = (1.0, 0.0)

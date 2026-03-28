@@ -14,7 +14,7 @@ import Foundation
 /// then binds different numerical values per optimization iteration without reconstructing
 /// the circuit. This separates circuit topology from parameter values, enabling efficient
 /// optimization loops. The typical workflow creates symbolic parameters, builds the circuit,
-/// then iteratively binds values via ``QuantumCircuit/binding(_:)`` and executes until
+/// then iteratively binds values via ``QuantumCircuit/bound(_:)`` and executes until
 /// convergence. Parameter names conventionally use Greek letters (theta, phi, gamma, beta),
 /// indexed variants (theta_0, theta_1) for repeated gates, or descriptive names
 /// (rotation_angle, phase_shift) for clarity.
@@ -29,7 +29,7 @@ import Foundation
 /// circuit.append(.rotationZ(phi), to: 1)
 ///
 /// let bindings = ["theta": Double.pi / 4, "phi": Double.pi / 8]
-/// let bound = circuit.binding(bindings)
+/// let bound = circuit.bound(bindings)
 /// let state = bound.execute()
 /// ```
 ///
@@ -67,7 +67,9 @@ public struct Parameter: Equatable, Hashable, Sendable, CustomStringConvertible 
 
     /// Parameter name as textual representation
     @inlinable
-    public var description: String { name }
+    public var description: String {
+        name
+    }
 }
 
 /// Parameter value: symbolic parameter, concrete numerical value, or expression

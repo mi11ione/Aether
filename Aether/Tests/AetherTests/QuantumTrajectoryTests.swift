@@ -17,7 +17,7 @@ struct TrajectoryConfigurationTests {
         #expect(config.trajectories == 1000, "Default trajectories should be 1000")
         #expect(config.seed == nil, "Default seed should be nil")
         #expect(config.timeSteps == 1000, "Default timeSteps should be 1000")
-        #expect(config.storeIndividualTrajectories == false, "Default storeIndividualTrajectories should be false")
+        #expect(config.shouldStoreIndividualTrajectories == false, "Default shouldStoreIndividualTrajectories should be false")
     }
 
     @Test("Custom configuration values")
@@ -26,13 +26,13 @@ struct TrajectoryConfigurationTests {
             trajectories: 50,
             seed: 12345,
             timeSteps: 200,
-            storeIndividualTrajectories: true,
+            shouldStoreIndividualTrajectories: true,
         )
 
         #expect(config.trajectories == 50, "Custom trajectories should be 50")
         #expect(config.seed == 12345, "Custom seed should be 12345")
         #expect(config.timeSteps == 200, "Custom timeSteps should be 200")
-        #expect(config.storeIndividualTrajectories == true, "storeIndividualTrajectories should be true")
+        #expect(config.shouldStoreIndividualTrajectories == true, "shouldStoreIndividualTrajectories should be true")
     }
 
     @Test("Partial custom configuration")
@@ -42,7 +42,7 @@ struct TrajectoryConfigurationTests {
         #expect(config.trajectories == 100, "Trajectories should be 100")
         #expect(config.seed == 42, "Seed should be 42")
         #expect(config.timeSteps == 1000, "TimeSteps should use default 1000")
-        #expect(config.storeIndividualTrajectories == false, "storeIndividualTrajectories should use default false")
+        #expect(config.shouldStoreIndividualTrajectories == false, "shouldStoreIndividualTrajectories should use default false")
     }
 }
 
@@ -206,7 +206,7 @@ struct QuantumTrajectoryEvolutionTests {
             trajectories: 15,
             seed: 42,
             timeSteps: 30,
-            storeIndividualTrajectories: true,
+            shouldStoreIndividualTrajectories: true,
         )
 
         let result = await QuantumTrajectory.evolve(
@@ -239,7 +239,7 @@ struct QuantumTrajectoryEvolutionTests {
             trajectories: 10,
             seed: 42,
             timeSteps: 20,
-            storeIndividualTrajectories: false,
+            shouldStoreIndividualTrajectories: false,
         )
 
         let result = await QuantumTrajectory.evolve(
@@ -251,6 +251,38 @@ struct QuantumTrajectoryEvolutionTests {
         )
 
         #expect(result.individualTrajectories == nil, "Individual trajectories should be nil")
+    }
+
+    @Test("Three-qubit evolution triggers BLAS optimized paths")
+    func threeQubitBLASPaths() async {
+        var L = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: 8), count: 8)
+        L[0][4] = Complex(1.0, 0)
+
+        let amps: [Complex<Double>] = [
+            .zero, .zero, .zero, .zero,
+            Complex(1.0, 0), .zero, .zero, .zero,
+        ]
+        let psi = QuantumState(qubits: 3, amplitudes: amps)
+        let H = Observable.pauliZ(qubit: 0, coefficient: 0.5)
+
+        let config = TrajectoryConfiguration(
+            trajectories: 5,
+            seed: 42,
+            timeSteps: 50,
+        )
+
+        let result = await QuantumTrajectory.evolve(
+            hamiltonian: H,
+            jumpOperators: [L],
+            initialState: psi,
+            time: 2.0,
+            configuration: config,
+        )
+
+        #expect(result.time == 2.0, "Evolution time should match input")
+        #expect(result.averageDensityMatrix.qubits == 3, "Density matrix should have 3 qubits")
+        #expect(result.statistics.trajectoryCount == 5, "Should have 5 trajectories")
+        #expect(result.statistics.jumpCounts.count == 1, "Should track one jump operator")
     }
 }
 

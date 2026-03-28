@@ -567,11 +567,11 @@ private struct ParserState {
         guard let absoluteQubits = resolveQubitArgs(qubitArgs) else { return }
 
         let paramBindings = Dictionary(
-            uniqueKeysWithValues: zip(definition.parameterNames.prefix(params.count), params)
+            uniqueKeysWithValues: zip(definition.parameterNames.prefix(params.count), params),
         )
 
         let qubitBindings = Dictionary(
-            uniqueKeysWithValues: zip(definition.qubitNames.prefix(absoluteQubits.count), absoluteQubits)
+            uniqueKeysWithValues: zip(definition.qubitNames.prefix(absoluteQubits.count), absoluteQubits),
         )
 
         var bodyState = ParserState(tokens: definition.bodyTokens)
@@ -862,9 +862,9 @@ private struct ParserState {
 
         for op in operations {
             if op.qubits.count == 1, op.qubits[0] < 0 {
-                circuit.addOperation(.reset(qubit: -1 - op.qubits[0]))
+                circuit.append(.reset(qubit: -1 - op.qubits[0]))
             } else {
-                circuit.addOperation(.gate(op.gate, qubits: op.qubits))
+                circuit.append(.gate(op.gate, qubits: op.qubits))
             }
         }
 

@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under Apache 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -59,10 +59,10 @@ struct PhasePriorTests {
     }
 }
 
-/// Test suite for BayesianPhaseResult struct properties.
+/// Test suite for BayesianPhaseEstimation.Result struct properties.
 /// Validates MAP estimate, posterior statistics, measurement count,
 /// and CustomStringConvertible description format.
-@Suite("BayesianPhaseResult Properties")
+@Suite("BayesianPhaseEstimation.Result Properties")
 struct BayesianPhaseResultTests {
     @Test("Result contains valid MAP estimate in [0, 2pi)")
     func mapEstimateRange() async {
@@ -131,59 +131,11 @@ struct BayesianPhaseResultTests {
         )
         let result = await estimator.run(maxMeasurements: 5)
         let desc = result.description
-        #expect(desc.contains("BayesianPhaseResult"), "Description should contain type name")
+        #expect(desc.contains("BayesianPhaseEstimation.Result"), "Description should contain type name")
         #expect(desc.contains("MAP Estimate"), "Description should contain MAP Estimate field")
         #expect(desc.contains("Posterior Mean"), "Description should contain Posterior Mean field")
         #expect(desc.contains("Posterior StdDev"), "Description should contain Posterior StdDev field")
         #expect(desc.contains("Measurements"), "Description should contain Measurements field")
-    }
-}
-
-/// Test suite for RamseyConfig initialization and validation.
-/// Validates evolution time, repetitions, detuning parameters,
-/// and default value handling for Ramsey interferometry.
-@Suite("RamseyConfig Initialization")
-struct RamseyConfigTests {
-    @Test("Default repetitions is 100")
-    func defaultRepetitions() {
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        #expect(config.repetitions == 100, "Default repetitions should be 100, got \(config.repetitions)")
-    }
-
-    @Test("Default detuning is 0")
-    func defaultDetuning() {
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        #expect(abs(config.detuning) < 1e-10, "Default detuning should be 0, got \(config.detuning)")
-    }
-
-    @Test("Custom evolution time is preserved")
-    func customEvolutionTime() {
-        let config = RamseyConfig(evolutionTime: 5e-6)
-        #expect(abs(config.evolutionTime - 5e-6) < 1e-15, "Evolution time should be 5e-6, got \(config.evolutionTime)")
-    }
-
-    @Test("Custom repetitions is preserved")
-    func customRepetitions() {
-        let config = RamseyConfig(evolutionTime: 1e-6, repetitions: 500)
-        #expect(config.repetitions == 500, "Repetitions should be 500, got \(config.repetitions)")
-    }
-
-    @Test("Custom detuning is preserved")
-    func customDetuning() {
-        let config = RamseyConfig(evolutionTime: 1e-6, repetitions: 100, detuning: 0.05)
-        #expect(abs(config.detuning - 0.05) < 1e-10, "Detuning should be 0.05, got \(config.detuning)")
-    }
-
-    @Test("Zero evolution time is valid")
-    func zeroEvolutionTime() {
-        let config = RamseyConfig(evolutionTime: 0.0)
-        #expect(abs(config.evolutionTime) < 1e-15, "Zero evolution time should be valid")
-    }
-
-    @Test("Negative detuning is valid")
-    func negativeDetuning() {
-        let config = RamseyConfig(evolutionTime: 1e-6, repetitions: 100, detuning: -0.1)
-        #expect(abs(config.detuning - -0.1) < 1e-10, "Negative detuning should be valid, got \(config.detuning)")
     }
 }
 
@@ -197,8 +149,7 @@ struct RamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: .pi / 4)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         #expect(result.phaseAccumulation >= 0.0, "Phase accumulation should be >= 0, got \(result.phaseAccumulation)")
         #expect(result.phaseAccumulation <= .pi, "Phase accumulation should be <= pi, got \(result.phaseAccumulation)")
     }
@@ -208,8 +159,7 @@ struct RamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: .pi / 4)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         #expect(result.visibility >= 0.0, "Visibility should be >= 0, got \(result.visibility)")
         #expect(result.visibility <= 1.0, "Visibility should be <= 1, got \(result.visibility)")
     }
@@ -219,8 +169,7 @@ struct RamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: .pi / 4)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         #expect(result.excitedStateProbability >= 0.0, "P(|1>) should be >= 0, got \(result.excitedStateProbability)")
         #expect(result.excitedStateProbability <= 1.0, "P(|1>) should be <= 1, got \(result.excitedStateProbability)")
     }
@@ -230,8 +179,7 @@ struct RamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: .pi / 4)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         let desc = result.description
         #expect(desc.contains("RamseyResult"), "Description should contain type name")
         #expect(desc.contains("Phase Accumulation"), "Description should contain Phase Accumulation field")
@@ -244,8 +192,7 @@ struct RamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: .pi / 3)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         if let t2 = result.estimatedT2Star {
             #expect(t2 > 0.0, "Estimated T2* should be positive when present, got \(t2)")
         }
@@ -295,21 +242,26 @@ struct BayesianPhaseEstimationTests {
 
     @Test("Progress callback is invoked")
     func progressCallbackInvoked() async {
-        actor Counter {
+        actor CallbackTracker {
             var count = 0
-            func increment() { count += 1 }
-            func value() -> Int { count }
+            func increment() {
+                count += 1
+            }
+
+            func value() -> Int {
+                count
+            }
         }
         let estimator = BayesianPhaseEstimation(
             unitary: .rotationZ(.pi / 4),
             prior: .uniform,
             discretizationBins: 64,
         )
-        let counter = Counter()
+        let tracker = CallbackTracker()
         _ = await estimator.run(maxMeasurements: 10) { _, _ in
-            await counter.increment()
+            await tracker.increment()
         }
-        let callbackCount = await counter.value()
+        let callbackCount = await tracker.value()
         #expect(callbackCount == 10, "Progress callback should be invoked 10 times, got \(callbackCount)")
     }
 
@@ -485,8 +437,7 @@ struct QuantumStateRamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: 0.0)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         #expect(abs(result.phaseAccumulation) < 1e-10, "Phase should be 0, got \(result.phaseAccumulation)")
         #expect(abs(result.excitedStateProbability) < 1e-10, "P(|1>) should be 0, got \(result.excitedStateProbability)")
     }
@@ -496,8 +447,7 @@ struct QuantumStateRamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: .pi)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         #expect(abs(result.phaseAccumulation - .pi) < 1e-7, "Phase should be pi, got \(result.phaseAccumulation)")
         #expect(abs(result.excitedStateProbability - 1.0) < 1e-7, "P(|1>) should be 1, got \(result.excitedStateProbability)")
     }
@@ -507,8 +457,7 @@ struct QuantumStateRamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: .pi / 2)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         #expect(abs(result.phaseAccumulation - .pi / 2) < 1e-10, "Phase should be pi/2, got \(result.phaseAccumulation)")
         #expect(abs(result.excitedStateProbability - 0.5) < 1e-10, "P(|1>) should be 0.5, got \(result.excitedStateProbability)")
     }
@@ -518,8 +467,7 @@ struct QuantumStateRamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: 0.0)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         #expect(abs(result.visibility - 1.0) < 1e-10, "Visibility should be 1 for |0>, got \(result.visibility)")
     }
 
@@ -528,8 +476,7 @@ struct QuantumStateRamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: .pi)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         #expect(abs(result.visibility - 1.0) < 1e-10, "Visibility should be 1 for |1>, got \(result.visibility)")
     }
 
@@ -538,8 +485,7 @@ struct QuantumStateRamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: .pi / 2)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         #expect(abs(result.visibility) < 1e-10, "Visibility should be 0 for 50/50, got \(result.visibility)")
     }
 
@@ -548,8 +494,7 @@ struct QuantumStateRamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: .pi / 4)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 0.0)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 0.0)
         #expect(result.estimatedT2Star == nil, "T2* should be nil for zero evolution time")
     }
 
@@ -558,8 +503,7 @@ struct QuantumStateRamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: .pi / 2)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         #expect(result.estimatedT2Star == nil, "T2* should be nil for visibility 0")
     }
 
@@ -568,8 +512,7 @@ struct QuantumStateRamseyResultTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: 0.0)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         #expect(result.estimatedT2Star == nil, "T2* should be nil for visibility 1")
     }
 }
@@ -715,7 +658,7 @@ struct MetrologyEdgeCasesTests {
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
         let p0 = state.probability(of: 0)
-        #expect(abs(p0 - 1.0) < 1e-8, "Very small phase should give P(|0>) close to 1")
+        #expect(abs(p0 - 1.0) < 1e-10, "Very small phase should give P(|0>) close to 1")
     }
 
     @Test("Custom prior with all zeros renormalizes")
@@ -735,10 +678,58 @@ struct MetrologyEdgeCasesTests {
         let circuit = QuantumCircuit.ramseySequence(evolutionPhase: .pi / 3)
         let simulator = QuantumSimulator()
         let state = await simulator.execute(circuit)
-        let config = RamseyConfig(evolutionTime: 1e-6)
-        let result = state.ramseyResult(config: config)
+        let result = state.ramseyResult(evolutionTime: 1e-6)
         if result.estimatedT2Star != nil {
             #expect(result.description.contains("T2*"), "Description should contain T2* when estimated")
         }
+    }
+
+    @Test("Custom prior with exact bin count preserves values")
+    func customPriorExactBinCount() async {
+        let bins = 64
+        var pdf = [Double](repeating: 1.0, count: bins)
+        pdf[0] = 5.0
+        let estimator = BayesianPhaseEstimation(
+            unitary: .rotationZ(.pi / 4),
+            prior: .custom(pdf),
+            discretizationBins: bins,
+        )
+        let result = await estimator.run(maxMeasurements: 1)
+        #expect(result.posterior.count == bins, "Posterior should have same bin count as input")
+    }
+
+    @Test("Estimation with pi/2 phase covers both measurement outcomes")
+    func estimationWithPiHalf() async {
+        let estimator = BayesianPhaseEstimation(
+            unitary: .rotationZ(.pi / 2),
+            prior: .uniform,
+            discretizationBins: 64,
+        )
+        let result = await estimator.run(maxMeasurements: 100)
+        #expect(result.measurementCount == 100, "Should complete all measurements")
+        #expect(result.posteriorStdDev < .pi, "Posterior should narrow after many measurements")
+    }
+
+    @Test("Estimation with near-zero phase produces outcome 0 dominant")
+    func estimationNearZeroPhase() async {
+        let estimator = BayesianPhaseEstimation(
+            unitary: .rotationZ(0.01),
+            prior: .uniform,
+            discretizationBins: 64,
+        )
+        let result = await estimator.run(maxMeasurements: 50)
+        #expect(result.measurementCount == 50, "Should complete all measurements")
+    }
+
+    @Test("Gaussian prior near 2pi triggers negative phase wrapping")
+    func gaussianPriorNear2Pi() async {
+        let estimator = BayesianPhaseEstimation(
+            unitary: .rotationZ(6.0),
+            prior: .gaussian(mean: 6.0, stdDev: 0.2),
+            discretizationBins: 128,
+        )
+        let result = await estimator.run(maxMeasurements: 20)
+        #expect(result.posteriorStdDev >= 0.0, "StdDev should be non-negative after wrapping")
+        #expect(result.posteriorStdDev < 2.0 * .pi, "StdDev should be bounded")
     }
 }

@@ -20,8 +20,8 @@ import Accelerate
 /// nᵢ ∝ |cᵢ| √Var(Pᵢ)
 /// ```
 ///
-/// Typical reduction: 2-10x fewer shots needed compared to uniform allocation for molecular
-/// Hamiltonians with diverse term weights.
+/// Optimal allocation significantly reduces the number of shots compared to uniform allocation,
+/// especially for molecular Hamiltonians with diverse term weights.
 ///
 /// **Example:**
 /// ```swift
@@ -48,6 +48,11 @@ public struct ShotAllocator {
     public let minShotsPerTerm: Int
 
     /// Creates a shot allocator with specified minimum shot constraint.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let allocator = ShotAllocator(minShotsPerTerm: 20)
+    /// ```
     ///
     /// - Parameter minShotsPerTerm: Minimum shots per term. Default 10 provides good
     ///   balance between optimization and coverage.
@@ -100,7 +105,10 @@ public struct ShotAllocator {
         let variances: [Double] = if let state {
             batchEstimateVariances(terms: terms, state: state)
         } else {
-            Array(repeating: 1.0, count: termCount)
+            [Double](unsafeUninitializedCapacity: termCount) { buffer, count in
+                buffer.initialize(repeating: 1.0)
+                count = termCount
+            }
         }
 
         let weights = [Double](unsafeUninitializedCapacity: termCount) { buffer, count in
@@ -173,6 +181,7 @@ public struct ShotAllocator {
         return allocateWithWeights(weights: groupWeights, totalShots: totalShots)
     }
 
+    /// Computes aggregate weight for each QWC group using batched variance estimation.
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
@@ -206,7 +215,7 @@ public struct ShotAllocator {
                 let end = groupBoundaries[groupIndex + 1]
                 var groupWeight = 0.0
                 for termIndex in start ..< end {
-                    groupWeight += abs(allTerms[termIndex].coefficient) * sqrt(allVariances[termIndex])
+                    groupWeight = groupWeight.addingProduct(abs(allTerms[termIndex].coefficient), sqrt(allVariances[termIndex]))
                 }
                 buffer[groupIndex] = groupWeight
             }
@@ -216,6 +225,7 @@ public struct ShotAllocator {
 
     // MARK: - Variance Estimation
 
+    /// Estimates measurement variances for all terms as Var(P) = 1 - ⟨P⟩².
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
@@ -228,9 +238,9 @@ public struct ShotAllocator {
             for i in 0 ..< termCount {
                 let expectation = Observable.pauliExpectation(
                     of: terms[i].pauliString,
-                    for: state
+                    for: state,
                 )
-                buffer[i] = 1.0 - expectation * expectation
+                buffer[i] = 1.0.addingProduct(-expectation, expectation)
             }
             count = termCount
         }
@@ -238,6 +248,7 @@ public struct ShotAllocator {
 
     // MARK: - Allocation Helpers
 
+    /// Distributes shots proportional to precomputed weights with minimum-shot enforcement.
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
@@ -287,6 +298,7 @@ public struct ShotAllocator {
         return allocation
     }
 
+    /// Returns uniform shot allocation across all terms.
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
@@ -295,14 +307,10 @@ public struct ShotAllocator {
         let effectiveMinShots: Int = min(minShotsPerTerm, maxPossibleMin)
         let shotsPerTerm: Int = max(totalShots / numTerms, effectiveMinShots)
 
-        var allocation = [Int: Int](minimumCapacity: numTerms)
-        for i in 0 ..< numTerms {
-            allocation[i] = shotsPerTerm
-        }
-
-        return allocation
+        return Dictionary(uniqueKeysWithValues: (0 ..< numTerms).lazy.map { ($0, shotsPerTerm) })
     }
 
+    /// Distributes leftover shots to highest-weight terms.
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
@@ -315,7 +323,8 @@ public struct ShotAllocator {
         var shotsToDistribute: Int = remaining
 
         let weightCount: Int = weights.count
-        var sortedIndices = [Int](unsafeUninitializedCapacity: weightCount) { buffer, count in
+        var sortedIndices = [Int](unsafeUninitializedCapacity: weightCount) {
+            buffer, count in
             for i in 0 ..< weightCount {
                 buffer[i] = i
             }
@@ -334,6 +343,7 @@ public struct ShotAllocator {
         return newAllocation
     }
 
+    /// Removes excess shots from lowest-weight terms while respecting minimum.
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
@@ -347,7 +357,8 @@ public struct ShotAllocator {
         var shotsToRemove: Int = excess
 
         let weightCount: Int = weights.count
-        var sortedIndices = [Int](unsafeUninitializedCapacity: weightCount) { buffer, count in
+        var sortedIndices = [Int](unsafeUninitializedCapacity: weightCount) {
+            buffer, count in
             for i in 0 ..< weightCount {
                 buffer[i] = i
             }
@@ -419,23 +430,26 @@ public struct ShotAllocator {
         let variances: [Double] = if let state {
             batchEstimateVariances(terms: terms, state: state)
         } else {
-            Array(repeating: 1.0, count: termCount)
+            [Double](unsafeUninitializedCapacity: termCount) { buffer, count in
+                buffer.initialize(repeating: 1.0)
+                count = termCount
+            }
         }
 
         var optimalVariance = 0.0
-        var uniformVariance = 0.0
+        var totalVarianceContrib = 0.0
 
         for index in 0 ..< termCount {
             ValidationUtilities.validateAllocationContainsIndex(allocation, index: index)
             // Safety: validateAllocationContainsIndex ensures key exists
             let shots = Double(allocation[index]!)
-            let coeffSquared = terms[index].coefficient * terms[index].coefficient
-            let varianceContrib = coeffSquared * variances[index]
+            let coeff = terms[index].coefficient
+            let varianceContrib = coeff * coeff * variances[index]
 
             optimalVariance += varianceContrib / shots
-            uniformVariance += varianceContrib / uniformShotsDouble
+            totalVarianceContrib += varianceContrib
         }
 
-        return uniformVariance / optimalVariance
+        return (totalVarianceContrib / uniformShotsDouble) / optimalVariance
     }
 }

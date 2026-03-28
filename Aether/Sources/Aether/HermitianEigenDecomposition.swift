@@ -37,7 +37,9 @@ import Accelerate
     ///
     /// - Complexity: O(1)
     @inlinable
-    public var dimension: Int { eigenvalues.count }
+    public var dimension: Int {
+        eigenvalues.count
+    }
 }
 
 /// Hermitian matrix eigendecomposition using LAPACK zheev driver
@@ -85,7 +87,8 @@ public enum HermitianEigenDecomposition {
 
         let n = matrix.count
 
-        var a = [Double](unsafeUninitializedCapacity: 2 * n * n) { buffer, count in
+        var a = [Double](unsafeUninitializedCapacity: 2 * n * n) {
+            buffer, count in
             for col in 0 ..< n {
                 let colOffset = 2 * col * n
                 for row in 0 ..< n {
@@ -98,7 +101,9 @@ public enum HermitianEigenDecomposition {
             count = 2 * n * n
         }
 
-        var w = [Double](unsafeUninitializedCapacity: n) { _, count in count = n }
+        var w = [Double](unsafeUninitializedCapacity: n) {
+            _, count in count = n
+        }
 
         var jobz = CChar(Character("V").asciiValue!) // Safety: ASCII letter always has asciiValue
         var uplo = CChar(Character("U").asciiValue!) // Safety: ASCII letter always has asciiValue
@@ -108,7 +113,9 @@ public enum HermitianEigenDecomposition {
         var info = __LAPACK_int(0)
 
         let rworkSize = max(1, 3 * n - 2)
-        var rwork = [Double](unsafeUninitializedCapacity: rworkSize) { _, count in count = rworkSize }
+        var rwork = [Double](unsafeUninitializedCapacity: rworkSize) {
+            _, count in count = rworkSize
+        }
 
         var workQuery: (Double, Double) = (0, 0)
 
@@ -135,7 +142,9 @@ public enum HermitianEigenDecomposition {
 
         let optimalWorkSize = max(1, Int(workQuery.0))
         lwork = __LAPACK_int(optimalWorkSize)
-        var work = [Double](unsafeUninitializedCapacity: 2 * optimalWorkSize) { _, count in count = 2 * optimalWorkSize }
+        var work = [Double](unsafeUninitializedCapacity: 2 * optimalWorkSize) {
+            _, count in count = 2 * optimalWorkSize
+        }
 
         a.withUnsafeMutableBytes { aPtr in
             work.withUnsafeMutableBytes { workPtr in

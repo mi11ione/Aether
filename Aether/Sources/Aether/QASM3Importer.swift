@@ -944,12 +944,12 @@ private func expandGateDefinition(
 ) {
     let paramBindings = Dictionary(uniqueKeysWithValues: zip(
         definition.parameterNames.prefix(params.count),
-        params.prefix(definition.parameterNames.count)
+        params.prefix(definition.parameterNames.count),
     ))
 
     let qubitBindings = Dictionary(uniqueKeysWithValues: zip(
         definition.qubitNames.prefix(qubits.count),
-        qubits.prefix(definition.qubitNames.count).map { [$0] }
+        qubits.prefix(definition.qubitNames.count).map { [$0] },
     ))
 
     var subState = ParserState(tokens: definition.bodyTokens, skipLineComputation: true)

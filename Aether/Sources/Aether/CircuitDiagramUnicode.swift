@@ -8,7 +8,7 @@
 /// boxes for multi-qubit custom gates. The renderer organizes operations into time layers
 /// and renders each qubit wire with box-drawing characters, producing compact diagrams
 /// with precise gate alignment across qubit wires. Optionally emits ANSI color escape
-/// sequences for terminal rendering when ``isColorEnabled`` is set.
+/// sequences for terminal rendering when `isColorEnabled` is set.
 ///
 /// **Example:**
 /// ```swift
@@ -28,7 +28,7 @@ public enum CircuitDiagramUnicode: Sendable {
     /// with gates rendered inline using box-drawing delimiters. Single-qubit gates appear as
     /// `┤Label├`, controlled gates show `●` on control wires connected by `│` to target
     /// symbols, SWAP gates display `×` on both wires, and reset operations render as `┤0├`.
-    /// When ``isColorEnabled`` is true, gate names are cyan, control dots yellow, and reset
+    /// When `isColorEnabled` is true, gate names are cyan, control dots yellow, and reset
     /// operations green, with ANSI reset codes after each colored segment.
     ///
     /// **Example:**
@@ -59,7 +59,8 @@ public enum CircuitDiagramUnicode: Sendable {
         let layers = assignLayers(operations: operations, qubitCount: qubitCount)
         let layerCount = layers.count
 
-        var columnWidths = [Int](unsafeUninitializedCapacity: layerCount) { buffer, count in
+        var columnWidths = [Int](unsafeUninitializedCapacity: layerCount) {
+            buffer, count in
             buffer.initialize(repeating: 1)
             count = layerCount
         }
@@ -174,7 +175,8 @@ public enum CircuitDiagramUnicode: Sendable {
         let assignments = CircuitDiagramUtilities.assignLayers(operations: operations, qubitCount: qubitCount)
         let layerCount = (assignments.max() ?? -1) + 1
         var layers = [[CircuitOperation]](repeating: [], count: layerCount)
-        var layerCounts = [Int](unsafeUninitializedCapacity: layerCount) { buffer, count in
+        var layerCounts = [Int](unsafeUninitializedCapacity: layerCount) {
+            buffer, count in
             buffer.initialize(repeating: 0)
             count = layerCount
         }
@@ -208,7 +210,7 @@ public enum CircuitDiagramUnicode: Sendable {
     @_effects(readonly)
     @usableFromInline
     static func gateLabelForGate(_ gate: QuantumGate, qubits: [Int]) -> String {
-        if let shared = CircuitDiagramUtilities.gateLabel(gate) {
+        if let shared = CircuitDiagramUtilities.label(for: gate) {
             return shared
         }
         return switch gate {

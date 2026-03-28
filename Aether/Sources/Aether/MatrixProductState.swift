@@ -765,12 +765,12 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
     }
 
     /// Updates tensor at specified site.
-    internal mutating func updateTensor(at site: Int, with tensor: MPSTensor) {
+    mutating func updateTensor(at site: Int, with tensor: MPSTensor) {
         tensors[site] = tensor
     }
 
     /// Adds truncation error to statistics.
-    internal mutating func addTruncationError(_ error: Double) {
+    mutating func addTruncationError(_ error: Double) {
         truncationStatistics = truncationStatistics.adding(error: error)
     }
 }

@@ -37,10 +37,17 @@ public struct QWCGroup: Sendable {
     ///
     /// Used for variance-weighted shot allocation in measurement optimization.
     ///
+    /// **Example:**
+    /// ```swift
+    /// let terms: PauliTerms = [(0.5, PauliString(.z(0))), (-0.3, PauliString(.z(1)))]
+    /// let group = QWCGroup(terms: terms, measurementBasis: [0: .z, 1: .z])
+    /// let w = group.weight
+    /// ```
+    ///
     /// - Complexity: O(n) where n is the number of terms in the group
     @inlinable
     public var weight: Double {
-        terms.reduce(0.0) { $0 + abs($1.coefficient) }
+        terms.reduce(0.0) { $0 + $1.coefficient.magnitude }
     }
 
     /// Creates a qubit-wise commuting group.
@@ -48,6 +55,14 @@ public struct QWCGroup: Sendable {
     /// - Parameters:
     ///   - terms: Pauli terms in this group
     ///   - measurementBasis: The measurement basis for each qubit
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let terms: PauliTerms = [(0.5, PauliString(.z(0))), (0.3, PauliString(.z(1)))]
+    /// let basis: [Int: PauliBasis] = [0: .z, 1: .z]
+    /// let group = QWCGroup(terms: terms, measurementBasis: basis)
+    /// ```
+    ///
     /// - Precondition: All terms must be qubit-wise commuting with each other
     public init(terms: PauliTerms, measurementBasis: [Int: PauliBasis]) {
         self.terms = terms
@@ -77,8 +92,6 @@ public struct QWCGroup: Sendable {
 /// - SeeAlso: ``PauliCommutation``
 /// - SeeAlso: ``Observable``
 public enum QWCGrouper {
-    // MARK: - Main Grouping Algorithm
-
     /// Groups Pauli terms into sets that can be measured simultaneously.
     ///
     /// Uses graph coloring to partition terms into qubit-wise commuting groups. Each group shares
@@ -108,11 +121,10 @@ public enum QWCGrouper {
         return buildGroups(terms: terms, coloring: coloring, numColors: numColors)
     }
 
-    // MARK: - Graph Construction
-
     /// Build adjacency list where edges connect non-QWC term pairs.
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     private static func buildConflictGraph(terms: PauliTerms) -> [[Int]] {
         let n: Int = terms.count
         var adjacencyList: [[Int]] = Array(repeating: [Int](), count: n)
@@ -129,11 +141,10 @@ public enum QWCGrouper {
         return adjacencyList
     }
 
-    // MARK: - Graph Coloring (DSATUR Algorithm)
-
     /// Color graph using DSATUR heuristic for near-optimal chromatic number.
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     private static func colorGraphDSATUR(graph: [[Int]]) -> (colors: [Int], numColors: Int) {
         let n: Int = graph.count
         var colors: [Int] = Array(repeating: -1, count: n)
@@ -149,15 +160,15 @@ public enum QWCGrouper {
 
         while let selectedVertex = heap.extractMax() {
             let forbiddenBits: UInt64 = neighborColorBits[selectedVertex]
-            let color: Int = forbiddenBits == UInt64.max ? 64 : (~forbiddenBits).trailingZeroBitCount
+            let color: Int = forbiddenBits == UInt64.max ? UInt64.bitWidth : (~forbiddenBits).trailingZeroBitCount
 
             colors[selectedVertex] = color
-            if color > maxColorUsed { maxColorUsed = color }
+            maxColorUsed = max(maxColorUsed, color)
 
-            let colorBit: UInt64 = color < 64 ? (1 << color) : 0
+            let colorBit: UInt64 = color < UInt64.bitWidth ? (1 << color) : 0
 
             for neighbor in graph[selectedVertex] where colors[neighbor] == -1 {
-                if color < 64, neighborColorBits[neighbor] & colorBit == 0 {
+                if color < UInt64.bitWidth, neighborColorBits[neighbor] & colorBit == 0 {
                     neighborColorBits[neighbor] |= colorBit
                     saturationDegree[neighbor] += 1
                     heap.updatePriority(vertex: neighbor, newSaturation: saturationDegree[neighbor])
@@ -168,20 +179,18 @@ public enum QWCGrouper {
         return (colors: colors, numColors: maxColorUsed + 1)
     }
 
-    // MARK: - Priority Queue for DSATUR
-
+    /// Priority queue for DSATUR vertex selection by saturation degree.
     private struct DSATURHeap {
         private var heap: [(saturation: Int, degree: Int, vertex: Int)]
         private var vertexToIndex: [Int]
-        private var removed: [Bool]
-
+        /// Creates a heap with pre-allocated capacity for the given number of vertices.
         init(capacity: Int) {
             heap = []
             heap.reserveCapacity(capacity)
             vertexToIndex = Array(repeating: -1, count: capacity)
-            removed = Array(repeating: false, count: capacity)
         }
 
+        /// Compares two entries by saturation degree then vertex degree.
         @inline(__always)
         private func compare(_ a: (saturation: Int, degree: Int, vertex: Int),
                              _ b: (saturation: Int, degree: Int, vertex: Int)) -> Bool
@@ -190,6 +199,7 @@ public enum QWCGrouper {
             return a.degree > b.degree
         }
 
+        /// Inserts a vertex with its saturation and degree into the heap.
         mutating func insert(saturation: Int, degree: Int, vertex: Int) {
             let index = heap.count
             heap.append((saturation: saturation, degree: degree, vertex: vertex))
@@ -197,20 +207,22 @@ public enum QWCGrouper {
             siftUp(index)
         }
 
+        /// Extracts the vertex with highest saturation degree.
         mutating func extractMax() -> Int? {
             guard !heap.isEmpty else { return nil }
             let top = heap[0]
-            removed[top.vertex] = true
             removeTop()
             return top.vertex
         }
 
+        /// Updates the saturation degree of a vertex and restores heap order.
         mutating func updatePriority(vertex: Int, newSaturation: Int) {
             let index = vertexToIndex[vertex]
             heap[index].saturation = newSaturation
             siftUp(index)
         }
 
+        /// Removes the root element and restores heap property.
         @inline(__always)
         private mutating func removeTop() {
             let lastIndex = heap.count - 1
@@ -225,6 +237,7 @@ public enum QWCGrouper {
             }
         }
 
+        /// Restores heap property by moving an element upward.
         @inline(__always)
         private mutating func siftUp(_ index: Int) {
             var i = index
@@ -241,6 +254,7 @@ public enum QWCGrouper {
             }
         }
 
+        /// Restores heap property by moving an element downward.
         @inline(__always)
         private mutating func siftDown(_ index: Int) {
             var i = index
@@ -269,20 +283,23 @@ public enum QWCGrouper {
         }
     }
 
-    // MARK: - Group Building
-
     /// Convert coloring assignment to QWCGroup array with measurement bases.
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     private static func buildGroups(
         terms: PauliTerms,
         coloring: [Int],
         numColors: Int,
     ) -> [QWCGroup] {
         var colorToTerms: [PauliTerms] = Array(repeating: [], count: numColors)
+        let avgSize = terms.count / max(numColors, 1)
+        for i in 0 ..< numColors {
+            colorToTerms[i].reserveCapacity(avgSize)
+        }
 
-        for (index, color) in coloring.enumerated() {
-            colorToTerms[color].append(terms[index])
+        for index in 0 ..< coloring.count {
+            colorToTerms[coloring[index]].append(terms[index])
         }
 
         var groups: [QWCGroup] = []
@@ -290,16 +307,13 @@ public enum QWCGrouper {
 
         for groupTerms in colorToTerms where !groupTerms.isEmpty {
             let pauliStrings: [PauliString] = groupTerms.map(\.pauliString)
-            // Safety: groupTerms came from same color class, guaranteed QWC by graph coloring
-            let basis: [Int: PauliBasis] = PauliCommutation.measurementBasis(of: pauliStrings)!
+            let basis: [Int: PauliBasis] = PauliCommutation.measurementBasis(of: pauliStrings)! // Safety: groupTerms from same color class, guaranteed QWC by graph coloring
 
             groups.append(QWCGroup(terms: groupTerms, measurementBasis: basis))
         }
 
         return groups
     }
-
-    // MARK: - Statistics
 
     /// Statistical summary of a QWC grouping.
     ///
@@ -337,6 +351,14 @@ public enum QWCGrouper {
 }
 
 extension QWCGrouper.GroupingStats: CustomStringConvertible {
+    /// Human-readable summary of grouping statistics.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let groups = QWCGrouper.group(hamiltonian.terms)
+    /// let stats = QWCGrouper.statistics(for: groups)
+    /// let summary = stats.description
+    /// ```
     @inlinable
     public var description: String {
         """
@@ -394,18 +416,17 @@ public extension QWCGrouper {
         var largestGroupSize = 0
         for size in groupSizes {
             numTerms += size
-            if size > largestGroupSize { largestGroupSize = size }
+            largestGroupSize = max(largestGroupSize, size)
         }
 
-        let averageGroupSize = Double(numTerms) / Double(numGroups)
-        let reductionFactor = Double(numTerms) / Double(numGroups)
+        let ratio = Double(numTerms) / Double(numGroups)
 
         return GroupingStats(
             numTerms: numTerms,
             numGroups: numGroups,
-            reductionFactor: reductionFactor,
+            reductionFactor: ratio,
             largestGroupSize: largestGroupSize,
-            averageGroupSize: averageGroupSize,
+            averageGroupSize: ratio,
             groupSizes: groupSizes,
         )
     }

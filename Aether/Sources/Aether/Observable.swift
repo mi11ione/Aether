@@ -99,7 +99,7 @@ public struct Observable: CustomStringConvertible, Sendable {
         for i in 0 ..< terms.count {
             let pauliExpectation = Self.pauliExpectation(
                 of: terms[i].pauliString,
-                for: state
+                for: state,
             )
             totalExpectation = totalExpectation.addingProduct(terms[i].coefficient, pauliExpectation)
         }
@@ -120,7 +120,7 @@ public struct Observable: CustomStringConvertible, Sendable {
     @_effects(readonly)
     static func pauliExpectation(
         of pauliString: PauliString,
-        for state: QuantumState
+        for state: QuantumState,
     ) -> Double {
         if pauliString.operators.isEmpty { return 1.0 }
 

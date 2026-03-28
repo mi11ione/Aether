@@ -33,6 +33,9 @@ import Accelerate
 /// - SeeAlso: ``QAOA``
 /// - SeeAlso: ``PrecisionPolicy``
 public actor SparseHamiltonian {
+    private static let cooZeroThreshold: Double = 1e-12
+    private static let componentZeroThreshold: Double = 1e-15
+
     private enum Backend {
         case metalGPU(
             device: MTLDevice,
@@ -92,10 +95,9 @@ public actor SparseHamiltonian {
     /// -> Observable fallback. The sparse representation persists across all VQE iterations,
     /// amortizing construction cost over the entire optimization.
     ///
-    /// Policy-specific thresholds for Metal GPU (uses ``PrecisionPolicy/gpuQubitThreshold``):
-    /// - `.fast`: ≥10 qubits
-    /// - `.balanced`: ≥12 qubits (higher precision threshold)
-    /// - `.accurate`: never (CPU-only for maximum precision)
+    /// Policy-specific Metal GPU thresholds (via ``PrecisionPolicy/gpuQubitThreshold``):
+    /// `.fast` activates at ≥10 qubits, `.balanced` at ≥12 qubits with higher precision threshold,
+    /// and `.accurate` never uses GPU (CPU-only for maximum precision).
     ///
     /// **Example:**
     ///
@@ -109,6 +111,7 @@ public actor SparseHamiltonian {
     ///   - observable: Quantum observable H = Σᵢ cᵢ Pᵢ.
     ///   - systemSize: Total qubits in system. When nil, inferred from maximum qubit index in observable.
     ///   - precisionPolicy: Precision policy governing backend selection (default: `.fast`).
+    /// - Complexity: O(terms × 2ⁿ) for matrix construction, O(nnz log nnz) for sorting
     /// - SeeAlso: ``PrecisionPolicy``
     public init(observable: Observable, systemSize: Int? = nil, precisionPolicy: PrecisionPolicy = .fast) {
         self.observable = observable
@@ -157,7 +160,6 @@ public actor SparseHamiltonian {
     }
 
     /// Builds COO matrix from observable terms.
-    /// - Complexity: O(terms * 2ⁿ) construction, O(nnz log nnz) sorting
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -180,9 +182,9 @@ public actor SparseHamiltonian {
             }
         }
 
-        let tolerance = 1e-12
+        let toleranceSq = cooZeroThreshold * cooZeroThreshold
         let nonZeros: [COOElement] = elements.compactMap { index, value -> COOElement? in
-            guard abs(value.magnitude) > tolerance else { return nil }
+            guard value.magnitudeSquared > toleranceSq else { return nil }
             return COOElement(row: index.row, col: index.col, value: value)
         }
 
@@ -195,7 +197,6 @@ public actor SparseHamiltonian {
     }
 
     /// Converts Pauli string to sparse matrix elements.
-    /// - Complexity: O(2ⁿ) for all Pauli strings (exactly 2ⁿ non-zeros per string)
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -203,15 +204,13 @@ public actor SparseHamiltonian {
         _ pauliString: PauliString,
         dimension: Int,
     ) -> [COOElement] {
-        var elements: [COOElement] = []
-        elements.reserveCapacity(dimension)
-
-        for row in 0 ..< dimension {
-            let (col, phase) = pauliString.applyToRow(row: row)
-            elements.append(COOElement(row: row, col: col, value: phase))
+        return [COOElement](unsafeUninitializedCapacity: dimension) { buffer, count in
+            for row in 0 ..< dimension {
+                let (col, phase) = pauliString.applyToRow(row: row)
+                buffer.initializeElement(at: row, to: COOElement(row: row, col: col, value: phase))
+            }
+            count = dimension
         }
-
-        return elements
     }
 
     // MARK: - Backend Construction
@@ -266,7 +265,6 @@ public actor SparseHamiltonian {
     }
 
     /// Converts COO to CSR format.
-    /// - Complexity: O(nnz) linear pass with prefix sum
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -276,15 +274,11 @@ public actor SparseHamiltonian {
     ) -> (rowPointers: [UInt32], columnIndices: [UInt32], values: [Complex<Double>]) {
         let nnz = cooMatrix.count
 
-        var rowPointers = [UInt32](unsafeUninitializedCapacity: numRows + 1) { buffer, count in
+        var rowPointers = [UInt32](unsafeUninitializedCapacity: numRows + 1) {
+            buffer, count in
             buffer.initialize(repeating: 0)
             count = numRows + 1
         }
-
-        var columnIndices = [UInt32]()
-        columnIndices.reserveCapacity(nnz)
-        var values = [Complex<Double>]()
-        values.reserveCapacity(nnz)
 
         for element in cooMatrix {
             rowPointers[element.row + 1] += 1
@@ -294,9 +288,17 @@ public actor SparseHamiltonian {
             rowPointers[i] += rowPointers[i - 1]
         }
 
-        for element in cooMatrix {
-            columnIndices.append(UInt32(element.col))
-            values.append(element.value)
+        let columnIndices = [UInt32](unsafeUninitializedCapacity: nnz) { buffer, count in
+            for (i, element) in cooMatrix.enumerated() {
+                buffer[i] = UInt32(element.col)
+            }
+            count = nnz
+        }
+        let values = [Complex<Double>](unsafeUninitializedCapacity: nnz) { buffer, count in
+            for (i, element) in cooMatrix.enumerated() {
+                buffer.initializeElement(at: i, to: element.value)
+            }
+            count = nnz
         }
 
         return (rowPointers, columnIndices, values)
@@ -333,13 +335,13 @@ public actor SparseHamiltonian {
             let row = Int32(element.row)
             let col = Int32(element.col)
 
-            if abs(element.value.real) > 1e-15 {
+            if abs(element.value.real) > componentZeroThreshold {
                 realRows.append(row)
                 realCols.append(col)
                 realVals.append(element.value.real)
             }
 
-            if abs(element.value.imaginary) > 1e-15 {
+            if abs(element.value.imaginary) > componentZeroThreshold {
                 imagRows.append(row)
                 imagCols.append(col)
                 imagVals.append(element.value.imaginary)
@@ -438,7 +440,8 @@ public actor SparseHamiltonian {
                 .assumingMemoryBound(to: Double.self)
             let doubleCount = complexArray.count * 2
 
-            var floatBuffer = [Float](unsafeUninitializedCapacity: doubleCount) { buffer, count in
+            var floatBuffer = [Float](unsafeUninitializedCapacity: doubleCount) {
+                buffer, count in
                 // Safety: Buffer allocated with doubleCount capacity, baseAddress valid
                 vDSP_vdpsp(doublePtr, 1, buffer.baseAddress!, 1, vDSP_Length(doubleCount))
                 count = doubleCount
@@ -459,17 +462,34 @@ public actor SparseHamiltonian {
     @_effects(readonly)
     private static func decomposeStateToRealImag(_ state: QuantumState) -> (real: [Double], imag: [Double]) {
         let dimension = state.amplitudes.count
-        let stateReal = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
-            for i in 0 ..< dimension {
-                buffer[i] = state.amplitudes[i].real
-            }
+        guard dimension > 0 else { return ([], []) }
+        var stateReal = [Double](unsafeUninitializedCapacity: dimension) {
+            buffer, count in
+            buffer.initialize(repeating: 0)
             count = dimension
         }
-        let stateImag = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
-            for i in 0 ..< dimension {
-                buffer[i] = state.amplitudes[i].imaginary
-            }
+        var stateImag = [Double](unsafeUninitializedCapacity: dimension) {
+            buffer, count in
+            buffer.initialize(repeating: 0)
             count = dimension
+        }
+        state.amplitudes.withUnsafeBufferPointer { ampBuf in
+            // Safety: dimension > 0 guard above ensures baseAddress is valid
+            let doublePtr = UnsafeRawPointer(ampBuf.baseAddress!)
+                .assumingMemoryBound(to: Double.self)
+            stateReal.withUnsafeMutableBufferPointer { realBuf in
+                stateImag.withUnsafeMutableBufferPointer { imagBuf in
+                    // Safety: all buffers allocated with dimension capacity
+                    var split = DSPDoubleSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
+                    vDSP_ctozD(
+                        UnsafePointer<DSPDoubleComplex>(OpaquePointer(doublePtr)),
+                        2,
+                        &split,
+                        1,
+                        vDSP_Length(dimension),
+                    )
+                }
+            }
         }
         return (stateReal, stateImag)
     }
@@ -493,6 +513,7 @@ public actor SparseHamiltonian {
     /// - Complexity: O(nnz) for sparse matvec, O(2ⁿ) for inner product
     /// - Precondition: State must have ``qubits`` qubits.
     /// - Precondition: State must be normalized.
+    /// - SeeAlso: ``Observable/expectationValue(of:)``
     public func expectationValue(of state: QuantumState) -> Double {
         ValidationUtilities.validateStateQubitCount(state, required: qubits, exact: true)
         ValidationUtilities.validateNormalizedState(state)
@@ -523,7 +544,6 @@ public actor SparseHamiltonian {
     }
 
     /// Computes expectation value using Metal GPU backend.
-    /// - Complexity: O(nnz) for sparse matvec, O(2ⁿ) for inner product
     @_optimize(speed)
     private func computeMetalGPU(
         state: QuantumState,
@@ -573,22 +593,22 @@ public actor SparseHamiltonian {
         commandBuffer.waitUntilCompleted()
 
         // Safety: outputBuffer created successfully above, contents always valid
-        let outputPointer = outputBuffer.contents().bindMemory(
-            to: (Float, Float).self,
-            capacity: dimension,
-        )
-
-        let gpuOutput = Array(UnsafeBufferPointer(start: outputPointer, count: dimension))
+        let localFloats = Array(UnsafeBufferPointer(
+            start: outputBuffer.contents().bindMemory(to: Float.self, capacity: dimension * 2),
+            count: dimension * 2,
+        ))
 
         let hPsiReal = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
-            for i in 0 ..< dimension {
-                buffer[i] = Double(gpuOutput[i].0)
+            localFloats.withUnsafeBufferPointer { floatBuf in
+                // Safety: buffer and floatBuf allocated with sufficient capacity
+                vDSP_vspdp(floatBuf.baseAddress!, 2, buffer.baseAddress!, 1, vDSP_Length(dimension))
             }
             count = dimension
         }
         let hPsiImag = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
-            for i in 0 ..< dimension {
-                buffer[i] = Double(gpuOutput[i].1)
+            localFloats.withUnsafeBufferPointer { floatBuf in
+                // Safety: buffer and floatBuf allocated with sufficient capacity
+                vDSP_vspdp(floatBuf.baseAddress! + 1, 2, buffer.baseAddress!, 1, vDSP_Length(dimension))
             }
             count = dimension
         }
@@ -604,7 +624,6 @@ public actor SparseHamiltonian {
     }
 
     /// Computes expectation value using Accelerate Sparse backend.
-    /// - Complexity: O(nnz) for sparse matvec, O(2ⁿ) for inner product
     @_optimize(speed)
     private func computeAccelerateSparse(
         state: QuantumState,
@@ -614,28 +633,34 @@ public actor SparseHamiltonian {
     ) -> Double {
         var (stateReal, stateImag) = Self.decomposeStateToRealImag(state)
 
-        var resultReal = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
+        var resultReal = [Double](unsafeUninitializedCapacity: dimension) {
+            buffer, count in
             buffer.initialize(repeating: 0.0)
             count = dimension
         }
-        var resultImag = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
+        var resultImag = [Double](unsafeUninitializedCapacity: dimension) {
+            buffer, count in
             buffer.initialize(repeating: 0.0)
             count = dimension
         }
 
-        var ax = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
+        var ax = [Double](unsafeUninitializedCapacity: dimension) {
+            buffer, count in
             buffer.initialize(repeating: 0.0)
             count = dimension
         }
-        var ay = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
+        var ay = [Double](unsafeUninitializedCapacity: dimension) {
+            buffer, count in
             buffer.initialize(repeating: 0.0)
             count = dimension
         }
-        var bx = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
+        var bx = [Double](unsafeUninitializedCapacity: dimension) {
+            buffer, count in
             buffer.initialize(repeating: 0.0)
             count = dimension
         }
-        var by = [Double](unsafeUninitializedCapacity: dimension) { buffer, count in
+        var by = [Double](unsafeUninitializedCapacity: dimension) {
+            buffer, count in
             buffer.initialize(repeating: 0.0)
             count = dimension
         }
@@ -699,6 +724,8 @@ public actor SparseHamiltonian {
     /// let sparse = SparseHamiltonian(observable: h)
     /// let desc = await sparse.backendDescription
     /// ```
+    ///
+    /// - Complexity: O(1)
     public var backendDescription: String {
         "\(backend.description) (\(nnz) non-zeros, \(String(format: "%.2f%%", sparsity * 100)) sparse)"
     }
@@ -717,6 +744,7 @@ public actor SparseHamiltonian {
     /// ```
     ///
     /// - Complexity: O(1)
+    /// - SeeAlso: ``SparseMatrixStatistics``
     @_eagerMove
     public var statistics: SparseMatrixStatistics {
         SparseMatrixStatistics(
@@ -750,7 +778,7 @@ private struct MatrixIndex: Hashable {
 
 /// Diagnostic statistics for sparse Hamiltonian representation.
 @frozen
-public struct SparseMatrixStatistics: CustomStringConvertible, Sendable {
+public struct SparseMatrixStatistics: CustomStringConvertible, Sendable, Equatable {
     /// Number of qubits.
     public let qubits: Int
 
@@ -769,15 +797,7 @@ public struct SparseMatrixStatistics: CustomStringConvertible, Sendable {
     /// Total memory in bytes.
     public let memoryBytes: Int
 
-    init(qubits: Int, dimension: Int, nonZeros: Int, sparsity: Double, backend: String, memoryBytes: Int) {
-        self.qubits = qubits
-        self.dimension = dimension
-        self.nonZeros = nonZeros
-        self.sparsity = sparsity
-        self.backend = backend
-        self.memoryBytes = memoryBytes
-    }
-
+    /// Multi-line summary of sparse Hamiltonian diagnostics including backend, dimensions, and memory usage.
     @inlinable
     public var description: String {
         let sparsityPercent = String(format: "%.4f%%", sparsity * 100)
@@ -788,7 +808,7 @@ public struct SparseMatrixStatistics: CustomStringConvertible, Sendable {
             String(format: "%.2f MB", memoryMB) :
             String(format: "%.2f KB", memoryKB)
 
-        let denseMemoryMB = Double(dimension * dimension * 16) / (1024.0 * 1024.0)
+        let denseMemoryMB = Double(dimension) * Double(dimension) * 16.0 / (1024.0 * 1024.0)
         let compressionRatio: Double = denseMemoryMB * 1024.0 * 1024.0 / Double(memoryBytes)
 
         return """

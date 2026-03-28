@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Testing
 
 /// Test suite for QuantumSimulator actor.
@@ -19,13 +19,13 @@ struct QuantumSimulatorTests {
 
         let finalState = await simulator.execute(circuit)
 
-        #expect(finalState.qubits == 2)
-        #expect(finalState.isNormalized())
+        #expect(finalState.qubits == 2, "Bell circuit should produce 2-qubit state")
+        #expect(finalState.isNormalized(), "Final state should be normalized")
 
         let p0 = finalState.probability(of: 0)
         let p3 = finalState.probability(of: 3)
-        #expect(abs(p0 - 0.5) < 1e-10)
-        #expect(abs(p3 - 0.5) < 1e-10)
+        #expect(abs(p0 - 0.5) < 1e-10, "P(|00>) should be 0.5 in Bell state")
+        #expect(abs(p3 - 0.5) < 1e-10, "P(|11>) should be 0.5 in Bell state")
     }
 
     @Test("Simulator executes from custom initial state")
@@ -38,7 +38,7 @@ struct QuantumSimulatorTests {
         let initialState = QuantumState(qubits: 1)
         let finalState = await simulator.execute(circuit, from: initialState)
 
-        #expect(abs(finalState.probability(of: 1) - 1.0) < 1e-10)
+        #expect(abs(finalState.probability(of: 1) - 1.0) < 1e-10, "X gate on |0> should give |1>")
     }
 
     @Test("Simulator reports progress during execution")
@@ -52,7 +52,9 @@ struct QuantumSimulatorTests {
 
         actor ProgressAccumulator {
             private(set) var values: [Double] = []
-            func append(_ value: Double) { values.append(value) }
+            func append(_ value: Double) {
+                values.append(value)
+            }
         }
 
         let accumulator = ProgressAccumulator()
@@ -63,14 +65,14 @@ struct QuantumSimulatorTests {
 
         let progressUpdates = await accumulator.values
 
-        #expect(progressUpdates.count > 0)
+        #expect(progressUpdates.count > 0, "Should receive at least one progress update")
 
         for i in 1 ..< progressUpdates.count {
-            #expect(progressUpdates[i] >= progressUpdates[i - 1])
+            #expect(progressUpdates[i] >= progressUpdates[i - 1], "Progress updates should be monotonically increasing")
         }
 
         if let lastProgress = progressUpdates.last {
-            #expect(lastProgress > 0.9)
+            #expect(lastProgress > 0.9, "Final progress should be near completion")
         }
     }
 
@@ -81,7 +83,7 @@ struct QuantumSimulatorTests {
 
         let finalState = await simulator.execute(circuit)
 
-        #expect(finalState.probability(of: 0) == 1.0)
+        #expect(abs(finalState.probability(of: 0) - 1.0) < 1e-10, "Empty circuit should leave ground state unchanged")
     }
 
     @Test("Simulator handles pre-built Bell state circuit")
@@ -90,9 +92,9 @@ struct QuantumSimulatorTests {
         let circuit = QuantumCircuit.bell()
         let finalState = await simulator.execute(circuit)
 
-        #expect(finalState.isNormalized())
-        #expect(abs(finalState.probability(of: 0) - 0.5) < 1e-10)
-        #expect(abs(finalState.probability(of: 3) - 0.5) < 1e-10)
+        #expect(finalState.isNormalized(), "Bell state should be normalized")
+        #expect(abs(finalState.probability(of: 0) - 0.5) < 1e-10, "P(|00>) should be 0.5 in Bell state")
+        #expect(abs(finalState.probability(of: 3) - 0.5) < 1e-10, "P(|11>) should be 0.5 in Bell state")
     }
 
     @Test("Simulator handles QFT circuit")
@@ -101,8 +103,8 @@ struct QuantumSimulatorTests {
         let circuit = QuantumCircuit.qft(qubits: 3)
         let finalState = await simulator.execute(circuit)
 
-        #expect(finalState.isNormalized())
-        #expect(finalState.qubits == 3)
+        #expect(finalState.isNormalized(), "QFT state should be normalized")
+        #expect(finalState.qubits == 3, "QFT circuit should produce 3-qubit state")
     }
 
     @Test("Simulator handles Grover circuit")
@@ -111,10 +113,10 @@ struct QuantumSimulatorTests {
         let circuit = QuantumCircuit.grover(qubits: 2, target: 3)
         let finalState = await simulator.execute(circuit)
 
-        #expect(finalState.isNormalized())
+        #expect(finalState.isNormalized(), "Grover state should be normalized")
 
         let targetProb = finalState.probability(of: 3)
-        #expect(targetProb > 0.8)
+        #expect(targetProb > 0.8, "Grover should amplify target state probability above 0.8")
     }
 
     @Test("Simulator with Metal disabled works correctly")
@@ -127,8 +129,8 @@ struct QuantumSimulatorTests {
 
         let finalState = await simulator.execute(circuit)
 
-        #expect(finalState.qubits == 2)
-        #expect(finalState.isNormalized())
+        #expect(finalState.qubits == 2, "Accurate mode should produce 2-qubit state")
+        #expect(finalState.isNormalized(), "State should be normalized in accurate mode")
     }
 
     @Test("Simulator uses Metal acceleration for large circuits")
@@ -144,8 +146,8 @@ struct QuantumSimulatorTests {
 
         let finalState = await simulator.execute(circuit)
 
-        #expect(finalState.qubits == 12)
-        #expect(finalState.isNormalized())
+        #expect(finalState.qubits == 12, "Metal path should produce 12-qubit state")
+        #expect(finalState.isNormalized(), "State should be normalized after GPU execution")
     }
 
     @Test("Simulator uses Metal acceleration with progress reporting")
@@ -161,7 +163,9 @@ struct QuantumSimulatorTests {
 
         actor ProgressTracker {
             private(set) var progressUpdates: [Double] = []
-            func append(_ value: Double) { progressUpdates.append(value) }
+            func append(_ value: Double) {
+                progressUpdates.append(value)
+            }
         }
 
         let tracker = ProgressTracker()
@@ -170,14 +174,14 @@ struct QuantumSimulatorTests {
             await tracker.append(progress)
         })
 
-        #expect(finalState.qubits == 12)
-        #expect(finalState.isNormalized())
+        #expect(finalState.qubits == 12, "Metal+progress should produce 12-qubit state")
+        #expect(finalState.isNormalized(), "State should be normalized after GPU execution with progress")
 
         let updates = await tracker.progressUpdates
-        #expect(updates.count > 0)
+        #expect(updates.count > 0, "Should receive progress updates during Metal execution")
 
         if let lastProgress = updates.last {
-            #expect(lastProgress >= 0.99)
+            #expect(lastProgress >= 0.99, "Final progress should indicate completion")
         }
     }
 
@@ -195,7 +199,9 @@ struct QuantumSimulatorTests {
 
         actor ProgressTracker {
             private(set) var progressCalled = false
-            func markCalled() { progressCalled = true }
+            func markCalled() {
+                progressCalled = true
+            }
         }
 
         let tracker = ProgressTracker()
@@ -204,9 +210,9 @@ struct QuantumSimulatorTests {
             await tracker.markCalled()
         })
 
-        #expect(finalState.qubits == 2)
-        #expect(finalState.isNormalized())
-        #expect(await tracker.progressCalled)
+        #expect(finalState.qubits == 2, "Custom state execution should produce 2-qubit state")
+        #expect(finalState.isNormalized(), "State should be normalized after custom state execution")
+        #expect(await tracker.progressCalled, "Progress callback should be invoked")
     }
 
     @Test("Progress percentage computes correctly for non-zero total")
@@ -214,7 +220,7 @@ struct QuantumSimulatorTests {
         let progress = QuantumSimulator.Progress(executed: 5, total: 10)
 
         #expect(
-            abs(progress.percentage - 0.5) < 1e-10,
+            abs(progress.fractionCompleted - 0.5) < 1e-10,
             "Progress should be 50% when 5 of 10 gates executed",
         )
     }
@@ -224,7 +230,7 @@ struct QuantumSimulatorTests {
         let progress = QuantumSimulator.Progress(executed: 0, total: 0)
 
         #expect(
-            progress.percentage == 0.0,
+            progress.fractionCompleted == 0.0,
             "Progress should be 0.0 when total is zero to avoid division by zero",
         )
     }
@@ -234,7 +240,7 @@ struct QuantumSimulatorTests {
         let progress = QuantumSimulator.Progress(executed: 20, total: 20)
 
         #expect(
-            abs(progress.percentage - 1.0) < 1e-10,
+            abs(progress.fractionCompleted - 1.0) < 1e-10,
             "Progress should be 100% when all gates executed",
         )
     }

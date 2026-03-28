@@ -14,7 +14,7 @@ struct GateUnitarityTests {
     func identityUnitary() {
         let gate = QuantumGate.identity
         let matrix = gate.matrix()
-        #expect(QuantumGate.isUnitary(matrix))
+        #expect(QuantumGate.isUnitary(matrix), "Identity matrix should be unitary")
     }
 
     @Test("Non-square matrix is not unitary")
@@ -23,7 +23,7 @@ struct GateUnitarityTests {
             [Complex<Double>.one, Complex<Double>.zero, Complex<Double>.zero],
             [Complex<Double>.zero, Complex<Double>.one, Complex<Double>.zero],
         ]
-        #expect(!QuantumGate.isUnitary(nonSquare))
+        #expect(!QuantumGate.isUnitary(nonSquare), "Non-square matrix should not be unitary")
     }
 
     @Test("Non-unitary matrix fails unitarity check")
@@ -32,49 +32,49 @@ struct GateUnitarityTests {
             [Complex<Double>(2.0, 0.0), Complex<Double>.zero],
             [Complex<Double>.zero, Complex<Double>(2.0, 0.0)],
         ]
-        #expect(!QuantumGate.isUnitary(nonUnitary))
+        #expect(!QuantumGate.isUnitary(nonUnitary), "Scaled identity should not be unitary")
     }
 
     @Test("Hadamard gate is unitary")
     func hadamardUnitary() {
         let gate = QuantumGate.hadamard
         let matrix = gate.matrix()
-        #expect(QuantumGate.isUnitary(matrix))
+        #expect(QuantumGate.isUnitary(matrix), "Hadamard matrix should be unitary")
     }
 
     @Test("Pauli-X gate is unitary")
     func pauliXUnitary() {
         let gate = QuantumGate.pauliX
         let matrix = gate.matrix()
-        #expect(QuantumGate.isUnitary(matrix))
+        #expect(QuantumGate.isUnitary(matrix), "Pauli-X matrix should be unitary")
     }
 
     @Test("Pauli-Y gate is unitary")
     func pauliYUnitary() {
         let gate = QuantumGate.pauliY
         let matrix = gate.matrix()
-        #expect(QuantumGate.isUnitary(matrix))
+        #expect(QuantumGate.isUnitary(matrix), "Pauli-Y matrix should be unitary")
     }
 
     @Test("Pauli-Z gate is unitary")
     func pauliZUnitary() {
         let gate = QuantumGate.pauliZ
         let matrix = gate.matrix()
-        #expect(QuantumGate.isUnitary(matrix))
+        #expect(QuantumGate.isUnitary(matrix), "Pauli-Z matrix should be unitary")
     }
 
     @Test("CNOT gate is unitary")
     func cnotUnitary() {
         let gate = QuantumGate.cnot
         let matrix = gate.matrix()
-        #expect(QuantumGate.isUnitary(matrix))
+        #expect(QuantumGate.isUnitary(matrix), "CNOT matrix should be unitary")
     }
 
     @Test("Phase gate is unitary")
     func phaseUnitary() {
         let gate = QuantumGate.phase(.pi / 4.0)
         let matrix = gate.matrix()
-        #expect(QuantumGate.isUnitary(matrix))
+        #expect(QuantumGate.isUnitary(matrix), "Phase matrix should be unitary")
     }
 
     @Test("Rotation gates are unitary")
@@ -83,9 +83,9 @@ struct GateUnitarityTests {
         let ry = QuantumGate.rotationY(.pi / 3.0)
         let rz = QuantumGate.rotationZ(.pi / 3.0)
 
-        #expect(QuantumGate.isUnitary(rx.matrix()))
-        #expect(QuantumGate.isUnitary(ry.matrix()))
-        #expect(QuantumGate.isUnitary(rz.matrix()))
+        #expect(QuantumGate.isUnitary(rx.matrix()), "RotationX matrix should be unitary")
+        #expect(QuantumGate.isUnitary(ry.matrix()), "RotationY matrix should be unitary")
+        #expect(QuantumGate.isUnitary(rz.matrix()), "RotationZ matrix should be unitary")
     }
 }
 
@@ -98,20 +98,20 @@ struct GateMatrixTests {
     func pauliXMatrix() {
         let matrix = QuantumGate.pauliX.matrix()
 
-        #expect(matrix[0][0] == .zero)
-        #expect(matrix[0][1] == .one)
-        #expect(matrix[1][0] == .one)
-        #expect(matrix[1][1] == .zero)
+        #expect(matrix[0][0] == .zero, "X(0,0) should be 0")
+        #expect(matrix[0][1] == .one, "X(0,1) should be 1")
+        #expect(matrix[1][0] == .one, "X(1,0) should be 1")
+        #expect(matrix[1][1] == .zero, "X(1,1) should be 0")
     }
 
     @Test("Pauli-Z matrix is correct")
     func pauliZMatrix() {
         let matrix = QuantumGate.pauliZ.matrix()
 
-        #expect(matrix[0][0] == .one)
-        #expect(matrix[0][1] == .zero)
-        #expect(matrix[1][0] == .zero)
-        #expect(abs(matrix[1][1].real - -1.0) < 1e-10)
+        #expect(matrix[0][0] == .one, "Z(0,0) should be 1")
+        #expect(matrix[0][1] == .zero, "Z(0,1) should be 0")
+        #expect(matrix[1][0] == .zero, "Z(1,0) should be 0")
+        #expect(abs(matrix[1][1].real - -1.0) < 1e-10, "Z(1,1) should be -1")
     }
 
     @Test("Hadamard matrix is correct")
@@ -119,22 +119,22 @@ struct GateMatrixTests {
         let matrix = QuantumGate.hadamard.matrix()
         let invSqrt2 = 1.0 / sqrt(2.0)
 
-        #expect(abs(matrix[0][0].real - invSqrt2) < 1e-10)
-        #expect(abs(matrix[0][1].real - invSqrt2) < 1e-10)
-        #expect(abs(matrix[1][0].real - invSqrt2) < 1e-10)
-        #expect(abs(matrix[1][1].real - -invSqrt2) < 1e-10)
+        #expect(abs(matrix[0][0].real - invSqrt2) < 1e-10, "H(0,0) should be 1/sqrt(2)")
+        #expect(abs(matrix[0][1].real - invSqrt2) < 1e-10, "H(0,1) should be 1/sqrt(2)")
+        #expect(abs(matrix[1][0].real - invSqrt2) < 1e-10, "H(1,0) should be 1/sqrt(2)")
+        #expect(abs(matrix[1][1].real - -invSqrt2) < 1e-10, "H(1,1) should be -1/sqrt(2)")
     }
 
     @Test("CNOT matrix is correct")
     func cnotMatrix() {
         let matrix = QuantumGate.cnot.matrix()
 
-        #expect(matrix.count == 4)
-        #expect(matrix[0].count == 4)
-        #expect(matrix[0][0] == .one)
-        #expect(matrix[1][1] == .one)
-        #expect(matrix[2][3] == .one)
-        #expect(matrix[3][2] == .one)
+        #expect(matrix.count == 4, "CNOT matrix should have 4 rows")
+        #expect(matrix[0].count == 4, "CNOT matrix should have 4 columns")
+        #expect(matrix[0][0] == .one, "CNOT(0,0) should be 1")
+        #expect(matrix[1][1] == .one, "CNOT(1,1) should be 1")
+        #expect(matrix[2][3] == .one, "CNOT(2,3) should be 1")
+        #expect(matrix[3][2] == .one, "CNOT(3,2) should be 1")
     }
 }
 
@@ -145,31 +145,31 @@ struct GateMatrixTests {
 struct GatePropertiesTests {
     @Test("Single-qubit gates require 1 qubit")
     func singleQubitGatesRequireOne() {
-        #expect(QuantumGate.hadamard.qubitsRequired == 1)
-        #expect(QuantumGate.pauliX.qubitsRequired == 1)
-        #expect(QuantumGate.pauliZ.qubitsRequired == 1)
-        #expect(QuantumGate.phase(0).qubitsRequired == 1)
+        #expect(QuantumGate.hadamard.qubitsRequired == 1, "Hadamard should require 1 qubit")
+        #expect(QuantumGate.pauliX.qubitsRequired == 1, "Pauli-X should require 1 qubit")
+        #expect(QuantumGate.pauliZ.qubitsRequired == 1, "Pauli-Z should require 1 qubit")
+        #expect(QuantumGate.phase(0).qubitsRequired == 1, "Phase should require 1 qubit")
     }
 
     @Test("Two-qubit gates require 2 qubits")
     func twoQubitGatesRequireTwo() {
-        #expect(QuantumGate.cnot.qubitsRequired == 2)
-        #expect(QuantumGate.swap.qubitsRequired == 2)
-        #expect(QuantumGate.controlledPhase(0).qubitsRequired == 2)
+        #expect(QuantumGate.cnot.qubitsRequired == 2, "CNOT should require 2 qubits")
+        #expect(QuantumGate.swap.qubitsRequired == 2, "SWAP should require 2 qubits")
+        #expect(QuantumGate.controlledPhase(0).qubitsRequired == 2, "Controlled phase should require 2 qubits")
     }
 
     @Test("Toffoli gate requires 3 qubits")
     func toffoliRequiresThree() {
-        #expect(QuantumGate.toffoli.qubitsRequired == 3)
+        #expect(QuantumGate.toffoli.qubitsRequired == 3, "Toffoli should require 3 qubits")
     }
 
     @Test("Hermitian gates are identified correctly")
     func hermitianGates() {
-        #expect(QuantumGate.pauliX.isHermitian)
-        #expect(QuantumGate.pauliY.isHermitian)
-        #expect(QuantumGate.pauliZ.isHermitian)
-        #expect(QuantumGate.hadamard.isHermitian)
-        #expect(!QuantumGate.phase(.pi / 4.0).isHermitian)
+        #expect(QuantumGate.pauliX.isHermitian, "Pauli-X should be Hermitian")
+        #expect(QuantumGate.pauliY.isHermitian, "Pauli-Y should be Hermitian")
+        #expect(QuantumGate.pauliZ.isHermitian, "Pauli-Z should be Hermitian")
+        #expect(QuantumGate.hadamard.isHermitian, "Hadamard should be Hermitian")
+        #expect(!QuantumGate.phase(.pi / 4.0).isHermitian, "Phase(pi/4) should not be Hermitian")
     }
 }
 
@@ -183,7 +183,7 @@ struct SelfInverseGateTests {
         let h = QuantumGate.hadamard.matrix()
         let product = QuantumGate.matrixMultiply(h, h)
 
-        #expect(QuantumGate.isIdentityMatrix(product))
+        #expect(QuantumGate.isIdentityMatrix(product), "H*H should equal identity")
     }
 
     @Test("Pauli gates are self-inverse")
@@ -196,9 +196,9 @@ struct SelfInverseGateTests {
         let yy = QuantumGate.matrixMultiply(y, y)
         let zz = QuantumGate.matrixMultiply(z, z)
 
-        #expect(QuantumGate.isIdentityMatrix(xx))
-        #expect(QuantumGate.isIdentityMatrix(yy))
-        #expect(QuantumGate.isIdentityMatrix(zz))
+        #expect(QuantumGate.isIdentityMatrix(xx), "X*X should equal identity")
+        #expect(QuantumGate.isIdentityMatrix(yy), "Y*Y should equal identity")
+        #expect(QuantumGate.isIdentityMatrix(zz), "Z*Z should equal identity")
     }
 
     @Test("CNOT is self-inverse")
@@ -206,7 +206,7 @@ struct SelfInverseGateTests {
         let cnot = QuantumGate.cnot.matrix()
         let product = QuantumGate.matrixMultiply(cnot, cnot)
 
-        #expect(QuantumGate.isIdentityMatrix(product))
+        #expect(QuantumGate.isIdentityMatrix(product), "CNOT*CNOT should equal identity")
     }
 }
 
@@ -220,7 +220,7 @@ struct ParameterizedGateTests {
         let phase = QuantumGate.phase(0).matrix()
         let identity = QuantumGate.identity.matrix()
 
-        #expect(QuantumGate.matricesEqual(phase, identity))
+        #expect(QuantumGate.matricesEqual(phase, identity), "Phase(0) should equal identity")
     }
 
     @Test("Phase(π) equals Pauli-Z")
@@ -228,7 +228,7 @@ struct ParameterizedGateTests {
         let phase = QuantumGate.phase(.pi).matrix()
         let z = QuantumGate.pauliZ.matrix()
 
-        #expect(QuantumGate.matricesEqual(phase, z))
+        #expect(QuantumGate.matricesEqual(phase, z), "Phase(pi) should equal Pauli-Z")
     }
 
     @Test("S gate equals Phase(π/2)")
@@ -236,7 +236,7 @@ struct ParameterizedGateTests {
         let s = QuantumGate.sGate.matrix()
         let phase = QuantumGate.phase(.pi / 2.0).matrix()
 
-        #expect(QuantumGate.matricesEqual(s, phase))
+        #expect(QuantumGate.matricesEqual(s, phase), "S gate should equal Phase(pi/2)")
     }
 
     @Test("T gate equals Phase(π/4)")
@@ -244,7 +244,7 @@ struct ParameterizedGateTests {
         let t = QuantumGate.tGate.matrix()
         let phase = QuantumGate.phase(.pi / 4.0).matrix()
 
-        #expect(QuantumGate.matricesEqual(t, phase))
+        #expect(QuantumGate.matricesEqual(t, phase), "T gate should equal Phase(pi/4)")
     }
 
     @Test("Rotation(0) equals identity")
@@ -254,9 +254,9 @@ struct ParameterizedGateTests {
         let rz = QuantumGate.rotationZ(0).matrix()
         let identity = QuantumGate.identity.matrix()
 
-        #expect(QuantumGate.matricesEqual(rx, identity))
-        #expect(QuantumGate.matricesEqual(ry, identity))
-        #expect(QuantumGate.matricesEqual(rz, identity))
+        #expect(QuantumGate.matricesEqual(rx, identity), "Rx(0) should equal identity")
+        #expect(QuantumGate.matricesEqual(ry, identity), "Ry(0) should equal identity")
+        #expect(QuantumGate.matricesEqual(rz, identity), "Rz(0) should equal identity")
     }
 }
 
@@ -267,26 +267,26 @@ struct ParameterizedGateTests {
 struct GateDescriptionTests {
     @Test("Single-qubit gates have correct descriptions")
     func singleQubitDescriptions() {
-        #expect(QuantumGate.hadamard.description == "H")
-        #expect(QuantumGate.pauliX.description == "X")
-        #expect(QuantumGate.pauliY.description == "Y")
-        #expect(QuantumGate.pauliZ.description == "Z")
-        #expect(QuantumGate.sGate.description == "S")
-        #expect(QuantumGate.tGate.description == "T")
+        #expect(QuantumGate.hadamard.description == "H", "Hadamard description should be H")
+        #expect(QuantumGate.pauliX.description == "X", "Pauli-X description should be X")
+        #expect(QuantumGate.pauliY.description == "Y", "Pauli-Y description should be Y")
+        #expect(QuantumGate.pauliZ.description == "Z", "Pauli-Z description should be Z")
+        #expect(QuantumGate.sGate.description == "S", "S gate description should be S")
+        #expect(QuantumGate.tGate.description == "T", "T gate description should be T")
     }
 
     @Test("All gate descriptions are non-empty")
     func allGateDescriptionsNonEmpty() {
-        #expect(QuantumGate.identity.description == "I")
-        #expect(QuantumGate.phase(1.234).description.contains("P"))
-        #expect(QuantumGate.phase(1.234).description.contains("1.234"))
-        #expect(QuantumGate.rotationX(2.345).description.contains("Rx"))
-        #expect(QuantumGate.rotationY(3.456).description.contains("Ry"))
-        #expect(QuantumGate.rotationZ(4.567).description.contains("Rz"))
-        #expect(QuantumGate.controlledPhase(1.5).description.contains("CP"))
-        #expect(QuantumGate.cnot.description.contains("CNOT"))
-        #expect(QuantumGate.swap.description.contains("SWAP"))
-        #expect(QuantumGate.toffoli.description.contains("Toffoli"))
+        #expect(QuantumGate.identity.description == "I", "Identity description should be I")
+        #expect(QuantumGate.phase(1.234).description.contains("P"), "Phase description should contain P")
+        #expect(QuantumGate.phase(1.234).description.contains("1.234"), "Phase description should contain angle")
+        #expect(QuantumGate.rotationX(2.345).description.contains("Rx"), "RotationX description should contain Rx")
+        #expect(QuantumGate.rotationY(3.456).description.contains("Ry"), "RotationY description should contain Ry")
+        #expect(QuantumGate.rotationZ(4.567).description.contains("Rz"), "RotationZ description should contain Rz")
+        #expect(QuantumGate.controlledPhase(1.5).description.contains("CP"), "ControlledPhase description should contain CP")
+        #expect(QuantumGate.cnot.description.contains("CNOT"), "CNOT description should contain CNOT")
+        #expect(QuantumGate.swap.description.contains("SWAP"), "SWAP description should contain SWAP")
+        #expect(QuantumGate.toffoli.description.contains("Toffoli"), "Toffoli description should contain Toffoli")
     }
 }
 
@@ -299,15 +299,15 @@ struct ToffoliGateTests {
     func toffoliIsUnitary() {
         let gate = QuantumGate.toffoli
         let matrix = gate.matrix()
-        #expect(QuantumGate.isUnitary(matrix))
+        #expect(QuantumGate.isUnitary(matrix), "Toffoli matrix should be unitary")
     }
 
     @Test("Toffoli matrix is 8x8")
     func toffoliMatrixSize() {
         let gate = QuantumGate.toffoli
         let matrix = gate.matrix()
-        #expect(matrix.count == 8)
-        #expect(matrix.allSatisfy { $0.count == 8 })
+        #expect(matrix.count == 8, "Toffoli matrix should have 8 rows")
+        #expect(matrix.allSatisfy { $0.count == 8 }, "Toffoli matrix rows should have 8 columns")
     }
 
     @Test("Toffoli matrix has identity on first 6 states")
@@ -318,25 +318,25 @@ struct ToffoliGateTests {
         for i in 0 ..< 6 {
             for j in 0 ..< 8 {
                 if i == j {
-                    #expect(abs(matrix[i][j].real - 1.0) < 1e-10)
-                    #expect(abs(matrix[i][j].imaginary) < 1e-10)
+                    #expect(abs(matrix[i][j].real - 1.0) < 1e-10, "Toffoli diagonal [\(i)][\(j)] should be 1")
+                    #expect(abs(matrix[i][j].imaginary) < 1e-10, "Toffoli diagonal [\(i)][\(j)] imaginary should be 0")
                 } else {
-                    #expect(abs(matrix[i][j].magnitude) < 1e-10)
+                    #expect(abs(matrix[i][j].magnitude) < 1e-10, "Toffoli off-diagonal [\(i)][\(j)] should be 0")
                 }
             }
         }
 
-        #expect(abs(matrix[6][7].real - 1.0) < 1e-10)
-        #expect(abs(matrix[7][6].real - 1.0) < 1e-10)
-        #expect(abs(matrix[6][6].magnitude) < 1e-10)
-        #expect(abs(matrix[7][7].magnitude) < 1e-10)
+        #expect(abs(matrix[6][7].real - 1.0) < 1e-10, "Toffoli [6][7] should be 1")
+        #expect(abs(matrix[7][6].real - 1.0) < 1e-10, "Toffoli [7][6] should be 1")
+        #expect(abs(matrix[6][6].magnitude) < 1e-10, "Toffoli [6][6] should be 0")
+        #expect(abs(matrix[7][7].magnitude) < 1e-10, "Toffoli [7][7] should be 0")
     }
 
     @Test("Toffoli is self-inverse")
     func toffoliSelfInverse() {
         let toffoli = QuantumGate.toffoli.matrix()
         let product = QuantumGate.matrixMultiply(toffoli, toffoli)
-        #expect(QuantumGate.isIdentityMatrix(product))
+        #expect(QuantumGate.isIdentityMatrix(product), "Toffoli*Toffoli should equal identity")
     }
 }
 
@@ -355,7 +355,7 @@ struct MatrixUtilityTests {
             [Complex<Double>.one, Complex<Double>.zero],
         ]
 
-        #expect(!QuantumGate.matricesEqual(a, b))
+        #expect(!QuantumGate.matricesEqual(a, b), "Matrices with different row counts should not be equal")
     }
 
     @Test("matricesEqual returns false for different column counts")
@@ -369,7 +369,7 @@ struct MatrixUtilityTests {
             [Complex<Double>.one],
         ]
 
-        #expect(!QuantumGate.matricesEqual(a, b))
+        #expect(!QuantumGate.matricesEqual(a, b), "Matrices with different column counts should not be equal")
     }
 
     @Test("matricesEqual returns false when real parts differ")
@@ -383,7 +383,7 @@ struct MatrixUtilityTests {
             [Complex<Double>.zero, Complex<Double>.one],
         ]
 
-        #expect(!QuantumGate.matricesEqual(a, b))
+        #expect(!QuantumGate.matricesEqual(a, b), "Matrices with different real parts should not be equal")
     }
 
     @Test("matricesEqual returns false when imaginary parts differ")
@@ -397,7 +397,7 @@ struct MatrixUtilityTests {
             [Complex<Double>.zero, Complex<Double>.one],
         ]
 
-        #expect(!QuantumGate.matricesEqual(a, b))
+        #expect(!QuantumGate.matricesEqual(a, b), "Matrices with different imaginary parts should not be equal")
     }
 
     @Test("matricesEqual returns true for identical matrices")
@@ -411,7 +411,7 @@ struct MatrixUtilityTests {
             [Complex<Double>.zero, Complex<Double>.one],
         ]
 
-        #expect(QuantumGate.matricesEqual(a, b))
+        #expect(QuantumGate.matricesEqual(a, b), "Identical matrices should be equal")
     }
 
     @Test("matricesEqual respects tolerance parameter")
@@ -423,15 +423,15 @@ struct MatrixUtilityTests {
             [Complex<Double>(1.0 + 1e-11, 0.0), Complex<Double>.zero],
         ]
 
-        #expect(QuantumGate.matricesEqual(a, b, tolerance: 1e-10))
-        #expect(!QuantumGate.matricesEqual(a, b, tolerance: 1e-12))
+        #expect(QuantumGate.matricesEqual(a, b, tolerance: 1e-10), "Matrices within 1e-10 tolerance should be equal")
+        #expect(!QuantumGate.matricesEqual(a, b, tolerance: 1e-12), "Matrices outside 1e-12 tolerance should not be equal")
     }
 
     @Test("isIdentityMatrix returns false for empty matrix")
     func isIdentityMatrixEmpty() {
         let empty: [[Complex<Double>]] = []
 
-        #expect(!QuantumGate.isIdentityMatrix(empty))
+        #expect(!QuantumGate.isIdentityMatrix(empty), "Empty matrix should not be identity")
     }
 
     @Test("isIdentityMatrix returns false for non-square matrix")
@@ -441,7 +441,7 @@ struct MatrixUtilityTests {
             [Complex<Double>.zero, Complex<Double>.one, Complex<Double>.zero],
         ]
 
-        #expect(!QuantumGate.isIdentityMatrix(nonSquare))
+        #expect(!QuantumGate.isIdentityMatrix(nonSquare), "Non-square matrix should not be identity")
     }
 
     @Test("isIdentityMatrix returns false for matrix with wrong diagonal")
@@ -451,7 +451,7 @@ struct MatrixUtilityTests {
             [Complex<Double>.zero, Complex<Double>.one],
         ]
 
-        #expect(!QuantumGate.isIdentityMatrix(wrongDiagonal))
+        #expect(!QuantumGate.isIdentityMatrix(wrongDiagonal), "Matrix with wrong diagonal should not be identity")
     }
 
     @Test("isIdentityMatrix returns false for matrix with non-zero off-diagonal")
@@ -461,7 +461,7 @@ struct MatrixUtilityTests {
             [Complex<Double>.zero, Complex<Double>.one],
         ]
 
-        #expect(!QuantumGate.isIdentityMatrix(nonZeroOffDiagonal))
+        #expect(!QuantumGate.isIdentityMatrix(nonZeroOffDiagonal), "Matrix with non-zero off-diagonal should not be identity")
     }
 
     @Test("isIdentityMatrix returns true for 2x2 identity")
@@ -471,7 +471,7 @@ struct MatrixUtilityTests {
             [Complex<Double>.zero, Complex<Double>.one],
         ]
 
-        #expect(QuantumGate.isIdentityMatrix(identity))
+        #expect(QuantumGate.isIdentityMatrix(identity), "2x2 identity should be recognized as identity")
     }
 
     @Test("isIdentityMatrix returns true for 4x4 identity")
@@ -483,7 +483,7 @@ struct MatrixUtilityTests {
             [Complex<Double>.zero, Complex<Double>.zero, Complex<Double>.zero, Complex<Double>.one],
         ]
 
-        #expect(QuantumGate.isIdentityMatrix(identity))
+        #expect(QuantumGate.isIdentityMatrix(identity), "4x4 identity should be recognized as identity")
     }
 
     @Test("isIdentityMatrix respects tolerance parameter")
@@ -493,8 +493,8 @@ struct MatrixUtilityTests {
             [Complex<Double>.zero, Complex<Double>(1.0, 0.0)],
         ]
 
-        #expect(QuantumGate.isIdentityMatrix(almostIdentity, tolerance: 1e-10))
-        #expect(!QuantumGate.isIdentityMatrix(almostIdentity, tolerance: 1e-12))
+        #expect(QuantumGate.isIdentityMatrix(almostIdentity, tolerance: 1e-10), "Almost-identity within 1e-10 tolerance should pass")
+        #expect(!QuantumGate.isIdentityMatrix(almostIdentity, tolerance: 1e-12), "Almost-identity outside 1e-12 tolerance should fail")
     }
 }
 
@@ -505,25 +505,25 @@ struct MatrixUtilityTests {
 struct SymbolicParameterExtractionTests {
     @Test("isParameterized returns false for non-parameterized gates")
     func isParameterizedFalseForNonParameterized() {
-        #expect(!QuantumGate.hadamard.isParameterized)
-        #expect(!QuantumGate.pauliX.isParameterized)
-        #expect(!QuantumGate.cnot.isParameterized)
-        #expect(!QuantumGate.toffoli.isParameterized)
+        #expect(!QuantumGate.hadamard.isParameterized, "Hadamard should not be parameterized")
+        #expect(!QuantumGate.pauliX.isParameterized, "Pauli-X should not be parameterized")
+        #expect(!QuantumGate.cnot.isParameterized, "CNOT should not be parameterized")
+        #expect(!QuantumGate.toffoli.isParameterized, "Toffoli should not be parameterized")
     }
 
     @Test("isParameterized returns false for gates with concrete values")
     func isParameterizedFalseForConcreteValues() {
-        #expect(!QuantumGate.rotationY(.pi / 4).isParameterized)
-        #expect(!QuantumGate.u1(lambda: 1.5).isParameterized)
-        #expect(!QuantumGate.u2(phi: 0.5, lambda: 1.0).isParameterized)
-        #expect(!QuantumGate.u3(theta: 0.1, phi: 0.2, lambda: 0.3).isParameterized)
+        #expect(!QuantumGate.rotationY(.pi / 4).isParameterized, "Ry with concrete angle should not be parameterized")
+        #expect(!QuantumGate.u1(lambda: 1.5).isParameterized, "U1 with concrete lambda should not be parameterized")
+        #expect(!QuantumGate.u2(phi: 0.5, lambda: 1.0).isParameterized, "U2 with concrete values should not be parameterized")
+        #expect(!QuantumGate.u3(theta: 0.1, phi: 0.2, lambda: 0.3).isParameterized, "U3 with concrete values should not be parameterized")
     }
 
     @Test("isParameterized returns true for gates with symbolic parameters")
     func isParameterizedTrueForSymbolic() {
         let theta = Parameter(name: "theta")
-        #expect(QuantumGate.rotationY(.parameter(theta)).isParameterized)
-        #expect(QuantumGate.u1(lambda: .parameter(theta)).isParameterized)
+        #expect(QuantumGate.rotationY(.parameter(theta)).isParameterized, "Ry with symbolic parameter should be parameterized")
+        #expect(QuantumGate.u1(lambda: .parameter(theta)).isParameterized, "U1 with symbolic parameter should be parameterized")
     }
 
     @Test("U1 parameters() returns symbolic parameter")
@@ -1118,6 +1118,9 @@ struct CustomGateMatrixTests {
     }
 }
 
+/// Test suite for controlled gate native gate classification.
+/// Validates that generic controlled gates are not native while all
+/// standard gate types correctly report as native implementations.
 @Suite("Controlled Gate isNativeGate")
 struct ControlledGateIsNativeGateTests {
     @Test("Controlled gate returns false for isNativeGate")
@@ -1202,6 +1205,9 @@ struct ControlledGateIsNativeGateTests {
     }
 }
 
+/// Test suite for controlled gate flattening.
+/// Validates recursive unwrapping of nested controlled gates into
+/// a single base gate with accumulated control qubit indices.
 @Suite("Controlled Gate flattenControlled")
 struct ControlledGateFlattenControlledTests {
     @Test("Non-controlled gate returns self with empty controls")
@@ -1275,6 +1281,9 @@ struct ControlledGateFlattenControlledTests {
     }
 }
 
+/// Test suite for controlled gate properties.
+/// Validates qubit requirements, parameter extraction, binding, inverse,
+/// and description formatting for generically controlled quantum gates.
 @Suite("Controlled Gate Properties")
 struct ControlledGatePropertiesTests {
     @Test("qubitsRequired equals baseGate qubits plus control count")
@@ -1394,6 +1403,9 @@ struct ControlledGatePropertiesTests {
     }
 }
 
+/// Test suite for controlled gate matrix generation.
+/// Validates matrix correctness, dimensionality, unitarity, and subspace
+/// structure for single-controlled, double-controlled, and multi-controlled gates.
 @Suite("Controlled Gate Matrix")
 struct ControlledGateMatrixTests {
     @Test("Single-controlled X matches CNOT matrix")

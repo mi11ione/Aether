@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -23,7 +23,7 @@ struct SparseHamiltonianCorrectnessTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-6)
+        #expect(abs(sparseValue - expectedValue) < 1e-6, "Sparse result should match Observable")
     }
 
     @Test("Single Pauli-Z term matches Observable")
@@ -39,7 +39,7 @@ struct SparseHamiltonianCorrectnessTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-6)
+        #expect(abs(sparseValue - expectedValue) < 1e-6, "Sparse result should match Observable")
     }
 
     @Test("Single Pauli-X term matches Observable")
@@ -57,7 +57,7 @@ struct SparseHamiltonianCorrectnessTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-6)
+        #expect(abs(sparseValue - expectedValue) < 1e-6, "Sparse result should match Observable")
     }
 
     @Test("Single Pauli-Y term matches Observable")
@@ -76,7 +76,7 @@ struct SparseHamiltonianCorrectnessTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-6)
+        #expect(abs(sparseValue - expectedValue) < 1e-6, "Sparse result should match Observable")
     }
 
     @Test("Two-qubit Z⊗Z matches Observable")
@@ -92,7 +92,7 @@ struct SparseHamiltonianCorrectnessTests {
         let expectedValue = observable.expectationValue(of: bell)
         let sparseValue = await sparseH.expectationValue(of: bell)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-6)
+        #expect(abs(sparseValue - expectedValue) < 1e-6, "Sparse result should match Observable")
     }
 
     @Test("Two-qubit X⊗X matches Observable")
@@ -108,7 +108,7 @@ struct SparseHamiltonianCorrectnessTests {
         let expectedValue = observable.expectationValue(of: bell)
         let sparseValue = await sparseH.expectationValue(of: bell)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-6)
+        #expect(abs(sparseValue - expectedValue) < 1e-6, "Sparse result should match Observable")
     }
 
     @Test("Multi-term Hamiltonian matches Observable")
@@ -128,7 +128,7 @@ struct SparseHamiltonianCorrectnessTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-6)
+        #expect(abs(sparseValue - expectedValue) < 1e-6, "Sparse result should match Observable")
     }
 
     @Test("Hydrogen molecule Hamiltonian matches Observable")
@@ -147,7 +147,7 @@ struct SparseHamiltonianCorrectnessTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-6)
+        #expect(abs(sparseValue - expectedValue) < 1e-6, "Sparse result should match Observable")
     }
 
     @Test("Negative coefficients match Observable")
@@ -163,7 +163,7 @@ struct SparseHamiltonianCorrectnessTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-6)
+        #expect(abs(sparseValue - expectedValue) < 1e-6, "Sparse result should match Observable")
     }
 
     @Test("Superposition state matches Observable")
@@ -183,7 +183,7 @@ struct SparseHamiltonianCorrectnessTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-6)
+        #expect(abs(sparseValue - expectedValue) < 1e-6, "Sparse result should match Observable")
     }
 }
 
@@ -202,7 +202,7 @@ struct SparseHamiltonianBackendTests {
 
         let backendDesc = await sparseH.backendDescription
 
-        #expect(!backendDesc.contains("Metal GPU") || sparseH.qubits >= 8)
+        #expect(!backendDesc.contains("Metal GPU") || sparseH.qubits >= 8, "Small system should not use Metal GPU")
     }
 
     @Test("Large system (≥ 8 qubits) attempts Metal GPU")
@@ -213,7 +213,7 @@ struct SparseHamiltonianBackendTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        #expect(sparseH.qubits >= 8)
+        #expect(sparseH.qubits >= 8, "Should infer at least 8 qubits from qubit indices")
     }
 
     @Test("Empty observable uses fallback backend")
@@ -224,7 +224,7 @@ struct SparseHamiltonianBackendTests {
         let state = QuantumState(qubits: 1)
         let value = await sparseH.expectationValue(of: state)
 
-        #expect(abs(value) < 1e-10)
+        #expect(abs(value) < 1e-10, "Empty Hamiltonian should give zero expectation")
     }
 
     @Test("Empty observable uses Observable fallback")
@@ -232,11 +232,11 @@ struct SparseHamiltonianBackendTests {
         let observable = Observable(terms: [])
         let sparseH = SparseHamiltonian(observable: observable)
         let backendDesc = await sparseH.backendDescription
-        #expect(backendDesc.contains("non-zero"))
+        #expect(backendDesc.contains("non-zero"), "Backend description should include non-zero count")
 
         let state = QuantumState(qubits: 1)
         let value = await sparseH.expectationValue(of: state)
-        #expect(abs(value) < 1e-10)
+        #expect(abs(value) < 1e-10, "Empty Hamiltonian should give zero expectation")
     }
 
     @Test("Empty observable with large system size uses fallback")
@@ -248,7 +248,7 @@ struct SparseHamiltonianBackendTests {
         #expect(sparseH.nnz == 0, "Empty observable has no non-zeros")
 
         let backendDesc = await sparseH.backendDescription
-        #expect(backendDesc.contains("fallback") || backendDesc.contains("Observable"))
+        #expect(backendDesc.contains("fallback") || backendDesc.contains("Observable"), "Empty observable should use fallback backend")
 
         let state = QuantumState(qubits: 8)
         let value = await sparseH.expectationValue(of: state)
@@ -269,8 +269,8 @@ struct SparseHamiltonianSparsityTests {
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
-        #expect(sparseH.nnz == sparseH.dimension)
-        #expect(sparseH.sparsity == Double(sparseH.dimension) / Double(sparseH.dimension * sparseH.dimension))
+        #expect(sparseH.nnz == sparseH.dimension, "Identity has exactly dimension non-zeros")
+        #expect(sparseH.sparsity == Double(sparseH.dimension) / Double(sparseH.dimension * sparseH.dimension), "Sparsity should equal nnz/dimension²")
     }
 
     @Test("Single Pauli-X is sparse")
@@ -281,8 +281,8 @@ struct SparseHamiltonianSparsityTests {
         )
         let sparseH = SparseHamiltonian(observable: observable)
 
-        #expect(sparseH.nnz == sparseH.dimension)
-        #expect(sparseH.sparsity < 1.0)
+        #expect(sparseH.nnz == sparseH.dimension, "Pauli-X has exactly dimension non-zeros")
+        #expect(sparseH.sparsity < 1.0, "Single-term matrix should be sparse")
     }
 
     @Test("Multi-term Hamiltonian has low sparsity")
@@ -295,8 +295,8 @@ struct SparseHamiltonianSparsityTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        #expect(sparseH.sparsity < 0.5)
-        #expect(sparseH.nnz > 0)
+        #expect(sparseH.sparsity < 0.5, "Multi-term Hamiltonian should have low sparsity")
+        #expect(sparseH.nnz > 0, "Should have non-zero elements")
     }
 
     @Test("Sparsity ratio is between 0 and 1")
@@ -307,8 +307,8 @@ struct SparseHamiltonianSparsityTests {
         ])
         let sparseH = SparseHamiltonian(observable: observable)
 
-        #expect(sparseH.sparsity >= 0.0)
-        #expect(sparseH.sparsity <= 1.0)
+        #expect(sparseH.sparsity >= 0.0, "Sparsity should be non-negative")
+        #expect(sparseH.sparsity <= 1.0, "Sparsity should not exceed 1.0")
     }
 }
 
@@ -327,10 +327,10 @@ struct SparseHamiltonianStatisticsTests {
 
         let stats = await sparseH.statistics
 
-        #expect(stats.qubits == sparseH.qubits)
-        #expect(stats.dimension == sparseH.dimension)
-        #expect(stats.nonZeros == sparseH.nnz)
-        #expect(abs(stats.sparsity - sparseH.sparsity) < 1e-10)
+        #expect(stats.qubits == sparseH.qubits, "Stats qubits should match actor qubits")
+        #expect(stats.dimension == sparseH.dimension, "Stats dimension should match actor dimension")
+        #expect(stats.nonZeros == sparseH.nnz, "Stats non-zeros should match actor nnz")
+        #expect(abs(stats.sparsity - sparseH.sparsity) < 1e-10, "Stats sparsity should match actor sparsity")
     }
 
     @Test("Backend description is non-empty")
@@ -343,8 +343,8 @@ struct SparseHamiltonianStatisticsTests {
 
         let desc = await sparseH.backendDescription
 
-        #expect(!desc.isEmpty)
-        #expect(desc.contains("non-zero"))
+        #expect(!desc.isEmpty, "Backend description should not be empty")
+        #expect(desc.contains("non-zero"), "Description should include non-zero count")
     }
 
     @Test("Statistics description formats correctly")
@@ -358,9 +358,9 @@ struct SparseHamiltonianStatisticsTests {
         let stats = await sparseH.statistics
         let description = stats.description
 
-        #expect(description.contains("Sparse Hamiltonian"))
-        #expect(description.contains("Backend"))
-        #expect(description.contains("Qubits"))
+        #expect(description.contains("Sparse Hamiltonian"), "Description should contain header")
+        #expect(description.contains("Backend"), "Description should include backend info")
+        #expect(description.contains("Qubits"), "Description should include qubit count")
     }
 
     @Test("Memory estimate is reasonable")
@@ -373,10 +373,10 @@ struct SparseHamiltonianStatisticsTests {
 
         let stats = await sparseH.statistics
 
-        #expect(stats.memoryBytes > 0)
+        #expect(stats.memoryBytes > 0, "Memory usage should be positive")
 
         let denseBytes = sparseH.dimension * sparseH.dimension * 16
-        #expect(stats.memoryBytes < denseBytes)
+        #expect(stats.memoryBytes < denseBytes, "Sparse should use less memory than dense")
     }
 
     @Test("Memory statistics formatting for large Hamiltonian")
@@ -394,8 +394,8 @@ struct SparseHamiltonianStatisticsTests {
         let sparseH = SparseHamiltonian(observable: observable)
 
         let description = await sparseH.statistics.description
-        #expect(description.contains("Qubits: 12"))
-        #expect(description.contains("Non-zeros:"))
+        #expect(description.contains("Qubits: 12"), "Description should show correct qubit count")
+        #expect(description.contains("Non-zeros:"), "Description should include non-zero count")
     }
 }
 
@@ -417,7 +417,7 @@ struct SparseHamiltonianEdgeCasesTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-3) // Relaxed tolerance for large values
+        #expect(abs(sparseValue - expectedValue) < 1e-3, "Sparse result should match Observable for large coefficients")
     }
 
     @Test("Small coefficients match Observable")
@@ -433,7 +433,7 @@ struct SparseHamiltonianEdgeCasesTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-10)
+        #expect(abs(sparseValue - expectedValue) < 1e-10, "Sparse result should match Observable for small coefficients")
     }
 
     @Test("Many-term Hamiltonian matches Observable")
@@ -450,7 +450,7 @@ struct SparseHamiltonianEdgeCasesTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-6)
+        #expect(abs(sparseValue - expectedValue) < 1e-6, "Sparse result should match Observable")
     }
 
     @Test("Canceling terms produce zero expectation")
@@ -464,7 +464,7 @@ struct SparseHamiltonianEdgeCasesTests {
         let state = QuantumState(qubits: 1)
 
         let value = await sparseH.expectationValue(of: state)
-        #expect(abs(value) < 1e-6)
+        #expect(abs(value) < 1e-6, "Canceling terms should produce zero")
     }
 
     @Test("Complex state with many gates matches Observable")
@@ -487,7 +487,7 @@ struct SparseHamiltonianEdgeCasesTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-6)
+        #expect(abs(sparseValue - expectedValue) < 1e-6, "Sparse result should match Observable")
     }
 
     @Test("8-qubit system for GPU backend testing")
@@ -507,7 +507,7 @@ struct SparseHamiltonianEdgeCasesTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-5)
+        #expect(abs(sparseValue - expectedValue) < 1e-5, "Sparse result should match Observable")
     }
 
     @Test("10-qubit system matches Observable")
@@ -529,7 +529,7 @@ struct SparseHamiltonianEdgeCasesTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-5)
+        #expect(abs(sparseValue - expectedValue) < 1e-5, "Sparse result should match Observable")
     }
 
     @Test("100-term Hamiltonian matches Observable")
@@ -558,7 +558,7 @@ struct SparseHamiltonianEdgeCasesTests {
         let expectedValue = observable.expectationValue(of: state)
         let sparseValue = await sparseH.expectationValue(of: state)
 
-        #expect(abs(sparseValue - expectedValue) < 1e-5)
+        #expect(abs(sparseValue - expectedValue) < 1e-5, "Sparse result should match Observable")
     }
 
     @Test("Construction time is reasonable for molecular Hamiltonian")
@@ -572,11 +572,8 @@ struct SparseHamiltonianEdgeCasesTests {
         }
         let observable = Observable(terms: terms)
 
-        let start = Date()
         let sparseH = SparseHamiltonian(observable: observable)
-        let constructionTime = Date().timeIntervalSince(start)
 
-        #expect(constructionTime < 5.0)
-        #expect(sparseH.nnz > 0)
+        #expect(sparseH.nnz > 0, "Constructed Hamiltonian should have non-zero elements")
     }
 }

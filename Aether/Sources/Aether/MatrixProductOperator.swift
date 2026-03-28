@@ -433,7 +433,7 @@
             leftBondDimension: newLeftDim,
             rightBondDimension: newRightDim,
             site: site,
-            elements: elements
+            elements: elements,
         )
     }
 
@@ -627,5 +627,4 @@
 
         return newTransfer
     }
-
 }

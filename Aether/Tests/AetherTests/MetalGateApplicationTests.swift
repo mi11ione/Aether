@@ -491,7 +491,7 @@ struct MetalGateApplicationTests {
     }
 
     @Test("Metal applies reset gate correctly")
-    func metalAppliesReset() async {
+    func metalAppliesReset() {
         var amplitudes = [Complex<Double>](repeating: .zero, count: 16)
         amplitudes[1] = .one
         let state = QuantumState(qubits: 4, amplitudes: amplitudes)

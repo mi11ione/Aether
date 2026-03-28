@@ -75,7 +75,7 @@ struct QAOAAnsatzTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.5])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bound(parameters: [0.5, 0.5])
         #expect(circuit.operations.count > 2, "Bound circuit should have more than 2 operations")
     }
 }
@@ -97,7 +97,7 @@ struct PauliStringExponentiationTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bound(parameters: [0.5, 0.3])
 
         let hasCNOT = circuit.operations.contains { op in
             if op.gate == .cnot { return true }
@@ -120,7 +120,7 @@ struct PauliStringExponentiationTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bound(parameters: [0.5, 0.3])
 
         let cnotCount = circuit.operations.count(where: { op in
             if op.gate == .cnot { return true }
@@ -142,7 +142,7 @@ struct PauliStringExponentiationTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bound(parameters: [0.5, 0.3])
 
         let rxGates = circuit.operations.filter { op in
             if case .rotationX = op.gate { return true }
@@ -165,7 +165,7 @@ struct PauliStringExponentiationTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bound(parameters: [0.5, 0.3])
 
         let hadamardGates = circuit.operations.filter { op in
             if op.gate == .hadamard { return true }
@@ -227,7 +227,7 @@ struct CoefficientScalingTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bound(parameters: [0.5, 0.3])
         #expect(!circuit.operations.isEmpty, "Near-zero term should be filtered but non-zero term should produce operations")
     }
 }
@@ -285,7 +285,7 @@ struct CompleteQAOAWorkflowsTests {
             depth: 1,
         )
 
-        let circuit = QAOAParameterBinder(ansatz: ansatz).binding(parameters: [0.5, 0.3])
+        let circuit = QAOAParameterBinder(ansatz: ansatz).bound(parameters: [0.5, 0.3])
 
         #expect(!circuit.operations.isEmpty, "Bound circuit should have operations")
         #expect(circuit.qubits == 2, "Bound circuit should preserve qubit count")
@@ -342,7 +342,7 @@ struct QAOAParameterBinderEdgeCaseTests {
         circuit.append(.rotationX(.parameter(beta)), to: 0)
 
         let binder = QAOAParameterBinder(ansatz: circuit)
-        let bound = binder.binding(parameters: [0.5, 0.25])
+        let bound = binder.bound(parameters: [0.5, 0.25])
 
         #expect(bound.parameters.isEmpty, "Well-formed parameters should be bound")
     }

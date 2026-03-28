@@ -28,7 +28,7 @@ import Accelerate
 /// // Variational circuit with symbolic parameters
 /// let theta = Parameter(name: "theta")
 /// circuit.append(.rotationY(theta), to: 0)
-/// let bound = circuit.binding(["theta": 1.57])
+/// let bound = circuit.bound(["theta": 1.57])
 /// let state = bound.execute()
 /// ```
 ///
@@ -451,6 +451,7 @@ import Accelerate
     /// QuantumGate.toffoli.qubitsRequired  // 3
     /// QuantumGate.controlled(gate: .pauliX, controls: [0, 1]).qubitsRequired  // 3
     /// ```
+    /// - Complexity: O(1) for fixed gates, O(log n) for variable-dimension gates
     @inlinable
     public var qubitsRequired: Int {
         switch self {
@@ -514,6 +515,7 @@ import Accelerate
     /// let theta = Parameter(name: "theta")
     /// QuantumGate.rotationY(theta).isParameterized  // true
     /// ```
+    /// - Complexity: O(1)
     @inlinable
     public var isParameterized: Bool {
         !parameters().isEmpty
@@ -599,6 +601,7 @@ import Accelerate
     /// - Parameter bindings: Dictionary mapping parameter names to numerical values
     /// - Returns: Gate with all parameters substituted
     /// - Precondition: All symbolic parameters must exist in bindings
+    /// - Complexity: O(1)
     @_optimize(speed)
     @inlinable
     @_eagerMove
@@ -656,6 +659,7 @@ import Accelerate
     /// QuantumGate.hadamard.isHermitian  // true (H† = H)
     /// QuantumGate.tGate.isHermitian  // false (T† ≠ T)
     /// ```
+    /// - Complexity: O(1)
     @inlinable
     public var isHermitian: Bool {
         switch self {
@@ -792,6 +796,7 @@ import Accelerate
     /// QuantumGate.cnot.fullName      // "cnot"
     /// QuantumGate.rotationY(.pi/4).fullName  // "rotationY(0.785)"
     /// ```
+    /// - Complexity: O(1)
     public var fullName: String {
         switch self {
         case .identity: "identity"
@@ -872,6 +877,7 @@ import Accelerate
     /// - SeeAlso: ``bound(with:)``
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     public func matrix() -> [[Complex<Double>]] {
         switch self {
         case .identity: return identityMatrix()
@@ -1224,7 +1230,7 @@ import Accelerate
     private func yyMatrix(theta: Double) -> [[Complex<Double>]] {
         let c: Complex<Double> = Complex(cos(theta), 0.0)
         let iSin: Complex<Double> = Complex(0.0, sin(theta))
-        let negISin: Complex<Double> = Complex(0.0, -sin(theta))
+        let negISin: Complex<Double> = -iSin
         return [
             [c, .zero, .zero, iSin],
             [.zero, c, negISin, .zero],
@@ -1311,17 +1317,7 @@ import Accelerate
         ]
     }
 
-    /// Controlled-Controlled-Z (CCZ) gate matrix
-    ///
-    /// 8x8 diagonal matrix: identity on all computational basis states except
-    /// |111> which acquires a -1 phase. CCZ is the natural three-qubit generalization
-    /// of CZ, applying a Z gate to the target only when both controls are |1>.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let matrix = QuantumGate.ccz.matrix()
-    /// // matrix[7][7] == Complex(-1, 0), all other diagonals == Complex(1, 0)
-    /// ```
+    /// CCZ gate matrix: identity with -1 phase on |111>.
     @_optimize(speed)
     @_effects(readonly)
     private func cczMatrix() -> [[Complex<Double>]] {
@@ -1381,10 +1377,11 @@ import Accelerate
 
         let controlMask = (1 << controlCount) - 1
         let controlShift = gate.qubitsRequired
+        let targetMask = (1 << controlShift) - 1
 
         for row in 0 ..< dimension {
             let controlBits = row >> controlShift
-            let targetBits = row & ((1 << controlShift) - 1)
+            let targetBits = row & targetMask
 
             if controlBits == controlMask {
                 for col in 0 ..< gateSize {
@@ -1419,6 +1416,7 @@ import Accelerate
     /// print(QuantumGate.u3(theta: theta, phi: .pi, lambda: 0.5))
     /// // "U3(theta, 3.142, 0.500)"
     /// ```
+    /// - Complexity: O(1)
     public var description: String {
         switch self {
         case .identity: "I"
@@ -1475,8 +1473,7 @@ public extension QuantumGate {
     ///
     /// Checks if matrix preserves quantum state normalization through unitary condition.
     /// All valid quantum gates must be unitary for probability conservation and
-    /// reversibility. Computes (U†U)[i][j] = Σₖ conj(U[k][i]) * U[k][j] directly without
-    /// allocating intermediate matrices, using numerical tolerance (1e-10) for comparison.
+    /// reversibility. Uses numerical tolerance (1e-10) for comparison.
     ///
     /// - Parameter matrix: Square complex matrix to check
     /// - Returns: True if unitary within tolerance (1e-10)
@@ -1517,9 +1514,7 @@ public extension QuantumGate {
     /// Multiply two square matrices
     ///
     /// Computes matrix product A x B optimized for quantum gate sizes.
-    /// Uses unrolled loops for 2x2 matrices (single-qubit gates) and naive multiplication
-    /// for 3x3 and 4x4 (two-qubit gates). For larger matrices (n>4), delegates to
-    /// MatrixUtilities with BLAS acceleration
+    /// Optimized for typical quantum gate dimensions.
     ///
     /// **Example:**
     /// ```swift
@@ -1693,6 +1688,7 @@ public extension QuantumGate {
     /// - Returns: Custom single-qubit or two-qubit gate
     /// - Precondition: Matrix must be 2x2 or 4x4 and unitary
     /// - SeeAlso: ``isUnitary(_:)``
+    /// - Complexity: O(n³) for unitarity validation
     @_eagerMove
     static func custom(matrix: [[Complex<Double>]]) -> QuantumGate {
         ValidationUtilities.validateCustomGateMatrix(matrix)
@@ -1722,6 +1718,7 @@ public extension QuantumGate {
     /// QuantumGate.toffoli.isNativeGate  // true
     /// QuantumGate.controlled(gate: .pauliX, controls: [0, 1]).isNativeGate  // false
     /// ```
+    /// - Complexity: O(1)
     @inlinable
     var isNativeGate: Bool {
         switch self {
@@ -1770,6 +1767,18 @@ public extension QuantumGate {
     }
 
     /// Ordered parameter values for parameterized gates.
+    ///
+    /// Returns the ``ParameterValue`` instances in declaration order for gates
+    /// with angular parameters. Empty array for non-parameterized gates.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let gate = QuantumGate.rotationY(.pi / 4)
+    /// let values = gate.parameterValues  // [.value(0.785...)]
+    /// let identity = QuantumGate.hadamard.parameterValues  // []
+    /// ```
+    ///
+    /// - Complexity: O(1)
     var parameterValues: [ParameterValue] {
         switch self {
         case let .phase(angle),

@@ -158,7 +158,7 @@ public actor DensityMatrixSimulator {
                     after: gate,
                     targetQubits: operation.qubits,
                     to: state,
-                    totalQubits: circuit.qubits
+                    totalQubits: circuit.qubits,
                 )
             }
 
@@ -737,7 +737,8 @@ private func sampleOutcomesFromDistribution(
 
     var generator = Measurement.createRNG(seed: seed)
 
-    var cdf = [Double](unsafeUninitializedCapacity: probabilities.count) { buffer, count in
+    var cdf = [Double](unsafeUninitializedCapacity: probabilities.count) {
+        buffer, count in
         var cumulative = 0.0
         for i in 0 ..< probabilities.count {
             cumulative += max(0, probabilities[i])

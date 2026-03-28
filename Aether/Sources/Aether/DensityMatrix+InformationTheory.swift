@@ -251,7 +251,8 @@ public extension DensityMatrix {
 
         let mEigen = HermitianEigenDecomposition.decompose(matrix: m)
 
-        var sqrtLambdas = [Double](unsafeUninitializedCapacity: dim) { buffer, count in
+        var sqrtLambdas = [Double](unsafeUninitializedCapacity: dim) {
+            buffer, count in
             for i in 0 ..< dim {
                 buffer[i] = sqrt(max(0.0, mEigen.eigenvalues[i]))
             }

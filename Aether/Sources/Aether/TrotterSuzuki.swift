@@ -10,10 +10,9 @@ import Foundation
 /// depth. The error scaling is O(t^(p+1)) for order p, making higher orders advantageous for
 /// longer evolution times or when high precision is required.
 ///
-/// - ``first``: Simple product formula with O(t^2) error per step
-/// - ``second``: Symmetric (Strang) splitting with O(t^3) error per step
-/// - ``fourth``: Yoshida's formula with O(t^5) error per step
-/// - ``sixth``: Suzuki's recursive formula with O(t^7) error per step
+/// The available orders range from ``first`` (simple product formula, O(t^2) error per step)
+/// through ``second`` (symmetric Strang splitting, O(t^3) error) and ``fourth`` (Yoshida's
+/// recursive formula, O(t^5) error) to ``sixth`` (Suzuki's recursive formula, O(t^7) error).
 ///
 /// **Example:**
 /// ```swift
@@ -49,7 +48,7 @@ public enum TrotterOrder: Int, Sendable {
 /// let config = TrotterConfiguration(
 ///     order: .second,
 ///     steps: 20,
-///     sortByCommutation: true,
+///     isSortingByCommutation: true,
 ///     coefficientThreshold: 1e-12
 /// )
 /// let circuit = TrotterSuzuki.evolve(hamiltonian, time: 1.0, qubits: 4, config: config)
@@ -66,7 +65,7 @@ public struct TrotterConfiguration: Sendable {
     public let steps: Int
 
     /// When true, reorders terms to group commuting operators together
-    public let sortByCommutation: Bool
+    public let isSortingByCommutation: Bool
 
     /// Terms with |coefficient| below this threshold are skipped
     public let coefficientThreshold: Double
@@ -81,18 +80,18 @@ public struct TrotterConfiguration: Sendable {
     /// - Parameters:
     ///   - order: Decomposition order (default: .second)
     ///   - steps: Number of Trotter steps (default: 1)
-    ///   - sortByCommutation: Reorder terms by commutation (default: false)
+    ///   - isSortingByCommutation: Reorder terms by commutation (default: false)
     ///   - coefficientThreshold: Minimum coefficient magnitude (default: 1e-15)
     @inlinable
     public init(
         order: TrotterOrder = .second,
         steps: Int = 1,
-        sortByCommutation: Bool = false,
+        isSortingByCommutation: Bool = false,
         coefficientThreshold: Double = 1e-15,
     ) {
         self.order = order
         self.steps = steps
-        self.sortByCommutation = sortByCommutation
+        self.isSortingByCommutation = isSortingByCommutation
         self.coefficientThreshold = coefficientThreshold
     }
 }
@@ -104,11 +103,10 @@ public struct TrotterConfiguration: Sendable {
 /// The decomposition breaks the exponential of a sum into a product of exponentials
 /// of individual terms, enabling efficient quantum circuit implementation.
 ///
-/// The approximation error depends on the order and step size:
-/// - First-order: O(t^2/steps) - simple but least accurate
-/// - Second-order: O(t^3/steps^2) - symmetric splitting, good balance
-/// - Fourth-order: O(t^5/steps^4) - Yoshida's recursive formula
-/// - Sixth-order: O(t^7/steps^6) - highest accuracy, deepest circuits
+/// The approximation error depends on the order and step size. First-order gives
+/// O(t^2/steps) error, second-order symmetric splitting gives O(t^3/steps^2),
+/// fourth-order Yoshida gives O(t^5/steps^4), and sixth-order Suzuki achieves
+/// O(t^7/steps^6) at the cost of the deepest circuits.
 ///
 /// Each Pauli string exponential exp(-i theta P) is implemented using basis rotations
 /// to transform non-Z Paulis to Z, a CNOT ladder to entangle qubits, an Rz rotation
@@ -130,12 +128,17 @@ public struct TrotterConfiguration: Sendable {
 /// - SeeAlso: ``TrotterOrder``
 /// - SeeAlso: ``Observable``
 public enum TrotterSuzuki {
+    /// Half of pi for basis rotation angles.
     private static let halfPi = Double.pi / 2
+    /// Negative half of pi for basis rotation angles.
     private static let negHalfPi = -Double.pi / 2
+    /// Upper bound on Trotter step count.
     private static let maxSteps = 10000
 
+    /// Yoshida fourth-order composition coefficient s = 1/(4 - 4^(1/3)).
     private static let yoshidaS = 1.0 / (4.0 - pow(4.0, 1.0 / 3.0))
 
+    /// Suzuki sixth-order composition coefficient s = 1/(4 - 4^(1/5)).
     private static let suzukiS6 = 1.0 / (4.0 - pow(4.0, 1.0 / 5.0))
 
     /// Evolve a quantum state under Hamiltonian time evolution using Trotter-Suzuki decomposition.
@@ -164,10 +167,13 @@ public enum TrotterSuzuki {
     ///   - config: Trotter decomposition configuration
     /// - Returns: Quantum circuit implementing the approximate time evolution
     /// - Complexity: O(steps * terms * order_factor) gates
-    /// - Precondition: qubits > 0, steps > 0, hamiltonian non-empty
+    /// - Precondition: `qubits > 0`
+    /// - Precondition: `qubits` within memory limit
+    /// - Precondition: `config.steps > 0`
+    /// - Precondition: `config.steps <= 10000`
+    /// - Precondition: `hamiltonian.terms` is non-empty
     @_optimize(speed)
     @_eagerMove
-    @_effects(readonly)
     public static func evolve(
         _ hamiltonian: Observable,
         time: Double,
@@ -184,21 +190,27 @@ public enum TrotterSuzuki {
 
         var terms = filterTerms(hamiltonian.terms, threshold: config.coefficientThreshold)
 
-        if config.sortByCommutation {
+        if config.isSortingByCommutation {
             terms = sortTermsByCommutation(terms)
         }
 
         let stepSize = time / Double(config.steps)
 
-        for _ in 0 ..< config.steps {
-            switch config.order {
-            case .first:
+        switch config.order {
+        case .first:
+            for _ in 0 ..< config.steps {
                 firstOrderLayer(terms: terms, stepSize: stepSize, circuit: &circuit)
-            case .second:
+            }
+        case .second:
+            for _ in 0 ..< config.steps {
                 secondOrderLayer(terms: terms, stepSize: stepSize, circuit: &circuit)
-            case .fourth:
+            }
+        case .fourth:
+            for _ in 0 ..< config.steps {
                 fourthOrderLayer(terms: terms, stepSize: stepSize, circuit: &circuit)
-            case .sixth:
+            }
+        case .sixth:
+            for _ in 0 ..< config.steps {
                 sixthOrderLayer(terms: terms, stepSize: stepSize, circuit: &circuit)
             }
         }
@@ -207,18 +219,9 @@ public enum TrotterSuzuki {
     }
 
     /// Apply first-order Trotter layer: prod_k exp(-i H_k * stepSize).
-    ///
-    /// Implements the simplest product formula by applying exponentials of each term
-    /// sequentially in the given order. Error is O(stepSize^2) due to non-commutativity.
-    ///
-    /// - Parameters:
-    ///   - terms: Hamiltonian terms as (coefficient, PauliString) pairs
-    ///   - stepSize: Time step for this layer
-    ///   - circuit: Circuit to append gates to
-    /// - Complexity: O(terms) exponentials
     @_optimize(speed)
-    static func firstOrderLayer(
-        terms: [(Double, PauliString)],
+    private static func firstOrderLayer(
+        terms: PauliTerms,
         stepSize: Double,
         circuit: inout QuantumCircuit,
     ) {
@@ -228,20 +231,10 @@ public enum TrotterSuzuki {
         }
     }
 
-    /// Apply second-order symmetric Trotter layer: S_2(t) = S_1(t/2)^dag S_1(t/2).
-    ///
-    /// Implements the Strang splitting by applying terms forward with half the time step,
-    /// then backward with half the time step. The symmetry cancels first-order errors,
-    /// yielding O(stepSize^3) error.
-    ///
-    /// - Parameters:
-    ///   - terms: Hamiltonian terms as (coefficient, PauliString) pairs
-    ///   - stepSize: Time step for this layer
-    ///   - circuit: Circuit to append gates to
-    /// - Complexity: O(2 * terms) exponentials
+    /// Apply second-order symmetric Trotter layer.
     @_optimize(speed)
-    static func secondOrderLayer(
-        terms: [(Double, PauliString)],
+    private static func secondOrderLayer(
+        terms: PauliTerms,
         stepSize: Double,
         circuit: inout QuantumCircuit,
     ) {
@@ -259,19 +252,9 @@ public enum TrotterSuzuki {
     }
 
     /// Apply fourth-order Yoshida layer using recursive composition.
-    ///
-    /// Implements Yoshida's formula: S_4(t) = S_2(s*t)^2 * S_2((1-4s)*t) * S_2(s*t)^2
-    /// where s = 1/(4 - 4^(1/3)). This recursive composition cancels errors up to
-    /// fourth order, yielding O(stepSize^5) error.
-    ///
-    /// - Parameters:
-    ///   - terms: Hamiltonian terms as (coefficient, PauliString) pairs
-    ///   - stepSize: Time step for this layer
-    ///   - circuit: Circuit to append gates to
-    /// - Complexity: O(10 * terms) exponentials
     @_optimize(speed)
-    static func fourthOrderLayer(
-        terms: [(Double, PauliString)],
+    private static func fourthOrderLayer(
+        terms: PauliTerms,
         stepSize: Double,
         circuit: inout QuantumCircuit,
     ) {
@@ -287,20 +270,9 @@ public enum TrotterSuzuki {
     }
 
     /// Apply sixth-order Suzuki layer using recursive composition.
-    ///
-    /// Implements Suzuki's sixth-order formula by recursively composing fourth-order
-    /// integrators with coefficients s = 1/(4 - 4^(1/5)). The pattern mirrors the
-    /// fourth-order construction: S_6(t) = S_4(s*t)^2 * S_4((1-4s)*t) * S_4(s*t)^2.
-    /// This yields O(stepSize^7) error.
-    ///
-    /// - Parameters:
-    ///   - terms: Hamiltonian terms as (coefficient, PauliString) pairs
-    ///   - stepSize: Time step for this layer
-    ///   - circuit: Circuit to append gates to
-    /// - Complexity: O(50 * terms) exponentials
     @_optimize(speed)
-    static func sixthOrderLayer(
-        terms: [(Double, PauliString)],
+    private static func sixthOrderLayer(
+        terms: PauliTerms,
         stepSize: Double,
         circuit: inout QuantumCircuit,
     ) {
@@ -316,21 +288,8 @@ public enum TrotterSuzuki {
     }
 
     /// Apply Pauli string exponential exp(-i * angle * P) to circuit.
-    ///
-    /// Implements the exponential of a Pauli string using the standard decomposition:
-    /// 1. Rotate each qubit from its Pauli basis to Z basis (H for X, Rx(-pi/2) for Y)
-    /// 2. Apply CNOT ladder to compute parity into the last qubit
-    /// 3. Apply Rz(2*angle) to the last qubit
-    /// 4. Reverse CNOT ladder
-    /// 5. Reverse basis rotations
-    ///
-    /// - Parameters:
-    ///   - term: Pauli string P to exponentiate
-    ///   - angle: Rotation angle theta in exp(-i * theta * P)
-    ///   - circuit: Circuit to append gates to
-    /// - Complexity: O(qubits in term) gates
     @_optimize(speed)
-    static func applyPauliExponential(
+    private static func applyPauliExponential(
         term: PauliString,
         angle: Double,
         circuit: inout QuantumCircuit,
@@ -339,11 +298,14 @@ public enum TrotterSuzuki {
 
         guard operatorCount > 0 else { return }
 
-        var targetQubits = [Int](unsafeUninitializedCapacity: operatorCount) { buffer, count in
+        for op in term.operators {
+            applyBasisRotation(qubit: op.qubit, basis: op.basis, forward: true, circuit: &circuit)
+        }
+
+        var targetQubits = [Int](unsafeUninitializedCapacity: operatorCount) {
+            buffer, count in
             for i in 0 ..< operatorCount {
-                let op = term.operators[i]
-                buffer[i] = op.qubit
-                applyBasisRotation(qubit: op.qubit, basis: op.basis, forward: true, circuit: &circuit)
+                buffer[i] = term.operators[i].qubit
             }
             count = operatorCount
         }
@@ -369,15 +331,6 @@ public enum TrotterSuzuki {
     }
 
     /// Apply basis rotation for Pauli exponentiation.
-    ///
-    /// Transforms between Pauli eigenbasis and computational (Z) basis. For X basis,
-    /// uses Hadamard. For Y basis, uses Rx(+-pi/2). Z basis requires no transformation.
-    ///
-    /// - Parameters:
-    ///   - qubit: Target qubit index
-    ///   - basis: Pauli basis to rotate from/to
-    ///   - forward: If true, rotate from Pauli basis to Z; if false, rotate from Z to Pauli
-    ///   - circuit: Circuit to append gates to
     @inline(__always)
     private static func applyBasisRotation(
         qubit: Int,
@@ -398,8 +351,8 @@ public enum TrotterSuzuki {
     private static func filterTerms(
         _ terms: PauliTerms,
         threshold: Double,
-    ) -> [(Double, PauliString)] {
-        var filtered: [(Double, PauliString)] = []
+    ) -> PauliTerms {
+        var filtered: PauliTerms = []
         filtered.reserveCapacity(terms.count)
 
         for (coefficient, pauliString) in terms {
@@ -413,19 +366,15 @@ public enum TrotterSuzuki {
     }
 
     /// Sort terms to group commuting operators together.
-    ///
-    /// Uses a greedy approach: starts with the first term, then repeatedly adds the next
-    /// term that commutes with all previously added terms. Non-commuting terms are added
-    /// at the end. This can reduce Trotter error by minimizing commutator contributions.
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
     private static func sortTermsByCommutation(
-        _ terms: [(Double, PauliString)],
-    ) -> [(Double, PauliString)] {
+        _ terms: PauliTerms,
+    ) -> PauliTerms {
         guard terms.count > 1 else { return terms }
 
-        var sorted: [(Double, PauliString)] = []
+        var sorted: PauliTerms = []
         sorted.reserveCapacity(terms.count)
 
         let remaining = terms
@@ -433,11 +382,12 @@ public enum TrotterSuzuki {
 
         sorted.append(remaining[0])
         used[0] = true
+        var firstUnused = 1
 
         for _ in 1 ..< terms.count {
             var bestIndex = -1
 
-            for i in 0 ..< remaining.count {
+            for i in firstUnused ..< remaining.count {
                 guard !used[i] else { continue }
 
                 var commutesWithAll = true
@@ -455,14 +405,14 @@ public enum TrotterSuzuki {
             }
 
             if bestIndex == -1 {
-                for i in 0 ..< remaining.count where !used[i] {
-                    bestIndex = i
-                    break
-                }
+                bestIndex = firstUnused
             }
 
             sorted.append(remaining[bestIndex])
             used[bestIndex] = true
+            while firstUnused < remaining.count, used[firstUnused] {
+                firstUnused += 1
+            }
         }
 
         return sorted

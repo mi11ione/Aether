@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -143,6 +143,13 @@ struct QubitPropertyWrapperTests {
         circuit.append(.cnot, to: [control, target])
         #expect(circuit.count == 1, "circuit should have 1 CNOT operation")
     }
+
+    @Test("Qubit mutation to valid index preserves value")
+    func mutationToValidIndex() {
+        @Qubit var q = 0
+        q = 3
+        #expect(q == 3, "wrappedValue should be updated to 3 after mutation")
+    }
 }
 
 /// Validates integration of @QuantumParameter with QuantumCircuit
@@ -168,7 +175,7 @@ struct QuantumParameterIntegrationTests {
         @QuantumParameter(name: "phi") var phi = 0.785
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.rotationY($phi), to: 0)
-        let bound = circuit.binding(["phi": phi])
+        let bound = circuit.bound(["phi": phi])
         #expect(bound.parameters.isEmpty, "bound circuit should have no symbolic parameters")
         #expect(bound.count == 1, "bound circuit should still have 1 operation")
     }
@@ -181,7 +188,7 @@ struct QuantumParameterIntegrationTests {
         circuit.append(.rotationY($alpha), to: 0)
         circuit.append(.rotationZ($beta), to: 1)
         #expect(circuit.parameters.count == 2, "circuit should have 2 symbolic parameters")
-        let bound = circuit.binding(["alpha": alpha, "beta": beta])
+        let bound = circuit.bound(["alpha": alpha, "beta": beta])
         #expect(bound.parameters.isEmpty, "bound circuit should have no remaining symbolic parameters")
     }
 
@@ -204,7 +211,7 @@ struct QuantumParameterIntegrationTests {
         var circuit = QuantumCircuit(qubits: 1)
         circuit.append(.rotationY($theta), to: 0)
         theta = 1.57
-        let bound = circuit.binding(["theta": theta])
+        let bound = circuit.bound(["theta": theta])
         #expect(bound.parameters.isEmpty, "bound circuit should have no symbolic parameters after binding mutated value")
     }
 }

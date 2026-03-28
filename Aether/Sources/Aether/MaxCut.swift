@@ -23,7 +23,7 @@
 /// - SeeAlso: ``MixerHamiltonian``
 public enum MaxCut {
     @usableFromInline
-    internal static let zzCoefficient = -0.5
+    static let zzCoefficient = -0.5
 
     /// Creates a MaxCut cost Hamiltonian from graph edges.
     ///

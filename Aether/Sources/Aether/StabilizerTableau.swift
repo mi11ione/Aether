@@ -9,8 +9,8 @@ import GameplayKit
 /// stabilizers. Each row encodes a Pauli operator: the first 2n bits represent X and Z
 /// components, and the final bit is the phase (0 for +1, 1 for -1).
 ///
-/// This representation enables O(n^2/w) time complexity per Clifford gate where w=256 is
-/// the SIMD word size, supporting simulation of millions of qubits. Memory usage scales
+/// This representation enables O(n^2) time complexity per Clifford gate with SIMD
+/// acceleration, supporting simulation of millions of qubits. Memory usage scales
 /// as O(n^2) bits rather than the exponential O(2^n) of statevector simulation.
 ///
 /// **Example:**
@@ -78,7 +78,8 @@ import GameplayKit
     /// ```
     ///
     /// - Parameter qubits: Number of qubits (must be positive)
-    /// - Complexity: O(n^2/w) where w=64
+    /// - Precondition: `qubits` must be positive
+    /// - Complexity: O(n^2)
     public init(qubits: Int) {
         ValidationUtilities.validatePositiveQubits(qubits)
 
@@ -93,8 +94,6 @@ import GameplayKit
 
         for i in 0 ..< n {
             setX(row: i, qubit: i, value: true)
-        }
-        for i in 0 ..< n {
             setZ(row: n + i, qubit: i, value: true)
         }
     }
@@ -114,7 +113,8 @@ import GameplayKit
     /// - Parameters:
     ///   - gate: Single-qubit Clifford gate to apply
     ///   - qubit: Target qubit index (0 to n-1)
-    /// - Complexity: O(n/w) where w=256
+    /// - Precondition: `qubit` must be in range 0 to n-1
+    /// - Complexity: O(n)
     @inlinable
     @_optimize(speed)
     public mutating func apply(_ gate: QuantumGate, to qubit: Int) {
@@ -164,7 +164,8 @@ import GameplayKit
     /// - Parameters:
     ///   - gate: Multi-qubit Clifford gate to apply
     ///   - qubits: Target qubit indices (order depends on gate type)
-    /// - Complexity: O(n/w) where w=256
+    /// - Precondition: `qubits` must contain exactly 2 indices, each in range 0 to n-1
+    /// - Complexity: O(n)
     @inlinable
     @_optimize(speed)
     public mutating func apply(_ gate: QuantumGate, to qubits: [Int]) {
@@ -209,6 +210,7 @@ import GameplayKit
     ///   - qubit: Qubit index to query (0 to n-1)
     ///   - basis: Pauli basis for measurement
     /// - Returns: Tuple of (probability of 0 outcome, probability of 1 outcome)
+    /// - Precondition: `qubit` must be in range 0 to n-1
     /// - Complexity: O(n)
     @_effects(readonly)
     @inlinable
@@ -267,7 +269,8 @@ import GameplayKit
     ///   - qubit: Qubit index to measure (0 to n-1)
     ///   - seed: Optional seed for reproducible random outcomes
     /// - Returns: Measurement outcome (0 or 1)
-    /// - Complexity: O(n^2/w)
+    /// - Precondition: `qubit` must be in range 0 to n-1
+    /// - Complexity: O(n^2)
     @inlinable
     @_optimize(speed)
     public mutating func measure(_ qubit: Int, seed: UInt64?) -> Int {
@@ -416,6 +419,7 @@ import GameplayKit
     ///
     /// - Parameter pauliString: Pauli string operator to measure
     /// - Returns: Expectation value (-1.0, 0.0, or +1.0)
+    /// - Precondition: All qubit indices in `pauliString` must be in range 0 to n-1
     /// - Complexity: O(n^2)
     @_effects(readonly)
     @inlinable
@@ -485,23 +489,24 @@ import GameplayKit
             }
         }
 
+        var newQueryX = ContiguousArray<Bool>(repeating: false, count: n)
+        var newQueryZ = ContiguousArray<Bool>(repeating: false, count: n)
+
+        var currentWeight = 0
+        for q in 0 ..< n {
+            if queryX[q] { currentWeight += 1 }
+            if queryZ[q] { currentWeight += 1 }
+        }
+
         var changed = true
-        while changed {
+        while changed, currentWeight > 0 {
             changed = false
 
-            var currentWeight = 0
-            for q in 0 ..< n {
-                if queryX[q] { currentWeight += 1 }
-                if queryZ[q] { currentWeight += 1 }
-            }
-
-            if currentWeight == 0 {
-                break
-            }
-
             for row in n ..< 2 * n {
-                var newQueryX = queryX
-                var newQueryZ = queryZ
+                for q in 0 ..< n {
+                    newQueryX[q] = queryX[q]
+                    newQueryZ[q] = queryZ[q]
+                }
                 var tempPhase = 0
 
                 for q in 0 ..< n {
@@ -521,6 +526,7 @@ import GameplayKit
                 if newWeight < currentWeight {
                     queryX = newQueryX
                     queryZ = newQueryZ
+                    currentWeight = newWeight
                     phaseAccum += tempPhase
                     if getPhase(row: row) {
                         phaseAccum += 2
@@ -558,7 +564,8 @@ import GameplayKit
     ///   - shots: Number of measurement samples to collect
     ///   - seed: Optional seed for reproducible results
     /// - Returns: Array of n-qubit measurement outcomes (each 0 to 2^n-1)
-    /// - Complexity: O(shots * n^2/w)
+    /// - Precondition: `shots` must be positive
+    /// - Complexity: O(shots * n^2)
     @inlinable
     @_optimize(speed)
     public mutating func sample(shots: Int, seed: UInt64?) -> [Int] {
@@ -605,6 +612,7 @@ import GameplayKit
         "StabilizerTableau(\(n) qubits)"
     }
 
+    /// Returns the word offset for a given tableau row.
     @inlinable
     @inline(__always)
     @_effects(readonly)
@@ -612,6 +620,7 @@ import GameplayKit
         row * wordsPerRow
     }
 
+    /// Reads the X component bit for a qubit in a tableau row.
     @inlinable
     @inline(__always)
     @_effects(readonly)
@@ -622,19 +631,18 @@ import GameplayKit
         return (tableau[wordIndex] >> bitOffset) & 1 == 1
     }
 
+    /// Sets the X component bit for a qubit in a tableau row.
     @inlinable
     @inline(__always)
     mutating func setX(row: Int, qubit: Int, value: Bool) {
         let bitIndex = qubit
         let wordIndex = rowOffset(row) + bitIndex / 64
         let bitOffset = bitIndex % 64
-        if value {
-            tableau[wordIndex] |= (1 << bitOffset)
-        } else {
-            tableau[wordIndex] &= ~(1 << bitOffset)
-        }
+        let mask: UInt64 = 1 << bitOffset
+        tableau[wordIndex] = (tableau[wordIndex] & ~mask) | (UInt64(value ? 1 : 0) << bitOffset)
     }
 
+    /// Reads the Z component bit for a qubit in a tableau row.
     @inlinable
     @inline(__always)
     @_effects(readonly)
@@ -645,19 +653,18 @@ import GameplayKit
         return (tableau[wordIndex] >> bitOffset) & 1 == 1
     }
 
+    /// Sets the Z component bit for a qubit in a tableau row.
     @inlinable
     @inline(__always)
     mutating func setZ(row: Int, qubit: Int, value: Bool) {
         let bitIndex = n + qubit
         let wordIndex = rowOffset(row) + bitIndex / 64
         let bitOffset = bitIndex % 64
-        if value {
-            tableau[wordIndex] |= (1 << bitOffset)
-        } else {
-            tableau[wordIndex] &= ~(1 << bitOffset)
-        }
+        let mask: UInt64 = 1 << bitOffset
+        tableau[wordIndex] = (tableau[wordIndex] & ~mask) | (UInt64(value ? 1 : 0) << bitOffset)
     }
 
+    /// Reads the phase bit for a tableau row.
     @inlinable
     @inline(__always)
     @_effects(readonly)
@@ -668,19 +675,18 @@ import GameplayKit
         return (tableau[wordIndex] >> bitOffset) & 1 == 1
     }
 
+    /// Sets the phase bit for a tableau row.
     @inlinable
     @inline(__always)
     mutating func setPhase(row: Int, value: Bool) {
         let bitIndex = 2 * n
         let wordIndex = rowOffset(row) + bitIndex / 64
         let bitOffset = bitIndex % 64
-        if value {
-            tableau[wordIndex] |= (1 << bitOffset)
-        } else {
-            tableau[wordIndex] &= ~(1 << bitOffset)
-        }
+        let mask: UInt64 = 1 << bitOffset
+        tableau[wordIndex] = (tableau[wordIndex] & ~mask) | (UInt64(value ? 1 : 0) << bitOffset)
     }
 
+    /// Flips the phase bit for a tableau row.
     @inlinable
     @inline(__always)
     mutating func togglePhase(row: Int) {
@@ -690,6 +696,7 @@ import GameplayKit
         tableau[wordIndex] ^= (1 << bitOffset)
     }
 
+    /// Applies Hadamard gate transformation to all tableau rows for a qubit.
     @inlinable
     @_optimize(speed)
     mutating func applyHadamard(_ qubit: Int) {
@@ -706,6 +713,7 @@ import GameplayKit
         }
     }
 
+    /// Applies S gate transformation to all tableau rows for a qubit.
     @inlinable
     @_optimize(speed)
     mutating func applyS(_ qubit: Int) {
@@ -721,6 +729,7 @@ import GameplayKit
         }
     }
 
+    /// Applies Pauli-X transformation to all tableau rows for a qubit.
     @inlinable
     @_optimize(speed)
     mutating func applyPauliX(_ qubit: Int) {
@@ -731,6 +740,7 @@ import GameplayKit
         }
     }
 
+    /// Applies Pauli-Z transformation to all tableau rows for a qubit.
     @inlinable
     @_optimize(speed)
     mutating func applyPauliZ(_ qubit: Int) {
@@ -741,6 +751,7 @@ import GameplayKit
         }
     }
 
+    /// Applies Pauli-Y transformation to all tableau rows for a qubit.
     @inlinable
     @_optimize(speed)
     mutating func applyPauliY(_ qubit: Int) {
@@ -753,6 +764,7 @@ import GameplayKit
         }
     }
 
+    /// Applies CNOT transformation to all tableau rows for control and target qubits.
     @inlinable
     @_optimize(speed)
     mutating func applyCNOT(control: Int, target: Int) {
@@ -771,6 +783,7 @@ import GameplayKit
         }
     }
 
+    /// Applies CZ transformation to all tableau rows for two qubits.
     @inlinable
     @_optimize(speed)
     mutating func applyCZ(qubit1: Int, qubit2: Int) {
@@ -789,6 +802,7 @@ import GameplayKit
         }
     }
 
+    /// Multiplies source row into target row with phase tracking.
     @inlinable
     @_optimize(speed)
     mutating func rowMultiply(target: Int, source: Int) {
@@ -837,31 +851,26 @@ import GameplayKit
         setPhase(row: target, value: newPhase == 2)
     }
 
+    /// Lookup table for Pauli product phase accumulation.
+    @usableFromInline
+    static let pauliPhaseLUT: ContiguousArray<Int> = [
+        0, 0, 0, 0,
+        0, 0, 1, 3,
+        0, 3, 0, 1,
+        0, 1, 3, 0,
+    ]
+
+    /// Returns phase contribution from multiplying two Pauli operators.
     @inlinable
     @inline(__always)
     @_effects(readonly)
     func pauliMultPhase(x1: Bool, z1: Bool, x2: Bool, z2: Bool) -> Int {
-        if !x1, !z1 { return 0 }
-        if !x2, !z2 { return 0 }
-
-        if x1, !z1 {
-            if !x2, z2 { return 1 }
-            if x2, z2 { return 3 }
-            return 0
-        }
-        if !x1, z1 {
-            if x2, !z2 { return 3 }
-            if x2, z2 { return 1 }
-            return 0
-        }
-        if x1, z1 {
-            if x2, !z2 { return 1 }
-            if !x2, z2 { return 3 }
-            return 0
-        }
-        return 0
+        let p1 = (x1 ? 1 : 0) | (z1 ? 2 : 0)
+        let p2 = (x2 ? 1 : 0) | (z2 ? 2 : 0)
+        return Self.pauliPhaseLUT[p1 * 4 + p2]
     }
 
+    /// Copies all words from one tableau row to another.
     @inlinable
     @_optimize(speed)
     mutating func copyRow(from source: Int, to target: Int) {
@@ -886,6 +895,7 @@ import GameplayKit
         }
     }
 
+    /// Zeroes all words in a tableau row.
     @inlinable
     @_optimize(speed)
     mutating func clearRow(_ row: Int) {
@@ -901,37 +911,6 @@ import GameplayKit
         }
         for i in (simdCount * 4) ..< wordsPerRow {
             tableau[offset + i] = 0
-        }
-    }
-
-    @inlinable
-    @_optimize(speed)
-    mutating func rowXor(target: Int, source: Int) {
-        let srcOffset = rowOffset(source)
-        let dstOffset = rowOffset(target)
-        let simdCount = wordsPerRow / 4
-        for i in 0 ..< simdCount {
-            let idx = i * 4
-            let a = SIMD4<UInt64>(
-                tableau[dstOffset + idx],
-                tableau[dstOffset + idx + 1],
-                tableau[dstOffset + idx + 2],
-                tableau[dstOffset + idx + 3],
-            )
-            let b = SIMD4<UInt64>(
-                tableau[srcOffset + idx],
-                tableau[srcOffset + idx + 1],
-                tableau[srcOffset + idx + 2],
-                tableau[srcOffset + idx + 3],
-            )
-            let result = a ^ b
-            tableau[dstOffset + idx] = result[0]
-            tableau[dstOffset + idx + 1] = result[1]
-            tableau[dstOffset + idx + 2] = result[2]
-            tableau[dstOffset + idx + 3] = result[3]
-        }
-        for i in (simdCount * 4) ..< wordsPerRow {
-            tableau[dstOffset + i] ^= tableau[srcOffset + i]
         }
     }
 }

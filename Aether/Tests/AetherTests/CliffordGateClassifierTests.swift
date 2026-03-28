@@ -214,187 +214,187 @@ struct CliffordGateClassifierAnalyzeTests {
 @Suite("Clifford Gate Classifier - Extended Gate Coverage")
 struct CliffordGateClassifierExtendedTests {
     @Test("Fredkin gate classifies as non-Clifford with tCount 7")
-    func classifyFredkinGate() async {
+    func classifyFredkinGate() {
         let classification = CliffordGateClassifier.classify(.fredkin)
         #expect(classification == .nonClifford(tCount: 7), "Fredkin should be non-Clifford with tCount 7")
     }
 
     @Test("CCZ gate classifies as non-Clifford with tCount 7")
-    func classifyCczGate() async {
+    func classifyCczGate() {
         let classification = CliffordGateClassifier.classify(.ccz)
         #expect(classification == .nonClifford(tCount: 7), "CCZ should be non-Clifford with tCount 7")
     }
 
     @Test("Phase with non-Clifford angle classifies as non-Clifford")
-    func classifyPhaseNonCliffordAngle() async {
+    func classifyPhaseNonCliffordAngle() {
         let classification = CliffordGateClassifier.classify(.phase(.value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "Phase(pi/5) should be non-Clifford")
     }
 
     @Test("RotationX with non-Clifford angle classifies as non-Clifford")
-    func classifyRotationXNonCliffordAngle() async {
+    func classifyRotationXNonCliffordAngle() {
         let classification = CliffordGateClassifier.classify(.rotationX(.value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "RotationX(pi/5) should be non-Clifford")
     }
 
     @Test("RotationY with non-Clifford angle classifies as non-Clifford")
-    func classifyRotationYNonCliffordAngle() async {
+    func classifyRotationYNonCliffordAngle() {
         let classification = CliffordGateClassifier.classify(.rotationY(.value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "RotationY(pi/5) should be non-Clifford")
     }
 
     @Test("RotationZ with non-Clifford angle classifies as non-Clifford")
-    func classifyRotationZNonCliffordAngle() async {
+    func classifyRotationZNonCliffordAngle() {
         let classification = CliffordGateClassifier.classify(.rotationZ(.value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "RotationZ(pi/5) should be non-Clifford")
     }
 
     @Test("U1 gate with Clifford angle classifies as Clifford")
-    func classifyU1CliffordAngle() async {
+    func classifyU1CliffordAngle() {
         let classification = CliffordGateClassifier.classify(.u1(lambda: .value(.pi / 2)))
         #expect(classification == .clifford, "U1(pi/2) should be Clifford")
     }
 
     @Test("U1 gate with non-Clifford angle classifies as non-Clifford")
-    func classifyU1NonCliffordAngle() async {
+    func classifyU1NonCliffordAngle() {
         let classification = CliffordGateClassifier.classify(.u1(lambda: .value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "U1(pi/5) should be non-Clifford")
     }
 
     @Test("U2 gate with Clifford angles classifies as Clifford")
-    func classifyU2CliffordAngles() async {
+    func classifyU2CliffordAngles() {
         let classification = CliffordGateClassifier.classify(.u2(phi: .value(0), lambda: .value(.pi)))
         #expect(classification == .clifford, "U2(0, pi) should be Clifford")
     }
 
     @Test("U2 gate with non-Clifford angles classifies as non-Clifford")
-    func classifyU2NonCliffordAngles() async {
+    func classifyU2NonCliffordAngles() {
         let classification = CliffordGateClassifier.classify(.u2(phi: .value(.pi / 5), lambda: .value(.pi / 3)))
         #expect(classification == .nonClifford(tCount: 6), "U2 with non-Clifford angles should be non-Clifford")
     }
 
     @Test("U3 gate with Clifford angles classifies as Clifford")
-    func classifyU3CliffordAngles() async {
+    func classifyU3CliffordAngles() {
         let classification = CliffordGateClassifier.classify(.u3(theta: .value(.pi), phi: .value(0), lambda: .value(.pi / 2)))
         #expect(classification == .clifford, "U3(pi, 0, pi/2) should be Clifford")
     }
 
     @Test("U3 gate with non-Clifford angles classifies as non-Clifford")
-    func classifyU3NonCliffordAngles() async {
+    func classifyU3NonCliffordAngles() {
         let classification = CliffordGateClassifier.classify(.u3(theta: .value(.pi / 5), phi: .value(.pi / 3), lambda: .value(.pi / 7)))
         #expect(classification == .nonClifford(tCount: 9), "U3 with non-Clifford angles should be non-Clifford")
     }
 
     @Test("ControlledPhase with Clifford angle classifies as Clifford")
-    func classifyControlledPhaseClifford() async {
+    func classifyControlledPhaseClifford() {
         let classification = CliffordGateClassifier.classify(.controlledPhase(.value(.pi)))
         #expect(classification == .clifford, "ControlledPhase(pi) should be Clifford")
     }
 
     @Test("ControlledPhase with non-Clifford angle classifies as non-Clifford")
-    func classifyControlledPhaseNonClifford() async {
+    func classifyControlledPhaseNonClifford() {
         let classification = CliffordGateClassifier.classify(.controlledPhase(.value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "ControlledPhase(pi/5) should be non-Clifford")
     }
 
     @Test("ControlledRotationX with non-Clifford angle classifies as non-Clifford")
-    func classifyControlledRotationXNonClifford() async {
+    func classifyControlledRotationXNonClifford() {
         let classification = CliffordGateClassifier.classify(.controlledRotationX(.value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "ControlledRotationX(pi/5) should be non-Clifford")
     }
 
     @Test("ControlledRotationY with non-Clifford angle classifies as non-Clifford")
-    func classifyControlledRotationYNonClifford() async {
+    func classifyControlledRotationYNonClifford() {
         let classification = CliffordGateClassifier.classify(.controlledRotationY(.value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "ControlledRotationY(pi/5) should be non-Clifford")
     }
 
     @Test("ControlledRotationZ with non-Clifford angle classifies as non-Clifford")
-    func classifyControlledRotationZNonClifford() async {
+    func classifyControlledRotationZNonClifford() {
         let classification = CliffordGateClassifier.classify(.controlledRotationZ(.value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "ControlledRotationZ(pi/5) should be non-Clifford")
     }
 
     @Test("SqrtSwap gate classifies as non-Clifford with tCount 1")
-    func classifySqrtSwapGate() async {
+    func classifySqrtSwapGate() {
         let classification = CliffordGateClassifier.classify(.sqrtSwap)
         #expect(classification == .nonClifford(tCount: 1), "SqrtSwap should be non-Clifford with tCount 1")
     }
 
     @Test("SqrtISwap gate classifies as non-Clifford with tCount 1")
-    func classifySqrtISwapGate() async {
+    func classifySqrtISwapGate() {
         let classification = CliffordGateClassifier.classify(.sqrtISwap)
         #expect(classification == .nonClifford(tCount: 1), "SqrtISwap should be non-Clifford with tCount 1")
     }
 
     @Test("FSwap gate classifies as non-Clifford with tCount 1")
-    func classifyFswapGate() async {
+    func classifyFswapGate() {
         let classification = CliffordGateClassifier.classify(.fswap)
         #expect(classification == .nonClifford(tCount: 1), "FSwap should be non-Clifford with tCount 1")
     }
 
     @Test("Givens gate with Clifford angle classifies as Clifford")
-    func classifyGivensClifford() async {
+    func classifyGivensClifford() {
         let classification = CliffordGateClassifier.classify(.givens(.value(.pi / 2)))
         #expect(classification == .clifford, "Givens(pi/2) should be Clifford")
     }
 
     @Test("Givens gate with non-Clifford angle classifies as non-Clifford")
-    func classifyGivensNonClifford() async {
+    func classifyGivensNonClifford() {
         let classification = CliffordGateClassifier.classify(.givens(.value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "Givens(pi/5) should be non-Clifford")
     }
 
     @Test("XX gate with Clifford angle classifies as Clifford")
-    func classifyXXClifford() async {
+    func classifyXXClifford() {
         let classification = CliffordGateClassifier.classify(.xx(.value(.pi)))
         #expect(classification == .clifford, "XX(pi) should be Clifford")
     }
 
     @Test("XX gate with non-Clifford angle classifies as non-Clifford")
-    func classifyXXNonClifford() async {
+    func classifyXXNonClifford() {
         let classification = CliffordGateClassifier.classify(.xx(.value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "XX(pi/5) should be non-Clifford")
     }
 
     @Test("YY gate with Clifford angle classifies as Clifford")
-    func classifyYYClifford() async {
+    func classifyYYClifford() {
         let classification = CliffordGateClassifier.classify(.yy(.value(.pi / 2)))
         #expect(classification == .clifford, "YY(pi/2) should be Clifford")
     }
 
     @Test("YY gate with non-Clifford angle classifies as non-Clifford")
-    func classifyYYNonClifford() async {
+    func classifyYYNonClifford() {
         let classification = CliffordGateClassifier.classify(.yy(.value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "YY(pi/5) should be non-Clifford")
     }
 
     @Test("ZZ gate with Clifford angle classifies as Clifford")
-    func classifyZZClifford() async {
+    func classifyZZClifford() {
         let classification = CliffordGateClassifier.classify(.zz(.value(.pi)))
         #expect(classification == .clifford, "ZZ(pi) should be Clifford")
     }
 
     @Test("ZZ gate with non-Clifford angle classifies as non-Clifford")
-    func classifyZZNonClifford() async {
+    func classifyZZNonClifford() {
         let classification = CliffordGateClassifier.classify(.zz(.value(.pi / 5)))
         #expect(classification == .nonClifford(tCount: 3), "ZZ(pi/5) should be non-Clifford")
     }
 
     @Test("Diagonal gate with Clifford phases classifies as Clifford")
-    func classifyDiagonalClifford() async {
+    func classifyDiagonalClifford() {
         let classification = CliffordGateClassifier.classify(.diagonal(phases: [0, .pi / 2, .pi, 3 * .pi / 2]))
         #expect(classification == .clifford, "Diagonal with Clifford phases should be Clifford")
     }
 
     @Test("Diagonal gate with non-Clifford phases classifies as non-Clifford")
-    func classifyDiagonalNonClifford() async {
+    func classifyDiagonalNonClifford() {
         let classification = CliffordGateClassifier.classify(.diagonal(phases: [0, .pi / 5, .pi / 3, .pi / 7]))
         #expect(classification == .nonClifford(tCount: 9), "Diagonal with non-Clifford phases should be non-Clifford")
     }
 
     @Test("Multiplexor with Clifford unitaries classifies as Clifford")
-    func classifyMultiplexorClifford() async {
+    func classifyMultiplexorClifford() {
         let hadamard: [[Complex<Double>]] = [
             [Complex(1.0 / 2.0.squareRoot(), 0), Complex(1.0 / 2.0.squareRoot(), 0)],
             [Complex(1.0 / 2.0.squareRoot(), 0), Complex(-1.0 / 2.0.squareRoot(), 0)],
@@ -408,7 +408,7 @@ struct CliffordGateClassifierExtendedTests {
     }
 
     @Test("Multiplexor with non-Clifford unitaries classifies as non-Clifford")
-    func classifyMultiplexorNonClifford() async {
+    func classifyMultiplexorNonClifford() {
         let nonClifford: [[Complex<Double>]] = [
             [Complex(0.9, 0), Complex(0.1, 0)],
             [Complex(0.1, 0), Complex(0.9, 0)],
@@ -418,25 +418,25 @@ struct CliffordGateClassifierExtendedTests {
     }
 
     @Test("Controlled Clifford gate with Pauli-X classifies as Clifford")
-    func classifyControlledPauliX() async {
+    func classifyControlledPauliX() {
         let classification = CliffordGateClassifier.classify(.controlled(gate: .pauliX, controls: [0]))
         #expect(classification == .clifford, "Controlled Pauli-X should be Clifford")
     }
 
     @Test("Controlled Clifford gate with Hadamard classifies as Clifford")
-    func classifyControlledHadamard() async {
+    func classifyControlledHadamard() {
         let classification = CliffordGateClassifier.classify(.controlled(gate: .hadamard, controls: [0]))
         #expect(classification == .clifford, "Controlled Hadamard should be Clifford")
     }
 
     @Test("Controlled non-Clifford gate classifies as non-Clifford")
-    func classifyControlledNonClifford() async {
+    func classifyControlledNonClifford() {
         let classification = CliffordGateClassifier.classify(.controlled(gate: .tGate, controls: [0]))
         #expect(classification == .nonClifford(tCount: 1), "Controlled T gate should be non-Clifford")
     }
 
     @Test("CustomSingleQubit Clifford matrix classifies as Clifford")
-    func classifyCustomSingleQubitClifford() async {
+    func classifyCustomSingleQubitClifford() {
         let pauliZ: [[Complex<Double>]] = [
             [.one, .zero],
             [.zero, Complex(-1.0, 0.0)],
@@ -446,7 +446,7 @@ struct CliffordGateClassifierExtendedTests {
     }
 
     @Test("CustomSingleQubit non-Clifford matrix classifies as non-Clifford")
-    func classifyCustomSingleQubitNonClifford() async {
+    func classifyCustomSingleQubitNonClifford() {
         let nonClifford: [[Complex<Double>]] = [
             [Complex(0.9, 0), Complex(0.1, 0.2)],
             [Complex(0.1, -0.2), Complex(0.9, 0)],
@@ -456,7 +456,7 @@ struct CliffordGateClassifierExtendedTests {
     }
 
     @Test("CustomTwoQubit matrix classifies as non-Clifford")
-    func classifyCustomTwoQubitNonClifford() async {
+    func classifyCustomTwoQubitNonClifford() {
         let nonClifford: [[Complex<Double>]] = [
             [Complex(0.9, 0), .zero, .zero, Complex(0.1, 0)],
             [.zero, Complex(0.8, 0), Complex(0.2, 0), .zero],

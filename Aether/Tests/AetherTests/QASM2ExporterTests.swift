@@ -87,7 +87,7 @@ struct QASM2ExporterSingleGateTests {
 @Suite("QASM2 Multi-Gate and Custom Gate Export")
 struct QASM2ExporterMultiGateTests {
     @Test("Multi-gate circuit preserves gate ordering")
-    func multiGateOrdering() {
+    func multiGateOrdering() throws {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.hadamard, to: 0)
         circuit.append(.cnot, to: [0, 1])
@@ -101,8 +101,8 @@ struct QASM2ExporterMultiGateTests {
         #expect(hIndex != nil, "Hadamard gate must appear in output")
         #expect(cxIndex != nil, "CNOT gate must appear in output")
         #expect(xIndex != nil, "Pauli-X gate must appear in output")
-        #expect(hIndex!.lowerBound < cxIndex!.lowerBound, "Hadamard must appear before CNOT in output")
-        #expect(cxIndex!.lowerBound < xIndex!.lowerBound, "CNOT must appear before Pauli-X in output")
+        #expect(try #require(hIndex?.lowerBound) < cxIndex!.lowerBound, "Hadamard must appear before CNOT in output")
+        #expect(try #require(cxIndex?.lowerBound) < xIndex!.lowerBound, "CNOT must appear before Pauli-X in output")
     }
 
     @Test("Custom single-qubit gate emits gate declaration")

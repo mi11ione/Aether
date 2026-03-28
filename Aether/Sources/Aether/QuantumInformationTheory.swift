@@ -72,7 +72,13 @@ import Foundation
     /// ```
     @inlinable
     public var entanglementEntropy: Double {
-        QuantumInformationTheory.entropyFromProbabilities(coefficients.map { $0 * $0 })
+        var entropy = 0.0
+        for lambda in coefficients {
+            let pSquared = lambda * lambda
+            if pSquared < 1e-15 { continue }
+            entropy -= pSquared * log2(pSquared)
+        }
+        return entropy
     }
 }
 
@@ -95,7 +101,7 @@ import Foundation
 ///     state: ghz, subsystemAQubits: [0]
 /// )
 /// ```
-@frozen public enum QuantumInformationTheory {
+public enum QuantumInformationTheory {
     /// Perform Schmidt decomposition of a bipartite quantum state
     ///
     /// Decomposes the state vector into Schmidt form |psi> = sum_i lambda_i |a_i> tensor |b_i>
@@ -138,7 +144,8 @@ import Foundation
         let dimA = 1 << subsystemAQubits.count
         let dimB = 1 << subsystemBQubits.count
 
-        var matrix = [[Complex<Double>]](unsafeUninitializedCapacity: dimA) { buffer, count in
+        var matrix = [[Complex<Double>]](unsafeUninitializedCapacity: dimA) {
+            buffer, count in
             for aIdx in 0 ..< dimA {
                 buffer[aIdx] = [Complex<Double>](repeating: .zero, count: dimB)
             }
@@ -226,15 +233,7 @@ import Foundation
         subsystemAQubits: [Int],
     ) -> Double {
         let decomposition = schmidtDecomposition(state: state, subsystemAQubits: subsystemAQubits)
-        var entropy = 0.0
-        for lambda in decomposition.coefficients {
-            let pSquared = lambda * lambda
-            if pSquared < 1e-15 {
-                continue
-            }
-            entropy -= pSquared * log2(pSquared)
-        }
-        return entropy
+        return decomposition.entanglementEntropy
     }
 
     /// Compute Shannon entropy from a probability distribution using base-2 logarithm

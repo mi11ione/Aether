@@ -55,7 +55,7 @@ public actor DMRG {
     /// - Parameters:
     ///   - hamiltonian: Target Hamiltonian as Matrix Product Operator
     ///   - maxBondDimension: Maximum bond dimension for MPS truncation
-    ///   - configuration: DMRG algorithm parameters (default: ``DMRGConfiguration/init()``)
+    ///   - configuration: DMRG algorithm parameters (default: ``DMRGConfiguration/init(maxSweeps:convergenceThreshold:isSubspaceExpansionEnabled:noiseStrength:)``)
     /// - Complexity: O(1)
     /// - Precondition: maxBondDimension must be positive
     public init(
@@ -458,16 +458,19 @@ public actor DMRG {
         dimension n: Int,
         to vector: [Complex<Double>],
     ) -> [Complex<Double>] {
-        var flatVec = [Double](unsafeUninitializedCapacity: n * 2) { buffer, count in
+        var flatVec = [Double](unsafeUninitializedCapacity: n * 2) {
+            buffer, count in
             for j in 0 ..< n {
                 buffer[j * 2] = vector[j].real
                 buffer[j * 2 + 1] = vector[j].imaginary
             }
             count = n * 2
         }
-        var flatResult = [Double](unsafeUninitializedCapacity: n * 2) { _, count in count = n * 2 }
-        var alpha: (Double, Double) = (1.0, 0.0)
-        var beta: (Double, Double) = (0.0, 0.0)
+        var flatResult = [Double](unsafeUninitializedCapacity: n * 2) {
+            _, count in count = n * 2
+        }
+        var alpha = (1.0, 0.0)
+        var beta = (0.0, 0.0)
         // Safety: baseAddress is non-nil for all buffers since n > 1000 guarantees non-empty arrays
         flatH.withUnsafeBufferPointer { hPtr in
             flatVec.withUnsafeMutableBufferPointer { vecPtr in
@@ -760,7 +763,8 @@ public actor DMRG {
             let rightDim = mps.tensors[site].rightBondDimension
 
             let elementCount = leftDim * 2 * rightDim
-            var elements = [Complex<Double>](unsafeUninitializedCapacity: elementCount) { buffer, count in
+            let elements = [Complex<Double>](unsafeUninitializedCapacity: elementCount) {
+                buffer, count in
                 for idx in 0 ..< elementCount {
                     seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
                     let real = Double(Int64(bitPattern: seed)) / Double(Int64.max)

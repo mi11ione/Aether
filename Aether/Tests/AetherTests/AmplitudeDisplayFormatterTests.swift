@@ -191,7 +191,7 @@ struct AmplitudeDisplayFormatterPhaseTests {
 @Suite("Sorting, Header, and PhaseUnit Enum")
 struct AmplitudeDisplayFormatterSortingAndEnumTests {
     @Test("Entries are sorted by descending probability")
-    func sortedByDescendingProbability() {
+    func sortedByDescendingProbability() throws {
         let state = QuantumState(qubits: 2, amplitudes: [
             Complex(0.2, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(0.9, 0.0),
         ])
@@ -201,8 +201,8 @@ struct AmplitudeDisplayFormatterSortingAndEnumTests {
         let dataLines = lines.dropFirst()
         #expect(dataLines.count >= 2, "Should have at least 2 data lines for 2 significant states")
 
-        let firstLine = String(dataLines.first!)
-        let secondLine = String(dataLines.dropFirst().first!)
+        let firstLine = try String(#require(dataLines.first))
+        let secondLine = try String(#require(dataLines.dropFirst().first))
         #expect(firstLine.contains("|11⟩"), "First entry should be |11> with highest probability")
         #expect(secondLine.contains("|00⟩"), "Second entry should be |00> with lower probability")
     }

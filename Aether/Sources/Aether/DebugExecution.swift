@@ -347,7 +347,9 @@ public struct DebugExecution: Sendable {
     /// }
     /// ```
     @inlinable
-    public var isComplete: Bool { currentIndex >= circuit.operations.count }
+    public var isComplete: Bool {
+        currentIndex >= circuit.operations.count
+    }
 
     /// The current quantum state after all executed operations.
     ///
@@ -361,5 +363,7 @@ public struct DebugExecution: Sendable {
     /// let probs = debug.currentState.probabilities()
     /// ```
     @inlinable
-    public var currentState: QuantumState { internalState }
+    public var currentState: QuantumState {
+        internalState
+    }
 }

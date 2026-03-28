@@ -268,7 +268,8 @@ public struct MPSTensor: Sendable, Equatable {
         let m = physicalDimension * rightBondDimension
         let n = leftBondDimension
 
-        var matrixInterleaved = [Double](unsafeUninitializedCapacity: m * n * 2) { buffer, count in
+        var matrixInterleaved = [Double](unsafeUninitializedCapacity: m * n * 2) {
+            buffer, count in
             for alpha in 0 ..< n {
                 for physical in 0 ..< physicalDimension {
                     for beta in 0 ..< rightBondDimension {
@@ -283,7 +284,8 @@ public struct MPSTensor: Sendable, Equatable {
             count = m * n * 2
         }
 
-        var vecInterleaved = [Double](unsafeUninitializedCapacity: n * 2) { buffer, count in
+        var vecInterleaved = [Double](unsafeUninitializedCapacity: n * 2) {
+            buffer, count in
             for i in 0 ..< n {
                 buffer[i * 2] = leftVector[i].real
                 buffer[i * 2 + 1] = leftVector[i].imaginary
@@ -291,7 +293,8 @@ public struct MPSTensor: Sendable, Equatable {
             count = n * 2
         }
 
-        var resultInterleaved = [Double](unsafeUninitializedCapacity: m * 2) { _, count in
+        var resultInterleaved = [Double](unsafeUninitializedCapacity: m * 2) {
+            _, count in
             count = m * 2
         }
 
@@ -323,7 +326,7 @@ public struct MPSTensor: Sendable, Equatable {
             }
         }
 
-        let result = (0 ..< physicalDimension).map { physical in
+        return (0 ..< physicalDimension).map { physical in
             [Complex<Double>](unsafeUninitializedCapacity: rightBondDimension) { buffer, count in
                 for betaIdx in 0 ..< rightBondDimension {
                     let idx = (physical * rightBondDimension + betaIdx) * 2
@@ -332,8 +335,6 @@ public struct MPSTensor: Sendable, Equatable {
                 count = rightBondDimension
             }
         }
-
-        return result
     }
 
     /// Contracts the tensor with a right vector: result[alpha,i] = Sum_beta A[alpha,i,beta] * v[beta].
@@ -396,7 +397,8 @@ public struct MPSTensor: Sendable, Equatable {
         let m = leftBondDimension * physicalDimension
         let n = rightBondDimension
 
-        var matrixInterleaved = [Double](unsafeUninitializedCapacity: m * n * 2) { buffer, count in
+        var matrixInterleaved = [Double](unsafeUninitializedCapacity: m * n * 2) {
+            buffer, count in
             for alpha in 0 ..< leftBondDimension {
                 for physical in 0 ..< physicalDimension {
                     let rowIndex = alpha * physicalDimension + physical
@@ -411,7 +413,8 @@ public struct MPSTensor: Sendable, Equatable {
             count = m * n * 2
         }
 
-        var vecInterleaved = [Double](unsafeUninitializedCapacity: n * 2) { buffer, count in
+        var vecInterleaved = [Double](unsafeUninitializedCapacity: n * 2) {
+            buffer, count in
             for i in 0 ..< n {
                 buffer[i * 2] = rightVector[i].real
                 buffer[i * 2 + 1] = rightVector[i].imaginary
@@ -419,7 +422,8 @@ public struct MPSTensor: Sendable, Equatable {
             count = n * 2
         }
 
-        var resultInterleaved = [Double](unsafeUninitializedCapacity: m * 2) { _, count in
+        var resultInterleaved = [Double](unsafeUninitializedCapacity: m * 2) {
+            _, count in
             count = m * 2
         }
 
@@ -451,7 +455,7 @@ public struct MPSTensor: Sendable, Equatable {
             }
         }
 
-        let result = (0 ..< leftBondDimension).map { alphaIdx in
+        return (0 ..< leftBondDimension).map { alphaIdx in
             [Complex<Double>](unsafeUninitializedCapacity: physicalDimension) { buffer, count in
                 for physical in 0 ..< physicalDimension {
                     let idx = (alphaIdx * physicalDimension + physical) * 2
@@ -460,8 +464,6 @@ public struct MPSTensor: Sendable, Equatable {
                 count = physicalDimension
             }
         }
-
-        return result
     }
 
     /// Extracts the matrix A[alpha,beta] for a fixed physical index.
@@ -480,7 +482,7 @@ public struct MPSTensor: Sendable, Equatable {
     /// - Returns: 2D matrix [leftBond][rightBond] for the given physical index
     /// - Complexity: O(leftBond * rightBond)
     /// - Precondition: physicalIndex must be 0 or 1
-    /// - SeeAlso: ``subscript(left:physical:right:)``
+    /// - SeeAlso: ``subscript(_:_:_:)``
     /// - SeeAlso: ``reshapeForSVD(mergingLeft:)``
     @_effects(readonly)
     @_optimize(speed)

@@ -48,7 +48,8 @@ public enum CircuitCostEstimator {
         var totalGates = 0
         var cnotEquivalent = 0
         var tCount = 0
-        var qubitDepth = [Int](unsafeUninitializedCapacity: max(circuit.qubits, 1)) { buffer, initializedCount in
+        var qubitDepth = [Int](unsafeUninitializedCapacity: max(circuit.qubits, 1)) {
+            buffer, initializedCount in
             buffer.initialize(repeating: 0)
             initializedCount = max(circuit.qubits, 1)
         }

@@ -722,7 +722,7 @@ struct MeasurementErrorModelTests {
     }
 
     @Test("Mitigate histogram with sparse entries uses zero for missing partner")
-    func mitigateHistogramSparseEntries() {
+    func mitigateHistogramSparseEntries() throws {
         let model = MeasurementErrorModel(p0Given1: 0.1, p1Given0: 0.05)
 
         let sparseHistogram = [0: 100]
@@ -730,7 +730,7 @@ struct MeasurementErrorModelTests {
         let corrected = model.mitigateHistogram(sparseHistogram, qubit: 0, totalQubits: 2)
 
         #expect(corrected[0] != nil, "State 0 should have corrected count")
-        #expect(corrected[0]! > 0, "Corrected count should be positive")
+        #expect(try #require(corrected[0]) > 0, "Corrected count should be positive")
     }
 
     @Test("Mitigate histogram handles asymmetric sparse data")
@@ -1029,12 +1029,12 @@ struct HardwareNoiseProfileTests {
     }
 
     @Test("Edge parameters lookup")
-    func edgeParametersLookup() {
+    func edgeParametersLookup() throws {
         let profile = HardwareNoiseProfile.ibmManila
 
         let edge = profile.edgeParameters(q1: 0, q2: 1)
         #expect(edge != nil, "Should find edge 0-1")
-        #expect(edge!.twoQubitErrorRate > 0, "Should have non-zero error rate")
+        #expect(try #require(edge?.twoQubitErrorRate) > 0, "Should have non-zero error rate")
     }
 
     @Test("Average error calculations")
@@ -1674,7 +1674,7 @@ struct NoiseModelIdleNoiseTests {
             after: .hadamard,
             targetQubits: [0],
             to: dm,
-            totalQubits: 3
+            totalQubits: 3,
         )
 
         #expect(abs(result.trace() - 1.0) < 1e-10, "Trace should be preserved")

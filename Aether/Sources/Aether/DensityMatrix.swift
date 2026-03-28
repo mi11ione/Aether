@@ -66,7 +66,9 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     ///
     /// - Complexity: O(1)
     @inlinable
-    public var dimension: Int { 1 << qubits }
+    public var dimension: Int {
+        1 << qubits
+    }
 
     /// Return type for ``mostProbableState()``, containing the basis state index and its probability.
     public typealias MostProbableResult = (index: Int, probability: Double)
@@ -592,7 +594,8 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
 
         let keptMasks = keptQubits.map { 1 << $0 }
 
-        var newElements = [Complex<Double>](unsafeUninitializedCapacity: newSize) { buffer, count in
+        var newElements = [Complex<Double>](unsafeUninitializedCapacity: newSize) {
+            buffer, count in
             buffer.initialize(repeating: .zero)
             count = newSize
         }
@@ -726,7 +729,8 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         let size = dim * dim
         let mask = 1 << qubit
 
-        var newElements = [Complex<Double>](unsafeUninitializedCapacity: size) { _, count in
+        var newElements = [Complex<Double>](unsafeUninitializedCapacity: size) {
+            _, count in
             count = size
         }
 
@@ -769,7 +773,8 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         let size = dim * dim
         let mask = 1 << qubit
 
-        var newElements = [Complex<Double>](unsafeUninitializedCapacity: size) { buffer, count in
+        var newElements = [Complex<Double>](unsafeUninitializedCapacity: size) {
+            buffer, count in
             buffer.initialize(repeating: .zero)
             count = size
         }
@@ -801,7 +806,8 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         let mask0 = 1 << qubit0
         let mask1 = 1 << qubit1
 
-        var newElements = [Complex<Double>](unsafeUninitializedCapacity: size) { buffer, count in
+        var newElements = [Complex<Double>](unsafeUninitializedCapacity: size) {
+            buffer, count in
             buffer.initialize(repeating: .zero)
             count = size
         }
@@ -848,7 +854,8 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
 
         var fullU = expandGateToFullSpaceFlat(gate: gate, targetQubits: targetQubits)
 
-        var fullUDagger = [Complex<Double>](unsafeUninitializedCapacity: nn) { buffer, count in
+        var fullUDagger = [Complex<Double>](unsafeUninitializedCapacity: nn) {
+            buffer, count in
             for i in 0 ..< dim {
                 for j in 0 ..< dim {
                     buffer[i * dim + j] = fullU[j * dim + i].conjugate
@@ -860,7 +867,8 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         var alpha = (1.0, 0.0)
         var beta = (0.0, 0.0)
 
-        var temp = [Complex<Double>](unsafeUninitializedCapacity: nn) { _, count in
+        var temp = [Complex<Double>](unsafeUninitializedCapacity: nn) {
+            _, count in
             count = nn
         }
 
@@ -886,7 +894,8 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
             }
         }
 
-        var newElements = [Complex<Double>](unsafeUninitializedCapacity: nn) { _, count in
+        var newElements = [Complex<Double>](unsafeUninitializedCapacity: nn) {
+            _, count in
             count = nn
         }
 
@@ -929,7 +938,8 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         }
         let nonTargetMask = ((1 << qubits) - 1) & ~targetMask
 
-        var flatMatrix = [Complex<Double>](unsafeUninitializedCapacity: fullDim * fullDim) { buffer, count in
+        var flatMatrix = [Complex<Double>](unsafeUninitializedCapacity: fullDim * fullDim) {
+            buffer, count in
             buffer.initialize(repeating: .zero)
             count = fullDim * fullDim
         }
@@ -979,7 +989,6 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     @_effects(readonly)
     @_eagerMove
     public func toQuantumState() -> QuantumState {
-        let dim = dimension
         let matrix = extractMatrix()
         let eigen = HermitianEigenDecomposition.decompose(matrix: matrix)
         var maxVal: Double = 0

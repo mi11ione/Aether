@@ -498,7 +498,8 @@ public actor AmplitudeEstimation {
         let state = await simulator.execute(circuit)
 
         let precisionStateSize = 1 << n
-        var precisionProbabilities = [Double](unsafeUninitializedCapacity: precisionStateSize) { buffer, count in
+        var precisionProbabilities = [Double](unsafeUninitializedCapacity: precisionStateSize) {
+            buffer, count in
             buffer.initialize(repeating: 0.0)
             count = precisionStateSize
         }
@@ -523,9 +524,7 @@ public actor AmplitudeEstimation {
         vDSP_maxviD(precisionProbabilities, 1, &maxValue, &maxIdx, vDSP_Length(precisionStateSize))
         let maxIndex = Int(maxIdx)
 
-        let rawPhase = Double(maxIndex) / Double(precisionStateSize)
-
-        return rawPhase
+        return Double(maxIndex) / Double(precisionStateSize)
     }
 
     /// Runs iterative phase estimation on Grover operator.
@@ -954,7 +953,6 @@ public actor AmplitudeEstimation {
     /// Computes classical Monte Carlo samples for equivalent precision.
     @_effects(readonly)
     private func computeClassicalEquivalent(precisionQubits: Int) -> Int {
-        let samples = 1 << (2 * precisionQubits)
-        return samples
+        1 << (2 * precisionQubits)
     }
 }

@@ -57,7 +57,8 @@ public enum MatrixUtilities {
         let nn = n * n
         let nn2 = nn * 2
 
-        var aInterleaved = [Double](unsafeUninitializedCapacity: nn2) { buffer, count in
+        var aInterleaved = [Double](unsafeUninitializedCapacity: nn2) {
+            buffer, count in
             for i in 0 ..< n {
                 for j in 0 ..< n {
                     let idx = (i * n + j) * 2
@@ -68,7 +69,8 @@ public enum MatrixUtilities {
             count = nn2
         }
 
-        var bInterleaved = [Double](unsafeUninitializedCapacity: nn2) { buffer, count in
+        var bInterleaved = [Double](unsafeUninitializedCapacity: nn2) {
+            buffer, count in
             for i in 0 ..< n {
                 for j in 0 ..< n {
                     let idx = (i * n + j) * 2
@@ -79,7 +81,8 @@ public enum MatrixUtilities {
             count = nn2
         }
 
-        var resultInterleaved = [Double](unsafeUninitializedCapacity: nn2) { _, count in
+        var resultInterleaved = [Double](unsafeUninitializedCapacity: nn2) {
+            _, count in
             count = nn2
         }
 
@@ -108,7 +111,7 @@ public enum MatrixUtilities {
             }
         }
 
-        let result = (0 ..< n).map { i in
+        return (0 ..< n).map { i in
             [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
                 for j in 0 ..< n {
                     let idx = (i * n + j) * 2
@@ -117,8 +120,6 @@ public enum MatrixUtilities {
                 count = n
             }
         }
-
-        return result
     }
 
     /// Compute Hermitian conjugate (conjugate transpose) M† = (M*)ᵀ
@@ -160,7 +161,7 @@ public enum MatrixUtilities {
     ///
     /// Computes M^n using binary exponentiation with O(log n) matrix multiplications instead of
     /// naive O(n) sequential products. Returns the identity matrix for exponent zero and the
-    /// original matrix for exponent one as base cases. Used by ``QuantumCircuit/power(_:)`` to
+    /// original matrix for exponent one as base cases. Used by ``QuantumCircuit/repeated(_:)`` to
     /// raise circuit unitaries to integer powers for repeated gate application.
     ///
     /// **Example:**

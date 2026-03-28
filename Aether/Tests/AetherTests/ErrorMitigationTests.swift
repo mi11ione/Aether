@@ -261,7 +261,7 @@ struct ZNEMitigationTests {
     }
 
     @Test("Mitigation on noisy circuit improves expectation")
-    func mitigationImprovesExpectation() async {
+    func mitigationImprovesExpectation() async throws {
         let zne = ZeroNoiseExtrapolation(scaleFactors: [1, 3, 5])
         let noise = NoiseModel.depolarizing(singleQubitError: 0.05, twoQubitError: 0.1)
         let simulator = DensityMatrixSimulator(noiseModel: noise)
@@ -274,8 +274,8 @@ struct ZNEMitigationTests {
             simulator: simulator,
         )
 
-        let noisyValue = result.noisyValues.first { $0.scale == 1.0 }?.value
-        #expect(noisyValue!.isFinite, "Noisy value should be finite")
+        let noisyValue = try #require(result.noisyValues.first { $0.scale == 1.0 }?.value)
+        #expect(noisyValue.isFinite, "Noisy value should be finite")
         #expect(result.mitigatedValue.isFinite, "Mitigated value should be finite")
     }
 
@@ -535,7 +535,7 @@ struct PECMitigationTests {
 @Suite("Readout Error Mitigation")
 struct ReadoutErrorMitigationTests {
     @Test("Mitigate histogram with zero error is identity")
-    func mitigateZeroError() {
+    func mitigateZeroError() throws {
         let model = MeasurementErrorModel(p0Given1: 0.0, p1Given0: 0.0)
         let histogram: [Int: Int] = [0: 500, 1: 500]
 
@@ -545,12 +545,12 @@ struct ReadoutErrorMitigationTests {
             models: [model],
         )
 
-        #expect(abs(corrected[0]! - 500.0) < 1e-10, "No error should preserve counts")
-        #expect(abs(corrected[1]! - 500.0) < 1e-10, "No error should preserve counts")
+        #expect(try abs(#require(corrected[0]) - 500.0) < 1e-10, "No error should preserve counts")
+        #expect(try abs(#require(corrected[1]) - 500.0) < 1e-10, "No error should preserve counts")
     }
 
     @Test("Mitigate histogram corrects bias")
-    func mitigateCorrectsBias() {
+    func mitigateCorrectsBias() throws {
         let model = MeasurementErrorModel(p0Given1: 0.1, p1Given0: 0.05)
         let histogram: [Int: Int] = [0: 600, 1: 400]
 
@@ -560,8 +560,10 @@ struct ReadoutErrorMitigationTests {
             models: [model],
         )
 
-        #expect(corrected[0]!.isFinite, "Corrected P(0) should be finite")
-        #expect(corrected[1]!.isFinite, "Corrected P(1) should be finite")
+        let corrected0 = try #require(corrected[0])
+        let corrected1 = try #require(corrected[1])
+        #expect(corrected0.isFinite, "Corrected P(0) should be finite")
+        #expect(corrected1.isFinite, "Corrected P(1) should be finite")
     }
 
     @Test("Mitigate histogram preserves total counts")
@@ -628,7 +630,7 @@ struct ReadoutErrorMitigationTests {
     }
 
     @Test("Mitigate single state histogram")
-    func mitigateSingleState() {
+    func mitigateSingleState() throws {
         let model = MeasurementErrorModel(p0Given1: 0.1, p1Given0: 0.05)
         let histogram = [0: 1000]
 
@@ -638,7 +640,8 @@ struct ReadoutErrorMitigationTests {
             models: [model],
         )
 
-        #expect(corrected[0]!.isFinite, "Single state should be mitigated")
+        let correctedValue = try #require(corrected[0])
+        #expect(correctedValue.isFinite, "Single state should be mitigated")
         #expect(abs(corrected.values.reduce(0, +) - 1000) < 1e-6, "Total should be preserved")
     }
 }
@@ -661,12 +664,12 @@ struct MeasurementErrorModelMitigationTests {
     }
 
     @Test("Mitigate histogram single qubit")
-    func mitigateHistogramSingleQubit() {
+    func mitigateHistogramSingleQubit() throws {
         let model = MeasurementErrorModel(p0Given1: 0.1, p1Given0: 0.05)
         let histogram = [0: 550, 1: 450]
 
         let corrected = model.mitigateHistogram(histogram, qubit: 0, totalQubits: 1)
-        let total = corrected[0]! + corrected[1]!
+        let total = try #require(corrected[0]) + corrected[1]!
 
         #expect(abs(total - 1000) < 10, "Total counts should be approximately preserved")
     }

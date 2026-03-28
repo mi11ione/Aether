@@ -103,12 +103,12 @@ struct ParameterConstraintTests {
     }
 
     @Test("Bounded constraint returns bounds tuple")
-    func boundedReturnsBounds() {
+    func boundedReturnsBounds() throws {
         let constraint = ParameterConstraint.bounded(min: -2.0, max: 3.0)
         let bounds = constraint.bounds
         #expect(bounds != nil, "Bounded constraint should return bounds")
-        #expect(abs(bounds!.min - -2.0) < 1e-10, "Min bound should be -2.0")
-        #expect(abs(bounds!.max - 3.0) < 1e-10, "Max bound should be 3.0")
+        #expect(try abs(#require(bounds?.min) - -2.0) < 1e-10, "Min bound should be -2.0")
+        #expect(try abs(#require(bounds?.max) - 3.0) < 1e-10, "Max bound should be 3.0")
     }
 
     @Test("NonNegative constraint returns nil bounds")
@@ -126,12 +126,12 @@ struct ParameterConstraintTests {
     }
 
     @Test("MakeBounded creates valid constraint")
-    func makeBoundedCreatesValidConstraint() {
+    func makeBoundedCreatesValidConstraint() throws {
         let constraint = ParameterConstraint.makeBounded(min: 0.0, max: 1.0)
         let bounds = constraint.bounds
         #expect(bounds != nil, "makeBounded should create bounded constraint")
-        #expect(abs(bounds!.min - 0.0) < 1e-10, "Min should be 0.0")
-        #expect(abs(bounds!.max - 1.0) < 1e-10, "Max should be 1.0")
+        #expect(try abs(#require(bounds?.min) - 0.0) < 1e-10, "Min should be 0.0")
+        #expect(try abs(#require(bounds?.max) - 1.0) < 1e-10, "Max should be 1.0")
     }
 
     @Test("MakePeriodic creates valid constraint")

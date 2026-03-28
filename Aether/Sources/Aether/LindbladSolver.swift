@@ -56,7 +56,7 @@ import Accelerate
         relativeTolerance: Double = 1e-6,
         maxSteps: Int = 10000,
         stiffnessThreshold: Int = 20,
-        positivityEnforcement: PositivityMethod = .cholesky
+        positivityEnforcement: PositivityMethod = .cholesky,
     ) {
         self.absoluteTolerance = absoluteTolerance
         self.relativeTolerance = relativeTolerance
@@ -201,7 +201,6 @@ import Accelerate
 /// - SeeAlso: ``LindbladConfiguration``
 /// - SeeAlso: ``LindbladResult``
 public enum LindbladSolver {
-
     // MARK: - Private Types
 
     /// Precomputed flat jump operator matrices for efficient RHS evaluation.
@@ -311,7 +310,7 @@ public enum LindbladSolver {
         jumpOperators: [[[Complex<Double>]]],
         initialState: DensityMatrix,
         time: Double,
-        configuration: LindbladConfiguration = LindbladConfiguration()
+        configuration: LindbladConfiguration = LindbladConfiguration(),
     ) -> LindbladResult {
         ValidationUtilities.validateNonNegativeDouble(time, name: "Evolution time")
         ValidationUtilities.validatePositiveInt(configuration.maxSteps, name: "Max steps")
@@ -376,7 +375,7 @@ public enum LindbladSolver {
                     h: h,
                     hMatrix: hMatrix,
                     jumpData: jumpData,
-                    dim: dim
+                    dim: dim,
                 )
                 rhoNew = stepRho
 
@@ -401,7 +400,9 @@ public enum LindbladSolver {
                     stiffnessDetections += 1
                     currentMethod = .trBdf2
                     methodSwitches += 1
-                    for i in 0 ..< windowSize { recentOutcomes[i] = true }
+                    for i in 0 ..< windowSize {
+                        recentOutcomes[i] = true
+                    }
                     outcomeIndex = 0
                     runningRejectionCount = 0
                 }
@@ -421,7 +422,7 @@ public enum LindbladSolver {
                     jumpData: jumpData,
                     dim: dim,
                     atol: configuration.absoluteTolerance,
-                    rtol: configuration.relativeTolerance
+                    rtol: configuration.relativeTolerance,
                 )
 
                 acceptedSteps += 1
@@ -443,14 +444,14 @@ public enum LindbladSolver {
             acceptedSteps: acceptedSteps,
             rejectedSteps: rejectedSteps,
             stiffnessDetections: stiffnessDetections,
-            methodSwitches: methodSwitches
+            methodSwitches: methodSwitches,
         )
 
         return LindbladResult(
             finalState: finalState,
             time: t,
             stepStatistics: stats,
-            finalMethod: currentMethod
+            finalMethod: currentMethod,
         )
     }
 
@@ -487,15 +488,17 @@ public enum LindbladSolver {
         _ rhoVec: [Complex<Double>],
         hMatrix: [Complex<Double>],
         jumpData: JumpOperatorData,
-        dim: Int
+        dim: Int,
     ) -> [Complex<Double>] {
         let n2 = dim * dim
 
-        var hRho = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+        var hRho = [Complex<Double>](unsafeUninitializedCapacity: n2) {
+            buffer, count in
             buffer.initialize(repeating: .zero)
             count = n2
         }
-        var rhoH = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+        var rhoH = [Complex<Double>](unsafeUninitializedCapacity: n2) {
+            buffer, count in
             buffer.initialize(repeating: .zero)
             count = n2
         }
@@ -503,26 +506,31 @@ public enum LindbladSolver {
         matrixMultiplyFlat(hMatrix, rhoVec, &hRho, dim: dim)
         matrixMultiplyFlat(rhoVec, hMatrix, &rhoH, dim: dim)
 
-        var result = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+        var result = [Complex<Double>](unsafeUninitializedCapacity: n2) {
+            buffer, count in
             for i in 0 ..< n2 {
                 let diff = hRho[i] - rhoH[i]
                 buffer[i] = Complex(diff.imaginary, -diff.real)
             }
             count = n2
         }
-        var lRho = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+        var lRho = [Complex<Double>](unsafeUninitializedCapacity: n2) {
+            buffer, count in
             buffer.initialize(repeating: .zero)
             count = n2
         }
-        var lRhoLdag = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+        var lRhoLdag = [Complex<Double>](unsafeUninitializedCapacity: n2) {
+            buffer, count in
             buffer.initialize(repeating: .zero)
             count = n2
         }
-        var ldagLRho = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+        var ldagLRho = [Complex<Double>](unsafeUninitializedCapacity: n2) {
+            buffer, count in
             buffer.initialize(repeating: .zero)
             count = n2
         }
-        var rhoLdagL = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+        var rhoLdagL = [Complex<Double>](unsafeUninitializedCapacity: n2) {
+            buffer, count in
             buffer.initialize(repeating: .zero)
             count = n2
         }
@@ -553,7 +561,7 @@ public enum LindbladSolver {
         h: Double,
         hMatrix: [Complex<Double>],
         jumpData: JumpOperatorData,
-        dim: Int
+        dim: Int,
     ) -> (rhoNew: [Complex<Double>], error: Double, k7: [Complex<Double>]) {
         let n2 = rhoVec.count
 
@@ -661,13 +669,14 @@ public enum LindbladSolver {
         jumpData: JumpOperatorData,
         dim: Int,
         atol: Double,
-        rtol: Double
+        rtol: Double,
     ) -> (rhoNew: [Complex<Double>], accepted: Bool) {
         let n2 = rhoVec.count
         let gamma = trBdf2Gamma
 
         let gammaH2 = Complex<Double>(gamma * h * 0.5, 0)
-        var yGamma = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+        var yGamma = [Complex<Double>](unsafeUninitializedCapacity: n2) {
+            buffer, count in
             for i in 0 ..< n2 {
                 buffer[i] = rhoVec[i] + gammaH2 * f0[i]
             }
@@ -705,7 +714,8 @@ public enum LindbladSolver {
         let cc2 = Complex<Double>(c2, 0)
         let cc3 = Complex<Double>(c3, 0)
 
-        var yNew = [Complex<Double>](unsafeUninitializedCapacity: n2) { buffer, count in
+        var yNew = [Complex<Double>](unsafeUninitializedCapacity: n2) {
+            buffer, count in
             for i in 0 ..< n2 {
                 buffer[i] = cc2 * yGamma[i] - cc3 * rhoVec[i] + cc1h * fGamma[i]
             }
@@ -739,7 +749,7 @@ public enum LindbladSolver {
     private static func enforcePositivity(
         _ rhoVec: [Complex<Double>],
         dim: Int,
-        method: PositivityMethod
+        method: PositivityMethod,
     ) -> [Complex<Double>] {
         switch method {
         case .none:
@@ -796,7 +806,8 @@ public enum LindbladSolver {
     @_effects(readonly)
     @_optimize(speed)
     private static func enforcePositivityCholesky(_ rhoVec: [Complex<Double>], dim: Int) -> [Complex<Double>] {
-        var aColMajor = [Double](unsafeUninitializedCapacity: 2 * dim * dim) { buffer, count in
+        var aColMajor = [Double](unsafeUninitializedCapacity: 2 * dim * dim) {
+            buffer, count in
             for col in 0 ..< dim {
                 for row in 0 ..< dim {
                     let idx = 2 * (col * dim + row)
@@ -935,13 +946,14 @@ public enum LindbladSolver {
         _ a: [Complex<Double>],
         _ b: [Complex<Double>],
         _ c: inout [Complex<Double>],
-        dim: Int
+        dim: Int,
     ) {
         let n = dim
         let nn = n * n
         let nn2 = nn * 2
 
-        var aInterleaved = [Double](unsafeUninitializedCapacity: nn2) { buffer, count in
+        var aInterleaved = [Double](unsafeUninitializedCapacity: nn2) {
+            buffer, count in
             for i in 0 ..< nn {
                 buffer[i * 2] = a[i].real
                 buffer[i * 2 + 1] = a[i].imaginary
@@ -949,7 +961,8 @@ public enum LindbladSolver {
             count = nn2
         }
 
-        var bInterleaved = [Double](unsafeUninitializedCapacity: nn2) { buffer, count in
+        var bInterleaved = [Double](unsafeUninitializedCapacity: nn2) {
+            buffer, count in
             for i in 0 ..< nn {
                 buffer[i * 2] = b[i].real
                 buffer[i * 2 + 1] = b[i].imaginary
@@ -957,7 +970,8 @@ public enum LindbladSolver {
             count = nn2
         }
 
-        var cInterleaved = [Double](unsafeUninitializedCapacity: nn2) { _, count in
+        var cInterleaved = [Double](unsafeUninitializedCapacity: nn2) {
+            _, count in
             count = nn2
         }
 
@@ -978,7 +992,7 @@ public enum LindbladSolver {
                                 OpaquePointer(aPtr.baseAddress), Int32(n),
                                 OpaquePointer(bPtr.baseAddress), Int32(n),
                                 OpaquePointer(betaPtr),
-                                OpaquePointer(cPtr.baseAddress), Int32(n)
+                                OpaquePointer(cPtr.baseAddress), Int32(n),
                             )
                         }
                     }

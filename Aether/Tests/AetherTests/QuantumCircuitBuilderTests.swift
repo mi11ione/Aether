@@ -245,7 +245,7 @@ struct QuantumCircuitBuilderMethodTests {
 
 /// Validates QuantumCircuit builder initializer with declarative syntax.
 /// Ensures basic circuits, conditional gates (if/else), for loops,
-/// and autoOptimize flag work correctly through the builder DSL.
+/// and isAutoOptimizing flag work correctly through the builder DSL.
 @Suite("QuantumCircuit Builder Init")
 struct QuantumCircuitBuilderInitTests {
     @Test("Basic circuit with sequential gates")
@@ -316,14 +316,14 @@ struct QuantumCircuitBuilderInitTests {
         #expect(circuit.operations[2] == .gate(.hadamard, qubits: [2]), "Third H should be on qubit 2")
     }
 
-    @Test("Builder with autoOptimize creates valid circuit")
+    @Test("Builder with isAutoOptimizing creates valid circuit")
     func autoOptimizeCreatesValidCircuit() {
-        let circuit = QuantumCircuit(qubits: 1, autoOptimize: true) {
+        let circuit = QuantumCircuit(qubits: 1, isAutoOptimizing: true) {
             GateStep(.hadamard, on: 0)
             GateStep(.hadamard, on: 0)
         }
         #expect(circuit.qubits == 1, "Auto-optimized circuit should have 1 qubit")
-        #expect(circuit.autoOptimize == true, "Circuit should have autoOptimize enabled")
+        #expect(circuit.isAutoOptimizing == true, "Circuit should have isAutoOptimizing enabled")
     }
 
     @Test("Builder includes non-unitary operations")

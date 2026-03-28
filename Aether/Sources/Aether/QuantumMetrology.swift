@@ -1,7 +1,13 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
+import Accelerate
 import Foundation
+
+/// Threshold for safe normalization division.
+private let normalizationEpsilon: Double = 1e-15
+/// Threshold below which phase angles are treated as zero.
+private let phaseEpsilon: Double = 1e-10
 
 /// Prior probability distribution for Bayesian phase estimation.
 ///
@@ -18,58 +24,12 @@ import Foundation
 /// ```
 ///
 /// - SeeAlso: ``BayesianPhaseEstimation``
-/// - SeeAlso: ``BayesianPhaseResult``
+/// - SeeAlso: ``BayesianPhaseEstimation/Result``
 @frozen
 public enum PhasePrior: Sendable {
     case uniform
     case gaussian(mean: Double, stdDev: Double)
     case custom([Double])
-}
-
-/// Result of Bayesian phase estimation containing posterior distribution and statistics.
-///
-/// Provides maximum a posteriori (MAP) estimate, posterior mean, standard deviation,
-/// and full discretized posterior distribution. The posterior precision typically
-/// achieves Heisenberg scaling: sigma proportional to 1/N measurements (vs 1/sqrt(N) classical).
-///
-/// **Example:**
-/// ```swift
-/// let result = await estimator.run(maxMeasurements: 100)
-/// print("Phase estimate: \(result.mapEstimate)")
-/// print("Uncertainty: \(result.posteriorStdDev)")
-/// print("Measurements used: \(result.measurementCount)")
-/// ```
-///
-/// - SeeAlso: ``BayesianPhaseEstimation``
-/// - SeeAlso: ``PhasePrior``
-@frozen
-public struct BayesianPhaseResult: Sendable, CustomStringConvertible {
-    /// Maximum a posteriori phase estimate (mode of posterior).
-    public let mapEstimate: Double
-
-    /// Expected value of posterior distribution.
-    public let posteriorMean: Double
-
-    /// Standard deviation of posterior distribution.
-    public let posteriorStdDev: Double
-
-    /// Full discretized posterior probability distribution over [0, 2pi).
-    public let posterior: [Double]
-
-    /// Total number of measurements performed.
-    public let measurementCount: Int
-
-    /// Multi-line formatted summary of estimation results.
-    @inlinable
-    public var description: String {
-        """
-        BayesianPhaseResult:
-          MAP Estimate: \(String(format: "%.6f", mapEstimate)) rad
-          Posterior Mean: \(String(format: "%.6f", posteriorMean)) rad
-          Posterior StdDev: \(String(format: "%.6f", posteriorStdDev)) rad
-          Measurements: \(measurementCount)
-        """
-    }
 }
 
 /// Adaptive Bayesian phase estimation for high-precision unitary eigenvalue determination.
@@ -102,14 +62,63 @@ public struct BayesianPhaseResult: Sendable, CustomStringConvertible {
 /// ```
 ///
 /// - SeeAlso: ``PhasePrior``
-/// - SeeAlso: ``BayesianPhaseResult``
+/// - SeeAlso: ``BayesianPhaseEstimation/Result``
 /// - SeeAlso: ``QuantumCircuit/phaseEstimation(unitary:precisionQubits:eigenstateQubits:)``
 public actor BayesianPhaseEstimation {
     private let unitary: QuantumGate
     private let discretizationBins: Int
     private var posterior: [Double]
     private let phaseGrid: [Double]
+    private let sinGrid: [Double]
+    private let cosGrid: [Double]
     private let deltaPhase: Double
+    private var posteriorBuffer: [Double]
+
+    /// Result of Bayesian phase estimation containing posterior distribution and statistics.
+    ///
+    /// Provides maximum a posteriori (MAP) estimate, posterior mean, standard deviation,
+    /// and full discretized posterior distribution. The posterior precision typically
+    /// achieves Heisenberg scaling: sigma proportional to 1/N measurements (vs 1/sqrt(N) classical).
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let result = await estimator.run(maxMeasurements: 100)
+    /// print("Phase estimate: \(result.mapEstimate)")
+    /// print("Uncertainty: \(result.posteriorStdDev)")
+    /// print("Measurements used: \(result.measurementCount)")
+    /// ```
+    ///
+    /// - SeeAlso: ``BayesianPhaseEstimation``
+    /// - SeeAlso: ``PhasePrior``
+    @frozen
+    public struct Result: Sendable, CustomStringConvertible {
+        /// Maximum a posteriori phase estimate (mode of posterior).
+        public let mapEstimate: Double
+
+        /// Expected value of posterior distribution.
+        public let posteriorMean: Double
+
+        /// Standard deviation of posterior distribution.
+        public let posteriorStdDev: Double
+
+        /// Full discretized posterior probability distribution over [0, 2pi).
+        public let posterior: [Double]
+
+        /// Total number of measurements performed.
+        public let measurementCount: Int
+
+        /// Multi-line formatted summary of estimation results.
+        @inlinable
+        public var description: String {
+            """
+            BayesianPhaseEstimation.Result:
+              MAP Estimate: \(String(format: "%.6f", mapEstimate)) rad
+              Posterior Mean: \(String(format: "%.6f", posteriorMean)) rad
+              Posterior StdDev: \(String(format: "%.6f", posteriorStdDev)) rad
+              Measurements: \(measurementCount)
+            """
+        }
+    }
 
     /// Creates Bayesian phase estimator for given unitary gate.
     ///
@@ -132,6 +141,8 @@ public actor BayesianPhaseEstimation {
     ///   - discretizationBins: Number of bins for phase discretization (default: 256)
     /// - Precondition: unitary must be a single-qubit gate
     /// - Precondition: discretizationBins must be positive
+    /// - Precondition: stdDev must be positive (for gaussian prior)
+    /// - Precondition: custom PDF must be non-empty (for custom prior)
     /// - Complexity: O(discretizationBins)
     public init(
         unitary: QuantumGate,
@@ -143,15 +154,18 @@ public actor BayesianPhaseEstimation {
 
         self.unitary = unitary
         self.discretizationBins = discretizationBins
-        deltaPhase = 2.0 * .pi / Double(discretizationBins)
+        let step = 2.0 * .pi / Double(discretizationBins)
+        deltaPhase = step
 
         let grid = [Double](unsafeUninitializedCapacity: discretizationBins) { buffer, count in
             for i in 0 ..< discretizationBins {
-                buffer[i] = Double(i) * 2.0 * .pi / Double(discretizationBins)
+                buffer[i] = Double(i) * step
             }
             count = discretizationBins
         }
         phaseGrid = grid
+        sinGrid = grid.map { sin($0) }
+        cosGrid = grid.map { cos($0) }
 
         switch prior {
         case .uniform:
@@ -160,53 +174,49 @@ public actor BayesianPhaseEstimation {
 
         case let .gaussian(mean, stdDev):
             ValidationUtilities.validatePositiveDouble(stdDev, name: "stdDev")
-            var priorValues = [Double](unsafeUninitializedCapacity: discretizationBins) { buffer, count in
+            var priorValues = [Double](unsafeUninitializedCapacity: discretizationBins) {
+                buffer, count in
                 let normFactor = 1.0 / (stdDev * sqrt(2.0 * .pi))
+                let halfInvVar = -0.5 / (stdDev * stdDev)
                 for i in 0 ..< discretizationBins {
                     let diff = grid[i] - mean
-                    buffer[i] = normFactor * exp(-0.5 * diff * diff / (stdDev * stdDev))
+                    buffer[i] = normFactor * exp(diff * diff * halfInvVar)
                 }
                 count = discretizationBins
             }
-            let sum = priorValues.reduce(0.0, +)
-            if sum > 1e-15 {
-                let invSum = 1.0 / sum
-                for i in 0 ..< discretizationBins {
-                    priorValues[i] *= invSum
-                }
+            var sum = 0.0
+            vDSP_sveD(priorValues, 1, &sum, vDSP_Length(priorValues.count))
+            if sum > normalizationEpsilon {
+                var invSum = 1.0 / sum
+                vDSP_vsmulD(priorValues, 1, &invSum, &priorValues, 1, vDSP_Length(priorValues.count))
             }
             posterior = priorValues
 
         case let .custom(pdf):
             ValidationUtilities.validateNonEmpty(pdf, name: "custom PDF")
-            var normalized = pdf
-            let sum = pdf.reduce(0.0, +)
-            if sum > 1e-15 {
-                let invSum = 1.0 / sum
-                for i in 0 ..< normalized.count {
-                    normalized[i] *= invSum
-                }
-            }
-            if normalized.count < discretizationBins {
+            var normalized: [Double]
+            if pdf.count < discretizationBins {
+                normalized = pdf
                 let padValue = 1.0 / Double(discretizationBins)
+                normalized.reserveCapacity(discretizationBins)
                 while normalized.count < discretizationBins {
                     normalized.append(padValue)
                 }
-                let newSum = normalized.reduce(0.0, +)
-                let invNewSum = 1.0 / newSum
-                for i in 0 ..< normalized.count {
-                    normalized[i] *= invNewSum
-                }
-            } else if normalized.count > discretizationBins {
-                normalized = Array(normalized.prefix(discretizationBins))
-                let newSum = normalized.reduce(0.0, +)
-                let invNewSum = 1.0 / newSum
-                for i in 0 ..< normalized.count {
-                    normalized[i] *= invNewSum
-                }
+            } else if pdf.count > discretizationBins {
+                normalized = Array(pdf.prefix(discretizationBins))
+            } else {
+                normalized = pdf
+            }
+            var sum = 0.0
+            vDSP_sveD(normalized, 1, &sum, vDSP_Length(normalized.count))
+            if sum > normalizationEpsilon {
+                var invSum = 1.0 / sum
+                vDSP_vsmulD(normalized, 1, &invSum, &normalized, 1, vDSP_Length(normalized.count))
             }
             posterior = normalized
         }
+
+        posteriorBuffer = [Double](repeating: 0.0, count: discretizationBins)
     }
 
     /// Runs adaptive Bayesian phase estimation until convergence or measurement limit.
@@ -233,15 +243,16 @@ public actor BayesianPhaseEstimation {
     ///   - maxMeasurements: Maximum number of measurements to perform
     ///   - targetPrecision: Optional target standard deviation for early stopping
     ///   - progress: Optional callback receiving (iteration, currentStdDev)
-    /// - Returns: BayesianPhaseResult with posterior statistics and estimates
+    /// - Returns: ``Result`` with posterior statistics and estimates
     /// - Precondition: maxMeasurements must be positive
+    /// - Precondition: targetPrecision must be positive (when non-nil)
     /// - Complexity: O(maxMeasurements * discretizationBins)
     @_optimize(speed)
     public func run(
         maxMeasurements: Int,
         targetPrecision: Double? = nil,
         progress: (@Sendable (Int, Double) async -> Void)? = nil,
-    ) async -> BayesianPhaseResult {
+    ) async -> Result {
         ValidationUtilities.validatePositiveInt(maxMeasurements, name: "maxMeasurements")
         if let precision = targetPrecision {
             ValidationUtilities.validatePositiveDouble(precision, name: "targetPrecision")
@@ -249,188 +260,136 @@ public actor BayesianPhaseEstimation {
 
         var measurementCount = 0
         let simulator = QuantumSimulator()
+        let phaseAngle = extractPhaseFromUnitary()
+        var currentStdDev = computePosteriorStdDev()
 
         for iteration in 0 ..< maxMeasurements {
-            let currentStdDev = computePosteriorStdDev()
-
             if let target = targetPrecision, currentStdDev <= target {
                 await progress?(iteration, currentStdDev)
                 break
             }
 
-            let adaptiveK = selectAdaptiveK()
+            let adaptiveK = selectAdaptiveK(stdDev: currentStdDev)
 
-            let outcome = await performMeasurement(k: adaptiveK, simulator: simulator)
+            let outcome = await performMeasurement(k: adaptiveK, simulator: simulator, phaseAngle: phaseAngle)
 
             updatePosterior(outcome: outcome, k: adaptiveK)
 
             measurementCount = iteration + 1
+            currentStdDev = computePosteriorStdDev()
 
-            await progress?(measurementCount, computePosteriorStdDev())
+            await progress?(measurementCount, currentStdDev)
         }
 
         return buildResult(measurementCount: measurementCount)
     }
 
+    /// Selects optimal controlled-U power based on current posterior width.
     @_optimize(speed)
     @_effects(readonly)
-    private func selectAdaptiveK() -> Int {
-        let stdDev = computePosteriorStdDev()
-        guard stdDev > 1e-10 else { return 1 }
+    @inline(__always)
+    private func selectAdaptiveK(stdDev: Double) -> Int {
+        guard stdDev > phaseEpsilon else { return 1 }
         let optimalK = Int(round(1.0 / (2.0 * stdDev)))
         return max(1, min(optimalK, 64))
     }
 
+    /// Executes controlled-U^k circuit and returns measurement outcome (0 or 1).
     @_optimize(speed)
-    private func performMeasurement(k: Int, simulator: QuantumSimulator) async -> Int {
+    private func performMeasurement(k: Int, simulator: QuantumSimulator, phaseAngle: Double) async -> Int {
         var circuit = QuantumCircuit(qubits: 2)
 
         circuit.append(.hadamard, to: 0)
 
-        let phaseAngle = extractPhaseFromUnitary()
         circuit.append(.controlledPhase(Double(k) * phaseAngle), to: [0, 1])
 
         circuit.append(.hadamard, to: 0)
 
         let state = await simulator.execute(circuit)
 
-        let random = Double.random(in: 0.0 ..< 1.0)
+        let sample = Double.random(in: 0.0 ..< 1.0)
         let (p0, _) = state.probabilities(for: 0)
 
-        return random < p0 ? 0 : 1
+        return sample < p0 ? 0 : 1
     }
 
+    /// Extracts eigenphase from the unitary gate's matrix representation.
     @_effects(readonly)
     private func extractPhaseFromUnitary() -> Double {
         let matrix = unitary.matrix()
         let eigenvalue1 = matrix[0][0]
-        let phase1 = atan2(eigenvalue1.imaginary, eigenvalue1.real)
-        return phase1
+        return atan2(eigenvalue1.imaginary, eigenvalue1.real)
     }
 
+    /// Applies Bayesian update to posterior distribution given measurement outcome.
     @_optimize(speed)
     private func updatePosterior(outcome: Int, k: Int) {
-        var newPosterior = [Double](unsafeUninitializedCapacity: discretizationBins) { buffer, count in
+        let kDouble = Double(k)
+        if outcome == 0 {
             for i in 0 ..< discretizationBins {
-                let phi = phaseGrid[i]
-                let likelihood: Double
-                if outcome == 0 {
-                    let cosVal = cos(Double(k) * phi / 2.0)
-                    likelihood = cosVal * cosVal
-                } else {
-                    let sinVal = sin(Double(k) * phi / 2.0)
-                    likelihood = sinVal * sinVal
-                }
-                buffer[i] = likelihood * posterior[i]
+                let cos2x = cos(kDouble * phaseGrid[i])
+                posteriorBuffer[i] = (1.0 + cos2x) * 0.5 * posterior[i]
             }
-            count = discretizationBins
-        }
-
-        let normalization = newPosterior.reduce(0.0, +)
-        if normalization > 1e-15 {
-            let invNorm = 1.0 / normalization
+        } else {
             for i in 0 ..< discretizationBins {
-                newPosterior[i] *= invNorm
+                let cos2x = cos(kDouble * phaseGrid[i])
+                posteriorBuffer[i] = (1.0 - cos2x) * 0.5 * posterior[i]
             }
         }
 
-        posterior = newPosterior
+        var normalization = 0.0
+        vDSP_sveD(posteriorBuffer, 1, &normalization, vDSP_Length(posteriorBuffer.count))
+        if normalization > normalizationEpsilon {
+            var invNorm = 1.0 / normalization
+            vDSP_vsmulD(posteriorBuffer, 1, &invNorm, &posteriorBuffer, 1, vDSP_Length(posteriorBuffer.count))
+        }
+
+        posterior = posteriorBuffer
     }
 
+    /// Computes circular mean of the posterior distribution.
     @_effects(readonly)
     private func computePosteriorMean() -> Double {
         var sumSin = 0.0
+        vDSP_dotprD(posterior, 1, sinGrid, 1, &sumSin, vDSP_Length(discretizationBins))
         var sumCos = 0.0
-        for i in 0 ..< discretizationBins {
-            let phi = phaseGrid[i]
-            sumSin += posterior[i] * sin(phi)
-            sumCos += posterior[i] * cos(phi)
-        }
+        vDSP_dotprD(posterior, 1, cosGrid, 1, &sumCos, vDSP_Length(discretizationBins))
         return atan2(sumSin, sumCos)
     }
 
+    /// Computes circular standard deviation of the posterior distribution.
     @_effects(readonly)
-    private func computePosteriorStdDev() -> Double {
-        let mean = computePosteriorMean()
+    private func computePosteriorStdDev(mean: Double? = nil) -> Double {
+        let resolvedMean = mean ?? computePosteriorMean()
         var variance = 0.0
         for i in 0 ..< discretizationBins {
-            var diff = phaseGrid[i] - mean
+            var diff = phaseGrid[i] - resolvedMean
             if diff > .pi { diff -= 2.0 * .pi }
             variance += posterior[i] * diff * diff
         }
         return sqrt(max(0.0, variance))
     }
 
+    /// Finds the maximum a posteriori phase estimate.
     @_effects(readonly)
     private func findMAP() -> Double {
-        var maxIndex = 0
-        var maxValue = posterior[0]
-        for i in 1 ..< discretizationBins {
-            if posterior[i] > maxValue {
-                maxValue = posterior[i]
-                maxIndex = i
-            }
-        }
-        return phaseGrid[maxIndex]
+        var maxValue = 0.0
+        var maxIndex: vDSP_Length = 0
+        vDSP_maxviD(posterior, 1, &maxValue, &maxIndex, vDSP_Length(posterior.count))
+        return phaseGrid[Int(maxIndex)]
     }
 
+    /// Assembles estimation result from current posterior statistics.
     @_effects(readonly)
-    private func buildResult(measurementCount: Int) -> BayesianPhaseResult {
-        BayesianPhaseResult(
+    private func buildResult(measurementCount: Int) -> Result {
+        let mean = computePosteriorMean()
+        return Result(
             mapEstimate: findMAP(),
-            posteriorMean: computePosteriorMean(),
-            posteriorStdDev: computePosteriorStdDev(),
+            posteriorMean: mean,
+            posteriorStdDev: computePosteriorStdDev(mean: mean),
             posterior: posterior,
             measurementCount: measurementCount,
         )
-    }
-}
-
-/// Configuration parameters for Ramsey interferometry experiments.
-///
-/// Specifies evolution time, number of repetitions for statistical averaging,
-/// and optional detuning from resonance. Used with QuantumCircuit.ramseySequence
-/// and QuantumState.ramseyResult for quantum sensing applications.
-///
-/// **Example:**
-/// ```swift
-/// let config = RamseyConfig(evolutionTime: 1e-6, repetitions: 1000, detuning: 0.1)
-/// ```
-///
-/// - SeeAlso: ``RamseyResult``
-/// - SeeAlso: ``QuantumCircuit/ramseySequence(evolutionPhase:initialPhase:)``
-@frozen
-public struct RamseyConfig: Sendable {
-    /// Free evolution time between Hadamard pulses (in seconds or natural units).
-    public let evolutionTime: Double
-
-    /// Number of experimental repetitions for statistical averaging.
-    public let repetitions: Int
-
-    /// Frequency detuning from resonance (in radians per unit time).
-    public let detuning: Double
-
-    /// Creates Ramsey interferometry configuration.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let config = RamseyConfig(evolutionTime: 1e-6, repetitions: 100)
-    /// let detuned = RamseyConfig(evolutionTime: 5e-6, repetitions: 500, detuning: 0.05)
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - evolutionTime: Free evolution time (must be non-negative)
-    ///   - repetitions: Number of measurement repetitions (default: 100)
-    ///   - detuning: Frequency detuning from resonance (default: 0)
-    /// - Precondition: evolutionTime must be non-negative
-    /// - Precondition: repetitions must be positive
-    public init(evolutionTime: Double, repetitions: Int = 100, detuning: Double = 0) {
-        ValidationUtilities.validateNonNegativeDouble(evolutionTime, name: "evolutionTime")
-        ValidationUtilities.validatePositiveInt(repetitions, name: "repetitions")
-
-        self.evolutionTime = evolutionTime
-        self.repetitions = repetitions
-        self.detuning = detuning
     }
 }
 
@@ -442,7 +401,7 @@ public struct RamseyConfig: Sendable {
 ///
 /// **Example:**
 /// ```swift
-/// let result = state.ramseyResult(config: config)
+/// let result = state.ramseyResult(evolutionTime: 1e-6)
 /// print("Phase: \(result.phaseAccumulation)")
 /// print("Visibility: \(result.visibility)")
 /// if let t2star = result.estimatedT2Star {
@@ -450,8 +409,7 @@ public struct RamseyConfig: Sendable {
 /// }
 /// ```
 ///
-/// - SeeAlso: ``RamseyConfig``
-/// - SeeAlso: ``QuantumState/ramseyResult(config:)``
+/// - SeeAlso: ``QuantumState/ramseyResult(evolutionTime:)``
 @frozen
 public struct RamseyResult: Sendable, CustomStringConvertible {
     /// Accumulated phase during free evolution (radians).
@@ -508,12 +466,12 @@ public extension QuantumCircuit {
     /// - Complexity: O(1) - constant 3 gates
     ///
     /// - SeeAlso: ``ramseyEcho(evolutionPhase:echoPosition:)``
-    /// - SeeAlso: ``RamseyConfig``
     @_eagerMove
+    @_effects(readonly)
     static func ramseySequence(evolutionPhase: Double, initialPhase: Double = 0) -> QuantumCircuit {
         var circuit = QuantumCircuit(qubits: 1)
 
-        if abs(initialPhase) > 1e-10 {
+        if abs(initialPhase) > phaseEpsilon {
             circuit.append(.rotationZ(initialPhase), to: 0)
         }
 
@@ -540,8 +498,9 @@ public extension QuantumCircuit {
     /// **Example:**
     /// ```swift
     /// let echo = QuantumCircuit.ramseyEcho(evolutionPhase: .pi / 2, echoPosition: 0.5)
-    /// let state = echo.execute()
-    /// let visibility = computeVisibility(state)
+    /// let simulator = QuantumSimulator()
+    /// let state = await simulator.execute(echo)
+    /// let p1 = state.probability(of: 1)
     /// ```
     ///
     /// - Parameters:
@@ -553,22 +512,23 @@ public extension QuantumCircuit {
     ///
     /// - SeeAlso: ``ramseySequence(evolutionPhase:initialPhase:)``
     @_eagerMove
+    @_effects(readonly)
     static func ramseyEcho(evolutionPhase: Double, echoPosition: Double = 0.5) -> QuantumCircuit {
-        ValidationUtilities.validateHalfOpenRange(echoPosition, min: 0.0, max: 1.0 + 1e-10, name: "echoPosition")
+        ValidationUtilities.validateHalfOpenRange(echoPosition, min: 0.0, max: 1.0 + phaseEpsilon, name: "echoPosition")
 
         var circuit = QuantumCircuit(qubits: 1)
 
         circuit.append(.hadamard, to: 0)
 
         let preEchoPhase = evolutionPhase * echoPosition
-        if abs(preEchoPhase) > 1e-10 {
+        if abs(preEchoPhase) > phaseEpsilon {
             circuit.append(.rotationZ(preEchoPhase), to: 0)
         }
 
         circuit.append(.pauliX, to: 0)
 
         let postEchoPhase = evolutionPhase * (1.0 - echoPosition)
-        if abs(postEchoPhase) > 1e-10 {
+        if abs(postEchoPhase) > phaseEpsilon {
             circuit.append(.rotationZ(postEchoPhase), to: 0)
         }
 
@@ -591,35 +551,36 @@ public extension QuantumState {
     ///
     /// **Example:**
     /// ```swift
-    /// let config = RamseyConfig(evolutionTime: 1e-6, repetitions: 100)
-    /// let circuit = QuantumCircuit.ramseySequence(evolutionPhase: config.evolutionTime * frequency)
+    /// let circuit = QuantumCircuit.ramseySequence(evolutionPhase: 1e-6 * frequency)
     /// let state = circuit.execute()
-    /// let result = state.ramseyResult(config: config)
+    /// let result = state.ramseyResult(evolutionTime: 1e-6)
     /// print("Phase: \(result.phaseAccumulation) rad")
     /// ```
     ///
-    /// - Parameter config: Ramsey configuration with timing parameters
+    /// - Parameter evolutionTime: Free evolution time for T2* estimation (must be non-negative)
     /// - Returns: RamseyResult with phase, visibility, and coherence metrics
     /// - Precondition: State must be single-qubit (qubits == 1)
+    /// - Precondition: evolutionTime must be non-negative
     /// - Complexity: O(1)
     ///
-    /// - SeeAlso: ``RamseyConfig``
     /// - SeeAlso: ``RamseyResult``
     /// - SeeAlso: ``QuantumCircuit/ramseySequence(evolutionPhase:initialPhase:)``
     @_effects(readonly)
-    func ramseyResult(config: RamseyConfig) -> RamseyResult {
+    @_eagerMove
+    func ramseyResult(evolutionTime: Double) -> RamseyResult {
         ValidationUtilities.validateStateQubitCount(self, required: 1, exact: true)
+        ValidationUtilities.validateNonNegativeDouble(evolutionTime, name: "evolutionTime")
 
         let p1 = probability(of: 1)
         let p0 = probability(of: 0)
 
-        let phaseAccumulation = 2.0 * asin(sqrt(max(0.0, min(1.0, p1))))
+        let phaseAccumulation = acos(max(-1.0, min(1.0, 1.0 - 2.0 * p1)))
 
         let visibility = abs(p0 - p1)
 
-        var estimatedT2Star: Double? = nil
-        if config.evolutionTime > 1e-15, visibility > 1e-10, visibility < 1.0 - 1e-10 {
-            estimatedT2Star = -config.evolutionTime / log(visibility)
+        var estimatedT2Star: Double?
+        if evolutionTime > normalizationEpsilon, visibility > phaseEpsilon, visibility < 1.0 - phaseEpsilon {
+            estimatedT2Star = -evolutionTime / log(visibility)
         }
 
         return RamseyResult(

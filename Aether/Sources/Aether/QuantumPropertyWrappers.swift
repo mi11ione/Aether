@@ -2,10 +2,11 @@
 // Licensed under the Apache License, Version 2.0
 
 import Foundation
+import Synchronization
 
 /// Property wrapper providing automatic symbolic parameter tracking for variational quantum circuits.
 ///
-/// Wraps a concrete ``Double`` value while maintaining a companion ``Parameter`` for symbolic
+/// Wraps a concrete `Double` value while maintaining a companion ``Parameter`` for symbolic
 /// circuit construction. The wrapped value serves as the current numerical angle, and the
 /// projected value (`$`-prefixed access) yields a ``ParameterValue/parameter(_:)`` suitable
 /// for gate constructors that accept symbolic or concrete parameters. This enables a natural
@@ -34,7 +35,7 @@ public struct QuantumParameter: Sendable {
     ///
     /// Accessing the projected value via the `$` prefix yields
     /// ``ParameterValue/parameter(_:)`` wrapping the underlying ``Parameter``, enabling
-    /// seamless integration with gates such as ``QuantumGate/rotationY(_:)``.
+    /// seamless integration with gates such as `QuantumGate.rotationY`.
     ///
     /// **Example:**
     /// ```swift
@@ -51,9 +52,8 @@ public struct QuantumParameter: Sendable {
 
     /// Creates a quantum parameter with an initial value and optional symbolic name.
     ///
-    /// When `name` is `nil`, a unique deterministic name is generated using a monotonically
-    /// increasing counter prefixed with `_qp`, ensuring distinct identifiers across
-    /// multiple unnamed parameters within the same program execution.
+    /// When `name` is `nil`, a unique auto-generated name is assigned, ensuring distinct
+    /// identifiers across multiple unnamed parameters within the same program execution.
     ///
     /// **Example:**
     /// ```swift
@@ -72,18 +72,23 @@ public struct QuantumParameter: Sendable {
         parameter = Parameter(name: resolvedName)
     }
 
-    private static let _counter = LockedCounter()
+    /// Thread-safe counter for auto-generating unique parameter names.
+    private static let _counter = Mutex(0)
 
-    @usableFromInline
-    static func generateName() -> String {
-        let index = _counter.next()
+    /// Produces the next unique auto-generated parameter name.
+    private static func generateName() -> String {
+        let index = _counter.withLock { value in
+            let current = value
+            value += 1
+            return current
+        }
         return "_qp\(index)"
     }
 }
 
 /// Property wrapper providing a validated non-negative qubit index reference.
 ///
-/// Wraps an ``Int`` qubit index with a non-negativity precondition enforced at initialization
+/// Wraps an `Int` qubit index with a non-negativity precondition enforced at initialization
 /// time via ``ValidationUtilities``. The wrapper is a zero-cost abstraction that carries no
 /// runtime overhead beyond the initial validation check, and the underlying integer is accessed
 /// directly through `wrappedValue` for use in gate operations and circuit construction.
@@ -101,7 +106,13 @@ public struct QuantumParameter: Sendable {
 @propertyWrapper
 public struct Qubit: Sendable {
     /// Qubit index used to reference a specific qubit in a quantum register.
-    public var wrappedValue: Int
+    ///
+    /// - Precondition: Value must be non-negative on mutation.
+    public var wrappedValue: Int {
+        didSet {
+            ValidationUtilities.validateNonNegativeInt(wrappedValue, name: "Qubit index")
+        }
+    }
 
     /// Creates a validated qubit index reference.
     ///
@@ -119,20 +130,5 @@ public struct Qubit: Sendable {
     public init(wrappedValue: Int) {
         ValidationUtilities.validateNonNegativeInt(wrappedValue, name: "Qubit index")
         self.wrappedValue = wrappedValue
-    }
-}
-
-// MARK: - Internal Utilities
-
-final class LockedCounter: @unchecked Sendable {
-    private var _value: Int = 0
-    private let _lock = NSLock()
-
-    func next() -> Int {
-        _lock.lock()
-        defer { _lock.unlock() }
-        let current = _value
-        _value += 1
-        return current
     }
 }

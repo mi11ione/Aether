@@ -309,7 +309,7 @@ struct DeepCircuitStabilityTests {
 @Suite("Metal GPU Threshold")
 struct MetalGPUThresholdTests {
     @Test("9-qubit execution (below GPU threshold)")
-    func nineQubitBelowThreshold() async {
+    func nineQubitBelowThreshold() {
         var circuit = QuantumCircuit(qubits: 9)
         for i in 0 ..< 9 {
             circuit.append(.hadamard, to: i)
@@ -326,7 +326,7 @@ struct MetalGPUThresholdTests {
     }
 
     @Test("10-qubit execution (at GPU threshold)")
-    func tenQubitAtThreshold() async {
+    func tenQubitAtThreshold() {
         var circuit = QuantumCircuit(qubits: 10)
         for i in 0 ..< 10 {
             circuit.append(.hadamard, to: i)
@@ -343,7 +343,7 @@ struct MetalGPUThresholdTests {
     }
 
     @Test("11-qubit execution (above GPU threshold)")
-    func elevenQubitAboveThreshold() async {
+    func elevenQubitAboveThreshold() {
         var circuit = QuantumCircuit(qubits: 11)
         for i in 0 ..< 11 {
             circuit.append(.hadamard, to: i)
@@ -360,7 +360,7 @@ struct MetalGPUThresholdTests {
     }
 
     @Test("CPU and GPU produce consistent results at threshold")
-    func cpuGpuConsistency() async {
+    func cpuGpuConsistency() {
         var circuit = QuantumCircuit(qubits: 10)
         for i in 0 ..< 10 {
             circuit.append(.hadamard, to: i)
@@ -394,7 +394,7 @@ struct VQEScalabilityTests {
             ansatz: ansatz,
             optimizer: optimizer,
             convergence: ConvergenceCriteria(energyTolerance: 1e-5, maxIterations: 200),
-            useSparseBackend: true,
+            isSparseEnabled: true,
         )
 
         let initialParams = [Double](repeating: 0.1, count: ansatz.parameterCount)
@@ -426,7 +426,7 @@ struct VQEScalabilityTests {
             ansatz: ansatz,
             optimizer: optimizer,
             convergence: ConvergenceCriteria(energyTolerance: 1e-3, maxIterations: 50),
-            useSparseBackend: true,
+            isSparseEnabled: true,
         )
 
         let initialParams = [Double](repeating: 0.05, count: ansatz.parameterCount)
@@ -452,7 +452,7 @@ struct VQEScalabilityTests {
             ansatz: ansatz,
             optimizer: optimizer,
             convergence: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 30),
-            useSparseBackend: true,
+            isSparseEnabled: true,
         )
 
         let initialParams = [Double](repeating: 0.01, count: ansatz.parameterCount)
@@ -486,7 +486,7 @@ struct VQEScalabilityTests {
             ansatz: ansatz,
             optimizer: optimizer,
             convergence: ConvergenceCriteria(energyTolerance: 1e-2, maxIterations: 20),
-            useSparseBackend: true,
+            isSparseEnabled: true,
         )
 
         let initialParams = [Double](repeating: 0.1, count: ansatz.parameterCount)

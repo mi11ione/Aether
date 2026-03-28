@@ -666,8 +666,8 @@ struct ObservablePropertyTests {
 struct GateIdentityPropertyTests {
     private static let tolerance: Double = 1e-10
 
-    @Test("Self-inverse gates: G² = I", arguments: 1 ... 20)
-    func selfInverseGates(seed _: Int) {
+    @Test("Self-inverse gates: G² = I")
+    func selfInverseGates() {
         let selfInverseGates: [QuantumGate] = [
             .pauliX, .pauliY, .pauliZ, .hadamard, .cnot, .cz, .swap, .toffoli,
         ]
@@ -683,8 +683,8 @@ struct GateIdentityPropertyTests {
         }
     }
 
-    @Test("Rotation by 2π equals identity", arguments: 1 ... 10)
-    func fullRotationIsIdentity(seed _: Int) {
+    @Test("Rotation by 2π equals identity")
+    func fullRotationIsIdentity() {
         let rxFull = QuantumGate.rotationX(2 * .pi).matrix()
         let ryFull = QuantumGate.rotationY(2 * .pi).matrix()
         let rzFull = QuantumGate.rotationZ(2 * .pi).matrix()
@@ -702,8 +702,8 @@ struct GateIdentityPropertyTests {
         }
     }
 
-    @Test("HZH = X (Hadamard conjugation)", arguments: 1 ... 5)
-    func hadamardConjugation(seed _: Int) {
+    @Test("HZH = X (Hadamard conjugation)")
+    func hadamardConjugation() {
         let h = QuantumGate.hadamard.matrix()
         let z = QuantumGate.pauliZ.matrix()
         let x = QuantumGate.pauliX.matrix()
@@ -717,8 +717,8 @@ struct GateIdentityPropertyTests {
         )
     }
 
-    @Test("Pauli algebra: XY = iZ", arguments: 1 ... 5)
-    func pauliAlgebra(seed _: Int) {
+    @Test("Pauli algebra: XY = iZ")
+    func pauliAlgebra() {
         let x = QuantumGate.pauliX.matrix()
         let y = QuantumGate.pauliY.matrix()
 

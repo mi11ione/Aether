@@ -98,6 +98,8 @@ public struct QuantumCountingResult: Sendable, CustomStringConvertible {
 
     /// Human-readable description of the quantum counting result.
     ///
+    /// - Complexity: O(1)
+    ///
     /// **Example:**
     /// ```swift
     /// let result = QuantumCountingResult(
@@ -127,7 +129,7 @@ public struct QuantumCountingResult: Sendable, CustomStringConvertible {
 /// **Example:**
 /// ```swift
 /// let config = QuantumCountingConfig(searchQubits: 4, precisionQubits: 8)
-/// let iterativeConfig = QuantumCountingConfig(searchQubits: 4, precisionQubits: 8, useIterative: true)
+/// let preciseConfig = QuantumCountingConfig(searchQubits: 4, precisionQubits: 10)
 /// ```
 ///
 /// - SeeAlso: ``QuantumCircuit/quantumCounting(oracle:config:)``
@@ -145,12 +147,6 @@ public struct QuantumCountingConfig: Sendable {
     /// approximately 1/2^precisionQubits.
     public let precisionQubits: Int
 
-    /// Whether to use iterative phase estimation instead of standard QPE.
-    ///
-    /// Iterative phase estimation reduces circuit depth at the cost of
-    /// additional classical post-processing.
-    public let useIterative: Bool
-
     /// Creates a quantum counting configuration.
     ///
     /// **Example:**
@@ -163,31 +159,26 @@ public struct QuantumCountingConfig: Sendable {
     /// - Parameters:
     ///   - searchQubits: Number of qubits for search space (minimum 1)
     ///   - precisionQubits: Number of qubits for phase precision (default: 8)
-    ///   - useIterative: Use iterative phase estimation (default: false)
     /// - Precondition: searchQubits >= 1
     /// - Precondition: precisionQubits >= 1
-    public init(searchQubits: Int, precisionQubits: Int = 8, useIterative: Bool = false) {
+    public init(searchQubits: Int, precisionQubits: Int = 8) {
         ValidationUtilities.validatePositiveQubits(searchQubits)
         ValidationUtilities.validatePositiveInt(precisionQubits, name: "precisionQubits")
 
         self.searchQubits = searchQubits
         self.precisionQubits = precisionQubits
-        self.useIterative = useIterative
     }
 }
 
 /// Extracts concrete Double value from ParameterValue if available.
 @_effects(readonly)
-@inlinable
-func extractConcreteValue(_ paramValue: ParameterValue) -> Double {
+@_optimize(speed)
+private func extractConcreteValue(_ paramValue: ParameterValue) -> Double {
     switch paramValue {
     case let .value(v):
-        return v
-    case .parameter, .negatedParameter:
-        return 0.0
-    case let .expression(expr):
-        precondition(!expr.isSymbolic, "Expression contains unbound parameters")
-        return expr.evaluate(using: [:])
+        v
+    case .parameter, .negatedParameter, .expression:
+        0.0
     }
 }
 
@@ -266,7 +257,7 @@ public extension QuantumCircuit {
 
         let inverseQFTCircuit = inverseQFT(qubits: config.precisionQubits)
         for op in inverseQFTCircuit.operations {
-            circuit.addOperation(op)
+            circuit.append(op)
         }
 
         return circuit
@@ -384,6 +375,7 @@ public extension QuantumCircuit {
             appendTriplyControlledX(to: &circuit, controls: [control, targetQubits[0], targetQubits[1]], target: targetQubits[2])
 
         default:
+            // Safe: unhandled gate types (identity, custom) are no-ops in controlled context
             break
         }
     }
@@ -460,7 +452,11 @@ public extension QuantumState {
         let precisionStateSize = 1 << config.precisionQubits
         let searchSpaceSize = 1 << config.searchQubits
 
-        var precisionProbabilities = [Double](repeating: 0.0, count: precisionStateSize)
+        var precisionProbabilities = [Double](unsafeUninitializedCapacity: precisionStateSize) {
+            buffer, count in
+            buffer.initialize(repeating: 0.0)
+            count = precisionStateSize
+        }
 
         for basisIndex in 0 ..< stateSpaceSize {
             let precisionIndex = basisIndex % precisionStateSize
@@ -481,7 +477,8 @@ public extension QuantumState {
 
         let theta = computeThetaFromPhase(measuredPhase)
 
-        let sinSquaredTheta = Foundation.sin(theta) * Foundation.sin(theta)
+        let sinTheta = Foundation.sin(theta)
+        let sinSquaredTheta = sinTheta * sinTheta
         let estimatedFraction = sinSquaredTheta
         let estimatedCountDouble = Double(searchSpaceSize) * estimatedFraction
 
@@ -532,8 +529,10 @@ public extension QuantumState {
         let thetaLower = computeThetaFromPhase(phaseLower)
         let thetaUpper = computeThetaFromPhase(phaseUpper)
 
-        let sinSqLower = Foundation.sin(thetaLower) * Foundation.sin(thetaLower)
-        let sinSqUpper = Foundation.sin(thetaUpper) * Foundation.sin(thetaUpper)
+        let sL = Foundation.sin(thetaLower)
+        let sinSqLower = sL * sL
+        let sU = Foundation.sin(thetaUpper)
+        let sinSqUpper = sU * sU
 
         let countLowerRaw = Double(searchSpaceSize) * min(sinSqLower, sinSqUpper)
         let countUpperRaw = Double(searchSpaceSize) * max(sinSqLower, sinSqUpper)

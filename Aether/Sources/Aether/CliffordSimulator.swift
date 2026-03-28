@@ -79,7 +79,7 @@ public actor CliffordSimulator {
     ///
     /// - Parameters:
     ///   - circuit: Quantum circuit containing only Clifford gates
-    ///   - from: Starting stabilizer tableau state
+    ///   - initial: Starting stabilizer tableau state
     /// - Returns: Final stabilizer tableau after applying all circuit operations
     /// - Precondition: Circuit contains only Clifford gates (no T or non-Clifford rotations).
     /// - Complexity: O(n^2 * g / w) where n = qubits, g = gate count, w = 64 (word size)
@@ -193,7 +193,7 @@ public actor CliffordSimulator {
                 applyCliffordPhase(theta, qubit: qubits[0], to: &tableau)
             }
         case let .controlled(innerGate, _):
-            applyControlledClifford(innerGate, control: qubits[0], target: qubits[1], qubits: qubits, to: &tableau)
+            applyControlledClifford(innerGate, target: qubits[1], qubits: qubits, to: &tableau)
         default:
             break
         }
@@ -220,7 +220,7 @@ public actor CliffordSimulator {
     /// Decomposes and applies a controlled Clifford gate to the tableau.
     @inline(__always)
     @_optimize(speed)
-    private func applyControlledClifford(_ innerGate: QuantumGate, control _: Int, target: Int, qubits: [Int], to tableau: inout StabilizerTableau) {
+    private func applyControlledClifford(_ innerGate: QuantumGate, target: Int, qubits: [Int], to tableau: inout StabilizerTableau) {
         switch innerGate {
         case .pauliX:
             tableau.apply(.cnot, to: qubits)

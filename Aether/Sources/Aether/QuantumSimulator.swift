@@ -7,7 +7,7 @@ import Foundation
 ///
 /// Actor-isolated simulator for non-blocking circuit execution with progress tracking. Uses
 /// ``GateApplication`` (CPU) for circuits below precision policy threshold and ``MetalGateApplication``
-/// (GPU) for larger circuits when Metal is available. Progress callbacks batch every 5 gates.
+/// (GPU) for larger circuits when Metal is available.
 ///
 /// Precision policy controls CPU/GPU threshold: `.fast` (≥10 qubits), `.balanced` (≥12 qubits),
 /// `.accurate` (CPU-only). GPU uses Float32 (~1e-7 precision), CPU uses Float64 (~1e-15 precision).
@@ -45,12 +45,18 @@ public actor QuantumSimulator {
         /// Total number of gates in circuit
         public let total: Int
 
-        /// Execution progress as percentage in [0.0, 1.0].
+        /// Fraction of gates completed in [0.0, 1.0].
         ///
-        /// - Returns: Progress value between 0.0 (not started) and 1.0 (complete)
         /// - Complexity: O(1)
-        public var percentage: Double {
+        public var fractionCompleted: Double {
             total > 0 ? Double(executed) / Double(total) : 0.0
+        }
+
+        /// Creates progress with executed and total gate counts.
+        @inlinable
+        public init(executed: Int, total: Int) {
+            self.executed = executed
+            self.total = total
         }
     }
 
@@ -60,8 +66,8 @@ public actor QuantumSimulator {
     /// Whether Metal GPU acceleration is enabled (derived from precision policy).
     private let useMetalAcceleration: Bool
 
-    /// Metal GPU backend (initialized if acceleration enabled)
-    private var metalApplication: MetalGateApplication?
+    /// Metal GPU backend (initialized if acceleration enabled).
+    private let metalApplication: MetalGateApplication?
 
     /// Creates a quantum simulator with specified precision policy.
     ///
@@ -86,46 +92,33 @@ public actor QuantumSimulator {
     public init(precisionPolicy: PrecisionPolicy = .fast) {
         self.precisionPolicy = precisionPolicy
         useMetalAcceleration = precisionPolicy.isGPUEnabled
-        if useMetalAcceleration {
-            metalApplication = MetalGateApplication()
-        }
+        metalApplication = useMetalAcceleration ? MetalGateApplication() : nil
     }
-
-    // MARK: - Circuit Execution
 
     /// Executes quantum circuit asynchronously with optional progress tracking.
     ///
-    /// Applies gate operations sequentially, using GPU for circuits with ≥10 qubits (after ancilla
-    /// expansion) when Metal is enabled. Backend selection happens once at start; no mid-circuit
-    /// switching. Progress callback fires every 5 gates or at completion with values in [0.0, 1.0].
+    /// Applies gate operations sequentially, selecting GPU or CPU backend based on the
+    /// precision policy and circuit size. Progress callback fires periodically and at
+    /// completion with values in [0.0, 1.0].
     ///
     /// **Example:**
     /// ```swift
-    /// let simulator = await QuantumSimulator()
-    /// var circuit = QuantumCircuit(qubits: 10)
+    /// let simulator = QuantumSimulator()
+    /// var circuit = QuantumCircuit(qubits: 3)
     /// circuit.append(.hadamard, to: 0)
     /// circuit.append(.cnot, to: [0, 1])
-    ///
-    /// // Basic execution
     /// let state = await simulator.execute(circuit)
-    ///
-    /// // With custom initial state
-    /// let initial = QuantumState(qubits: 10)
-    /// let result = await simulator.execute(circuit, from: initial)
-    ///
-    /// // With progress tracking
-    /// let final = await simulator.execute(circuit, progressHandler: { progress in
-    ///     print("Progress: \(Int(progress * 100))%")
-    /// })
     /// ```
     ///
     /// - Parameters:
     ///   - circuit: Quantum circuit to execute
-    ///   - initialState: Starting state (defaults to ground state |00...0⟩)
+    ///   - initialState: Starting state (defaults to ground state |00...0>)
     ///   - progressHandler: Optional async callback receiving progress in [0.0, 1.0]
     /// - Returns: Final quantum state after applying all gates
-    /// - Complexity: O(n x 2^q) where n = gate count, q = qubits (including ancilla)
+    /// - Complexity: O(n * 2^q) where n = gate count, q = qubits (including ancilla)
     ///
+    /// - SeeAlso: ``QuantumCircuit/execute()``
+    /// - SeeAlso: ``GateApplication``
     @_optimize(speed)
     @_eagerMove
     public func execute(
@@ -155,6 +148,7 @@ public actor QuantumSimulator {
         for index in 0 ..< operationCount {
             let operation = operations[index]
             if useGPU {
+                // safety: useGPU guard above checks metalApplication != nil
                 state = await metalApplication!.apply(operation, state: state)
             } else {
                 state = GateApplication.apply(operation, state: state)

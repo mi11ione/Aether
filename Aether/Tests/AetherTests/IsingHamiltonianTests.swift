@@ -176,14 +176,14 @@ struct IsingFromCouplingsTests {
     }
 
     @Test("Site-dependent fields are correctly assigned")
-    func fromCouplingsSiteDependentFields() {
+    func fromCouplingsSiteDependentFields() throws {
         let couplings: [(Int, Int, Double)] = []
         let fields: [Int: Double] = [0: 0.3, 1: 0.7, 2: 0.5]
         let hamiltonian = IsingHamiltonian.custom(zzCouplings: couplings, xFields: fields, qubits: 3)
         let xTerms = hamiltonian.terms.filter { $0.pauliString.operators.count == 1 }
         for term in xTerms {
             let qubit = term.pauliString.operators[0].qubit
-            let expectedCoeff = -fields[qubit]!
+            let expectedCoeff = try -#require(fields[qubit])
             #expect(abs(term.coefficient - expectedCoeff) < 1e-10, "X term on qubit \(qubit) should have coefficient \(expectedCoeff)")
         }
     }
@@ -248,7 +248,7 @@ struct IsingLongRangeTests {
     }
 
     @Test("Large alpha suppresses long-range interactions")
-    func longRangeLargeAlpha() {
+    func longRangeLargeAlpha() throws {
         let J0 = 1.0
         let alpha = 10.0
         let hamiltonian = IsingHamiltonian.longRange(qubits: 5, J0: J0, alpha: alpha, h: 0.0)
@@ -261,8 +261,8 @@ struct IsingLongRangeTests {
             let qubits = term.pauliString.operators.map(\.qubit).sorted()
             return qubits[1] - qubits[0] > 1
         }
-        let maxNNCoeff = nearestNeighborTerms.map { abs($0.coefficient) }.max()!
-        let maxLRCoeff = longRangeTerms.map { abs($0.coefficient) }.max()!
+        let maxNNCoeff = try #require(nearestNeighborTerms.map { abs($0.coefficient) }.max())
+        let maxLRCoeff = try #require(longRangeTerms.map { abs($0.coefficient) }.max())
         #expect(maxLRCoeff < maxNNCoeff / 100, "Long-range couplings should be suppressed by factor > 100 for alpha=10")
     }
 

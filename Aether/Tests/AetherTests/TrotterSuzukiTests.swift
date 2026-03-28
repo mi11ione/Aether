@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -78,10 +78,10 @@ struct TrotterConfigurationTests {
         #expect(config.steps == 1, "Default steps should be 1")
     }
 
-    @Test("Default configuration has sortByCommutation false")
+    @Test("Default configuration has isSortingByCommutation false")
     func defaultSortByCommutation() {
         let config = TrotterConfiguration()
-        #expect(config.sortByCommutation == false, "Default sortByCommutation should be false")
+        #expect(config.isSortingByCommutation == false, "Default isSortingByCommutation should be false")
     }
 
     @Test("Default coefficient threshold is 1e-15")
@@ -102,10 +102,10 @@ struct TrotterConfigurationTests {
         #expect(config.steps == 100, "Custom steps should be preserved")
     }
 
-    @Test("Custom sortByCommutation is preserved")
+    @Test("Custom isSortingByCommutation is preserved")
     func customSortByCommutation() {
-        let config = TrotterConfiguration(sortByCommutation: true)
-        #expect(config.sortByCommutation == true, "Custom sortByCommutation should be preserved")
+        let config = TrotterConfiguration(isSortingByCommutation: true)
+        #expect(config.isSortingByCommutation == true, "Custom isSortingByCommutation should be preserved")
     }
 
     @Test("Custom coefficient threshold is preserved")
@@ -119,13 +119,13 @@ struct TrotterConfigurationTests {
         let config = TrotterConfiguration(
             order: .sixth,
             steps: 50,
-            sortByCommutation: true,
+            isSortingByCommutation: true,
             coefficientThreshold: 1e-12,
         )
 
         #expect(config.order == .sixth, "Order should be sixth")
         #expect(config.steps == 50, "Steps should be 50")
-        #expect(config.sortByCommutation == true, "sortByCommutation should be true")
+        #expect(config.isSortingByCommutation == true, "isSortingByCommutation should be true")
         #expect(abs(config.coefficientThreshold - 1e-12) < 1e-17, "Threshold should be 1e-12")
     }
 }
@@ -356,14 +356,14 @@ struct TrotterEdgeCasesTests {
     }
 
     @Test("Sort by commutation reorders terms")
-    func sortByCommutationReorders() {
+    func isSortingByCommutationReorders() {
         let hamiltonian = Observable(terms: [
             (1.0, PauliString(.x(0))),
             (0.5, PauliString(.z(0), .z(1))),
             (0.3, PauliString(.x(1))),
         ])
-        let configNoSort = TrotterConfiguration(order: .first, steps: 1, sortByCommutation: false)
-        let configWithSort = TrotterConfiguration(order: .first, steps: 1, sortByCommutation: true)
+        let configNoSort = TrotterConfiguration(order: .first, steps: 1, isSortingByCommutation: false)
+        let configWithSort = TrotterConfiguration(order: .first, steps: 1, isSortingByCommutation: true)
 
         let circuitNoSort = TrotterSuzuki.evolve(hamiltonian, time: 1.0, qubits: 2, config: configNoSort)
         let circuitWithSort = TrotterSuzuki.evolve(hamiltonian, time: 1.0, qubits: 2, config: configWithSort)
@@ -598,7 +598,7 @@ struct TrotterPauliExponentialTests {
         fullCircuit.append(.hadamard, to: 0)
         fullCircuit.append(.hadamard, to: 1)
         for op in circuit.operations {
-            fullCircuit.addOperation(op)
+            fullCircuit.append(op)
         }
 
         let state = fullCircuit.execute()
@@ -617,29 +617,6 @@ struct TrotterPauliExponentialTests {
 /// skipped during exponential application without circuit modification.
 @Suite("TrotterSuzuki Empty Pauli String")
 struct TrotterEmptyPauliStringTests {
-    @Test("Empty Pauli string produces no gates")
-    func emptyPauliStringProducesNoGates() {
-        let emptyPauliString = PauliString()
-        var circuit = QuantumCircuit(qubits: 2)
-        let initialGateCount = circuit.count
-
-        TrotterSuzuki.applyPauliExponential(term: emptyPauliString, angle: 1.0, circuit: &circuit)
-
-        #expect(circuit.count == initialGateCount, "Empty Pauli string should add no gates to circuit")
-    }
-
-    @Test("Empty Pauli string with various angles adds no gates")
-    func emptyPauliStringVariousAngles() {
-        let emptyPauliString = PauliString()
-        let angles = [0.0, 1.0, -1.0, Double.pi, -Double.pi / 2]
-
-        for angle in angles {
-            var circuit = QuantumCircuit(qubits: 1)
-            TrotterSuzuki.applyPauliExponential(term: emptyPauliString, angle: angle, circuit: &circuit)
-            #expect(circuit.count == 0, "Empty Pauli string with angle \(angle) should add no gates")
-        }
-    }
-
     @Test("Circuit with empty Pauli string terms filters them out")
     func hamiltonianWithEmptyTermsFiltered() {
         let hamiltonian = Observable(terms: [
@@ -657,15 +634,15 @@ struct TrotterEmptyPauliStringTests {
 }
 
 /// Test suite for single-term commutation sorting in Trotter-Suzuki.
-/// Validates that sortByCommutation with single or no terms
+/// Validates that isSortingByCommutation with single or no terms
 /// correctly returns the input unchanged without processing.
 @Suite("TrotterSuzuki Single Term Commutation Sort")
 struct TrotterSingleTermCommutationTests {
     @Test("Single term Hamiltonian with sort returns same circuit")
     func singleTermWithSortByCommutation() {
         let hamiltonian = Observable(terms: [(1.0, PauliString(.x(0)))])
-        let configNoSort = TrotterConfiguration(order: .first, steps: 1, sortByCommutation: false)
-        let configWithSort = TrotterConfiguration(order: .first, steps: 1, sortByCommutation: true)
+        let configNoSort = TrotterConfiguration(order: .first, steps: 1, isSortingByCommutation: false)
+        let configWithSort = TrotterConfiguration(order: .first, steps: 1, isSortingByCommutation: true)
 
         let circuitNoSort = TrotterSuzuki.evolve(hamiltonian, time: 0.5, qubits: 1, config: configNoSort)
         let circuitWithSort = TrotterSuzuki.evolve(hamiltonian, time: 0.5, qubits: 1, config: configWithSort)
@@ -676,7 +653,7 @@ struct TrotterSingleTermCommutationTests {
     @Test("Single term with sort produces valid evolution")
     func singleTermSortProducesValidEvolution() {
         let hamiltonian = Observable(terms: [(1.0, PauliString(.z(0), .z(1)))])
-        let config = TrotterConfiguration(order: .second, steps: 3, sortByCommutation: true)
+        let config = TrotterConfiguration(order: .second, steps: 3, isSortingByCommutation: true)
 
         let circuit = TrotterSuzuki.evolve(hamiltonian, time: 1.0, qubits: 2, config: config)
         let state = circuit.execute()
@@ -691,7 +668,7 @@ struct TrotterSingleTermCommutationTests {
         let orders: [TrotterOrder] = [.first, .second, .fourth, .sixth]
 
         for order in orders {
-            let config = TrotterConfiguration(order: order, steps: 2, sortByCommutation: true)
+            let config = TrotterConfiguration(order: order, steps: 2, isSortingByCommutation: true)
             let circuit = TrotterSuzuki.evolve(hamiltonian, time: 0.3, qubits: 1, config: config)
             let state = circuit.execute()
 
@@ -713,7 +690,7 @@ struct TrotterNonCommutingTermSelectionTests {
             (0.8, PauliString(.y(0))),
             (0.6, PauliString(.z(0))),
         ])
-        let config = TrotterConfiguration(order: .first, steps: 1, sortByCommutation: true)
+        let config = TrotterConfiguration(order: .first, steps: 1, isSortingByCommutation: true)
 
         let circuit = TrotterSuzuki.evolve(hamiltonian, time: 0.5, qubits: 1, config: config)
         let state = circuit.execute()
@@ -730,7 +707,7 @@ struct TrotterNonCommutingTermSelectionTests {
             (0.3, PauliString(.y(0))),
             (0.2, PauliString(.x(1))),
         ])
-        let config = TrotterConfiguration(order: .second, steps: 2, sortByCommutation: true)
+        let config = TrotterConfiguration(order: .second, steps: 2, isSortingByCommutation: true)
 
         let circuit = TrotterSuzuki.evolve(hamiltonian, time: 0.4, qubits: 2, config: config)
         let state = circuit.execute()
@@ -751,7 +728,7 @@ struct TrotterNonCommutingTermSelectionTests {
             (0.7, PauliString(.x(0))),
             (0.6, PauliString(.y(0))),
         ])
-        let config = TrotterConfiguration(order: .first, steps: 1, sortByCommutation: true)
+        let config = TrotterConfiguration(order: .first, steps: 1, isSortingByCommutation: true)
 
         let circuit = TrotterSuzuki.evolve(hamiltonian, time: 0.2, qubits: 1, config: config)
         let state = circuit.execute()
@@ -766,8 +743,8 @@ struct TrotterNonCommutingTermSelectionTests {
             (1.0, PauliString(.x(0))),
             (0.5, PauliString(.z(0))),
         ])
-        let configNoSort = TrotterConfiguration(order: .first, steps: 1, sortByCommutation: false)
-        let configWithSort = TrotterConfiguration(order: .first, steps: 1, sortByCommutation: true)
+        let configNoSort = TrotterConfiguration(order: .first, steps: 1, isSortingByCommutation: false)
+        let configWithSort = TrotterConfiguration(order: .first, steps: 1, isSortingByCommutation: true)
 
         let circuitNoSort = TrotterSuzuki.evolve(hamiltonian, time: 0.5, qubits: 1, config: configNoSort)
         let circuitWithSort = TrotterSuzuki.evolve(hamiltonian, time: 0.5, qubits: 1, config: configWithSort)

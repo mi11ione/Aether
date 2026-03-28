@@ -3,7 +3,7 @@
 
 import Foundation
 
-/// Decode ``QuantumCircuit`` from JSON ``Data`` using the schema defined by ``CircuitJSON``.
+/// Decode ``QuantumCircuit`` from JSON `Data` using the schema defined by ``CircuitJSON``.
 ///
 /// Parses JSON data, validates the schema version, reconstructs gate operations with parameters,
 /// and returns a ``ParseResult`` containing the best-effort circuit alongside any diagnostics.
@@ -23,7 +23,7 @@ import Foundation
 public enum CircuitJSONDecoder {
     /// Shared JSON decoder instance.
     private static let jsonDecoder = JSONDecoder()
-    /// Decode a ``QuantumCircuit`` from JSON ``Data``.
+    /// Decode a ``QuantumCircuit`` from JSON `Data`.
     ///
     /// Attempts to parse the provided data, validate the schema version, and convert each
     /// operation into the corresponding ``CircuitOperation``. All

@@ -250,14 +250,14 @@ public struct ZeroNoiseExtrapolation: Sendable {
         result = appendCircuit(circuit, to: result)
 
         for _ in 0 ..< fullFolds {
-            result = appendCircuit(circuit.inverse(), to: result)
+            result = appendCircuit(circuit.inversed(), to: result)
             result = appendCircuit(circuit, to: result)
         }
 
         if fractionalPart > Self.fractionalThreshold {
             let gatesToFold = Int(Double(circuit.count) * fractionalPart / 2)
             if gatesToFold > 0 {
-                let partialInverse = partialCircuit(circuit.inverse(), gateCount: gatesToFold)
+                let partialInverse = partialCircuit(circuit.inversed(), gateCount: gatesToFold)
                 let partialOriginal = partialCircuit(circuit, gateCount: gatesToFold)
                 result = appendCircuit(partialInverse, to: result)
                 result = appendCircuit(partialOriginal, to: result)
@@ -288,7 +288,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
                     foldedCount += 1
                 }
             case .reset, .measure:
-                result.addOperation(operation)
+                result.append(operation)
             }
         }
 
@@ -304,7 +304,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
         var result = QuantumCircuit(qubits: circuit.qubits)
 
         for operation in circuit.operations {
-            result.addOperation(operation)
+            result.append(operation)
         }
 
         let startIndex = max(0, circuit.count - gatesToFold)
@@ -315,7 +315,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
             case let .gate(gate, qubits, _):
                 result.append(gate.inverse, to: qubits)
             case .reset, .measure:
-                result.addOperation(operation)
+                result.append(operation)
             }
         }
 
@@ -324,7 +324,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
             case let .gate(gate, qubits, _):
                 result.append(gate, to: qubits)
             case .reset, .measure:
-                result.addOperation(operation)
+                result.append(operation)
             }
         }
 
@@ -337,7 +337,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
     private func appendCircuit(_ source: QuantumCircuit, to target: QuantumCircuit) -> QuantumCircuit {
         var result = target
         for operation in source.operations {
-            result.addOperation(operation)
+            result.append(operation)
         }
         return result
     }
@@ -347,7 +347,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
     private func partialCircuit(_ circuit: QuantumCircuit, gateCount: Int) -> QuantumCircuit {
         var result = QuantumCircuit(qubits: circuit.qubits)
         for operation in circuit.operations.prefix(gateCount) {
-            result.addOperation(operation)
+            result.append(operation)
         }
         return result
     }
@@ -392,8 +392,7 @@ public struct ZeroNoiseExtrapolation: Sendable {
             return sumY / n
         }
 
-        let intercept = (sumY * sumX2 - sumX * sumXY) / denom
-        return intercept
+        return (sumY * sumX2 - sumX * sumXY) / denom
     }
 
     /// Polynomial extrapolation using Vandermonde matrix.
@@ -416,7 +415,9 @@ public struct ZeroNoiseExtrapolation: Sendable {
             count = n * m
         }
         let y = [Double](unsafeUninitializedCapacity: n) { buffer, count in
-            for i in 0 ..< n { buffer[i] = data[i].value }
+            for i in 0 ..< n {
+                buffer[i] = data[i].value
+            }
             count = n
         }
 
@@ -719,10 +720,10 @@ public struct ProbabilisticErrorCancellation: Sendable {
 
     /// Generic implementation to avoid existential RNG overhead.
     @_optimize(speed)
-    private func mitigateImpl<G: RandomNumberGenerator>(
+    private func mitigateImpl(
         circuit: QuantumCircuit,
         observable: Observable,
-        generator: inout G,
+        generator: inout some RandomNumberGenerator,
     ) async -> PECResult {
         var weightedSum = 0.0
         var weightedSumSquared = 0.0
@@ -755,9 +756,9 @@ public struct ProbabilisticErrorCancellation: Sendable {
 
     /// Sample circuit with quasi-probability weighting.
     @_optimize(speed)
-    private func sampleCircuit<G: RandomNumberGenerator>(
+    private func sampleCircuit(
         circuit: QuantumCircuit,
-        generator: inout G,
+        generator: inout some RandomNumberGenerator,
     ) -> (circuit: QuantumCircuit, sign: Int) {
         var result = QuantumCircuit(qubits: circuit.qubits)
         var totalSign = 1
@@ -775,7 +776,7 @@ public struct ProbabilisticErrorCancellation: Sendable {
                     }
                 }
             case .reset, .measure:
-                result.addOperation(operation)
+                result.append(operation)
             }
         }
 
@@ -784,7 +785,7 @@ public struct ProbabilisticErrorCancellation: Sendable {
 
     /// Sample Pauli operator from quasi-probability distribution.
     @_optimize(speed)
-    private func samplePauli<G: RandomNumberGenerator>(generator: inout G) -> (index: Int, sign: Int) {
+    private func samplePauli(generator: inout some RandomNumberGenerator) -> (index: Int, sign: Int) {
         let r = Double.random(in: 0 ..< 1, using: &generator)
 
         var cumulative = 0.0

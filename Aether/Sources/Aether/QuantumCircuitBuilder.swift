@@ -9,10 +9,9 @@
 /// evaluation and converted to ``CircuitOperation`` values when the final
 /// ``QuantumCircuit`` is constructed.
 ///
-/// ``GateStep`` is intentionally minimal. It stores only the data needed to produce one
-/// ``CircuitOperation`` and exposes a single conversion property ``operation`` for that
-/// purpose. The struct is `@frozen` and `Sendable`, so the compiler can lay it out inline
-/// and pass it across concurrency boundaries without overhead.
+/// ``GateStep`` is intentionally minimal, storing only the data needed to produce one
+/// ``CircuitOperation`` via its ``operation`` property. The type is thread-safe and
+/// suitable for use across concurrency boundaries.
 ///
 /// **Example:**
 /// ```swift
@@ -27,19 +26,27 @@
 /// - SeeAlso: ``NonUnitaryOperation``
 @frozen
 public struct GateStep: Sendable, Equatable {
-    @usableFromInline
+    /// Discriminated union of gate or non-unitary operation payloads.
+    @frozen @usableFromInline
     enum Payload: Sendable, Equatable {
         case gate(QuantumGate, qubits: [Int])
         case nonUnitary(NonUnitaryOperation, qubit: Int)
     }
 
+    /// Discriminated storage for gate or non-unitary step data.
     @usableFromInline
     let payload: Payload
 
     /// Optional scheduling timestamp for time-ordered circuit representations.
     public let timestamp: Double?
 
-    /// The unitary gate for this step, or `nil` for non-unitary steps.
+    /// The unitary gate for this step, or ``QuantumGate/identity`` for non-unitary steps.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let step = GateStep(.hadamard, on: 0)
+    /// let gate = step.gate  // .hadamard
+    /// ```
     ///
     /// - Returns: The ``QuantumGate`` for gate payloads, or ``QuantumGate/identity`` for non-unitary payloads.
     /// - Complexity: O(1)
@@ -52,6 +59,12 @@ public struct GateStep: Sendable, Equatable {
     }
 
     /// Qubit indices targeted by this step.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let step = GateStep(.cnot, on: 0, 1)
+    /// let targets = step.qubits  // [0, 1]
+    /// ```
     ///
     /// - Returns: Array of qubit indices this step operates on.
     /// - Complexity: O(1)
@@ -179,11 +192,9 @@ public struct GateStep: Sendable, Equatable {
 /// ``QuantumCircuitBuilder`` collects ``GateStep`` values from a closure body and
 /// concatenates them into a flat `[GateStep]` array. The builder supports all standard
 /// result-builder features: sequential statements, `if`/`else` branching, optional
-/// binding, and `for`-`in` loops. Because the builder operates on plain arrays of value
-/// types, there is zero heap allocation beyond the final array itself and no runtime
-/// overhead compared to imperative circuit construction.
+/// binding, and `for`-`in` loops.
 ///
-/// Use the builder indirectly through the ``QuantumCircuit/init(qubits:autoOptimize:_:)``
+/// Use the builder indirectly through the ``QuantumCircuit/init(qubits:isAutoOptimizing:_:)``
 /// initializer rather than invoking builder methods directly.
 ///
 /// **Example:**
@@ -231,15 +242,22 @@ public enum QuantumCircuitBuilder {
     /// ```
     @inlinable
     @_optimize(speed)
+    @_effects(readonly)
     public static func buildBlock(_ components: [GateStep]...) -> [GateStep] {
         var totalCount = 0
         for component in components {
             totalCount += component.count
         }
-        var result: [GateStep] = []
-        result.reserveCapacity(totalCount)
-        for component in components {
-            result.append(contentsOf: component)
+        // Safe: totalCount >= 0; baseAddress is non-nil when totalCount > 0
+        let result = [GateStep](unsafeUninitializedCapacity: totalCount) { buffer, count in
+            var i = 0
+            for component in components {
+                for step in component {
+                    (buffer.baseAddress! + i).initialize(to: step)
+                    i += 1
+                }
+            }
+            count = i
         }
         return result
     }
@@ -319,15 +337,22 @@ public enum QuantumCircuitBuilder {
     /// ```
     @inlinable
     @_optimize(speed)
+    @_effects(readonly)
     public static func buildArray(_ groups: [[GateStep]]) -> [GateStep] {
         var totalCount = 0
         for group in groups {
             totalCount += group.count
         }
-        var result: [GateStep] = []
-        result.reserveCapacity(totalCount)
-        for group in groups {
-            result.append(contentsOf: group)
+        // Safe: totalCount >= 0; baseAddress is non-nil when totalCount > 0
+        let result = [GateStep](unsafeUninitializedCapacity: totalCount) { buffer, count in
+            var i = 0
+            for group in groups {
+                for step in group {
+                    (buffer.baseAddress! + i).initialize(to: step)
+                    i += 1
+                }
+            }
+            count = i
         }
         return result
     }
@@ -340,15 +365,14 @@ public extension QuantumCircuit {
     ///
     /// Collects ``GateStep`` values from the ``QuantumCircuitBuilder`` closure, converts
     /// each step to a ``CircuitOperation`` via ``GateStep/operation``, and delegates to
-    /// ``init(qubits:operations:autoOptimize:)`` for final construction. This provides
-    /// SwiftUI-style declarative syntax with zero runtime overhead compared to imperative
-    /// construction through repeated `append` calls.
+    /// ``init(qubits:operations:isAutoOptimizing:)`` for final construction. This provides
+    /// SwiftUI-style declarative syntax for circuit construction.
     ///
     /// - Parameters:
     ///   - qubits: Number of qubits (1-30)
-    ///   - autoOptimize: When true, automatically cancel adjacent identity pairs on append (default: false)
+    ///   - isAutoOptimizing: When true, automatically cancel adjacent identity pairs on append (default: false)
     ///   - build: Builder closure producing an array of gate steps
-    /// - Precondition: qubits must be positive
+    /// - Precondition: qubits > 0
     /// - Complexity: O(n) where n is the number of steps in the builder closure
     ///
     /// **Example:**
@@ -361,17 +385,21 @@ public extension QuantumCircuit {
     ///
     /// - SeeAlso: ``QuantumCircuitBuilder``
     /// - SeeAlso: ``GateStep``
+    @inlinable
+    @_optimize(speed)
     init(
         qubits: Int,
-        autoOptimize: Bool = false,
+        isAutoOptimizing: Bool = false,
         @QuantumCircuitBuilder _ build: () -> [GateStep],
     ) {
         let steps = build()
-        var operations: [CircuitOperation] = []
-        operations.reserveCapacity(steps.count)
-        for step in steps {
-            operations.append(step.operation)
+        // Safe: steps.count >= 0; baseAddress is non-nil when steps is non-empty
+        let operations = [CircuitOperation](unsafeUninitializedCapacity: steps.count) { buffer, count in
+            for i in steps.indices {
+                (buffer.baseAddress! + i).initialize(to: steps[i].operation)
+            }
+            count = steps.count
         }
-        self.init(qubits: qubits, operations: operations, autoOptimize: autoOptimize)
+        self.init(qubits: qubits, operations: operations, isAutoOptimizing: isAutoOptimizing)
     }
 }

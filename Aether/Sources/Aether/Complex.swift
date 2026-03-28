@@ -26,60 +26,116 @@ public protocol ComplexScalar: BinaryFloatingPoint, Sendable {
 
 extension Double: ComplexScalar {
     /// The additive identity.
-    @inlinable public static var zero: Double { 0.0 }
+    @inlinable public static var zero: Double {
+        0.0
+    }
+
     /// The multiplicative identity.
-    @inlinable public static var one: Double { 1.0 }
+    @inlinable public static var one: Double {
+        1.0
+    }
+
     /// The comparison tolerance for Double precision.
-    @inlinable public static var epsilon: Double { 1e-10 }
+    @inlinable public static var epsilon: Double {
+        1e-10
+    }
+
     /// The minimum denominator magnitude for safe division.
-    @inlinable public static var divisionThreshold: Double { 1e-15 }
+    @inlinable public static var divisionThreshold: Double {
+        1e-15
+    }
 
     /// Returns the square root.
-    @inlinable public static func squareRoot(of value: Double) -> Double { Foundation.sqrt(value) }
+    @inlinable public static func squareRoot(of value: Double) -> Double {
+        Foundation.sqrt(value)
+    }
+
     /// Returns the cosine of the angle.
-    @inlinable public static func cosine(of value: Double) -> Double { Foundation.cos(value) }
+    @inlinable public static func cosine(of value: Double) -> Double {
+        Foundation.cos(value)
+    }
+
     /// Returns the sine of the angle.
-    @inlinable public static func sine(of value: Double) -> Double { Foundation.sin(value) }
+    @inlinable public static func sine(of value: Double) -> Double {
+        Foundation.sin(value)
+    }
+
     /// Returns the two-argument arctangent.
-    @inlinable public static func arctangent(y: Double, x: Double) -> Double { Foundation.atan2(y, x) }
+    @inlinable public static func arctangent(y: Double, x: Double) -> Double {
+        Foundation.atan2(y, x)
+    }
+
     /// Returns the absolute value.
     @inlinable public static func absoluteValue(of value: Double) -> Double {
         Double(bitPattern: value.bitPattern & 0x7FFF_FFFF_FFFF_FFFF)
     }
 
     /// Returns the hypotenuse from the two sides.
-    @inlinable public static func hypotenuse(x: Double, y: Double) -> Double { Foundation.hypot(x, y) }
+    @inlinable public static func hypotenuse(x: Double, y: Double) -> Double {
+        Foundation.hypot(x, y)
+    }
+
     /// Returns a fused multiply-add result.
-    @inlinable public static func fusedMultiplyAdd(_ a: Double, _ b: Double, _ c: Double) -> Double { Foundation.fma(a, b, c) }
+    @inlinable public static func fusedMultiplyAdd(_ a: Double, _ b: Double, _ c: Double) -> Double {
+        Foundation.fma(a, b, c)
+    }
 }
 
 extension Float: ComplexScalar {
     /// The additive identity.
-    @inlinable public static var zero: Float { 0.0 }
+    @inlinable public static var zero: Float {
+        0.0
+    }
+
     /// The multiplicative identity.
-    @inlinable public static var one: Float { 1.0 }
+    @inlinable public static var one: Float {
+        1.0
+    }
+
     /// The comparison tolerance for Float precision.
-    @inlinable public static var epsilon: Float { 1e-6 }
+    @inlinable public static var epsilon: Float {
+        1e-6
+    }
+
     /// The minimum denominator magnitude for safe division.
-    @inlinable public static var divisionThreshold: Float { 1e-10 }
+    @inlinable public static var divisionThreshold: Float {
+        1e-10
+    }
 
     /// Returns the square root.
-    @inlinable public static func squareRoot(of value: Float) -> Float { Foundation.sqrt(value) }
+    @inlinable public static func squareRoot(of value: Float) -> Float {
+        Foundation.sqrt(value)
+    }
+
     /// Returns the cosine of the angle.
-    @inlinable public static func cosine(of value: Float) -> Float { Foundation.cos(value) }
+    @inlinable public static func cosine(of value: Float) -> Float {
+        Foundation.cos(value)
+    }
+
     /// Returns the sine of the angle.
-    @inlinable public static func sine(of value: Float) -> Float { Foundation.sin(value) }
+    @inlinable public static func sine(of value: Float) -> Float {
+        Foundation.sin(value)
+    }
+
     /// Returns the two-argument arctangent.
-    @inlinable public static func arctangent(y: Float, x: Float) -> Float { Foundation.atan2(y, x) }
+    @inlinable public static func arctangent(y: Float, x: Float) -> Float {
+        Foundation.atan2(y, x)
+    }
+
     /// Returns the absolute value.
     @inlinable public static func absoluteValue(of value: Float) -> Float {
         Float(bitPattern: value.bitPattern & 0x7FFF_FFFF)
     }
 
     /// Returns the hypotenuse from the two sides.
-    @inlinable public static func hypotenuse(x: Float, y: Float) -> Float { Foundation.hypot(x, y) }
+    @inlinable public static func hypotenuse(x: Float, y: Float) -> Float {
+        Foundation.hypot(x, y)
+    }
+
     /// Returns a fused multiply-add result.
-    @inlinable public static func fusedMultiplyAdd(_ a: Float, _ b: Float, _ c: Float) -> Float { Foundation.fma(a, b, c) }
+    @inlinable public static func fusedMultiplyAdd(_ a: Float, _ b: Float, _ c: Float) -> Float {
+        Foundation.fma(a, b, c)
+    }
 }
 
 /// Generic complex number type for quantum computing with type-safe arithmetic.

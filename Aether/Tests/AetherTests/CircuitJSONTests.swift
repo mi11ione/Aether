@@ -178,23 +178,23 @@ struct CircuitJSONEncoderCoverageTests {
     }
 
     @Test("Encode symbolic parameter round-trips preserving parameter name")
-    func encodeSymbolicParameter() {
+    func encodeSymbolicParameter() throws {
         var circuit = QuantumCircuit(qubits: 1)
         let theta = Parameter(name: "theta")
         circuit.append(.rotationX(.parameter(theta)), to: 0)
         let data = CircuitJSONEncoder.encode(circuit)
-        let json = String(data: data, encoding: .utf8)!
+        let json = try #require(String(data: data, encoding: .utf8))
         #expect(json.contains("symbolic"), "Symbolic parameter should encode with type symbolic")
         #expect(json.contains("theta"), "Symbolic parameter name theta should appear in JSON")
     }
 
     @Test("Encode negated parameter round-trips preserving negated type")
-    func encodeNegatedParameter() {
+    func encodeNegatedParameter() throws {
         var circuit = QuantumCircuit(qubits: 1)
         let phi = Parameter(name: "phi")
         circuit.append(.rotationZ(.negatedParameter(phi)), to: 0)
         let data = CircuitJSONEncoder.encode(circuit)
-        let json = String(data: data, encoding: .utf8)!
+        let json = try #require(String(data: data, encoding: .utf8))
         #expect(json.contains("negated"), "Negated parameter should encode with type negated")
         #expect(json.contains("phi"), "Negated parameter name phi should appear in JSON")
     }
@@ -244,23 +244,23 @@ struct CircuitJSONEncoderCoverageTests {
     }
 
     @Test("Encode expression parameter produces expression type in JSON")
-    func encodeExpressionParameter() {
+    func encodeExpressionParameter() throws {
         var circuit = QuantumCircuit(qubits: 1)
         let alpha = Parameter(name: "alpha")
         let expr = ParameterExpression(alpha) + ParameterExpression(2.0)
         circuit.append(.rotationX(.expression(expr)), to: 0)
         let data = CircuitJSONEncoder.encode(circuit)
-        let json = String(data: data, encoding: .utf8)!
+        let json = try #require(String(data: data, encoding: .utf8))
         #expect(json.contains("expression"), "Expression parameter should encode with type expression")
         #expect(json.contains("alpha"), "Expression parameter name alpha should appear in JSON")
     }
 
     @Test("Encode controlled gate preserves controls in JSON")
-    func encodeControlledGate() {
+    func encodeControlledGate() throws {
         var circuit = QuantumCircuit(qubits: 3)
         circuit.append(.controlled(gate: .pauliX, controls: [0, 1]), to: [0, 1, 2])
         let data = CircuitJSONEncoder.encode(circuit)
-        let json = String(data: data, encoding: .utf8)!
+        let json = try #require(String(data: data, encoding: .utf8))
         #expect(json.contains("controls"), "Controlled gate JSON should contain controls field")
         let result = CircuitJSONDecoder.decode(from: data)
         #expect(result.circuit.count == 1, "Round-trip of controlled gate should preserve operation count")
@@ -555,11 +555,11 @@ struct CircuitJSONDecoderCoverageTests {
     }
 
     @Test("Encode controlled gate with parameter extracts parameter through controlled wrapper")
-    func encodeControlledGateWithParameter() {
+    func encodeControlledGateWithParameter() throws {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.controlled(gate: .rotationZ(.value(1.5)), controls: [0]), to: [0, 1])
         let data = CircuitJSONEncoder.encode(circuit)
-        let json = String(data: data, encoding: .utf8)!
+        let json = try #require(String(data: data, encoding: .utf8))
         #expect(json.contains("1.5"), "Controlled gate with parameter should preserve parameter value in JSON")
         #expect(json.contains("controls"), "Controlled gate should have controls field in JSON")
     }
