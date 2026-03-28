@@ -1600,4 +1600,78 @@ public enum ValidationUtilities {
     static func validateConcreteExpression(_ isSymbolic: Bool) {
         precondition(!isSymbolic, "Expression contains unbound parameters")
     }
+
+    /// Validate that two qubit registers do not overlap.
+    ///
+    /// Ensures no qubit index appears in both registers, preventing undefined behavior in arithmetic
+    /// circuits where register overlap would corrupt quantum state.
+    ///
+    /// - Parameters:
+    ///   - registerA: First qubit register indices
+    ///   - registerB: Second qubit register indices
+    ///   - nameA: Descriptive name for first register
+    ///   - nameB: Descriptive name for second register
+    /// - Precondition: registerA and registerB must have no common elements
+    /// - Complexity: O(n) where n = registerA.count + registerB.count
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateDisjointRegisters(
+        _ registerA: [Int],
+        _ registerB: [Int],
+        nameA: String,
+        nameB: String,
+    ) {
+        let setA = Set(registerA)
+        precondition(
+            registerB.allSatisfy { !setA.contains($0) },
+            "\(nameA) and \(nameB) registers must not overlap (got \(nameA)=\(registerA), \(nameB)=\(registerB))",
+        )
+    }
+
+    /// Validate that a qubit register has the expected size.
+    ///
+    /// Ensures register arrays match the required bit width for arithmetic circuit operands,
+    /// preventing dimension mismatches in adder, multiplier, and comparator circuits.
+    ///
+    /// - Parameters:
+    ///   - register: Qubit register indices
+    ///   - expected: Expected number of qubits
+    ///   - name: Descriptive name for the register
+    /// - Precondition: register.count == expected
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateRegisterSize(_ register: [Int], expected: Int, name: String) {
+        precondition(
+            register.count == expected,
+            "\(name) register must have \(expected) qubits (got \(register.count))",
+        )
+    }
+
+    /// Validate that a qubit index does not appear in any register.
+    ///
+    /// Ensures a standalone qubit (ancilla, result, control) does not collide with
+    /// any register qubit, preventing corruption during arithmetic circuit execution.
+    ///
+    /// - Parameters:
+    ///   - qubit: Standalone qubit index to check
+    ///   - registers: Array of registers to check against
+    ///   - qubitName: Descriptive name for the standalone qubit
+    /// - Precondition: qubit must not appear in any register
+    /// - Complexity: O(n) where n = total qubits across all registers
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateQubitNotInRegisters(
+        _ qubit: Int,
+        registers: [[Int]],
+        qubitName: String,
+    ) {
+        precondition(
+            registers.allSatisfy { !$0.contains(qubit) },
+            "\(qubitName) qubit \(qubit) must not overlap with any register",
+        )
+    }
 }
