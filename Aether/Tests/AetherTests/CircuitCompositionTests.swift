@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -643,5 +643,18 @@ struct UncoveredBranchTests {
         #expect(tensor.qubits == 3, "Tensor product qubit count should be 2 + 1 = 3")
         let lastOp = tensor.operations[tensor.count - 1]
         #expect(lastOp == .measure(qubit: 2, classicalBit: 2), "Measure classicalBit should shift from 0 to 2")
+    }
+
+    @Test("power(2) on circuit with reset falls back to repeated")
+    func powerTwoWithResetFallsBackToRepeated() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.reset, to: 0)
+        circuit.append(.pauliX, to: 1)
+        let powered = circuit.powered(by: 2)
+        #expect(powered.qubits == 2, "power(2) with reset should preserve qubit count")
+        #expect(powered.count == 6, "power(2) with reset should repeat 3 operations twice yielding 6 operations")
+        #expect(!powered.operations[1].isUnitary, "Reset operation should remain non-unitary after composition")
+        #expect(!powered.operations[4].isUnitary, "Repeated reset operation should remain non-unitary")
     }
 }

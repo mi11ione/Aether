@@ -936,7 +936,7 @@ public actor DMRG {
         ///   - groundState: Optimized MPS
         ///   - sweeps: Number of sweeps performed
         ///   - convergenceHistory: Energy history per sweep
-        init(
+        public init(
             groundStateEnergy: Double,
             groundState: MatrixProductState,
             sweeps: Int,
@@ -978,7 +978,7 @@ public actor DMRG {
         ///   - sweep: Current sweep number
         ///   - energy: Current energy value
         ///   - maxTruncationError: Maximum truncation error
-        init(sweep: Int, energy: Double, maxTruncationError: Double) {
+        public init(sweep: Int, energy: Double, maxTruncationError: Double) {
             self.sweep = sweep
             self.energy = energy
             self.maxTruncationError = maxTruncationError

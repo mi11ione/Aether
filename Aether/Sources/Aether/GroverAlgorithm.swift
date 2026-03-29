@@ -67,7 +67,7 @@ public struct GroverDiffusion: Sendable {
     /// Generates multi-controlled Z gate sequence.
     @_optimize(speed)
     @_effects(readonly)
-    static func buildMultiControlledZGates(qubits: Int) -> [(gate: QuantumGate, qubits: [Int])] {
+    public static func buildMultiControlledZGates(qubits: Int) -> [(gate: QuantumGate, qubits: [Int])] {
         if qubits == 1 {
             return [(.pauliZ, [0])]
         } else if qubits == 2 {
@@ -95,7 +95,7 @@ public struct GroverDiffusion: Sendable {
     /// Generates multi-controlled X gate sequence using Toffoli ladder.
     @_optimize(speed)
     @_effects(readonly)
-    static func buildMultiControlledXGates(controls: [Int], target: Int) -> [(gate: QuantumGate, qubits: [Int])] {
+    public static func buildMultiControlledXGates(controls: [Int], target: Int) -> [(gate: QuantumGate, qubits: [Int])] {
         let n = controls.count
 
         if n == 0 {

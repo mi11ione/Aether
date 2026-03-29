@@ -96,10 +96,8 @@ public extension Observable {
     func keepingLargest(_ count: Int) -> Observable {
         guard !terms.isEmpty else { return Observable(terms: []) }
         guard count > 0 else {
-            if let largest = terms.max(by: { abs($0.coefficient) < abs($1.coefficient) }) {
-                return Observable(terms: [largest])
-            }
-            return Observable(terms: [])
+            let largest = terms.max(by: { abs($0.coefficient) < abs($1.coefficient) })!
+            return Observable(terms: [largest])
         }
         guard count < terms.count else { return Observable(terms: terms) }
 

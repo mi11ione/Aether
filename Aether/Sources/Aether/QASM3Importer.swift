@@ -981,7 +981,6 @@ private func expandGateDefinition(
         var innerQubits: [Int] = []
         while currentToken(&subState) != .eof {
             if case .symbol(";") = currentToken(&subState) { break }
-            if currentToken(&subState) == .newline { break }
 
             if case let .identifier(qName) = currentToken(&subState) {
                 advance(&subState)
@@ -1334,7 +1333,6 @@ private func parseBracedBody(_ state: inout ParserState) -> [QASMToken] {
 
 /// Skip over balanced parentheses including their contents.
 private func skipBalancedParens(_ state: inout ParserState) {
-    guard case .symbol("(") = currentToken(&state) else { return }
     advance(&state)
     var depth = 1
     while depth > 0, currentToken(&state) != .eof {

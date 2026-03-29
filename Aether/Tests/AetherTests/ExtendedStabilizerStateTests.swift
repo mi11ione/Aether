@@ -381,4 +381,76 @@ struct ExtendedStabilizerStateDescriptionTests {
         let state = ExtendedStabilizerState(qubits: 3, maxRank: 64)
         #expect(state.memoryUsage > 0, "Memory usage should be positive")
     }
+
+    @Test("States with different qubit counts are not equal")
+    func differentQubitCountsNotEqual() {
+        let state1 = ExtendedStabilizerState(qubits: 2, maxRank: 64)
+        let state2 = ExtendedStabilizerState(qubits: 3, maxRank: 64)
+        #expect(state1 != state2, "States with different qubit counts should not be equal")
+    }
+
+    @Test("States with different maxRank are not equal")
+    func differentMaxRankNotEqual() {
+        let state1 = ExtendedStabilizerState(qubits: 2, maxRank: 64)
+        let state2 = ExtendedStabilizerState(qubits: 2, maxRank: 128)
+        #expect(state1 != state2, "States with different maxRank should not be equal")
+    }
+
+    @Test("States with same structure but different coefficients are not equal")
+    func differentCoefficientsNotEqual() {
+        var state1 = ExtendedStabilizerState(qubits: 1, maxRank: 64)
+        var state2 = ExtendedStabilizerState(qubits: 1, maxRank: 64)
+        state1.apply(.tGate, to: 0)
+        state2.apply(.tGate, to: 0)
+        state2.apply(.tGate, to: 0)
+        #expect(state1 != state2, "States with different T-gate counts should differ")
+    }
+
+    @Test("Equality detects coefficient difference at same rank")
+    func equalityDetectsCoefficientDifferenceAtSameRank() {
+        var state1 = ExtendedStabilizerState(qubits: 1, maxRank: 64)
+        var state2 = ExtendedStabilizerState(qubits: 1, maxRank: 64)
+        state1.apply(.tGate, to: 0)
+        state2.apply(.hadamard, to: 0)
+        state2.apply(.tGate, to: 0)
+        state2.apply(.hadamard, to: 0)
+        #expect(
+            state1 != state2,
+            "States with same rank but different coefficients should not be equal",
+        )
+    }
+
+    @Test("Amplitude returns zero for orthogonal basis state")
+    func amplitudeReturnsZeroForOrthogonalState() {
+        let state = ExtendedStabilizerState(qubits: 1, maxRank: 64)
+        let amp = state.amplitude(of: 1)
+        #expect(
+            amp.magnitudeSquared < 1e-10,
+            "Ground state should have zero amplitude for |1⟩",
+        )
+    }
+
+    @Test("Amplitude skips terms when tableau returns nil for large qubit count")
+    func amplitudeSkipsNilTableauTerms() {
+        let state = ExtendedStabilizerState(qubits: 21, maxRank: 64)
+        let amp = state.amplitude(of: 0)
+        #expect(
+            amp.magnitudeSquared == 0.0,
+            "21-qubit state amplitude should be zero when tableau returns nil",
+        )
+    }
+
+    @Test("Equality detects differing coefficients at same term index")
+    func equalityDetectsDifferingCoefficients() {
+        var state1 = ExtendedStabilizerState(qubits: 2, maxRank: 64)
+        var state2 = ExtendedStabilizerState(qubits: 2, maxRank: 64)
+        state1.apply(.tGate, to: 0)
+        state1.apply(.tGate, to: 0)
+        state2.apply(.tGate, to: 0)
+        state2.apply(.tGate, to: 1)
+        #expect(
+            state1 != state2,
+            "States with same rank but different T-gate targets should differ",
+        )
+    }
 }

@@ -145,7 +145,7 @@ public enum QASM2Exporter: Sendable {
         case let .negatedParameter(p):
             return "-\(p.name)"
         case let .expression(expr):
-            precondition(!expr.isSymbolic, "QASM2 export requires concrete parameter values")
+            ValidationUtilities.validateConcreteExpression(expr.isSymbolic)
             return formatDouble(expr.evaluate(using: [:]))
         }
     }

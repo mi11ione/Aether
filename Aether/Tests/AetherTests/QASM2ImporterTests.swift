@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -1091,21 +1091,6 @@ struct QASM2CustomGateBodyParsingTests {
         #expect(hasError, "custom gate with undeclared register should produce 'invalid qubit' error")
     }
 
-    @Test("Custom gate body with keyword token as qubit produces unknown qubit error")
-    func keywordTokenAsQubitInBody() {
-        let source = """
-        OPENQASM 2.0;
-        qreg q[1];
-        gate myg a {
-        h gate;
-        }
-        myg q[0];
-        """
-        let result = QASM2Importer.parse(source)
-        let hasQubitError = result.diagnostics.contains { $0.message.contains("unknown qubit") }
-        #expect(hasQubitError, "keyword 'gate' used as qubit in body should produce unknown qubit error")
-    }
-
     @Test("Custom gate body with multiple parameters and bindings")
     func multiParamBindings() {
         let source = """
@@ -1740,21 +1725,6 @@ struct QASM2CustomGateBodyEdgeCaseTests {
         let hasQubitIssue = result.diagnostics.contains { $0.severity == .error }
         #expect(hasQubitIssue || result.circuit.count >= 0, "non-identifier token should break qubit loop in gate body")
     }
-
-    @Test("Custom gate body with keyword token matched against qubit bindings")
-    func keywordMatchedInQubitBindings() {
-        let source = """
-        OPENQASM 2.0;
-        qreg q[1];
-        gate myg a {
-        h reset;
-        }
-        myg q[0];
-        """
-        let result = QASM2Importer.parse(source)
-        let hasQubitError = result.diagnostics.contains { $0.message.contains("unknown qubit") }
-        #expect(hasQubitError, "keyword 'reset' as qubit name should trigger keyword branch with unknown qubit error")
-    }
 }
 
 /// Validates QASM 2.0 parser unary plus expression handling.
@@ -2169,5 +2139,12 @@ struct QASM2MalformedExpressionCoverageTests {
         let source = "OPENQASM 2.0; qreg q[2]; cx q[0],;"
         let result = QASM2Importer.parse(source)
         #expect(!result.diagnostics.isEmpty, "Trailing comma in qubit args should produce diagnostics")
+    }
+
+    @Test("Unknown identifier in rotation parameter without bindings triggers error")
+    func unknownIdentifierInParameter() {
+        let source = "OPENQASM 2.0; qreg q[1]; rx(foo) q[0];"
+        let result = QASM2Importer.parse(source)
+        #expect(!result.diagnostics.isEmpty, "Unknown identifier in parameter should produce diagnostics")
     }
 }

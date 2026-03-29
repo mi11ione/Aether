@@ -177,9 +177,8 @@ public struct TreeTensorNetwork: Sendable {
 
         for nodeIndex in stride(from: nodeCount - 1, through: 0, by: -1) {
             let children = adjacency[nodeIndex]
-            guard let node = nodes[nodeIndex] else {
-                preconditionFailure("Node at index \(nodeIndex) is not set")
-            }
+            ValidationUtilities.validateNodeExists(nodes[nodeIndex], index: nodeIndex)
+            let node = nodes[nodeIndex]!
 
             if children.isEmpty {
                 contracted[nodeIndex] = node.elements
@@ -187,11 +186,9 @@ public struct TreeTensorNetwork: Sendable {
                 let leftChildIndex = children[0]
                 let rightChildIndex = children[1]
 
-                guard let leftTensor = contracted[leftChildIndex],
-                      let rightTensor = contracted[rightChildIndex]
-                else {
-                    preconditionFailure("Child tensors not available for contraction at node \(nodeIndex)")
-                }
+                ValidationUtilities.validateChildTensors(contracted[leftChildIndex], contracted[rightChildIndex], index: nodeIndex)
+                let leftTensor = contracted[leftChildIndex]!
+                let rightTensor = contracted[rightChildIndex]!
 
                 let contractedChildren = Self.contractChildTensors(
                     left: leftTensor,
@@ -203,9 +200,8 @@ public struct TreeTensorNetwork: Sendable {
             }
         }
 
-        guard let rootResult = contracted[0] else {
-            preconditionFailure("Root contraction failed")
-        }
+        ValidationUtilities.validateRootContraction(contracted[0])
+        let rootResult = contracted[0]!
 
         var sum: Complex<Double> = .zero
         for element in rootResult {

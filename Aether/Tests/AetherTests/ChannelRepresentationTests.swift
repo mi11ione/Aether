@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -937,5 +937,84 @@ struct ChannelRepresentationUncoveredPathsTests {
         let elementValue = superop.element(row: 0, col: 0)
 
         #expect(elementValue == superop.matrix[0][0], "element(row:col:) should return the same value as direct matrix access")
+    }
+}
+
+/// Test suite for validation false branches in channel representations.
+/// Constructs invalid (non-physical) channels via raw matrix initializers
+/// to trigger return-false paths in isTracePreserving, isCompletelyPositive,
+/// and isUnital checks.
+@Suite("Channel Validation False Branches")
+struct ChannelValidationFalseBranchTests {
+    @Test("Non-trace-preserving superoperator returns false")
+    func superoperatorNotTracePreserving() {
+        // A valid 1-qubit superoperator for trace preservation requires
+        // sum_i S[i*d+i, j*d+k] = delta(j,k) for d=2.
+        // We break this by scaling the identity superoperator by 2,
+        // so the sums become 2 instead of 1.
+        let d2 = 4
+        var brokenMatrix = [[Complex<Double>]](
+            repeating: [Complex<Double>](repeating: .zero, count: d2),
+            count: d2,
+        )
+        for i in 0 ..< d2 {
+            brokenMatrix[i][i] = Complex(2.0, 0)
+        }
+
+        let superop = SuperoperatorRepresentation(matrix: brokenMatrix, qubits: 1)
+
+        #expect(!superop.isTracePreserving(), "Scaled identity superoperator should not be trace preserving")
+    }
+
+    @Test("Non-completely-positive Choi matrix returns false")
+    func choiNotCompletelyPositive() {
+        // A completely positive channel has a positive semidefinite Choi matrix.
+        // We construct a Hermitian 4x4 matrix with a negative eigenvalue.
+        // Use diag(1, 1, 1, -1) which has eigenvalue -1.
+        let d2 = 4
+        var negativeChoi = [[Complex<Double>]](
+            repeating: [Complex<Double>](repeating: .zero, count: d2),
+            count: d2,
+        )
+        negativeChoi[0][0] = Complex(1.0, 0)
+        negativeChoi[1][1] = Complex(1.0, 0)
+        negativeChoi[2][2] = Complex(1.0, 0)
+        negativeChoi[3][3] = Complex(-1.0, 0)
+
+        let choi = ChoiMatrix(matrix: negativeChoi, qubits: 1)
+
+        #expect(!choi.isCompletelyPositive(), "Choi matrix with negative eigenvalue should not be completely positive")
+    }
+
+    @Test("Non-unital Pauli transfer matrix returns false from first element check")
+    func ptmNotUnitalFirstElement() {
+        // A unital channel has PTM[0][0] == 1.0.
+        // Set PTM[0][0] = 0.5 to trigger the first return-false branch.
+        let d2 = 4
+        var brokenPTM = [[Double]](
+            repeating: [Double](repeating: 0.0, count: d2),
+            count: d2,
+        )
+        brokenPTM[0][0] = 0.5
+
+        let ptm = PauliTransferMatrix(matrix: brokenPTM, qubits: 1)
+
+        #expect(!ptm.isUnital(), "PTM with R[0][0] != 1.0 should not be unital")
+    }
+
+    @Test("Non-trace-preserving Choi matrix returns false")
+    func choiNotTracePreserving() {
+        let d2 = 4
+        var brokenChoi = [[Complex<Double>]](
+            repeating: [Complex<Double>](repeating: .zero, count: d2),
+            count: d2,
+        )
+        for i in 0 ..< d2 {
+            brokenChoi[i][i] = Complex(2.0, 0)
+        }
+
+        let choi = ChoiMatrix(matrix: brokenChoi, qubits: 1)
+
+        #expect(!choi.isTracePreserving(), "Scaled identity Choi matrix should not be trace preserving")
     }
 }

@@ -217,11 +217,14 @@ struct QuantumTrajectoryEvolutionTests {
             configuration: config,
         )
 
-        #expect(result.individualTrajectories != nil, "Individual trajectories should be stored")
-        #expect(result.individualTrajectories?.count == 15, "Should have 15 individual trajectories")
+        let trajectories = result.individualTrajectories
+        #expect(trajectories != nil, "Individual trajectories should be stored")
+        #expect(trajectories?.count == 15, "Should have 15 individual trajectories")
 
-        for state in result.individualTrajectories ?? [] {
-            #expect(state.isNormalized(), "Each trajectory state should be normalized")
+        if let trajectories {
+            for state in trajectories {
+                #expect(state.isNormalized(), "Each trajectory state should be normalized")
+            }
         }
     }
 
@@ -876,6 +879,37 @@ struct JumpOperatorSamplingEdgeCasesTests {
         #expect(
             result.averageDensityMatrix.isHermitian(),
             "Averaged density matrix should be Hermitian",
+        )
+    }
+
+    @Test("Five-qubit evolution triggers vDSP vectorized paths")
+    func fiveQubitVDSPPaths() async {
+        let dim = 32
+        var L = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: dim), count: dim)
+        L[0][dim / 2] = Complex(0.3, 0)
+
+        var amps = [Complex<Double>](repeating: .zero, count: dim)
+        amps[dim / 2] = Complex(1.0, 0)
+        let psi = QuantumState(qubits: 5, amplitudes: amps)
+        let H = Observable.pauliZ(qubit: 0, coefficient: 0.5)
+
+        let config = TrajectoryConfiguration(
+            trajectories: 3,
+            seed: 99,
+            timeSteps: 20,
+        )
+
+        let result = await QuantumTrajectory.evolve(
+            hamiltonian: H,
+            jumpOperators: [L],
+            initialState: psi,
+            time: 1.0,
+            configuration: config,
+        )
+
+        #expect(
+            result.averageDensityMatrix.qubits == 5,
+            "Density matrix should have 5 qubits after vDSP path evolution",
         )
     }
 }

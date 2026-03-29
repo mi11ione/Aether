@@ -296,8 +296,6 @@ public enum TrotterSuzuki {
     ) {
         let operatorCount = term.operators.count
 
-        guard operatorCount > 0 else { return }
-
         for op in term.operators {
             applyBasisRotation(qubit: op.qubit, basis: op.basis, forward: true, circuit: &circuit)
         }

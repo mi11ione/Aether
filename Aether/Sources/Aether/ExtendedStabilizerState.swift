@@ -256,7 +256,7 @@ import GameplayKit
     public mutating func measure(_ qubit: Int, seed: UInt64?) -> Int {
         ValidationUtilities.validateQubitIndex(qubit, qubits: qubits)
 
-        let prob0 = computeMeasurementProbability(qubit: qubit, outcome: 0)
+        let prob0 = computeMeasurementProbability(qubit: qubit)
 
         let random: Double
         if let seed {
@@ -343,15 +343,12 @@ import GameplayKit
     /// Computes probability of a specific measurement outcome on one qubit.
     @inlinable
     @_effects(readonly)
-    func computeMeasurementProbability(qubit: Int, outcome: Int) -> Double {
+    func computeMeasurementProbability(qubit: Int) -> Double {
         let halfDimension = 1 << (qubits - 1)
         var totalProb = 0.0
 
         for i in 0 ..< halfDimension {
-            var basisState = BitUtilities.insertZeroBit(i, at: qubit)
-            if outcome == 1 {
-                basisState |= (1 << qubit)
-            }
+            let basisState = BitUtilities.insertZeroBit(i, at: qubit)
             let amp = amplitude(of: basisState)
             totalProb += amp.magnitudeSquared
         }

@@ -638,7 +638,6 @@ public enum QuantumTrajectory {
     @_optimize(speed)
     private static func normalizeVectorInPlace(_ psi: inout [Complex<Double>], dimension: Int) {
         let normSq = computeNormSquared(psi, dimension: dimension)
-        guard normSq > normalizationEpsilon else { return }
         let invNorm = 1.0 / sqrt(normSq)
 
         if dimension < 32 {

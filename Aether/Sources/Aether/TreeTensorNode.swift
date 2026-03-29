@@ -248,7 +248,7 @@ public struct TreeTensorNode: Sendable, Equatable {
     /// - Precondition: physical must be in valid range
     @inlinable
     public subscript(physical physical: Int) -> Complex<Double> {
-        guard isLeaf else { preconditionFailure("Physical index subscript requires leaf node") }
+        ValidationUtilities.validateLeafNode(isLeaf)
         // Safe: physicalDimension! non-nil because isLeaf guard above ensures non-nil
         ValidationUtilities.validateIndexInBounds(physical, bound: physicalDimension!, name: "Physical index")
         return elements[physical]
@@ -279,7 +279,7 @@ public struct TreeTensorNode: Sendable, Equatable {
     /// - Precondition: Both indices must be in valid ranges
     @inlinable
     public subscript(child0 child0: Int, child1 child1: Int) -> Complex<Double> {
-        guard isInternal else { preconditionFailure("Child bond subscript requires internal node") }
+        ValidationUtilities.validateInternalNode(isInternal)
         ValidationUtilities.validateIndexInBounds(child0, bound: childBondDimensions[0], name: "Child 0 bond index")
         ValidationUtilities.validateIndexInBounds(child1, bound: childBondDimensions[1], name: "Child 1 bond index")
         let flatIndex = child0 * childBondDimensions[1] + child1

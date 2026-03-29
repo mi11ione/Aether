@@ -767,4 +767,39 @@ struct LindbladStiffnessMinStepTests {
             "Trace should be approximately preserved or at least finite",
         )
     }
+
+    @Test("RK45 rejection buffer wraparound overwrites previous rejection")
+    func rk45RejectionBufferWraparound() {
+        let hamiltonian = Observable.pauliX(qubit: 0, coefficient: 20.0)
+        let sigmaMinusOp: [[Complex<Double>]] = [
+            [.zero, Complex(0.5, 0)],
+            [.zero, .zero],
+        ]
+        let jumpOperators = [sigmaMinusOp]
+        let initialState = DensityMatrix(qubits: 1)
+        let config = LindbladConfiguration(
+            absoluteTolerance: 1e-14,
+            relativeTolerance: 1e-14,
+            maxSteps: 500,
+            stiffnessThreshold: 50,
+        )
+
+        let result = LindbladSolver.evolve(
+            hamiltonian: hamiltonian,
+            jumpOperators: jumpOperators,
+            initialState: initialState,
+            time: 0.5,
+            configuration: config,
+        )
+
+        let stats = result.stepStatistics
+        #expect(
+            stats.acceptedSteps + stats.rejectedSteps > 0,
+            "Solver should take steps during evolution",
+        )
+        #expect(
+            result.finalState.trace().isFinite,
+            "Final state trace should be finite after long evolution with rejections",
+        )
+    }
 }

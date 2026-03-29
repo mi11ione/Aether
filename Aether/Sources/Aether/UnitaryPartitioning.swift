@@ -15,12 +15,12 @@ public struct UnitaryPartition: Sendable {
     public let terms: PauliTerms
 
     /// Diagonalizing unitary (2^n * 2^n).
-    let unitaryMatrix: [[Complex<Double>]]
+    public let unitaryMatrix: [[Complex<Double>]]
 
     /// Measurement basis per qubit (all Z after U†).
     public let measurementBasis: [Int: PauliBasis]
 
-    init(terms: PauliTerms, unitaryMatrix: [[Complex<Double>]]) {
+    public init(terms: PauliTerms, unitaryMatrix: [[Complex<Double>]]) {
         self.terms = terms
         self.unitaryMatrix = unitaryMatrix
 
@@ -548,7 +548,7 @@ public struct UnitaryPartitioner: Sendable {
             _, count in count = 2
         }
 
-        let queryResult: __LAPACK_int = a.withUnsafeMutableBytes { aPtr in
+        a.withUnsafeMutableBytes { aPtr in
             workQuery.withUnsafeMutableBytes { workPtr in
                 w.withUnsafeMutableBufferPointer { wPtr in
                     rwork.withUnsafeMutableBufferPointer { rworkPtr in
@@ -562,23 +562,19 @@ public struct UnitaryPartitioner: Sendable {
                             rworkPtr.baseAddress,
                             &info,
                         )
-                        return info
                     }
                 }
             }
         }
 
-        guard queryResult == 0 else { return nil }
-
         let optimalWorkSize = Int(workQuery[0])
-        guard optimalWorkSize > 0 else { return nil }
 
         lwork = __LAPACK_int(optimalWorkSize)
         var work = [Double](unsafeUninitializedCapacity: 2 * optimalWorkSize) {
             _, count in count = 2 * optimalWorkSize
         }
 
-        let computeResult: __LAPACK_int = a.withUnsafeMutableBytes { aPtr in
+        a.withUnsafeMutableBytes { aPtr in
             work.withUnsafeMutableBytes { workPtr in
                 w.withUnsafeMutableBufferPointer { wPtr in
                     rwork.withUnsafeMutableBufferPointer { rworkPtr in
@@ -592,13 +588,10 @@ public struct UnitaryPartitioner: Sendable {
                             rworkPtr.baseAddress,
                             &info,
                         )
-                        return info
                     }
                 }
             }
         }
-
-        guard computeResult == 0 else { return nil }
 
         let eigenvectors = [[Complex<Double>]](unsafeUninitializedCapacity: n) { rowBuffer, rowCount in
             for row in 0 ..< n {

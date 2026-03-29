@@ -199,6 +199,16 @@ public struct GateBenchmarkResult: Sendable, Equatable, CustomStringConvertible 
     /// Number of iterations used for measurement (excludes warmup).
     public let iterations: Int
 
+    /// Create benchmark result.
+    public init(gate: QuantumGate, meanNs: Double, minNs: Double, maxNs: Double, stdDevNs: Double, iterations: Int) {
+        self.gate = gate
+        self.meanNs = meanNs
+        self.minNs = minNs
+        self.maxNs = maxNs
+        self.stdDevNs = stdDevNs
+        self.iterations = iterations
+    }
+
     /// Human-readable description of benchmark results.
     ///
     /// Formats timing statistics with appropriate precision for display.

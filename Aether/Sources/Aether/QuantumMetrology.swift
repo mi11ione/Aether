@@ -299,6 +299,7 @@ public actor BayesianPhaseEstimation {
     private func performMeasurement(k: Int, simulator: QuantumSimulator, phaseAngle: Double) async -> Int {
         var circuit = QuantumCircuit(qubits: 2)
 
+        circuit.append(.pauliX, to: 1)
         circuit.append(.hadamard, to: 0)
 
         circuit.append(.controlledPhase(Double(k) * phaseAngle), to: [0, 1])

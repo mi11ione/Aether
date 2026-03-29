@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Testing
 
 /// Validates QASMLexer tokenization of OpenQASM source text including whitespace handling,
@@ -339,5 +339,26 @@ struct QASMLexerTests {
         #expect(tokens[0] == .identifier("a"), "identifier before dot at end should be present")
         #expect(tokens[1] == .symbol("."), "dot at end of input with no following digit should be symbol")
         #expect(tokens[2] == .eof, "stream should end with eof")
+    }
+}
+
+@Suite("QASMToken Description")
+struct QASMTokenDescriptionTests {
+    @Test("description returns correct string for every token type")
+    func descriptionAllTokenTypes() {
+        let tokens: [(QASMToken, String)] = [
+            (.keyword("qreg"), "keyword(qreg)"),
+            (.identifier("q"), "identifier(q)"),
+            (.integer(42), "integer(42)"),
+            (.real(3.14), "real(3.14)"),
+            (.string("hello"), "string(hello)"),
+            (.symbol("+"), "symbol(+)"),
+            (.newline, "newline"),
+            (.eof, "eof"),
+        ]
+
+        for (token, expected) in tokens {
+            #expect(token.description == expected, "\(token) description should be \(expected)")
+        }
     }
 }

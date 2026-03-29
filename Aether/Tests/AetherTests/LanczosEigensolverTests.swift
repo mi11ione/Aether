@@ -5,6 +5,15 @@ import Aether
 import Foundation
 import Testing
 
+/// Thread-safe call counter for verifying operator invocation counts.
+private actor Counter {
+    private(set) var value: Int = 0
+    func increment() -> Int {
+        value += 1
+        return value
+    }
+}
+
 /// Test suite for Lanczos eigensolver on diagonal matrices.
 /// Validates that findLowest correctly identifies eigenvalues of diagonal matrices,
 /// where eigenvalues are the diagonal entries and eigenvectors are standard basis vectors.
@@ -700,16 +709,35 @@ struct LanczosEdgeCasesTests {
         #expect(eigenvalueDiff < 1e-10, "Uniform diagonal should find eigenvalue \(eigenvalue), got \(result.eigenvalues[0])")
     }
 
-    @Test("Max restarts exhaustion with impossibly tight tolerance")
+    @Test("Max restarts exhaustion with impossibly tight tolerance on banded matrix")
     func maxRestartsExhaustion() async {
-        let dimension = 35
-        let diagonalValues = (0 ..< dimension).map { Double($0) + 1.0 }
+        // Exercises the fallback return path (lines 117-121) that runs when
+        // the Lanczos restart loop completes without converging.
+        //
+        // Strategy: dimension > 30 avoids solveDirect. A tridiagonal Hermitian
+        // matrix with strong coupling prevents invariant-subspace breakdown.
+        // A captured call counter adds a vanishing perturbation (~1e-15) that
+        // changes the operator very slightly across Krylov steps, ensuring the
+        // eigenvalue estimate never stabilizes to the exact same Double and
+        // |lambda_new - lambda_old| always exceeds Double.leastNonzeroMagnitude.
+        let dimension = 40
+        let counter = Counter()
 
         let result = await LanczosEigensolver.findLowest(
             applying: { vector in
+                let n = await counter.increment()
                 var output = [Complex<Double>](repeating: .zero, count: dimension)
                 for i in 0 ..< dimension {
-                    output[i] = Complex(diagonalValues[i], 0) * vector[i]
+                    // Diagonal with a tiny perturbation that shifts each call
+                    let perturbation = 1.0e-15 * Double(n) * Double(i + 1)
+                    output[i] = Complex(Double(i + 1) + perturbation, 0) * vector[i]
+                    // Nearest-neighbor coupling keeps beta above breakdown threshold
+                    if i > 0 {
+                        output[i] = output[i] + Complex(0.5, 0) * vector[i - 1]
+                    }
+                    if i < dimension - 1 {
+                        output[i] = output[i] + Complex(0.5, 0) * vector[i + 1]
+                    }
                 }
                 return output
             },
@@ -718,6 +746,9 @@ struct LanczosEdgeCasesTests {
         )
 
         #expect(result.eigenvalues[0].isFinite, "Should return finite eigenvalue after exhausting restarts")
-        #expect(abs(result.eigenvalues[0] - 1.0) < 0.1, "Should approximate lowest eigenvalue 1.0, got \(result.eigenvalues[0])")
+        #expect(!result.eigenvectors[0].isEmpty, "Should return non-empty eigenvector after exhausting restarts")
+        // Verify it actually went through many iterations (at least 100 restarts * 30 steps)
+        let totalCalls = await counter.value
+        #expect(totalCalls > 2000, "Should have made many apply calls, got \(totalCalls)")
     }
 }

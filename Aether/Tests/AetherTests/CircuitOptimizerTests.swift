@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -2398,5 +2398,122 @@ struct ResetPreservationInOptimizerTests {
         let count = CircuitOptimizer.cnotEquivalentCount(circuit)
 
         #expect(count == 4, "cnotEquivalentCount must be 4 (CNOT=1 + SWAP=3) and must exclude the reset operation")
+    }
+}
+
+/// Test suite for coverage of gate arity counting with 4+ qubit gates
+/// and KAK decomposition sorting network branches.
+@Suite("CircuitOptimizer Coverage")
+struct CircuitOptimizerCoverageTests {
+    @Test("Gate count by arity ignores 4+ qubit gates")
+    func gateCountByArityIgnoresFourQubitGates() {
+        let phases: [Double] = Array(repeating: 0.0, count: 16)
+        var circuit = QuantumCircuit(qubits: 4)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.diagonal(phases: phases), to: [0, 1, 2, 3])
+
+        let (single, two, three) = CircuitOptimizer.gateCountByArity(circuit)
+
+        #expect(single == 1, "Should count the Hadamard")
+        #expect(two == 0, "No two-qubit gates")
+        #expect(three == 0, "No three-qubit gates")
+    }
+
+    @Test("KAK decomposition of asymmetric custom unitary covers sorting branches")
+    func kakAsymmetricUnitary() {
+        let a = 0.15
+        let b = 0.7
+        let cosA = Complex<Double>(cos(a), 0)
+        let sinA = Complex<Double>(0, -sin(a))
+        let cosB = Complex<Double>(cos(b), 0)
+        let sinB = Complex<Double>(0, -sin(b))
+
+        let matrix: [[Complex<Double>]] = [
+            [cosA, .zero, .zero, sinA],
+            [.zero, cosB, sinB, .zero],
+            [.zero, sinB, cosB, .zero],
+            [sinA, .zero, .zero, cosA],
+        ]
+
+        let gate = QuantumGate.customTwoQubit(matrix: matrix)
+        let decomposed = CircuitOptimizer.kakDecomposition(gate)
+
+        #expect(!decomposed.isEmpty, "Asymmetric unitary should decompose successfully")
+    }
+
+    @Test("KAK decomposition of XX gate covers coordinate extraction")
+    func kakXXGate() {
+        let decomposed = CircuitOptimizer.kakDecomposition(.xx(0.6))
+
+        let cnotCount = decomposed.count(where: { $0.gate == .cnot })
+        #expect(cnotCount <= 3, "XX should decompose to at most 3 CNOTs")
+    }
+
+    @Test("KAK decomposition of ZZ gate covers coordinate extraction")
+    func kakZZGate() {
+        let decomposed = CircuitOptimizer.kakDecomposition(.zz(1.2))
+
+        let cnotCount = decomposed.count(where: { $0.gate == .cnot })
+        #expect(cnotCount <= 3, "ZZ should decompose to at most 3 CNOTs")
+    }
+
+    @Test("KAK decomposition of iSWAP covers sorting network")
+    func kakISWAP() {
+        let decomposed = CircuitOptimizer.kakDecomposition(.iswap)
+
+        let cnotCount = decomposed.count(where: { $0.gate == .cnot })
+        #expect(cnotCount <= 3, "iSWAP should decompose to at most 3 CNOTs")
+    }
+
+    @Test("KAK decomposition of Givens rotation covers alternate orderings")
+    func kakGivensRotation() {
+        let decomposed = CircuitOptimizer.kakDecomposition(.givens(0.9))
+
+        let cnotCount = decomposed.count(where: { $0.gate == .cnot })
+        #expect(cnotCount <= 3, "Givens should decompose to at most 3 CNOTs")
+    }
+
+    @Test("KAK decomposition of various gates covers eigenvalue sorting")
+    func kakVariousGates() {
+        let gates: [QuantumGate] = [
+            .xx(1.8),
+            .yy(0.4),
+            .zz(2.5),
+            .xx(0.1),
+            .givens(2.3),
+            .sqrtISwap,
+            .fswap,
+        ]
+
+        for gate in gates {
+            let decomposed = CircuitOptimizer.kakDecomposition(gate)
+            #expect(!decomposed.isEmpty, "Gate should decompose successfully")
+        }
+    }
+
+    @Test("KAK decomposition with highly asymmetric unitary")
+    func kakHighlyAsymmetric() {
+        let t = 0.8
+        let matrix: [[Complex<Double>]] = [
+            [Complex<Double>(cos(t), 0), .zero, .zero, Complex<Double>(0, -sin(t))],
+            [.zero, Complex<Double>(cos(0.1), 0), Complex<Double>(0, -sin(0.1)), .zero],
+            [.zero, Complex<Double>(0, -sin(0.1)), Complex<Double>(cos(0.1), 0), .zero],
+            [Complex<Double>(0, -sin(t)), .zero, .zero, Complex<Double>(cos(t), 0)],
+        ]
+        let decomposed = CircuitOptimizer.kakDecomposition(.customTwoQubit(matrix: matrix))
+        #expect(!decomposed.isEmpty, "Highly asymmetric unitary should decompose")
+    }
+
+    @Test("KAK decomposition with rotated unitary via product")
+    func kakProductUnitary() {
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.rotationX(0.3), to: 0)
+        circuit.append(.cnot, to: [0, 1])
+        circuit.append(.rotationZ(1.7), to: 1)
+        circuit.append(.cnot, to: [0, 1])
+        circuit.append(.rotationY(0.9), to: 0)
+
+        let optimized = CircuitOptimizer.optimize(circuit)
+        #expect(!optimized.isEmpty, "Optimized circuit should not be empty")
     }
 }

@@ -150,9 +150,7 @@ public extension QuantumCircuit {
 
         let controlIndices = Array(0 ..< numControls)
 
-        for operation in operations {
-            guard case let .gate(gate, targetQubits, _) = operation else { continue }
-
+        for case let .gate(gate, targetQubits, _) in operations {
             let shiftedTargets = targetQubits.map { $0 + numControls }
 
             if gate.qubitsRequired == 1 {

@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -2039,6 +2039,43 @@ struct CCZGateTests {
                     #expect(abs(matrix[i][j].magnitude) < 1e-10, "CCZ off-diagonal element [\(i)][\(j)] should be 0")
                 }
             }
+        }
+    }
+}
+
+@Suite("QuantumGate fullName")
+struct QuantumGateFullNameTests {
+    @Test("fullName returns non-empty string for every gate type")
+    func fullNameAllGateTypes() {
+        let identity2x2: [[Complex<Double>]] = [
+            [Complex<Double>(1, 0), Complex<Double>(0, 0)],
+            [Complex<Double>(0, 0), Complex<Double>(1, 0)],
+        ]
+        let identity4x4: [[Complex<Double>]] = (0 ..< 4).map { i in
+            (0 ..< 4).map { j in i == j ? Complex<Double>(1, 0) : Complex<Double>(0, 0) }
+        }
+
+        let gates: [QuantumGate] = [
+            .identity, .pauliX, .pauliY, .pauliZ, .hadamard,
+            .phase(.pi / 4), .sGate, .tGate,
+            .rotationX(.pi), .rotationY(.pi), .rotationZ(.pi),
+            .u1(lambda: .pi), .u2(phi: .pi, lambda: .pi / 2), .u3(theta: .pi, phi: .pi / 2, lambda: .pi / 4),
+            .sx, .sy, .customSingleQubit(matrix: identity2x2), .globalPhase(.pi),
+            .cnot, .cz, .cy, .ch,
+            .swap, .sqrtSwap, .iswap, .sqrtISwap, .fswap,
+            .givens(.pi / 4), .xx(.pi / 4), .yy(.pi / 4), .zz(.pi / 4),
+            .toffoli, .fredkin, .ccz,
+            .controlledPhase(.pi), .controlledRotationX(.pi),
+            .controlledRotationY(.pi), .controlledRotationZ(.pi),
+            .customTwoQubit(matrix: identity4x4),
+            .diagonal(phases: [0.0, 0.0]),
+            .multiplexor(unitaries: [identity2x2]),
+            .controlled(gate: .pauliX, controls: [0]),
+            .customUnitary(matrix: identity2x2),
+        ]
+
+        for gate in gates {
+            #expect(!gate.fullName.isEmpty, "\(gate) should have non-empty fullName")
         }
     }
 }

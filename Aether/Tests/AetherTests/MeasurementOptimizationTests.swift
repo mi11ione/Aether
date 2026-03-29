@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Testing
 
 /// Tests for Pauli operator commutation rules.
@@ -661,6 +661,25 @@ struct UnitaryPartitioningTests {
         let ps = PauliString(.z(0))
         let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)])
         #expect(!partitions.isEmpty, "High ansatz depth should produce non-empty partitions")
+    }
+
+    @Test("Optimizer converges and diagonalizes for trivial single-Z operator")
+    func optimizerConvergesForSingleZ() {
+        let partitioner = UnitaryPartitioner(
+            maxIterations: 200,
+            convergenceTolerance: 1e-3,
+            circuitDepth: 2,
+            diagonalityThreshold: 0.5,
+        )
+        let ps = PauliString(.z(0))
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)])
+        #expect(!partitions.isEmpty, "Single Z operator should be trivially diagonalizable")
+        if let first = partitions.first {
+            #expect(
+                !first.unitaryMatrix.isEmpty,
+                "Diagonalizing unitary should be returned for trivially diagonal operator",
+            )
+        }
     }
 }
 
@@ -1833,5 +1852,38 @@ struct MeasurementOptimizationIntegrationTests {
 
         let totalTerms = partitions.reduce(0) { $0 + $1.terms.count }
         #expect(totalTerms == 2, "All terms should be preserved")
+    }
+
+    @Test("Cache termsEqual returns false for NaN coefficients")
+    func cacheTermsEqualNaNCoefficients() async {
+        await Observable.clearGroupingCaches()
+
+        let ps = PauliString(.z(0))
+        let nanObs = Observable(terms: [(coefficient: Double.nan, pauliString: ps)])
+
+        let g1 = await nanObs.qwcGroups()
+        let g2 = await nanObs.qwcGroups()
+        let g3 = await nanObs.qwcGroups()
+
+        #expect(
+            g1.count == g2.count && g2.count == g3.count,
+            "NaN coefficient observable should produce consistent QWC groups despite cache miss",
+        )
+    }
+
+    @Test("Cache termsEqual returns false for NaN in unitary partitions")
+    func cacheTermsEqualNaNUnitaryPartitions() async {
+        await Observable.clearGroupingCaches()
+
+        let ps = PauliString(.z(0))
+        let nanObservable = Observable(terms: [(coefficient: Double.nan, pauliString: ps)])
+
+        let partitions1 = await nanObservable.unitaryPartitions()
+        let partitions2 = await nanObservable.unitaryPartitions()
+
+        #expect(
+            partitions1.count == partitions2.count,
+            "NaN coefficient observable should produce consistent unitary partitions despite cache miss",
+        )
     }
 }

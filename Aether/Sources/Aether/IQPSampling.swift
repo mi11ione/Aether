@@ -200,8 +200,6 @@ public enum IQPSampling {
     /// - Precondition: `outcomes` is non-empty
     /// - Precondition: `qubits` > 0
     /// - Complexity: O(outcomes.count) time, O(2^qubits) space for histogram
-    ///
-    /// - SeeAlso: ``validateAntiConcentration(outcomes:qubits:)``
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove

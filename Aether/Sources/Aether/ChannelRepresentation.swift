@@ -276,7 +276,12 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
     }
 
     /// Creates a superoperator from a precomputed matrix.
-    private init(matrix: [[Complex<Double>]], qubits: Int) {
+    ///
+    /// - Parameters:
+    ///   - matrix: Precomputed superoperator matrix of dimension d² x d² where d = 2^qubits
+    ///   - qubits: Number of qubits the channel acts on
+    /// - Precondition: qubits >= 1
+    public init(matrix: [[Complex<Double>]], qubits: Int) {
         self.matrix = matrix
         self.qubits = qubits
     }
@@ -417,6 +422,17 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
         }
 
         matrix = result
+    }
+
+    /// Creates a Choi matrix from a precomputed matrix.
+    ///
+    /// - Parameters:
+    ///   - matrix: Precomputed Choi matrix of dimension d² x d² where d = 2^qubits
+    ///   - qubits: Number of qubits the channel acts on
+    /// - Precondition: qubits >= 1
+    public init(matrix: [[Complex<Double>]], qubits: Int) {
+        self.matrix = matrix
+        self.qubits = qubits
     }
 
     /// Accesses Choi matrix element at specified row and column.
@@ -815,6 +831,17 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
         }
 
         matrix = result
+    }
+
+    /// Creates a Pauli transfer matrix from a precomputed matrix.
+    ///
+    /// - Parameters:
+    ///   - matrix: Precomputed Pauli transfer matrix of dimension d² x d² where d = 2^qubits
+    ///   - qubits: Number of qubits the channel acts on
+    /// - Precondition: qubits >= 1
+    public init(matrix: [[Double]], qubits: Int) {
+        self.matrix = matrix
+        self.qubits = qubits
     }
 
     /// Accesses Pauli transfer matrix element at specified row and column.

@@ -86,8 +86,7 @@ public enum CircuitDiagramASCII: Sendable {
     @_effects(readonly)
     @usableFromInline
     static func computeLayerCount(_ layerAssignments: [Int]) -> Int {
-        guard let m = layerAssignments.max() else { return 0 }
-        return m + 1
+        layerAssignments.max()! + 1
     }
 
     /// Build 2D grid of gate symbol strings indexed by [qubit][layer].
@@ -384,7 +383,6 @@ public enum CircuitDiagramASCII: Sendable {
     @_effects(readonly)
     @usableFromInline
     static func qubitRange(_ qubits: [Int]) -> (min: Int, max: Int) {
-        guard !qubits.isEmpty else { return (0, 0) }
         var minQ = qubits[0]
         var maxQ = qubits[0]
         for q in qubits {

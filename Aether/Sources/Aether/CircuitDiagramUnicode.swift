@@ -173,7 +173,7 @@ public enum CircuitDiagramUnicode: Sendable {
     @usableFromInline
     static func assignLayers(operations: [CircuitOperation], qubitCount: Int) -> [[CircuitOperation]] {
         let assignments = CircuitDiagramUtilities.assignLayers(operations: operations, qubitCount: qubitCount)
-        let layerCount = (assignments.max() ?? -1) + 1
+        let layerCount = assignments.max()! + 1
         var layers = [[CircuitOperation]](repeating: [], count: layerCount)
         var layerCounts = [Int](unsafeUninitializedCapacity: layerCount) {
             buffer, count in

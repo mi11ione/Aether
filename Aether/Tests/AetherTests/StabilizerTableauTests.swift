@@ -234,16 +234,18 @@ struct StabilizerMeasurementTests {
 
     @Test("Measurement collapses superposition to definite state")
     func measurementCollapsesSuperposition() {
-        var tableau = StabilizerTableau(qubits: 1)
-        tableau.apply(.hadamard, to: 0)
-        let outcome = tableau.measure(0, seed: 42)
-        let (p0, p1) = tableau.probability(of: 0, measuring: .z)
-        if outcome == 0 {
-            #expect(abs(p0 - 1.0) < 1e-10, "After measuring 0, p(0) should be 1.0")
-            #expect(abs(p1) < 1e-10, "After measuring 0, p(1) should be 0.0")
-        } else {
-            #expect(abs(p0) < 1e-10, "After measuring 1, p(0) should be 0.0")
-            #expect(abs(p1 - 1.0) < 1e-10, "After measuring 1, p(1) should be 1.0")
+        for seed: UInt64 in [42, 123] {
+            var tableau = StabilizerTableau(qubits: 1)
+            tableau.apply(.hadamard, to: 0)
+            let outcome = tableau.measure(0, seed: seed)
+            let (p0, p1) = tableau.probability(of: 0, measuring: .z)
+            if outcome == 0 {
+                #expect(abs(p0 - 1.0) < 1e-10, "After measuring 0, p(0) should be 1.0")
+                #expect(abs(p1) < 1e-10, "After measuring 0, p(1) should be 0.0")
+            } else {
+                #expect(abs(p0) < 1e-10, "After measuring 1, p(0) should be 0.0")
+                #expect(abs(p1 - 1.0) < 1e-10, "After measuring 1, p(1) should be 1.0")
+            }
         }
     }
 
@@ -565,5 +567,31 @@ struct StabilizerTableauCoverageTests {
         let zz = PauliString(.z(0), .z(1))
         let expectation = tableau.expectationValue(of: zz)
         #expect(abs(expectation - 1.0) < 1e-10, "X|0>X|0> should give ZZ=+1")
+    }
+
+    @Test("Large tableau triggers SIMD4 vectorized row operations")
+    func largeTableauSIMD4Paths() {
+        var tableau = StabilizerTableau(qubits: 100)
+        for q in 0 ..< 10 {
+            tableau.apply(.hadamard, to: q)
+        }
+        for q in 0 ..< 9 {
+            tableau.apply(.cnot, to: [q, q + 1])
+        }
+        for q in 0 ..< 10 {
+            tableau.apply(.sGate, to: q)
+            tableau.apply(.hadamard, to: q)
+            tableau.apply(.sGate, to: q)
+        }
+        for q in stride(from: 8, through: 0, by: -1) {
+            tableau.apply(.cnot, to: [q, q + 1])
+        }
+        for q in 0 ..< 5 {
+            let outcome = tableau.measure(q, seed: UInt64(q + 1))
+            #expect(
+                outcome == 0 || outcome == 1,
+                "Measurement on 100-qubit tableau should produce valid outcome for qubit \(q)",
+            )
+        }
     }
 }

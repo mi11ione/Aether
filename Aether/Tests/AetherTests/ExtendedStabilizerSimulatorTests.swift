@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Testing
 
 /// Test suite for ExtendedStabilizerSimulator actor.
@@ -411,5 +411,76 @@ struct ExtendedStabilizerSimulatorTests {
         let state = await simulator.execute(circuit)
 
         #expect(state.qubits == 3, "State should have 3 qubits after Fredkin gate")
+    }
+
+    @Test("execute handles sqrtSwap gate")
+    func executeHandlesSqrtSwap() async {
+        let simulator = ExtendedStabilizerSimulator(maxRank: 1024)
+
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.pauliX, to: 0)
+        circuit.append(.sqrtSwap, to: [0, 1])
+
+        let state = await simulator.execute(circuit)
+
+        #expect(state.qubits == 2, "State should have 2 qubits after sqrtSwap gate")
+    }
+
+    @Test("execute skips rotation with symbolic parameter")
+    func executeSkipsSymbolicRotation() async {
+        let simulator = ExtendedStabilizerSimulator(maxRank: 64)
+        let param = Parameter(name: "theta")
+
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.rotationX(.parameter(param)), to: 0)
+        circuit.append(.rotationY(.parameter(param)), to: 0)
+        circuit.append(.rotationZ(.parameter(param)), to: 0)
+
+        let state = await simulator.execute(circuit)
+
+        #expect(
+            state.rank == 1,
+            "Symbolic rotation parameters should be skipped, leaving rank unchanged",
+        )
+        #expect(
+            abs(state.probability(of: 0) - 1.0) < 1e-10,
+            "State should remain in ground state when symbolic rotations are skipped",
+        )
+    }
+
+    @Test("execute skips controlled-phase with symbolic parameter")
+    func executeSkipsSymbolicControlledPhase() async {
+        let simulator = ExtendedStabilizerSimulator(maxRank: 64)
+        let param = Parameter(name: "phi")
+
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.controlledPhase(.parameter(param)), to: [0, 1])
+
+        let state = await simulator.execute(circuit)
+
+        #expect(
+            state.qubits == 2,
+            "State should have 2 qubits after symbolic controlled-phase is skipped",
+        )
+    }
+
+    @Test("execute skips controlled-rotation with symbolic parameter")
+    func executeSkipsSymbolicControlledRotation() async {
+        let simulator = ExtendedStabilizerSimulator(maxRank: 64)
+        let param = Parameter(name: "alpha")
+
+        var circuit = QuantumCircuit(qubits: 2)
+        circuit.append(.hadamard, to: 0)
+        circuit.append(.controlledRotationX(.parameter(param)), to: [0, 1])
+        circuit.append(.controlledRotationY(.parameter(param)), to: [0, 1])
+        circuit.append(.controlledRotationZ(.parameter(param)), to: [0, 1])
+
+        let state = await simulator.execute(circuit)
+
+        #expect(
+            state.qubits == 2,
+            "State should have 2 qubits after symbolic controlled-rotations are skipped",
+        )
     }
 }

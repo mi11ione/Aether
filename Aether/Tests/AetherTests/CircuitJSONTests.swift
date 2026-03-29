@@ -753,4 +753,22 @@ struct CircuitJSONDecoderTargetedCoverageTests {
         let result = CircuitJSONDecoder.decode(from: Data(json.utf8))
         #expect(result.circuit.count == 1, "value parameter without value field should default to 0")
     }
+
+    @Test("Expression parameter type decodes as value fallback")
+    func decodeExpressionParameter() {
+        let json = """
+        {"version":1,"qubitCount":1,"classicalBitCount":0,"operations":[{"type":"gate","gate":"rx","qubits":[0],"parameters":[{"type":"expression","value":1.57}]}]}
+        """
+        let result = CircuitJSONDecoder.decode(from: Data(json.utf8))
+        #expect(result.circuit.count == 1, "expression parameter type should decode as value fallback")
+    }
+
+    @Test("Expression parameter type without value defaults to zero")
+    func decodeExpressionParameterNoValue() {
+        let json = """
+        {"version":1,"qubitCount":1,"classicalBitCount":0,"operations":[{"type":"gate","gate":"rx","qubits":[0],"parameters":[{"type":"expression"}]}]}
+        """
+        let result = CircuitJSONDecoder.decode(from: Data(json.utf8))
+        #expect(result.circuit.count == 1, "expression parameter without value should default to zero")
+    }
 }

@@ -141,7 +141,6 @@ extension AmplitudeDisplayFormatter {
     /// Formats an integer as a fixed-width binary string.
     @_effects(readonly)
     @inlinable static func binaryString(for value: Int, width: Int) -> String {
-        guard width > 0 else { return "" }
         let chars = [Character](unsafeUninitializedCapacity: width) { buffer, count in
             for i in 0 ..< width {
                 let bit = (width - 1) - i

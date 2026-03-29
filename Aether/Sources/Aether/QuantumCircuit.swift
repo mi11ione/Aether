@@ -1735,7 +1735,7 @@ public extension QuantumCircuit {
     /// - Complexity: O(n) gates where n = controls.count
     ///
     /// - SeeAlso: ``grover(qubits:target:iterations:)``
-    internal static func appendMultiControlledU(
+    static func appendMultiControlledU(
         to circuit: inout QuantumCircuit,
         gate: QuantumGate,
         controls: [Int],

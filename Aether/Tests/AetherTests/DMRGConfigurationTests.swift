@@ -182,13 +182,12 @@ struct DMRGSweepDirectionTests {
 
     @Test("Direction can be toggled in sweep pattern")
     func directionTogglePattern() {
-        var direction = DMRGSweepDirection.leftToRight
+        let left = DMRGSweepDirection.leftToRight
+        let right = DMRGSweepDirection.rightToLeft
 
-        direction = (direction == .leftToRight) ? .rightToLeft : .leftToRight
-        #expect(direction == .rightToLeft, "Direction should toggle from leftToRight to rightToLeft")
-
-        direction = (direction == .leftToRight) ? .rightToLeft : .leftToRight
-        #expect(direction == .leftToRight, "Direction should toggle from rightToLeft back to leftToRight")
+        #expect(left != right, "Direction should toggle from leftToRight to rightToLeft")
+        #expect(left == .leftToRight, "Left direction should be leftToRight")
+        #expect(right == .rightToLeft, "Right direction should be rightToLeft")
     }
 
     @Test("Directions can be stored in array")

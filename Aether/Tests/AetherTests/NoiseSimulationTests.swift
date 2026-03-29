@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -1706,5 +1706,23 @@ struct NoiseModelIdleNoiseTests {
         #expect(!model.hasIdleNoise, "Should not have idle noise when disabled")
         #expect(model.idleNoiseConfig == nil, "Idle config should be nil")
         #expect(model.hasNoise, "Should still have gate noise from profile")
+    }
+
+    @Test("Empty profile with zero qubits produces zero averages")
+    func emptyProfileZeroAverages() {
+        let profile = HardwareNoiseProfile(
+            name: "empty",
+            qubitCount: 0,
+            qubitParameters: [],
+            edges: [],
+        )
+
+        #expect(profile.qubitCount == 0, "Should have 0 qubits")
+        #expect(profile.averageSingleQubitError == 0.0, "Average error should be 0")
+        #expect(profile.averageT1 == 0.0, "Average T1 should be 0")
+        #expect(profile.averageT2 == 0.0, "Average T2 should be 0")
+
+        let model = profile.noiseModel()
+        #expect(model.hasNoise, "Model should still have noise channels")
     }
 }

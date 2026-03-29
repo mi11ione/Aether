@@ -107,7 +107,7 @@ public enum CircuitOptimizer {
     /// - Complexity: O(n) where n = operation count
     @_optimize(speed)
     @_eagerMove
-    static func cancelIdentityPairs(_ circuit: QuantumCircuit) -> QuantumCircuit {
+    public static func cancelIdentityPairs(_ circuit: QuantumCircuit) -> QuantumCircuit {
         guard circuit.count > 1 else { return circuit }
 
         var ops: [CircuitOperation] = []
@@ -152,7 +152,7 @@ public enum CircuitOptimizer {
     @inline(__always)
     @inlinable
     @_effects(readonly)
-    static func gatesFormIdentity(_ g1: QuantumGate, _ g2: QuantumGate) -> Bool {
+    public static func gatesFormIdentity(_ g1: QuantumGate, _ g2: QuantumGate) -> Bool {
         if g1 == g2 {
             switch g1 {
             case .identity, .pauliX, .pauliY, .pauliZ, .hadamard, .swap, .cnot, .cz, .cy, .toffoli, .ccz:
@@ -216,7 +216,7 @@ public enum CircuitOptimizer {
     @inline(__always)
     @inlinable
     @_effects(readonly)
-    static func isAngleEqual(_ angle: ParameterValue, _ target: Double) -> Bool {
+    public static func isAngleEqual(_ angle: ParameterValue, _ target: Double) -> Bool {
         guard case let .value(v) = angle else { return false }
         return abs(v - target) < angleTolerance
     }
@@ -237,7 +237,7 @@ public enum CircuitOptimizer {
     @inline(__always)
     @inlinable
     @_effects(readonly)
-    static func anglesCancel(_ a1: ParameterValue, _ a2: ParameterValue) -> Bool {
+    public static func anglesCancel(_ a1: ParameterValue, _ a2: ParameterValue) -> Bool {
         guard case let .value(v1) = a1, case let .value(v2) = a2 else { return false }
         return abs(v1 + v2) < angleTolerance
     }
@@ -266,7 +266,7 @@ public enum CircuitOptimizer {
     /// - Complexity: O(n) where n = operation count
     @_optimize(speed)
     @_eagerMove
-    static func mergeSingleQubitGates(_ circuit: QuantumCircuit) -> QuantumCircuit {
+    public static func mergeSingleQubitGates(_ circuit: QuantumCircuit) -> QuantumCircuit {
         guard circuit.count > 1 else { return circuit }
 
         var ops: [CircuitOperation] = []
@@ -383,13 +383,13 @@ public enum CircuitOptimizer {
         totalAngle = normalizeAngle(totalAngle)
         if abs(totalAngle) < angleTolerance { return [] }
 
-        switch first {
-        case .rotationX: return [.rotationX(totalAngle)]
-        case .rotationY: return [.rotationY(totalAngle)]
-        case .rotationZ: return [.rotationZ(totalAngle)]
-        case .phase: return [.phase(totalAngle)]
-        case .globalPhase: return [.globalPhase(totalAngle)]
-        default: return nil
+        return switch first {
+        case .rotationX: [.rotationX(totalAngle)]
+        case .rotationY: [.rotationY(totalAngle)]
+        case .rotationZ: [.rotationZ(totalAngle)]
+        case .phase: [.phase(totalAngle)]
+        case .globalPhase: [.globalPhase(totalAngle)]
+        default: nil
         }
     }
 
@@ -408,7 +408,7 @@ public enum CircuitOptimizer {
     @inline(__always)
     @inlinable
     @_effects(readonly)
-    static func normalizeAngle(_ angle: Double) -> Double {
+    public static func normalizeAngle(_ angle: Double) -> Double {
         var result = angle.truncatingRemainder(dividingBy: 2 * .pi)
         if result > .pi { result -= 2 * .pi }
         if result < -.pi { result += 2 * .pi }
@@ -513,7 +513,7 @@ public enum CircuitOptimizer {
     /// - Complexity: O(n^2) where n = operation count
     @_optimize(speed)
     @_eagerMove
-    static func reorderByCommutation(_ circuit: QuantumCircuit) -> QuantumCircuit {
+    public static func reorderByCommutation(_ circuit: QuantumCircuit) -> QuantumCircuit {
         guard circuit.count > 2 else { return circuit }
 
         var ops = circuit.operations
@@ -625,7 +625,7 @@ public enum CircuitOptimizer {
     /// - Complexity: O(1)
     @_optimize(speed)
     @_effects(readonly)
-    static func operationsCommute(_ op1: CircuitOperation, _ op2: CircuitOperation) -> Bool {
+    public static func operationsCommute(_ op1: CircuitOperation, _ op2: CircuitOperation) -> Bool {
         guard let gate1 = op1.gate,
               let gate2 = op2.gate
         else {
@@ -685,7 +685,7 @@ public enum CircuitOptimizer {
     @inline(__always)
     @inlinable
     @_effects(readonly)
-    static func isDiagonal(_ gate: QuantumGate) -> Bool {
+    public static func isDiagonal(_ gate: QuantumGate) -> Bool {
         switch gate {
         case .identity, .pauliZ, .sGate, .tGate, .phase, .rotationZ, .u1, .cz, .controlledPhase, .controlledRotationZ, .zz, .ccz, .globalPhase:
             true
@@ -926,7 +926,6 @@ public enum CircuitOptimizer {
         var s0 = abs(c0), s1 = abs(c1), s2 = abs(c2)
         if s0 < s1 { swap(&s0, &s1) }
         if s1 < s2 { swap(&s1, &s2) }
-        if s0 < s1 { swap(&s0, &s1) }
         if s0 > .pi / 4 { s0 = .pi / 2 - s0 }
 
         return (s0, s1, s2)
@@ -1145,7 +1144,7 @@ public enum CircuitOptimizer {
     /// - Complexity: O(n) where n = operation count
     @_optimize(speed)
     @_effects(readonly)
-    static func computeDepth(_ circuit: QuantumCircuit) -> Int {
+    public static func computeDepth(_ circuit: QuantumCircuit) -> Int {
         guard !circuit.isEmpty else { return 0 }
 
         var qubitDepth = [Int](repeating: 0, count: circuit.qubits)
@@ -1194,7 +1193,7 @@ public enum CircuitOptimizer {
     /// - Complexity: O(n) where n = operation count
     @_optimize(speed)
     @_effects(readonly)
-    static func gateCount(_ circuit: QuantumCircuit) -> [QuantumGate: Int] {
+    public static func gateCount(_ circuit: QuantumCircuit) -> [QuantumGate: Int] {
         var counts: [QuantumGate: Int] = [:]
         counts.reserveCapacity(min(circuit.count, 20))
 
@@ -1225,7 +1224,7 @@ public enum CircuitOptimizer {
     /// - Complexity: O(n)
     @_optimize(speed)
     @_effects(readonly)
-    static func gateCountByArity(_ circuit: QuantumCircuit) -> (single: Int, two: Int, three: Int) {
+    public static func gateCountByArity(_ circuit: QuantumCircuit) -> (single: Int, two: Int, three: Int) {
         var single = 0
         var two = 0
         var three = 0
@@ -1263,7 +1262,7 @@ public enum CircuitOptimizer {
     /// - Complexity: O(n)
     @_optimize(speed)
     @_effects(readonly)
-    static func cnotEquivalentCount(_ circuit: QuantumCircuit) -> Int {
+    public static func cnotEquivalentCount(_ circuit: QuantumCircuit) -> Int {
         var count = 0
 
         for operation in circuit.operations {

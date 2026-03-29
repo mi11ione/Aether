@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-@testable import Aether
+import Aether
 import Foundation
 import Testing
 
@@ -1737,5 +1737,11 @@ struct ShorFactorizationFactorExtractionTests {
             #expect(factors.p == 3 || factors.p == 5, "Factor p should be 3 or 5")
             #expect(factors.q == 3 || factors.q == 5, "Factor q should be 3 or 5")
         }
+    }
+
+    @Test("isPerfectPower overflow guard triggers for non-perfect-power with high exponent")
+    func isPerfectPowerOverflowGuard() {
+        let result = NumberTheory.isPerfectPower(99)
+        #expect(result == nil, "99 is not a perfect power")
     }
 }

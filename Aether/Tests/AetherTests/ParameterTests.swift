@@ -282,6 +282,16 @@ struct ParameterValueTests {
         #expect(abs(result - -2.0) < 1e-10, "Negated expression should evaluate to negated value")
     }
 
+    @Test("Expression parameter value isSymbolic and description")
+    func expressionIsSymbolicAndDescription() {
+        let theta = Parameter(name: "theta")
+        let expr = ParameterExpression(theta)
+        let exprValue = ParameterValue.expression(expr)
+
+        #expect(exprValue.isSymbolic, "Expression containing parameter should be symbolic")
+        #expect(exprValue.description.contains("expr("), "Expression description should contain expr prefix")
+    }
+
     @Test("Negated parameter hashability")
     func negatedParameterHashability() {
         let param = Parameter(name: "theta")

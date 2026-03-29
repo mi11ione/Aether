@@ -435,8 +435,7 @@ public actor SparseHamiltonian {
     @_effects(readonly)
     private static func convertComplexToFloat32Pairs(_ complexArray: [Complex<Double>]) -> [(Float, Float)] {
         complexArray.withUnsafeBufferPointer { complexBuffer in
-            guard let baseAddress = complexBuffer.baseAddress else { return [] }
-            let doublePtr = UnsafeRawPointer(baseAddress)
+            let doublePtr = UnsafeRawPointer(complexBuffer.baseAddress!)
                 .assumingMemoryBound(to: Double.self)
             let doubleCount = complexArray.count * 2
 
@@ -462,7 +461,6 @@ public actor SparseHamiltonian {
     @_effects(readonly)
     private static func decomposeStateToRealImag(_ state: QuantumState) -> (real: [Double], imag: [Double]) {
         let dimension = state.amplitudes.count
-        guard dimension > 0 else { return ([], []) }
         var stateReal = [Double](unsafeUninitializedCapacity: dimension) {
             buffer, count in
             buffer.initialize(repeating: 0)

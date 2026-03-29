@@ -293,7 +293,7 @@ public enum HubbardHamiltonian {
     /// - Complexity: O(to - from) operators per Pauli string
     @_optimize(speed)
     @_effects(readonly)
-    static func jordanWignerHopping(
+    public static func jordanWignerHopping(
         from: Int,
         to: Int,
         coefficient: Double,
@@ -346,7 +346,7 @@ public enum HubbardHamiltonian {
     /// - Complexity: O(1) - always produces 4 terms
     @_optimize(speed)
     @_effects(readonly)
-    static func jordanWignerInteraction(
+    public static func jordanWignerInteraction(
         upQubit: Int,
         downQubit: Int,
         U: Double,

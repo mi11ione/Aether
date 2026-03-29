@@ -47,7 +47,6 @@ public enum ApproximateQFT {
     /// - Precondition: truncation ≥ 1
     /// - Complexity: O(n · min(t, n)) gates where t = truncation
     ///
-    /// - SeeAlso: ``inverseCircuit(qubits:truncation:)``
     /// - SeeAlso: ``minimumTruncation(qubits:targetFidelity:)``
     @_optimize(speed)
     @_eagerMove
@@ -85,8 +84,6 @@ public enum ApproximateQFT {
     /// - Precondition: qubits is non-empty with unique non-negative indices
     /// - Precondition: truncation ≥ 1
     /// - Complexity: O(n · min(t, n)) gates where n = qubits.count
-    ///
-    /// - SeeAlso: ``inverseCircuit(qubits:truncation:)-swift.type.method``
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -108,7 +105,7 @@ public enum ApproximateQFT {
     /// Creates inverse approximate QFT circuit with truncated controlled rotations.
     ///
     /// Builds the adjoint of the approximate QFT by reversing gate order and negating
-    /// phase angles. Composing ``circuit(qubits:truncation:)`` with this inverse using the
+    /// phase angles. Composing circuit with this inverse using the
     /// same truncation approximates the identity within the error bound.
     ///
     /// **Example:**
@@ -125,8 +122,6 @@ public enum ApproximateQFT {
     /// - Precondition: qubits in 1...16
     /// - Precondition: truncation ≥ 1
     /// - Complexity: O(n · min(t, n)) gates where t = truncation
-    ///
-    /// - SeeAlso: ``circuit(qubits:truncation:)``
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -146,8 +141,7 @@ public enum ApproximateQFT {
     /// Creates inverse approximate QFT on explicit qubit indices.
     ///
     /// Applies the inverse truncated QFT to specified qubit indices for composition within
-    /// larger circuits. Mirrors ``circuit(qubits:truncation:)-swift.type.method`` with
-    /// reversed gate order and negated phases.
+    /// larger circuits.
     ///
     /// **Example:**
     /// ```swift
@@ -272,8 +266,6 @@ public enum ApproximateQFT {
     /// - Precondition: qubits > 0
     /// - Precondition: truncation ≥ 1
     /// - Complexity: O(n)
-    ///
-    /// - SeeAlso: ``circuit(qubits:truncation:)``
     @_effects(readonly)
     public static func gateCount(qubits: Int, truncation: Int) -> Int {
         ValidationUtilities.validatePositiveQubits(qubits)
@@ -337,7 +329,7 @@ public enum ApproximateQFT {
 public extension QuantumCircuit {
     /// Creates approximate QFT circuit with explicit truncation parameter.
     ///
-    /// Convenience factory delegating to ``ApproximateQFT/circuit(qubits:truncation:)``.
+    /// Convenience factory delegating to ``ApproximateQFT``.
     /// Truncates controlled-phase rotations R_k with k > truncation, reducing gate count
     /// from O(n²) to O(n·t).
     ///

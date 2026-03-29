@@ -580,6 +580,19 @@ public struct ZNEResult: Sendable, CustomStringConvertible {
     /// Scale factors used.
     public let scaleFactors: [Double]
 
+    /// Create ZNE result.
+    public init(
+        mitigatedValue: Double,
+        noisyValues: [(scale: Double, value: Double)],
+        method: ZeroNoiseExtrapolation.ExtrapolationMethod,
+        scaleFactors: [Double],
+    ) {
+        self.mitigatedValue = mitigatedValue
+        self.noisyValues = noisyValues
+        self.method = method
+        self.scaleFactors = scaleFactors
+    }
+
     /// Improvement factor: |noisy - mitigated| / |noisy|.
     @inlinable
     public var improvementFactor: Double {

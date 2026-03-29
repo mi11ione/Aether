@@ -728,13 +728,11 @@ private func applyMeasurementErrors(
 
 /// Sample outcomes from probability distribution.
 @_optimize(speed)
-private func sampleOutcomesFromDistribution(
+func sampleOutcomesFromDistribution(
     probabilities: [Double],
     shots: Int,
     seed: UInt64?,
 ) -> [Int] {
-    guard !probabilities.isEmpty else { return [] }
-
     var generator = Measurement.createRNG(seed: seed)
 
     var cdf = [Double](unsafeUninitializedCapacity: probabilities.count) {

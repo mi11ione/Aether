@@ -1096,3 +1096,25 @@ struct UncoveredGateLabelAndAngleFormatTests {
         #expect(diagram.contains("P(expr)"), "Phase gate with expression parameter should render as P(expr)")
     }
 }
+
+@Suite("CircuitDiagramUnicode Coverage")
+struct CircuitDiagramUnicodeCoverageTests {
+    @Test("Circuit with no operations renders without error")
+    func noOperationsRenders() {
+        let circuit = QuantumCircuit(qubits: 1)
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        #expect(!diagram.isEmpty, "Circuit with no operations should still render qubit wire")
+    }
+
+    @Test("Custom single qubit gate uses default label")
+    func customSingleQubitGateLabel() {
+        let identity: [[Complex<Double>]] = [
+            [Complex<Double>(1, 0), Complex<Double>(0, 0)],
+            [Complex<Double>(0, 0), Complex<Double>(1, 0)],
+        ]
+        var circuit = QuantumCircuit(qubits: 1)
+        circuit.append(.customSingleQubit(matrix: identity), to: 0)
+        let diagram = CircuitDiagramUnicode.render(circuit)
+        #expect(!diagram.isEmpty, "Custom gate diagram should render")
+    }
+}

@@ -79,9 +79,7 @@ struct CircuitDiagramASCIIMultiQubitTests {
         let lines = diagram.split(separator: "\n", omittingEmptySubsequences: false)
         #expect(lines.count == 5, "3-qubit diagram should have 5 lines (3 wires + 2 spacers), got \(lines.count)")
         let spacerLine1 = String(lines[1])
-        let spacerLine2 = String(lines[3])
-        let hasConnector = spacerLine1.contains("\u{2502}") || spacerLine2.contains("\u{2502}")
-        #expect(hasConnector, "Spacer lines should contain vertical connector \u{2502} between connected qubits")
+        #expect(spacerLine1.contains("\u{2502}"), "Spacer line should contain vertical connector \u{2502} between connected qubits")
     }
 }
 

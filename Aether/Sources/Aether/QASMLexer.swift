@@ -251,10 +251,10 @@ public enum QASMLexer: Sendable {
 
         let text = String(scalars[start ..< index])
         if hasDecimalPoint {
-            let value = Double(text) ?? 0.0
+            let value = Double(text)!
             return (.real(value), index, length)
         }
-        let value = Int(text) ?? 0
+        let value = Int(text)!
         return (.integer(value), index, length)
     }
 

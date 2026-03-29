@@ -631,6 +631,28 @@ struct TrotterEmptyPauliStringTests {
         let totalProb = state.probability(of: 0) + state.probability(of: 1)
         #expect(abs(totalProb - 1.0) < 1e-10, "Evolution with empty terms should produce valid state")
     }
+
+    @Test("Empty operator list terms add no gates to circuit")
+    func emptyOperatorListProducesNoExtraGates() {
+        let hamiltonianClean = Observable(terms: [
+            (1.0, PauliString(.x(0))),
+        ])
+        let hamiltonianWithEmpty = Observable(terms: [
+            (1.0, PauliString(.x(0))),
+            (2.0, PauliString()),
+            (0.7, PauliString()),
+            (3.5, PauliString()),
+        ])
+        let config = TrotterConfiguration(order: .second, steps: 3)
+
+        let circuitClean = TrotterSuzuki.evolve(hamiltonianClean, time: 0.5, qubits: 1, config: config)
+        let circuitWithEmpty = TrotterSuzuki.evolve(hamiltonianWithEmpty, time: 0.5, qubits: 1, config: config)
+
+        #expect(
+            circuitClean.count == circuitWithEmpty.count,
+            "Empty operator list terms should contribute zero gates",
+        )
+    }
 }
 
 /// Test suite for single-term commutation sorting in Trotter-Suzuki.

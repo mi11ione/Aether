@@ -174,7 +174,7 @@ public enum CircuitJSONDecoder {
             return
         }
 
-        if let schemaParameters = operation.parameters, !schemaParameters.isEmpty {
+        if let schemaParameters = operation.parameters {
             gate = applyingParameters(to: gate, schemaParameters: schemaParameters, index: index, diagnostics: &diagnostics)
         }
 

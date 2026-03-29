@@ -502,9 +502,14 @@ public struct NelderMeadOptimizer: Optimizer {
     }
 
     /// Simplex vertex with parameters and objective value
-    struct SimplexVertex {
-        var parameters: [Double]
-        var value: Double
+    public struct SimplexVertex {
+        public var parameters: [Double]
+        public var value: Double
+
+        public init(parameters: [Double], value: Double) {
+            self.parameters = parameters
+            self.value = value
+        }
     }
 }
 
@@ -1078,7 +1083,7 @@ public struct LBFGSBOptimizer: Optimizer {
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
-    static func computeSearchDirection(
+    public static func computeSearchDirection(
         gradient: [Double],
         sHistory: [[Double]],
         yHistory: [[Double]],
@@ -1757,15 +1762,26 @@ public struct COBYLAOptimizer: Optimizer {
     // MARK: - Supporting Types
 
     /// Single point in simplex with parameters and objective value
-    struct SimplexPoint {
-        var parameters: [Double]
-        var value: Double
+    public struct SimplexPoint {
+        public var parameters: [Double]
+        public var value: Double
+
+        public init(parameters: [Double], value: Double) {
+            self.parameters = parameters
+            self.value = value
+        }
     }
 
     /// Linear interpolation model: m(x) = f₀ + g^T(x - x₀)
-    struct LinearModel {
-        let baseParameters: [Double]
-        let baseValue: Double
-        let gradient: [Double]
+    public struct LinearModel {
+        public let baseParameters: [Double]
+        public let baseValue: Double
+        public let gradient: [Double]
+
+        public init(baseParameters: [Double], baseValue: Double, gradient: [Double]) {
+            self.baseParameters = baseParameters
+            self.baseValue = baseValue
+            self.gradient = gradient
+        }
     }
 }

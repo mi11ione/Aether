@@ -432,6 +432,18 @@ public enum ValidationUtilities {
         precondition(dimension > 0, "Matrix dimension must be positive (got \(dimension))")
     }
 
+    /// Validate that matrix dimension is a power of 2
+    ///
+    /// - Parameter dimension: Matrix dimension to validate
+    /// - Precondition: dimension > 0 and dimension is a power of 2
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validatePowerOfTwoDimension(_ dimension: Int) {
+        precondition(dimension > 0 && (dimension & (dimension - 1)) == 0, "Matrix dimension must be a power of 2 (got \(dimension))")
+    }
+
     /// Validate that square matrix has expected dimension
     ///
     /// - Parameters:
@@ -1502,51 +1514,6 @@ public enum ValidationUtilities {
         )
     }
 
-    /// Validate bounded constraint parameters.
-    ///
-    /// Ensures minimum bound is strictly less than maximum bound for valid interval constraints.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// ValidationUtilities.validateBoundedConstraint(min: 0.0, max: 2.0 * .pi)
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - min: Minimum bound value
-    ///   - max: Maximum bound value
-    ///   - name: Optional constraint name for error message
-    /// - Precondition: min < max
-    /// - Complexity: O(1)
-    @_effects(readonly)
-    @inlinable
-    @inline(__always)
-    public static func validateBoundedConstraint(min: Double, max: Double, name: String? = nil) {
-        let namePrefix = name.map { "\($0): " } ?? ""
-        precondition(min < max, "\(namePrefix)Bounded constraint requires min < max (got min=\(min), max=\(max))")
-    }
-
-    /// Validate periodic constraint parameter.
-    ///
-    /// Ensures period is strictly positive for valid periodic constraints.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// ValidationUtilities.validatePeriodicConstraint(period: 2.0 * .pi)
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - period: Period value to validate
-    ///   - name: Optional constraint name for error message
-    /// - Precondition: period > 0
-    /// - Complexity: O(1)
-    @_effects(readonly)
-    @inlinable
-    @inline(__always)
-    public static func validatePeriodicConstraint(period: Double, name: String? = nil) {
-        let namePrefix = name.map { "\($0): " } ?? ""
-        precondition(period > 0, "\(namePrefix)Periodic constraint requires period > 0 (got \(period))")
-    }
-
     /// Validate parameter binding completeness for expression.
     ///
     /// Ensures all parameters in the set have corresponding bindings in the dictionary.
@@ -1673,5 +1640,70 @@ public enum ValidationUtilities {
             registers.allSatisfy { !$0.contains(qubit) },
             "\(qubitName) qubit \(qubit) must not overlap with any register",
         )
+    }
+
+    /// Validate that a tree tensor node exists at the given index.
+    ///
+    /// - Parameters:
+    ///   - node: Optional node to validate
+    ///   - index: Node index for error message
+    /// - Precondition: node must be non-nil
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateNodeExists(_ node: TreeTensorNode?, index: Int) {
+        precondition(node != nil, "Node at index \(index) is not set")
+    }
+
+    /// Validate that child tensors are available for contraction.
+    ///
+    /// - Parameters:
+    ///   - left: Left child tensor
+    ///   - right: Right child tensor
+    ///   - index: Parent node index for error message
+    /// - Precondition: both tensors must be non-nil
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateChildTensors(_ left: [Complex<Double>]?, _ right: [Complex<Double>]?, index: Int) {
+        precondition(left != nil && right != nil, "Child tensors not available for contraction at node \(index)")
+    }
+
+    /// Validate that root contraction produced a result.
+    ///
+    /// - Parameter result: Optional contraction result
+    /// - Precondition: result must be non-nil
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateRootContraction(_ result: [Complex<Double>]?) {
+        precondition(result != nil, "Root contraction failed")
+    }
+
+    /// Validate that a tree tensor node is a leaf node.
+    ///
+    /// - Parameter isLeaf: Whether the node is a leaf
+    /// - Precondition: isLeaf must be true
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateLeafNode(_ isLeaf: Bool) {
+        precondition(isLeaf, "Physical index subscript requires leaf node")
+    }
+
+    /// Validate that a tree tensor node is an internal node.
+    ///
+    /// - Parameter isInternal: Whether the node is internal
+    /// - Precondition: isInternal must be true
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateInternalNode(_ isInternal: Bool) {
+        precondition(isInternal, "Child bond subscript requires internal node")
     }
 }

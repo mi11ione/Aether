@@ -132,7 +132,6 @@ enum QAOAAnsatz {
         coefficient: Double,
     ) {
         let operatorCount = pauliString.operators.count
-        guard operatorCount > 0 else { return }
 
         var targetQubits = [Int](unsafeUninitializedCapacity: operatorCount) {
             buffer, count in
@@ -189,10 +188,10 @@ enum QAOAAnsatz {
 /// string parsing in optimization loops. Expands base parameters [γ₀,β₀,...,γₚ₋₁,βₚ₋₁]
 /// to all coefficient-scaled variants (e.g., "gamma_0_c_1.5" = γ₀ * 1.5).
 ///
-/// Internal use by ``QAOA`` actor for efficient parameter binding during optimization.
+/// Used by ``QAOA`` actor and available for custom QAOA workflows.
 ///
 /// - SeeAlso: ``QAOA``
-struct QAOAParameterBinder: Sendable {
+public struct QAOAParameterBinder: Sendable {
     private typealias ParameterMapping = (name: String, baseIndex: Int, coefficient: Double)
 
     private let parameterInfo: [ParameterMapping]
@@ -200,7 +199,7 @@ struct QAOAParameterBinder: Sendable {
 
     /// Create binder with pre-computed parameter info.
     @_optimize(speed)
-    init(ansatz: QuantumCircuit) {
+    public init(ansatz: QuantumCircuit) {
         self.ansatz = ansatz
 
         var info: [ParameterMapping] = []
@@ -244,7 +243,7 @@ struct QAOAParameterBinder: Sendable {
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
-    func bound(parameters: [Double]) -> QuantumCircuit {
+    public func bound(parameters: [Double]) -> QuantumCircuit {
         let bindings = Dictionary(uniqueKeysWithValues: parameterInfo.lazy.map { info in
             (info.name, parameters[info.baseIndex] * info.coefficient)
         })

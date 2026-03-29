@@ -897,9 +897,8 @@ struct TEBDStepDirectInvocationTests {
         await evolution.applyTEBDStep(mps: &mps, evenGate: evenGate, oddGate: oddGate, singleSiteGates: singleSiteGates)
         let amplitudeAfter = mps.amplitude(of: 0)
 
-        let changed = abs(amplitudeBefore.real - amplitudeAfter.real) > 1e-10 ||
-            abs(amplitudeBefore.imaginary - amplitudeAfter.imaginary) > 1e-10
-        #expect(changed, "TEBD step should modify state amplitude")
+        let diff = (amplitudeBefore + amplitudeAfter * Complex(-1, 0)).magnitudeSquared
+        #expect(diff > 1e-20, "TEBD step should modify state amplitude")
     }
 
     @Test("applyTEBDStep works with different even and odd gates")

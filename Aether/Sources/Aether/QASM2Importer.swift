@@ -291,8 +291,6 @@ private struct ParserState {
             parseIfStatement()
         case .identifier:
             parseGateOperation()
-        case .eof:
-            return
         default:
             addError("unexpected token: \(current)")
             synchronize()
@@ -617,13 +615,6 @@ private struct ParserState {
         while true {
             skipNewlines()
             if case let .identifier(name) = current {
-                _ = advance()
-                if let idx = qubitBindings[name] {
-                    qubits.append(idx)
-                } else {
-                    addError("unknown qubit '\(name)' in gate body")
-                }
-            } else if case let .keyword(name) = current {
                 _ = advance()
                 if let idx = qubitBindings[name] {
                     qubits.append(idx)

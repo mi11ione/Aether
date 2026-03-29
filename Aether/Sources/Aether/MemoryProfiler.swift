@@ -103,19 +103,15 @@ public enum MemoryProfiler {
         var info = task_basic_info()
         var count = mach_msg_type_number_t(MemoryLayout<task_basic_info>.size) / 4
 
-        let result = withUnsafeMutablePointer(to: &info) { infoPtr in
+        withUnsafeMutablePointer(to: &info) { infoPtr in
             infoPtr.withMemoryRebound(to: Int32.self, capacity: Int(count)) { ptr in
-                task_info(
+                _ = task_info(
                     mach_task_self_,
                     task_flavor_t(TASK_BASIC_INFO),
                     ptr,
                     &count,
                 )
             }
-        }
-
-        if result != KERN_SUCCESS {
-            return (0, 0)
         }
 
         return (Int(info.resident_size), Int(info.virtual_size))

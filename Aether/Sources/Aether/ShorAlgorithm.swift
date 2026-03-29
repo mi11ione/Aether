@@ -271,7 +271,6 @@ public enum NumberTheory {
             var power = 1
             for _ in 0 ..< k {
                 power *= root
-                if power > n { break }
             }
             if power == n {
                 return (root, k)
@@ -288,10 +287,10 @@ public enum NumberTheory {
     }
 
     /// Computes integer k-th root using binary search.
-    @usableFromInline
     @_optimize(speed)
     @_effects(readonly)
-    static func integerRoot(_ n: Int, _ k: Int) -> Int {
+    @inlinable
+    public static func integerRoot(_ n: Int, _ k: Int) -> Int {
         guard n > 0, k > 0 else { return 0 }
         guard k > 1 else { return n }
 
@@ -580,6 +579,25 @@ public struct ShorPeriodResult: Sendable, CustomStringConvertible {
     /// Number of precision qubits used.
     public let precisionQubits: Int
 
+    /// Create period finding result.
+    public init(
+        measuredPhase: Double,
+        phaseNumerator: Int,
+        phaseDenominator: Int,
+        candidatePeriods: [Int],
+        verifiedPeriod: Int?,
+        measurementOutcome: Int,
+        precisionQubits: Int,
+    ) {
+        self.measuredPhase = measuredPhase
+        self.phaseNumerator = phaseNumerator
+        self.phaseDenominator = phaseDenominator
+        self.candidatePeriods = candidatePeriods
+        self.verifiedPeriod = verifiedPeriod
+        self.measurementOutcome = measurementOutcome
+        self.precisionQubits = precisionQubits
+    }
+
     /// Human-readable description of the period finding result.
     ///
     /// **Example:**
@@ -633,6 +651,25 @@ public struct ShorResult: Sendable, CustomStringConvertible {
 
     /// Reason for failure if unsuccessful.
     public let failureReason: ShorFailureReason?
+
+    /// Create factorization result.
+    public init(
+        numberToFactor: Int,
+        factors: (p: Int, q: Int)?,
+        period: Int?,
+        base: Int,
+        attempts: Int,
+        isSuccessful: Bool,
+        failureReason: ShorFailureReason?,
+    ) {
+        self.numberToFactor = numberToFactor
+        self.factors = factors
+        self.period = period
+        self.base = base
+        self.attempts = attempts
+        self.isSuccessful = isSuccessful
+        self.failureReason = failureReason
+    }
 
     /// Human-readable description of the factorization result.
     ///
@@ -1103,26 +1140,12 @@ public actor ShorFactorization {
             }
 
             let factor1 = NumberTheory.gcd(x + 1, n)
-            let factor2 = NumberTheory.gcd(x - 1, n)
 
             if factor1 > 1, factor1 < n {
                 let other = n / factor1
                 return ShorResult(
                     numberToFactor: n,
                     factors: (min(factor1, other), max(factor1, other)),
-                    period: r,
-                    base: a,
-                    attempts: attempt,
-                    isSuccessful: true,
-                    failureReason: nil,
-                )
-            }
-
-            if factor2 > 1, factor2 < n {
-                let other = n / factor2
-                return ShorResult(
-                    numberToFactor: n,
-                    factors: (min(factor2, other), max(factor2, other)),
                     period: r,
                     base: a,
                     attempts: attempt,

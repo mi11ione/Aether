@@ -870,6 +870,158 @@ public enum GradientMethods {
         return fisherMatrix
     }
 
+    /// Compute the Fubini-Study metric tensor (quantum geometric tensor real part)
+    ///
+    /// Evaluates g_ij = Re⟨∂ᵢψ|∂ⱼψ⟩ - ⟨∂ᵢψ|ψ⟩⟨ψ|∂ⱼψ⟩ where |∂ᵢψ⟩ is the derivative
+    /// of the parameterized state with respect to parameter θᵢ. The Fubini-Study metric
+    /// encodes the geometry of the quantum state manifold and is used by the quantum natural
+    /// gradient optimizer to precondition gradient updates, achieving parameter-space
+    /// covariance that accelerates convergence on variational energy landscapes.
+    ///
+    /// Uses adjoint differentiation infrastructure to compute derivative states |∂ᵢψ⟩
+    /// for all parameters simultaneously in O(p·L·2ⁿ) time, then constructs the p×p
+    /// metric tensor from inner products. The result is symmetric positive semi-definite.
+    ///
+    /// - Parameters:
+    ///   - circuit: Parameterized quantum circuit
+    ///   - parameters: Concrete parameter values
+    /// - Returns: Symmetric p×p Fubini-Study metric tensor
+    /// - Precondition: parameters.count == circuit.parameterCount
+    /// - Complexity: O(p·L·2ⁿ + p²·2ⁿ) time, O(p·2ⁿ) memory for derivative states
+    /// - SeeAlso: ``fisherInformationMatrix(circuit:parameters:)`` for classical Fisher information
+    /// - SeeAlso: ``QuantumNaturalGradientOptimizer`` for usage context
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let circuit = QuantumCircuit(qubits: 2)
+    /// circuit.append(.rotationY(Parameter(name: "a")), to: 0)
+    /// circuit.append(.controlledNot, to: [0, 1])
+    /// let g = GradientMethods.fubiniStudyMetric(circuit: circuit, parameters: [0.5])
+    /// ```
+    @_optimize(speed)
+    @_eagerMove
+    public static func fubiniStudyMetric(
+        circuit: QuantumCircuit,
+        parameters: [Double],
+    ) -> [[Double]] {
+        let paramList = circuit.parameters
+        let paramCount = paramList.count
+        ValidationUtilities.validateArrayCount(parameters, expected: paramCount, name: "parameters")
+
+        guard paramCount > 0 else { return [] }
+
+        let qubitCount = circuit.qubits
+        let stateSize = 1 << qubitCount
+
+        var paramNameToIndex: [String: Int] = [:]
+        paramNameToIndex.reserveCapacity(paramCount)
+        var parameterBindings: [String: Double] = [:]
+        parameterBindings.reserveCapacity(paramCount)
+        for i in 0 ..< paramCount {
+            paramNameToIndex[paramList[i].name] = i
+            parameterBindings[paramList[i].name] = parameters[i]
+        }
+
+        let boundCircuit = circuit.bound(with: parameters)
+        let boundOps = boundCircuit.operations
+        let originalOps = circuit.operations
+        let opCount = boundOps.count
+
+        var forwardStates: [[Complex<Double>]] = []
+        forwardStates.reserveCapacity(opCount + 1)
+        let initialAmps = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            buffer[0] = .one
+            count = stateSize
+        }
+        forwardStates.append(initialAmps)
+
+        var currentState = QuantumState(qubits: qubitCount)
+        for op in boundOps {
+            currentState = GateApplication.apply(op, state: currentState)
+            forwardStates.append(currentState.amplitudes)
+        }
+
+        let finalAmps = forwardStates[opCount]
+
+        var derivativeStates = [[Complex<Double>]](repeating: [], count: paramCount)
+
+        for k in 0 ..< paramCount {
+            var derivAmps = [Complex<Double>](unsafeUninitializedCapacity: stateSize) {
+                buffer, count in
+                buffer.initialize(repeating: .zero)
+                count = stateSize
+            }
+
+            for j in 0 ..< opCount {
+                guard case let .gate(originalGate, qubits, _) = originalOps[j] else {
+                    continue
+                }
+
+                let derivatives = computeGateDerivatives(
+                    originalGate: originalGate,
+                    qubits: qubits,
+                    stateAfterAmplitudes: forwardStates[j + 1],
+                    stateBeforeAmplitudes: forwardStates[j],
+                    paramNameToIndex: paramNameToIndex,
+                    parameterBindings: parameterBindings,
+                    qubitCount: qubitCount,
+                )
+
+                for entry in derivatives where entry.parameterIndex == k {
+                    derivAmps = addAmplitudes(
+                        derivAmps,
+                        scaleAmplitudes(entry.amplitudes, by: Complex(entry.signMultiplier, 0.0)),
+                    )
+                }
+
+                if case let .gate(boundGate, boundQubits, _) = boundOps[j] {
+                    derivAmps = applyGateMatrixToAmplitudes(
+                        boundGate.matrix(),
+                        qubits: boundQubits,
+                        amplitudes: derivAmps,
+                        qubitCount: qubitCount,
+                    )
+                }
+            }
+
+            derivativeStates[k] = derivAmps
+        }
+
+        var metric = [[Double]](unsafeUninitializedCapacity: paramCount) {
+            buffer, count in
+            for i in 0 ..< paramCount {
+                buffer[i] = [Double](unsafeUninitializedCapacity: paramCount) { inner, innerCount in
+                    inner.initialize(repeating: 0.0)
+                    innerCount = paramCount
+                }
+            }
+            count = paramCount
+        }
+
+        let psiOverlaps = [Complex<Double>](unsafeUninitializedCapacity: paramCount) { buffer, count in
+            for k in 0 ..< paramCount {
+                buffer[k] = complexInnerProduct(finalAmps, derivativeStates[k])
+            }
+            count = paramCount
+        }
+
+        for i in 0 ..< paramCount {
+            for j in i ..< paramCount {
+                let derivOverlap = complexInnerProduct(derivativeStates[i], derivativeStates[j])
+                let psiProduct = psiOverlaps[i].conjugate * psiOverlaps[j]
+                let gij = derivOverlap.real - psiProduct.real
+
+                metric[i][j] = gij
+                if i != j {
+                    metric[j][i] = gij
+                }
+            }
+        }
+
+        return metric
+    }
+
     // MARK: - Private Helpers
 
     /// Derivative entry for a single parameter contribution from a gate.
