@@ -51,12 +51,12 @@ public struct UnitaryPartition: Sendable {
 
 /// Groups Pauli terms into partitions diagonalizable by unitary transformations.
 ///
-/// Starts with QWC groups, then greedily merges using eigendecomposition (fast, exact) or
-/// variational ansatz optimization (L-BFGS-B with hardware-efficient ansatz) when needed.
+/// Starts with QWC groups, then greedily merges using eigendecomposition to find
+/// diagonalizing unitaries that pass the off-diagonal norm threshold.
 ///
 /// **Example:**
 /// ```swift
-/// let partitioner = UnitaryPartitioner()
+/// let partitioner = UnitaryPartitioner(diagonalityThreshold: 0.1)
 /// let partitions = partitioner.partition(terms: observable.terms)
 /// ```
 ///
@@ -64,39 +64,20 @@ public struct UnitaryPartition: Sendable {
 /// - SeeAlso: ``QWCGrouper``
 @frozen
 public struct UnitaryPartitioner: Sendable {
-    /// L-BFGS-B iteration limit.
-    public let maxIterations: Int
-
-    /// Gradient norm convergence threshold.
-    public let convergenceTolerance: Double
-
-    /// Ansatz layers, 3n parameters per layer.
-    public let circuitDepth: Int
-
     /// Max off-diagonal norm to accept partition.
     public let diagonalityThreshold: Double
 
-    /// Creates a partitioner with the given optimization parameters.
+    /// Creates a partitioner with the given diagonality threshold.
     ///
     /// **Example:**
     /// ```swift
-    /// let partitioner = UnitaryPartitioner(maxIterations: 200, circuitDepth: 4)
+    /// let partitioner = UnitaryPartitioner(diagonalityThreshold: 0.1)
     /// ```
     ///
-    /// - Parameters:
-    ///   - maxIterations: L-BFGS-B iteration limit (default: 100)
-    ///   - convergenceTolerance: Gradient norm convergence threshold (default: 1e-6)
-    ///   - circuitDepth: Ansatz circuit depth (default: 3)
-    ///   - diagonalityThreshold: Max off-diagonal norm to accept partition (default: 0.1)
+    /// - Parameter diagonalityThreshold: Max off-diagonal norm to accept partition (default: 0.1)
     public init(
-        maxIterations: Int = 100,
-        convergenceTolerance: Double = 1e-6,
-        circuitDepth: Int = 3,
         diagonalityThreshold: Double = 0.1,
     ) {
-        self.maxIterations = maxIterations
-        self.convergenceTolerance = convergenceTolerance
-        self.circuitDepth = circuitDepth
         self.diagonalityThreshold = diagonalityThreshold
     }
 
@@ -194,7 +175,7 @@ public struct UnitaryPartitioner: Sendable {
         return partitions
     }
 
-    /// Finds diagonalizing unitary via eigendecomposition, falling back to variational optimization.
+    /// Finds diagonalizing unitary via eigendecomposition.
     @_optimize(speed)
     @_eagerMove
     private func findDiagonalizingUnitary(
@@ -203,209 +184,13 @@ public struct UnitaryPartitioner: Sendable {
     ) -> [[Complex<Double>]]? {
         let targetOperator = buildTargetOperator(terms: terms, qubits: qubits)
 
-        if let (_, eigenvectors) = eigendecompose(targetOperator) {
-            let offDiagNorm: Double = computeOffDiagonalNorm(
-                operator: targetOperator,
-                unitary: eigenvectors,
-            )
-
-            if offDiagNorm < diagonalityThreshold {
-                return eigenvectors
-            }
-        }
-
-        return optimizeVariational(terms: terms, qubits: qubits)
-    }
-
-    /// Optimize unitary using variational ansatz.
-    @_optimize(speed)
-    @_eagerMove
-    private func optimizeVariational(
-        terms: PauliTerms,
-        qubits: Int,
-    ) -> [[Complex<Double>]]? {
-        let pauliMatrices: [[[Complex<Double>]]] = terms.map { $0.pauliString.matrix(qubits: qubits) }
-
-        let numParams: Int = parameterCount(qubits: qubits, depth: circuitDepth)
-        let parameters = [Double](unsafeUninitializedCapacity: numParams) { buffer, count in
-            for i in 0 ..< numParams {
-                buffer[i] = Double.random(in: -Double.pi ... Double.pi)
-            }
-            count = numParams
-        }
-
-        let result: UnitaryOptimizationResult = lbfgsb(
-            initialParameters: parameters,
-            costFunction: { params in
-                costFunctionCached(
-                    parameters: params,
-                    terms: terms,
-                    pauliMatrices: pauliMatrices,
-                    qubits: qubits,
-                )
-            },
-            gradientFunction: { params in
-                gradientFunctionCached(
-                    parameters: params,
-                    terms: terms,
-                    pauliMatrices: pauliMatrices,
-                    qubits: qubits,
-                )
-            },
-            maxIterations: maxIterations,
-            tolerance: convergenceTolerance,
+        let (_, eigenvectors) = eigendecompose(targetOperator)
+        let offDiagNorm: Double = computeOffDiagonalNorm(
+            operator: targetOperator,
+            unitary: eigenvectors,
         )
 
-        let unitary: [[Complex<Double>]] = buildVariationalUnitary(
-            parameters: result.parameters,
-            qubits: qubits,
-            depth: circuitDepth,
-        )
-
-        let targetOperator = buildTargetOperator(terms: terms, qubits: qubits, precomputedMatrices: pauliMatrices)
-
-        let offDiagNorm: Double = computeOffDiagonalNorm(operator: targetOperator, unitary: unitary)
-
-        return offDiagNorm < diagonalityThreshold ? unitary : nil
-    }
-
-    /// Off-diagonal cost for variational optimization.
-    @_optimize(speed)
-    private func costFunctionCached(
-        parameters: [Double],
-        terms: PauliTerms,
-        pauliMatrices: [[[Complex<Double>]]],
-        qubits: Int,
-    ) -> Double {
-        let unitary = buildVariationalUnitary(
-            parameters: parameters,
-            qubits: qubits,
-            depth: circuitDepth,
-        )
-
-        let dimension = 1 << qubits
-        var cost = 0.0
-        let unitaryDagger: [[Complex<Double>]] = MatrixUtilities.hermitianConjugate(unitary)
-        var interleaved = [Double](repeating: 0.0, count: dimension * dimension * 2)
-
-        for (index, term) in terms.enumerated() {
-            let pauliMatrix = pauliMatrices[index]
-            let temp: [[Complex<Double>]] = MatrixUtilities.matrixMultiply(unitaryDagger, pauliMatrix)
-            let conjugated: [[Complex<Double>]] = MatrixUtilities.matrixMultiply(temp, unitary)
-
-            let coeffWeight = abs(term.coefficient)
-
-            var idx = 0
-            for i in 0 ..< dimension {
-                for j in 0 ..< dimension {
-                    interleaved[idx] = conjugated[i][j].real
-                    interleaved[idx + 1] = conjugated[i][j].imaginary
-                    idx += 2
-                }
-            }
-
-            var totalSumSq = 0.0
-            vDSP_svesqD(interleaved, 1, &totalSumSq, vDSP_Length(interleaved.count))
-
-            var diagSumSq = 0.0
-            for i in 0 ..< dimension {
-                diagSumSq += conjugated[i][i].magnitudeSquared
-            }
-
-            cost += coeffWeight * (totalSumSq - diagSumSq)
-        }
-
-        return cost
-    }
-
-    /// Finite-difference gradient of the off-diagonal cost.
-    @_optimize(speed)
-    @_eagerMove
-    private func gradientFunctionCached(
-        parameters: [Double],
-        terms: PauliTerms,
-        pauliMatrices: [[[Complex<Double>]]],
-        qubits: Int,
-    ) -> [Double] {
-        let epsilon = 1e-7
-        let invEpsilon = 1.0 / epsilon
-        let paramCount = parameters.count
-
-        let f0 = costFunctionCached(
-            parameters: parameters,
-            terms: terms,
-            pauliMatrices: pauliMatrices,
-            qubits: qubits,
-        )
-
-        var paramsPlus = parameters
-        let gradient = [Double](unsafeUninitializedCapacity: paramCount) { buffer, count in
-            for i in 0 ..< paramCount {
-                paramsPlus[i] += epsilon
-
-                let fPlus = costFunctionCached(
-                    parameters: paramsPlus,
-                    terms: terms,
-                    pauliMatrices: pauliMatrices,
-                    qubits: qubits,
-                )
-                buffer[i] = (fPlus - f0) * invEpsilon
-                paramsPlus[i] -= epsilon
-            }
-            count = paramCount
-        }
-
-        return gradient
-    }
-
-    /// Parameter count: depth * qubits * 3 (U3 Euler angles per qubit per layer).
-    @inline(__always)
-    @_effects(readonly)
-    private func parameterCount(qubits: Int, depth: Int) -> Int {
-        depth * qubits * 3
-    }
-
-    /// Builds unitary from hardware-efficient ansatz: [U3 rotations -> CNOT ladder] * depth.
-    @_optimize(speed)
-    @_eagerMove
-    private func buildVariationalUnitary(
-        parameters: [Double],
-        qubits: Int,
-        depth: Int,
-    ) -> [[Complex<Double>]] {
-        let dimension = 1 << qubits
-        var unitary: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: dimension)
-
-        let cnotMatrices: [[[Complex<Double>]]] = (0 ..< (qubits - 1)).map { qubit in
-            cnotMatrix(control: qubit, target: qubit + 1, qubits: qubits)
-        }
-
-        var paramIndex = 0
-
-        for _ in 0 ..< depth {
-            for qubit in 0 ..< qubits {
-                let theta: Double = parameters[paramIndex]
-                let phi: Double = parameters[paramIndex + 1]
-                let lambda: Double = parameters[paramIndex + 2]
-                paramIndex += 3
-
-                let rotation: [[Complex<Double>]] = singleQubitRotation(
-                    qubit: qubit,
-                    theta: theta,
-                    phi: phi,
-                    lambda: lambda,
-                    qubits: qubits,
-                )
-
-                unitary = MatrixUtilities.matrixMultiply(rotation, unitary)
-            }
-
-            for cnot in cnotMatrices {
-                unitary = MatrixUtilities.matrixMultiply(cnot, unitary)
-            }
-        }
-
-        return unitary
+        return offDiagNorm < diagonalityThreshold ? eigenvectors : nil
     }
 
     /// Compute U† M U for unitary similarity transformation.
@@ -440,80 +225,10 @@ public struct UnitaryPartitioner: Sendable {
         return sqrt(normSquared)
     }
 
-    /// Build U3(theta, phi, lambda) rotation embedded into n-qubit system.
+    /// Diagonalizes Hermitian matrix via LAPACK zheev.
     @_optimize(speed)
     @_eagerMove
-    private func singleQubitRotation(
-        qubit: Int,
-        theta: Double,
-        phi: Double,
-        lambda: Double,
-        qubits: Int,
-    ) -> [[Complex<Double>]] {
-        let c: Double = cos(theta / 2)
-        let s: Double = sin(theta / 2)
-
-        let u3: [[Complex<Double>]] = [
-            [Complex(c), Complex(-cos(lambda) * s, -sin(lambda) * s)],
-            [Complex(cos(phi) * s, sin(phi) * s), Complex(cos(phi + lambda) * c, sin(phi + lambda) * c)],
-        ]
-
-        return embedSingleQubitGate(u3, qubit: qubit, qubits: qubits)
-    }
-
-    /// Build CNOT gate matrix for given control and target qubits.
-    @_optimize(speed)
-    @_eagerMove
-    private func cnotMatrix(control: Int, target: Int, qubits: Int) -> [[Complex<Double>]] {
-        let dimension = 1 << qubits
-        var cnot: [[Complex<Double>]] = MatrixUtilities.identityMatrix(dimension: dimension)
-
-        for basis in 0 ..< dimension {
-            let controlBit: Int = BitUtilities.bit(basis, qubit: control)
-            if controlBit == 1 {
-                let flippedBasis: Int = BitUtilities.flipBit(basis, qubit: target)
-                if flippedBasis != basis {
-                    cnot[basis][basis] = .zero
-                    cnot[basis][flippedBasis] = .one
-                }
-            }
-        }
-
-        return cnot
-    }
-
-    /// Embed a 2x2 gate into the full n-qubit Hilbert space.
-    @_optimize(speed)
-    @_eagerMove
-    private func embedSingleQubitGate(
-        _ gate: [[Complex<Double>]],
-        qubit: Int,
-        qubits: Int,
-    ) -> [[Complex<Double>]] {
-        let dimension = 1 << qubits
-        var result = Array(repeating: Array(repeating: Complex<Double>.zero, count: dimension), count: dimension)
-
-        for row in 0 ..< dimension {
-            for col in 0 ..< dimension {
-                let rowBit: Int = BitUtilities.bit(row, qubit: qubit)
-                let colBit: Int = BitUtilities.bit(col, qubit: qubit)
-
-                let rowRest: Int = BitUtilities.clearBit(row, qubit: qubit)
-                let colRest: Int = BitUtilities.clearBit(col, qubit: qubit)
-
-                if rowRest == colRest {
-                    result[row][col] = gate[rowBit][colBit]
-                }
-            }
-        }
-
-        return result
-    }
-
-    /// Diagonalizes Hermitian matrix via LAPACK zheev. Returns nil on failure.
-    @_optimize(speed)
-    @_eagerMove
-    private func eigendecompose(_ matrix: [[Complex<Double>]]) -> (eigenvalues: [Double], eigenvectors: [[Complex<Double>]])? {
+    private func eigendecompose(_ matrix: [[Complex<Double>]]) -> (eigenvalues: [Double], eigenvectors: [[Complex<Double>]]) {
         let n: Int = matrix.count
 
         var a = [Double](unsafeUninitializedCapacity: 2 * n * n) {
@@ -607,153 +322,6 @@ public struct UnitaryPartitioner: Sendable {
         }
 
         return (eigenvalues: w, eigenvectors: eigenvectors)
-    }
-
-    /// Result of L-BFGS-B optimization.
-    private struct UnitaryOptimizationResult {
-        let parameters: [Double]
-        let finalCost: Double
-        let iterations: Int
-        let isConverged: Bool
-    }
-
-    /// L-BFGS-B optimizer with Wolfe line search. Converges when ||∇|| < tolerance.
-    @_optimize(speed)
-    @_eagerMove
-    private func lbfgsb(
-        initialParameters: [Double],
-        costFunction: ([Double]) -> Double,
-        gradientFunction: ([Double]) -> [Double],
-        maxIterations: Int,
-        tolerance: Double,
-    ) -> UnitaryOptimizationResult {
-        let c1 = 1e-4
-        let c2 = 0.9
-
-        var params = initialParameters
-        var gradient = gradientFunction(params)
-        var cost = costFunction(params)
-
-        var sHistory: [[Double]] = []
-        var yHistory: [[Double]] = []
-        var rhoHistory: [Double] = []
-
-        var iteration = 0
-        var converged = false
-
-        while iteration < maxIterations {
-            var gradNormSq = 0.0
-            vDSP_svesqD(gradient, 1, &gradNormSq, vDSP_Length(gradient.count))
-            let gradNorm = sqrt(gradNormSq)
-
-            if gradNorm < tolerance {
-                converged = true
-                break
-            }
-
-            let direction: [Double] = LBFGSBOptimizer.computeSearchDirection(
-                gradient: gradient,
-                sHistory: sHistory,
-                yHistory: yHistory,
-                rhoHistory: rhoHistory,
-            )
-
-            guard let alpha = lineSearch(
-                params: params,
-                direction: direction,
-                gradient: gradient,
-                cost: cost,
-                costFunction: costFunction,
-                gradientFunction: gradientFunction,
-                c1: c1,
-                c2: c2,
-            ) else { break }
-
-            let n = params.count
-            let newParams = [Double](unsafeUninitializedCapacity: n) { buffer, count in
-                var alphaVar = alpha
-                vDSP_vsmaD(direction, 1, &alphaVar, params, 1, buffer.baseAddress!, 1, vDSP_Length(n)) // safe: non-empty unsafeUninitializedCapacity buffer
-                count = n
-            }
-            let newGradient: [Double] = gradientFunction(newParams)
-            let newCost: Double = costFunction(newParams)
-
-            let s = [Double](unsafeUninitializedCapacity: n) { buffer, count in
-                vDSP_vsubD(params, 1, newParams, 1, buffer.baseAddress!, 1, vDSP_Length(n)) // safe: non-empty unsafeUninitializedCapacity buffer
-                count = n
-            }
-            let y = [Double](unsafeUninitializedCapacity: n) { buffer, count in
-                vDSP_vsubD(gradient, 1, newGradient, 1, buffer.baseAddress!, 1, vDSP_Length(n)) // safe: non-empty unsafeUninitializedCapacity buffer
-                count = n
-            }
-
-            var ys = 0.0
-            vDSP_dotprD(y, 1, s, 1, &ys, vDSP_Length(n))
-
-            if ys > 1e-10 {
-                let rho = 1.0 / ys
-
-                sHistory.append(s)
-                yHistory.append(y)
-                rhoHistory.append(rho)
-            }
-
-            params = newParams
-            gradient = newGradient
-            cost = newCost
-            iteration += 1
-        }
-
-        return UnitaryOptimizationResult(
-            parameters: params,
-            finalCost: cost,
-            iterations: iteration,
-            isConverged: converged,
-        )
-    }
-
-    /// Backtracking line search with Wolfe conditions.
-    @_optimize(speed)
-    private func lineSearch(
-        params: [Double],
-        direction: [Double],
-        gradient: [Double],
-        cost: Double,
-        costFunction: ([Double]) -> Double,
-        gradientFunction: ([Double]) -> [Double],
-        c1: Double,
-        c2: Double,
-    ) -> Double? {
-        var alpha = 1.0
-        let maxBacktrack = 20
-        let rho = 0.5
-        let n = params.count
-
-        var dirGrad = 0.0
-        vDSP_dotprD(direction, 1, gradient, 1, &dirGrad, vDSP_Length(n))
-
-        guard dirGrad < 0 else { return nil }
-
-        for _ in 0 ..< maxBacktrack {
-            let newParams = [Double](unsafeUninitializedCapacity: n) { buffer, count in
-                var alphaVar = alpha
-                vDSP_vsmaD(direction, 1, &alphaVar, params, 1, buffer.baseAddress!, 1, vDSP_Length(n)) // safe: non-empty unsafeUninitializedCapacity buffer
-                count = n
-            }
-            let newCost: Double = costFunction(newParams)
-
-            if newCost <= cost + c1 * alpha * dirGrad {
-                let newGradient: [Double] = gradientFunction(newParams)
-                var newDirGrad = 0.0
-                vDSP_dotprD(direction, 1, newGradient, 1, &newDirGrad, vDSP_Length(n))
-
-                if abs(newDirGrad) <= -c2 * dirGrad { return alpha }
-            }
-
-            alpha *= rho
-        }
-
-        return alpha > 1e-10 ? alpha : nil
     }
 }
 

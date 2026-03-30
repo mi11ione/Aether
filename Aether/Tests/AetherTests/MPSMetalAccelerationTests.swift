@@ -593,6 +593,47 @@ struct MPSMetalAccelerationTests {
         }
     }
 
+    @Test("GPU cache invalidation on dimension change")
+    func gpuCacheInvalidationOnDimensionChange() async {
+        let accelerator = MPSMetalAcceleration()
+        let size = MPSMetalAcceleration.gpuThreshold
+
+        let a1 = (0 ..< size).map { i in
+            (0 ..< size).map { j in Complex(Double(i == j ? 1 : 0), 0.0) }
+        }
+        let b1 = (0 ..< size).map { i in
+            (0 ..< size).map { j in Complex(Double(i + j), 0.0) }
+        }
+
+        let result1 = await accelerator.multiply(a1, b1)
+        #expect(result1.count == size, "First multiply should return correct row count")
+
+        let k2 = size + 4
+        let n2 = size + 8
+        let a2 = (0 ..< size).map { i in
+            (0 ..< k2).map { j in Complex(Double(i == j ? 1 : 0), 0.0) }
+        }
+        let b2 = (0 ..< k2).map { i in
+            (0 ..< n2).map { j in Complex(Double(i + j), 0.0) }
+        }
+
+        let result2 = await accelerator.multiply(a2, b2)
+        #expect(result2.count == size, "Second multiply with different k should return correct row count")
+        #expect(result2[0].count == n2, "Second multiply should return correct column count")
+
+        let n3 = size + 12
+        let a3 = (0 ..< size).map { i in
+            (0 ..< k2).map { j in Complex(Double(i == j ? 1 : 0), 0.0) }
+        }
+        let b3 = (0 ..< k2).map { i in
+            (0 ..< n3).map { j in Complex(Double(i + j), 0.0) }
+        }
+
+        let result3 = await accelerator.multiply(a3, b3)
+        #expect(result3.count == size, "Third multiply with different n should return correct row count")
+        #expect(result3[0].count == n3, "Third multiply should return correct column count")
+    }
+
     @Test("Full tensor contraction workflow")
     func fullTensorContractionWorkflow() async {
         let accelerator = MPSMetalAcceleration()

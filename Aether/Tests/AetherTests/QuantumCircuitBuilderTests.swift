@@ -280,27 +280,34 @@ struct QuantumCircuitBuilderInitTests {
 
     @Test("Conditional gate with if-false branch yields empty")
     func conditionalGateIfFalse() {
-        let applyH = false
-        let circuit = QuantumCircuit(qubits: 1) {
+        for applyH in [false, true] {
+            let circuit = QuantumCircuit(qubits: 1) {
+                if applyH {
+                    GateStep(.hadamard, on: 0)
+                }
+            }
             if applyH {
-                GateStep(.hadamard, on: 0)
+                #expect(circuit.count == 1, "Circuit should have hadamard when condition is true")
+            } else {
+                #expect(circuit.isEmpty, "Circuit should be empty when condition is false")
             }
         }
-        #expect(circuit.isEmpty, "Circuit should be empty when condition is false")
     }
 
     @Test("If-else selects correct branch")
     func ifElseSelectsCorrectBranch() {
-        let useH = false
-        let circuit = QuantumCircuit(qubits: 1) {
-            if useH {
-                GateStep(.hadamard, on: 0)
-            } else {
-                GateStep(.pauliX, on: 0)
+        for useH in [false, true] {
+            let circuit = QuantumCircuit(qubits: 1) {
+                if useH {
+                    GateStep(.hadamard, on: 0)
+                } else {
+                    GateStep(.pauliX, on: 0)
+                }
             }
+            #expect(circuit.count == 1, "Circuit should have exactly 1 operation for useH=\(useH)")
+            let expected: QuantumGate = useH ? .hadamard : .pauliX
+            #expect(circuit.operations[0] == .gate(expected, qubits: [0]), "Should select correct branch for useH=\(useH)")
         }
-        #expect(circuit.count == 1, "Circuit should have exactly 1 operation")
-        #expect(circuit.operations[0] == .gate(.pauliX, qubits: [0]), "Should select else branch (pauliX)")
     }
 
     @Test("For loop generates gates for each iteration")

@@ -462,9 +462,6 @@ struct UnitaryPartitioningTests {
     @Test("Partition single Pauli term")
     func partitionSingleTerm() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 10,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 1,
             diagonalityThreshold: 0.1,
         )
         let ps = PauliString(.x(0))
@@ -475,9 +472,6 @@ struct UnitaryPartitioningTests {
     @Test("Partition QWC terms into single partition")
     func partitionQwcTerms() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 10,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 1,
             diagonalityThreshold: 0.1,
         )
         let ps1 = PauliString(.x(0))
@@ -496,17 +490,12 @@ struct UnitaryPartitioningTests {
     @Test("Default configuration values")
     func defaultConfiguration() {
         let partitioner = UnitaryPartitioner()
-        #expect(partitioner.maxIterations > 0, "Default maxIterations should be positive")
-        #expect(partitioner.convergenceTolerance > 0, "Default convergenceTolerance should be positive")
-        #expect(partitioner.circuitDepth > 0, "Default circuitDepth should be positive")
+        #expect(partitioner.diagonalityThreshold > 0, "Default diagonalityThreshold should be positive")
     }
 
     @Test("Custom configuration")
     func customConfiguration() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 50,
-            convergenceTolerance: 1e-8,
-            circuitDepth: 3,
             diagonalityThreshold: 0.05,
         )
         let ps = PauliString(.x(0))
@@ -557,9 +546,6 @@ struct UnitaryPartitioningTests {
     @Test("Partition preserves all terms")
     func partitionPreservesTerms() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 10,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 1,
             diagonalityThreshold: 0.1,
         )
         let ps1 = PauliString(.x(0))
@@ -625,9 +611,6 @@ struct UnitaryPartitioningTests {
     @Test("Partition with adaptive depth enabled")
     func partitionWithAdaptiveDepth() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 10,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 2,
             diagonalityThreshold: 0.1,
         )
         let ps1 = PauliString(.x(0))
@@ -639,9 +622,6 @@ struct UnitaryPartitioningTests {
     @Test("Partition with multiple qubits")
     func partitionMultipleQubits() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 5,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 1,
             diagonalityThreshold: 0.2,
         )
         let ps1 = PauliString(.x(0), .y(1))
@@ -653,9 +633,6 @@ struct UnitaryPartitioningTests {
     @Test("Partition with high ansatz depth")
     func partitionHighAnsatzDepth() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 3,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 3,
             diagonalityThreshold: 0.15,
         )
         let ps = PauliString(.z(0))
@@ -666,9 +643,6 @@ struct UnitaryPartitioningTests {
     @Test("Optimizer converges and diagonalizes for trivial single-Z operator")
     func optimizerConvergesForSingleZ() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 200,
-            convergenceTolerance: 1e-3,
-            circuitDepth: 2,
             diagonalityThreshold: 0.5,
         )
         let ps = PauliString(.z(0))
@@ -680,6 +654,16 @@ struct UnitaryPartitioningTests {
                 "Diagonalizing unitary should be returned for trivially diagonal operator",
             )
         }
+    }
+
+    @Test("L-BFGS-B gradient convergence path triggers with loose tolerance")
+    func lbfgsbGradientConvergence() {
+        let partitioner = UnitaryPartitioner(
+            diagonalityThreshold: 0.0,
+        )
+        let ps = PauliString(.z(0))
+        let partitions = partitioner.partition(terms: [(coefficient: 1.0, pauliString: ps)])
+        #expect(!partitions.isEmpty, "Partition should produce at least one group")
     }
 }
 
@@ -1385,9 +1369,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Unitary partitioning with variational optimization")
     func unitaryPartitioningVariationalOptimization() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 20,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 2,
             diagonalityThreshold: 0.5,
         )
         let ps1 = PauliString(.x(0))
@@ -1400,9 +1381,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Unitary partitioning with optimization failure fallback to identity")
     func unitaryPartitioningOptimizationFailure() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 1,
-            convergenceTolerance: 1e-10,
-            circuitDepth: 1,
             diagonalityThreshold: 1e-15,
         )
         let ps1 = PauliString(.x(0), .y(1))
@@ -1415,9 +1393,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Unitary partitioning with merge failure increments index")
     func unitaryPartitioningMergeFailure() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 2,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 1,
             diagonalityThreshold: 1e-15,
         )
         let ps1 = PauliString(.x(0))
@@ -1435,9 +1410,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Unitary partitioning exercises L-BFGS optimization")
     func unitaryPartitioningLbfgsOptimization() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 30,
-            convergenceTolerance: 1e-5,
-            circuitDepth: 2,
             diagonalityThreshold: 0.2,
         )
         let ps1 = PauliString(.x(0), .y(1))
@@ -1451,9 +1423,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Unitary partitioning with deep ansatz depth")
     func unitaryPartitioningDeepAnsatz() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 25,
-            convergenceTolerance: 1e-4,
-            circuitDepth: 4,
             diagonalityThreshold: 0.25,
         )
         let ps1 = PauliString(.x(0), .x(1))
@@ -1466,9 +1435,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Unitary partitioning forces variational optimization path")
     func unitaryPartitioningForcesVariational() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 20,
-            convergenceTolerance: 1e-5,
-            circuitDepth: 3,
             diagonalityThreshold: 0.15,
         )
         let ps1 = PauliString(.x(0), .y(1), .z(2))
@@ -1481,9 +1447,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Unitary partitioning identity matrix fallback")
     func unitaryPartitioningIdentityFallback() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 1,
-            convergenceTolerance: 1e-8,
-            circuitDepth: 1,
             diagonalityThreshold: 1e-16,
         )
         let ps1 = PauliString(.x(0), .y(1), .z(2))
@@ -1495,9 +1458,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("L-BFGS optimization with early convergence")
     func lbfgsEarlyConvergence() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 100,
-            convergenceTolerance: 0.5,
-            circuitDepth: 1,
             diagonalityThreshold: 0.8,
         )
         let ps1 = PauliString(.x(0))
@@ -1509,9 +1469,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("L-BFGS optimization with history buffer overflow")
     func lbfgsHistoryBufferOverflow() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 50,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 2,
             diagonalityThreshold: 0.2,
         )
         let ps1 = PauliString(.x(0), .y(1))
@@ -1525,9 +1482,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("L-BFGS optimization exercises compute search direction")
     func lbfgsComputeSearchDirection() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 40,
-            convergenceTolerance: 1e-5,
-            circuitDepth: 3,
             diagonalityThreshold: 0.18,
         )
         let ps1 = PauliString(.x(0), .y(1), .z(2))
@@ -1544,9 +1498,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("L-BFGS line search with backtracking")
     func lbfgsLineSearchBacktracking() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 35,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 2,
             diagonalityThreshold: 0.22,
         )
         let ps1 = PauliString(.x(0), .y(1))
@@ -1636,9 +1587,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Unitary partitioning caches Pauli matrices during optimization")
     func unitaryPartitioningCachesPauliMatrices() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 10,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 2,
             diagonalityThreshold: 0.2,
         )
         let ps1 = PauliString(.x(0))
@@ -1690,9 +1638,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Cost function decreases during optimization")
     func costFunctionDecreasesDuringOptimization() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 50,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 2,
             diagonalityThreshold: 0.15,
         )
 
@@ -1713,9 +1658,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Gradient function produces valid derivatives")
     func gradientFunctionProducesValidDerivatives() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 30,
-            convergenceTolerance: 1e-5,
-            circuitDepth: 1,
             diagonalityThreshold: 0.2,
         )
 
@@ -1732,9 +1674,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Cost and gradient functions handle multi-qubit systems")
     func costAndGradientHandleMultiQubitSystems() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 40,
-            convergenceTolerance: 1e-5,
-            circuitDepth: 2,
             diagonalityThreshold: 0.25,
         )
 
@@ -1754,9 +1693,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Optimization handles weighted coefficients correctly")
     func optimizationHandlesWeightedCoefficients() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 40,
-            convergenceTolerance: 1e-5,
-            circuitDepth: 2,
             diagonalityThreshold: 0.3,
         )
 
@@ -1781,9 +1717,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Gradient computation converges for identity case")
     func gradientComputationConvergesForIdentity() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 20,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 1,
             diagonalityThreshold: 0.01,
         )
         let ps1 = PauliString(.z(0))
@@ -1796,9 +1729,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Optimization failure triggers identity matrix fallback")
     func optimizationFailureIdentityFallback() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 1,
-            convergenceTolerance: 1e-10,
-            circuitDepth: 1,
             diagonalityThreshold: 1e-18,
         )
 
@@ -1832,9 +1762,6 @@ struct MeasurementOptimizationIntegrationTests {
     @Test("Partition with identity Pauli string (empty operators) covers inner fallback")
     func partitionWithIdentityPauliString() {
         let partitioner = UnitaryPartitioner(
-            maxIterations: 10,
-            convergenceTolerance: 1e-6,
-            circuitDepth: 1,
             diagonalityThreshold: 0.1,
         )
 

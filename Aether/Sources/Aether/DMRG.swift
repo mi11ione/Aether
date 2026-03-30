@@ -183,25 +183,26 @@ public actor DMRG {
         var energy = 0.0
 
         for site in 0 ..< hamiltonian.sites - 1 {
-            let rightEnvIndex = min(site + 2, rightEnvironments.count - 1)
+            let rightEnvIndex = min(site + 3, rightEnvironments.count - 1)
             let rightEnv = rightEnvironments[rightEnvIndex]
             let leftEnv = currentLeftEnvs[site]
 
-            let effectiveH = buildEffectiveHamiltonian(
+            let (dim, lapackMatrix) = Self.buildEffectiveHamiltonian(
                 leftEnv: leftEnv,
                 rightEnv: rightEnv,
                 mpoLeft: hamiltonian.tensors[site],
                 mpoRight: hamiltonian.tensors[site + 1],
             )
 
-            let (eigenvalue, eigenvector) = await solveEigenproblem(effectiveH: effectiveH)
+            let (eigenvalue, eigenvector) = await solveEigenproblem(dimension: dim, columnMajorLAPACK: consume lapackMatrix)
             energy = eigenvalue
 
-            let (leftTensor, rightTensor, truncationError) = splitTwoSiteTensor(
+            let (leftTensor, rightTensor, truncationError) = Self.splitTwoSiteTensor(
                 eigenvector: eigenvector,
                 site: site,
                 leftDim: currentMPS.tensors[site].leftBondDimension,
                 rightDim: currentMPS.tensors[site + 1].rightBondDimension,
+                maxBondDimension: maxBondDimension,
                 direction: .leftToRight,
                 noiseStrength: noiseStrength,
             )
@@ -235,25 +236,26 @@ public actor DMRG {
         var energy = 0.0
 
         for site in stride(from: hamiltonian.sites - 2, through: 0, by: -1) {
-            let rightEnvIndex = min(site + 2, currentRightEnvs.count - 1)
+            let rightEnvIndex = min(site + 3, currentRightEnvs.count - 1)
             let rightEnv = currentRightEnvs[rightEnvIndex]
             let leftEnv = leftEnvironments[site]
 
-            let effectiveH = buildEffectiveHamiltonian(
+            let (dim, lapackMatrix) = Self.buildEffectiveHamiltonian(
                 leftEnv: leftEnv,
                 rightEnv: rightEnv,
                 mpoLeft: hamiltonian.tensors[site],
                 mpoRight: hamiltonian.tensors[site + 1],
             )
 
-            let (eigenvalue, eigenvector) = await solveEigenproblem(effectiveH: effectiveH)
+            let (eigenvalue, eigenvector) = await solveEigenproblem(dimension: dim, columnMajorLAPACK: consume lapackMatrix)
             energy = eigenvalue
 
-            let (leftTensor, rightTensor, truncationError) = splitTwoSiteTensor(
+            let (leftTensor, rightTensor, truncationError) = Self.splitTwoSiteTensor(
                 eigenvector: eigenvector,
                 site: site,
                 leftDim: currentMPS.tensors[site].leftBondDimension,
                 rightDim: currentMPS.tensors[site + 1].rightBondDimension,
+                maxBondDimension: maxBondDimension,
                 direction: .rightToLeft,
                 noiseStrength: noiseStrength,
             )
@@ -262,9 +264,9 @@ public actor DMRG {
             currentMPS.updateTensor(at: site + 1, with: rightTensor)
             currentMPS.addTruncationError(truncationError)
 
-            if site > 0, site + 1 < currentRightEnvs.count {
-                let sourceRightEnvIndex = min(site + 2, currentRightEnvs.count - 1)
-                currentRightEnvs[site + 1] = updateRightEnvironment(
+            if site > 0, site + 2 < currentRightEnvs.count {
+                let sourceRightEnvIndex = min(site + 3, currentRightEnvs.count - 1)
+                currentRightEnvs[site + 2] = updateRightEnvironment(
                     rightEnv: currentRightEnvs[sourceRightEnvIndex],
                     mpsTensor: currentMPS.tensors[site + 1],
                     mpoTensor: hamiltonian.tensors[site + 1],
@@ -277,19 +279,19 @@ public actor DMRG {
 
     /// Constructs effective Hamiltonian for two-site optimization.
     @_optimize(speed)
-    private func buildEffectiveHamiltonian(
+    private static func buildEffectiveHamiltonian(
         leftEnv: [[[Complex<Double>]]],
         rightEnv: [[[Complex<Double>]]],
         mpoLeft: MPOTensor,
         mpoRight: MPOTensor,
-    ) -> [[Complex<Double>]] {
+    ) -> (dimension: Int, columnMajorLAPACK: [Double]) {
         let leftBraDim = leftEnv.count
-        let leftMPODim = leftBraDim > 0 ? leftEnv[0].count : 1
-        let leftKetDim = (leftBraDim > 0 && leftMPODim > 0) ? leftEnv[0][0].count : 1
+        let leftMPODim = leftEnv[0].count
+        let leftKetDim = leftEnv[0][0].count
 
         let rightBraDim = rightEnv.count
-        let rightMPODim = rightBraDim > 0 ? rightEnv[0].count : 1
-        let rightKetDim = (rightBraDim > 0 && rightMPODim > 0) ? rightEnv[0][0].count : 1
+        let rightMPODim = rightEnv[0].count
+        let rightKetDim = rightEnv[0][0].count
 
         let physicalDimension = 2
         let effectiveDim = max(1, leftKetDim) * physicalDimension * physicalDimension * max(1, rightKetDim)
@@ -339,28 +341,22 @@ public actor DMRG {
         let ketStride1 = physicalDimension * safeRightKetDim
 
         for alphaBra in 0 ..< leftBraDim {
-            guard alphaBra < leftEnv.count else { continue }
             let leftEnvAlpha = leftEnv[alphaBra]
 
             for alphaO in 0 ..< constrainedLeftMPODim {
-                guard alphaO < leftEnvAlpha.count else { continue }
                 let leftEnvAlphaO = leftEnvAlpha[alphaO]
 
                 for alphaKet in 0 ..< leftKetDim {
-                    guard alphaKet < leftEnvAlphaO.count else { continue }
                     let leftVal = leftEnvAlphaO[alphaKet]
                     if leftVal.magnitudeSquared < 1e-30 { continue }
 
                     for betaBra in 0 ..< rightBraDim {
-                        guard betaBra < rightEnv.count else { continue }
                         let rightEnvBeta = rightEnv[betaBra]
 
                         for betaO in 0 ..< constrainedRightMPODim {
-                            guard betaO < rightEnvBeta.count else { continue }
                             let rightEnvBetaO = rightEnvBeta[betaO]
 
                             for betaKet in 0 ..< rightKetDim {
-                                guard betaKet < rightEnvBetaO.count else { continue }
                                 let rightVal = rightEnvBetaO[betaKet]
                                 if rightVal.magnitudeSquared < 1e-30 { continue }
 
@@ -370,8 +366,6 @@ public actor DMRG {
                                     let s1Bra = braPhys / physicalDimension
                                     let s2Bra = braPhys % physicalDimension
                                     let braIdx = alphaBra * braStride0 + s1Bra * braStride1 + s2Bra * safeRightBraDim + betaBra
-
-                                    guard braIdx < effectiveDim else { continue }
                                     let braOffset = braIdx * effectiveDim
 
                                     for ketPhys in 0 ..< (physicalDimension * physicalDimension) {
@@ -379,11 +373,9 @@ public actor DMRG {
                                         let s2Ket = ketPhys % physicalDimension
                                         let ketIdx = alphaKet * ketStride0 + s1Ket * ketStride1 + s2Ket * safeRightKetDim + betaKet
 
-                                        guard ketIdx < effectiveDim else { continue }
                                         let mpoVal = mpoCache[alphaO * mpoCacheStride0 + betaO * mpoCacheStride1 + braPhys * mpoCacheStride2 + ketPhys]
                                         let contribution = envProduct * mpoVal
                                         let flatIdx = braOffset + ketIdx
-                                        guard flatIdx < flatReal.count else { continue }
                                         flatReal[flatIdx] += contribution.real
                                         flatImag[flatIdx] += contribution.imaginary
                                     }
@@ -395,32 +387,31 @@ public actor DMRG {
             }
         }
 
-        var effectiveH = [[Complex<Double>]]()
-        effectiveH.reserveCapacity(effectiveDim)
-        for i in 0 ..< effectiveDim {
-            let rowOffset = i * effectiveDim
-            let row = [Complex<Double>](unsafeUninitializedCapacity: effectiveDim) { buffer, count in
-                for j in 0 ..< effectiveDim {
-                    buffer.initializeElement(at: j, to: Complex(flatReal[rowOffset + j], flatImag[rowOffset + j]))
+        let columnMajor = [Double](unsafeUninitializedCapacity: 2 * effectiveDim * effectiveDim) {
+            buffer, count in
+            for col in 0 ..< effectiveDim {
+                for row in 0 ..< effectiveDim {
+                    let idx = 2 * (col * effectiveDim + row)
+                    buffer[idx] = flatReal[row * effectiveDim + col]
+                    buffer[idx + 1] = flatImag[row * effectiveDim + col]
                 }
-                count = effectiveDim
             }
-            effectiveH.append(row)
+            count = 2 * effectiveDim * effectiveDim
         }
 
-        return effectiveH
+        return (effectiveDim, columnMajor)
     }
 
-    /// Solves eigenproblem using direct or Lanczos method based on dimension.
-    private func solveEigenproblem(effectiveH: [[Complex<Double>]]) async -> (Double, [Complex<Double>]) {
-        let dimension = effectiveH.count
-
+    /// Solves eigenproblem using direct LAPACK or Lanczos method based on dimension.
+    private func solveEigenproblem(
+        dimension: Int,
+        columnMajorLAPACK a: consuming [Double],
+    ) async -> (Double, [Complex<Double>]) {
         if dimension <= 1000 {
-            let result = HermitianEigenDecomposition.decompose(matrix: effectiveH)
-            return (result.eigenvalues[0], result.eigenvectors[0])
+            return Self.solveDirectLAPACK(dimension: dimension, a: &a)
         }
 
-        let flatH = Self.flattenHamiltonian(effectiveH)
+        let flatH = Self.convertColumnMajorToRowMajor(a, dimension: dimension)
         let applyH: @Sendable ([Complex<Double>]) async -> [Complex<Double>] = { vector in
             Self.applyFlatHamiltonian(flatH, dimension: dimension, to: vector)
         }
@@ -434,17 +425,76 @@ public actor DMRG {
         return (result.eigenvalues[0], result.eigenvectors[0])
     }
 
-    /// Flattens 2D complex matrix into interleaved real/imaginary for BLAS.
-    private static func flattenHamiltonian(_ H: [[Complex<Double>]]) -> [Double] {
-        let n = H.count
-        return [Double](unsafeUninitializedCapacity: n * n * 2) { buffer, count in
-            var idx = 0
-            for i in 0 ..< n {
-                let row = H[i]
-                for j in 0 ..< n {
-                    buffer[idx] = row[j].real
-                    buffer[idx + 1] = row[j].imaginary
-                    idx += 2
+    /// Calls zheev_ directly on pre-built column-major LAPACK array.
+    @_optimize(speed)
+    private static func solveDirectLAPACK(dimension n: Int, a: inout [Double]) -> (Double, [Complex<Double>]) {
+        var w = [Double](unsafeUninitializedCapacity: n) {
+            _, count in count = n
+        }
+        var jobz = CChar(Character("V").asciiValue!)
+        var uplo = CChar(Character("U").asciiValue!)
+        var nn = __LAPACK_int(n)
+        var lda = __LAPACK_int(n)
+        var lwork = __LAPACK_int(-1)
+        var info = __LAPACK_int(0)
+        let rworkSize = max(1, 3 * n - 2)
+        var rwork = [Double](unsafeUninitializedCapacity: rworkSize) {
+            _, count in count = rworkSize
+        }
+        var workQuery: (Double, Double) = (0, 0)
+
+        a.withUnsafeMutableBytes { aPtr in
+            withUnsafeMutablePointer(to: &workQuery) { workPtr in
+                w.withUnsafeMutableBufferPointer { wPtr in
+                    rwork.withUnsafeMutableBufferPointer { rworkPtr in
+                        zheev_(&jobz, &uplo, &nn, OpaquePointer(aPtr.baseAddress), &lda,
+                               wPtr.baseAddress, OpaquePointer(workPtr), &lwork, rworkPtr.baseAddress, &info)
+                    }
+                }
+            }
+        }
+
+        ValidationUtilities.validateLAPACKSuccess(info, operation: "zheev_ workspace query")
+        let optimalWorkSize = max(1, Int(workQuery.0))
+        lwork = __LAPACK_int(optimalWorkSize)
+        var work = [Double](unsafeUninitializedCapacity: 2 * optimalWorkSize) {
+            _, count in count = 2 * optimalWorkSize
+        }
+
+        a.withUnsafeMutableBytes { aPtr in
+            work.withUnsafeMutableBytes { workPtr in
+                w.withUnsafeMutableBufferPointer { wPtr in
+                    rwork.withUnsafeMutableBufferPointer { rworkPtr in
+                        zheev_(&jobz, &uplo, &nn, OpaquePointer(aPtr.baseAddress), &lda,
+                               wPtr.baseAddress, OpaquePointer(workPtr.baseAddress!), &lwork, rworkPtr.baseAddress, &info)
+                    }
+                }
+            }
+        }
+
+        ValidationUtilities.validateLAPACKSuccess(info, operation: "zheev_ computation")
+
+        let eigenvector = [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
+            for row in 0 ..< n {
+                let idx = 2 * row
+                buffer.initializeElement(at: row, to: Complex(a[idx], a[idx + 1]))
+            }
+            count = n
+        }
+
+        return (w[0], eigenvector)
+    }
+
+    /// Converts column-major interleaved LAPACK format to row-major interleaved for cblas_zgemv.
+    @_effects(readonly)
+    private static func convertColumnMajorToRowMajor(_ colMajor: [Double], dimension n: Int) -> [Double] {
+        [Double](unsafeUninitializedCapacity: n * n * 2) { buffer, count in
+            for row in 0 ..< n {
+                for col in 0 ..< n {
+                    let srcIdx = 2 * (col * n + row)
+                    let dstIdx = 2 * (row * n + col)
+                    buffer[dstIdx] = colMajor[srcIdx]
+                    buffer[dstIdx + 1] = colMajor[srcIdx + 1]
                 }
             }
             count = n * n * 2
@@ -501,11 +551,12 @@ public actor DMRG {
 
     /// Splits optimized two-site tensor via SVD into left and right MPS tensors.
     @_optimize(speed)
-    private func splitTwoSiteTensor(
+    private static func splitTwoSiteTensor(
         eigenvector: [Complex<Double>],
         site: Int,
         leftDim: Int,
         rightDim: Int,
+        maxBondDimension: Int,
         direction: DMRGSweepDirection,
         noiseStrength: Double,
     ) -> (MPSTensor, MPSTensor, Double) {
@@ -537,7 +588,7 @@ public actor DMRG {
         }
 
         if noiseStrength > 0 {
-            matrix = addSubspaceExpansion(matrix: matrix, strength: noiseStrength)
+            matrix = addSubspaceExpansion(matrix: matrix, maxBondDimension: maxBondDimension, strength: noiseStrength)
         }
 
         let svdResult = SVDDecomposition.decompose(
@@ -668,8 +719,8 @@ public actor DMRG {
         )
 
         let oldBraDim = min(leftEnv.count, mpsTensor.leftBondDimension)
-        let oldMPODim = min(leftEnv.isEmpty ? 1 : leftEnv[0].count, mpoTensor.leftBondDimension)
-        let oldKetDim = min(leftEnv.isEmpty ? 1 : (leftEnv[0].isEmpty ? 1 : leftEnv[0][0].count), mpsTensor.leftBondDimension)
+        let oldMPODim = min(leftEnv[0].count, mpoTensor.leftBondDimension)
+        let oldKetDim = min(leftEnv[0][0].count, mpsTensor.leftBondDimension)
 
         for alphaBra in 0 ..< oldBraDim {
             for alphaO in 0 ..< oldMPODim {
@@ -720,8 +771,8 @@ public actor DMRG {
         )
 
         let oldBraDim = min(rightEnv.count, mpsTensor.rightBondDimension)
-        let oldMPODim = min(rightEnv.isEmpty ? 1 : rightEnv[0].count, mpoTensor.rightBondDimension)
-        let oldKetDim = min(rightEnv.isEmpty ? 1 : (rightEnv[0].isEmpty ? 1 : rightEnv[0][0].count), mpsTensor.rightBondDimension)
+        let oldMPODim = min(rightEnv[0].count, mpoTensor.rightBondDimension)
+        let oldKetDim = min(rightEnv[0][0].count, mpsTensor.rightBondDimension)
 
         for betaBra in 0 ..< oldBraDim {
             for betaO in 0 ..< oldMPODim {
@@ -864,11 +915,9 @@ public actor DMRG {
 
     /// Adds perturbative noise to tensor for subspace expansion.
     @_optimize(speed)
-    private func addSubspaceExpansion(matrix: [[Complex<Double>]], strength: Double) -> [[Complex<Double>]] {
+    private static func addSubspaceExpansion(matrix: [[Complex<Double>]], maxBondDimension: Int, strength: Double) -> [[Complex<Double>]] {
         let rows = matrix.count
-        let cols = matrix.isEmpty ? 0 : matrix[0].count
-
-        guard rows > 0, cols > 0 else { return matrix }
+        let cols = matrix[0].count
 
         let fullSVD = SVDDecomposition.decompose(matrix: matrix, truncation: .none)
         let fullSingularValues = fullSVD.singularValues
@@ -880,7 +929,6 @@ public actor DMRG {
 
         for k in keptCount ..< fullSingularValues.count {
             let discardedWeight = fullSingularValues[k] * strength
-            guard k < fullSVD.u.count, k < fullSVD.vDagger.count else { continue }
             let scaledWeight = Complex(discardedWeight, 0)
             let vRow = fullSVD.vDagger[k]
             for i in 0 ..< rows {

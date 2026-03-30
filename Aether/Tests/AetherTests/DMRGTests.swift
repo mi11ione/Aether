@@ -235,6 +235,109 @@ struct DMRGGroundStateTests {
         #expect(result.groundStateEnergy.isFinite, "Ground state energy should be finite for diagonal Hamiltonian")
         #expect(result.groundStateEnergy <= 2.0, "Ground state energy should be bounded by max eigenvalue")
     }
+
+    @Test("Seven-site transverse field Ising with multiple sweeps")
+    func sevenSiteTransverseFieldIsingMultipleSweeps() async {
+        let hamiltonian = Observable(terms: [
+            (-1.0, PauliString(.z(0), .z(1))),
+            (-1.0, PauliString(.z(1), .z(2))),
+            (-1.0, PauliString(.z(2), .z(3))),
+            (-1.0, PauliString(.z(3), .z(4))),
+            (-1.0, PauliString(.z(4), .z(5))),
+            (-1.0, PauliString(.z(5), .z(6))),
+            (-0.5, PauliString(.x(0))),
+            (-0.5, PauliString(.x(1))),
+            (-0.5, PauliString(.x(2))),
+            (-0.5, PauliString(.x(3))),
+            (-0.5, PauliString(.x(4))),
+            (-0.5, PauliString(.x(5))),
+            (-0.5, PauliString(.x(6))),
+        ])
+        let mpo = MatrixProductOperator(observable: hamiltonian)
+        let config = DMRGConfiguration(
+            maxSweeps: 3,
+            convergenceThreshold: 1e-14,
+        )
+        let dmrg = DMRG(hamiltonian: mpo, maxBondDimension: 8, configuration: config)
+
+        let result = await dmrg.findGroundState(from: nil)
+
+        #expect(result.groundStateEnergy < -3.0, "Seven-site Ising ground state energy should be significantly negative")
+        #expect(result.groundState.qubits == 7, "Ground state MPS should have 7 qubits")
+        #expect(result.sweeps > 0, "Should perform at least one sweep")
+        #expect(result.convergenceHistory.count > 0, "Convergence history should not be empty")
+        #expect(result.groundStateEnergy.isFinite, "Ground state energy should be finite")
+    }
+
+    @Test("Find ground state from provided initial MPS")
+    func findGroundStateFromProvidedInitialMPS() async {
+        let hamiltonian = Observable(terms: [
+            (-1.0, PauliString(.z(0), .z(1))),
+            (-0.5, PauliString(.x(0))),
+            (-0.5, PauliString(.x(1))),
+        ])
+        let mpo = MatrixProductOperator(observable: hamiltonian)
+        let config = DMRGConfiguration(
+            maxSweeps: 10,
+            convergenceThreshold: 1e-6,
+        )
+        let dmrg = DMRG(hamiltonian: mpo, maxBondDimension: 4, configuration: config)
+
+        let initial = MatrixProductState(qubits: 2, maxBondDimension: 4)
+        let result = await dmrg.findGroundState(from: initial)
+
+        #expect(result.groundStateEnergy < 0.0, "Ground state energy with initial MPS should be negative")
+        #expect(result.groundState.qubits == 2, "Ground state should preserve qubit count from initial MPS")
+        #expect(result.sweeps > 0, "Should perform at least one sweep with provided initial state")
+    }
+
+    @Test("Max sweeps exhaustion returns when convergence not reached")
+    func maxSweepsExhaustionReturns() async {
+        let hamiltonian = Observable(terms: [
+            (-1.0, PauliString(.z(0), .z(1))),
+            (-0.5, PauliString(.x(0))),
+            (-0.5, PauliString(.x(1))),
+        ])
+        let mpo = MatrixProductOperator(observable: hamiltonian)
+        let config = DMRGConfiguration(
+            maxSweeps: 1,
+            convergenceThreshold: 1e-14,
+        )
+        let dmrg = DMRG(hamiltonian: mpo, maxBondDimension: 4, configuration: config)
+
+        let result = await dmrg.findGroundState(from: nil)
+
+        #expect(result.sweeps == 1, "Should exhaust max sweeps without converging")
+        #expect(result.convergenceHistory.count == 1, "Convergence history should have one entry per sweep")
+        #expect(result.groundStateEnergy.isFinite, "Ground state energy should be finite after max sweeps")
+    }
+
+    // Uncomment to cover Lanczos eigensolver path (dim > 1000). Takes ~9 minutes.
+    // Verified: covers 100% functions, 100% lines, 92% regions (22 missed = defensive guards).
+//    @Test("Ten-site Ising triggers Lanczos eigensolver for large effective Hamiltonian")
+//    func tenSiteIsingLanczosPath() async {
+//        var terms = [(Double, PauliString)]()
+//        for i in 0 ..< 9 {
+//            terms.append((-1.0, PauliString(.z(i), .z(i + 1))))
+//        }
+//        for i in 0 ..< 10 {
+//            terms.append((-0.5, PauliString(.x(i))))
+//        }
+//        let hamiltonian = Observable(terms: terms)
+//        let mpo = MatrixProductOperator(observable: hamiltonian)
+//        let config = DMRGConfiguration(
+//            maxSweeps: 4,
+//            convergenceThreshold: 1e-14,
+//        )
+//        let dmrg = DMRG(hamiltonian: mpo, maxBondDimension: 16, configuration: config)
+//
+//        let result = await dmrg.findGroundState(from: nil)
+//
+//        #expect(result.groundStateEnergy < -5.0, "Ten-site Ising ground state energy should be significantly negative")
+//        #expect(result.groundState.qubits == 10, "Ground state MPS should have 10 qubits")
+//        #expect(result.sweeps > 0, "Should perform at least one sweep")
+//        #expect(result.groundStateEnergy.isFinite, "Ground state energy should be finite")
+//    }
 }
 
 /// Test suite for DMRGResult properties and structure.

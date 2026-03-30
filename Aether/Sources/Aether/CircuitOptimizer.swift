@@ -210,7 +210,7 @@ public enum CircuitOptimizer {
     ///
     /// - Parameter angle: Parameter value to check.
     /// - Parameter target: Target angle in radians.
-    /// - Returns: `true` if the angle equals the target within ``angleTolerance``.
+    /// - Returns: `true` if the angle equals the target within `angleTolerance`.
     /// - Complexity: O(1)
     @_optimize(speed)
     @inline(__always)

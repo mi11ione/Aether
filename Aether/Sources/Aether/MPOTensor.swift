@@ -135,6 +135,11 @@ public struct MPOTensor: Sendable, Equatable {
     /// - Precondition: 0 <= right < rightBondDimension
     @inlinable
     public subscript(left: Int, physIn: Int, physOut: Int, right: Int) -> Complex<Double> {
+        ValidationUtilities.validateIndexInBounds(left, bound: leftBondDimension, name: "MPO left bond index")
+        ValidationUtilities.validateIndexInBounds(physIn, bound: physicalDimension, name: "MPO physical input index")
+        ValidationUtilities.validateIndexInBounds(physOut, bound: physicalDimension, name: "MPO physical output index")
+        ValidationUtilities.validateIndexInBounds(right, bound: rightBondDimension, name: "MPO right bond index")
+
         let d = physicalDimension
         let flatIndex = left * (d * d * rightBondDimension) + physIn * (d * rightBondDimension) + physOut * rightBondDimension + right
         return elements[flatIndex]

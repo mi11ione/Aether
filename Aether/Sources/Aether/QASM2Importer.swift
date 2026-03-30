@@ -81,8 +81,7 @@ private struct ParserState {
 
     /// Return current token without advancing.
     var current: QASMToken {
-        guard position < tokens.count else { return .eof }
-        return tokens[position]
+        tokens[position]
     }
 
     /// Return current token and advance position.

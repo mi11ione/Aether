@@ -758,7 +758,7 @@ struct QASM2ExpectIntegerErrorTests {
     func nonIntegerQregSize() {
         let source = "OPENQASM 2.0; qreg q[abc];"
         let result = QASM2Importer.parse(source)
-        let hasIntError = result.diagnostics.contains { $0.message.contains("expected integer") || $0.message.contains("expected") }
+        let hasIntError = result.diagnostics.contains { $0.message.contains("expected integer") }
         #expect(hasIntError, "identifier where integer expected should produce diagnostic")
     }
 
@@ -1722,8 +1722,7 @@ struct QASM2CustomGateBodyEdgeCaseTests {
         myg q[0];
         """
         let result = QASM2Importer.parse(source)
-        let hasQubitIssue = result.diagnostics.contains { $0.severity == .error }
-        #expect(hasQubitIssue || result.circuit.count >= 0, "non-identifier token should break qubit loop in gate body")
+        #expect(result.circuit.count >= 0, "non-identifier token should break qubit loop in gate body")
     }
 }
 

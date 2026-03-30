@@ -351,13 +351,10 @@ struct CliffordTSynthesisTests {
                 "Finer precision should require at least as many gates (coarse: \(coarseGates.count), fine: \(fineGates.count))")
     }
 
+    private static let cliffordTSet: Set<QuantumGate> = [.hadamard, .sGate, .tGate, .pauliY]
+
     private func isCliffordTGate(_ gate: QuantumGate) -> Bool {
-        switch gate {
-        case .hadamard, .sGate, .tGate, .pauliY:
-            true
-        default:
-            false
-        }
+        Self.cliffordTSet.contains(gate)
     }
 }
 
