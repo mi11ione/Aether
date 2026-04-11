@@ -90,44 +90,44 @@ struct CliffordGateClassifierIsCliffordTests {
     @Test("isClifford returns true for Hadamard")
     func isCliffordHadamard() {
         let result = CliffordGateClassifier.isClifford(.hadamard)
-        #expect(result == true, "isClifford should return true for Hadamard gate")
+        #expect(result, "isClifford should return true for Hadamard gate")
     }
 
     @Test("isClifford returns true for CNOT")
     func isCliffordCnot() {
         let result = CliffordGateClassifier.isClifford(.cnot)
-        #expect(result == true, "isClifford should return true for CNOT gate")
+        #expect(result, "isClifford should return true for CNOT gate")
     }
 
     @Test("isClifford returns true for Pauli gates")
     func isCliffordPauliGates() {
-        #expect(CliffordGateClassifier.isClifford(.pauliX) == true, "isClifford should return true for Pauli-X")
-        #expect(CliffordGateClassifier.isClifford(.pauliY) == true, "isClifford should return true for Pauli-Y")
-        #expect(CliffordGateClassifier.isClifford(.pauliZ) == true, "isClifford should return true for Pauli-Z")
+        #expect(CliffordGateClassifier.isClifford(.pauliX), "isClifford should return true for Pauli-X")
+        #expect(CliffordGateClassifier.isClifford(.pauliY), "isClifford should return true for Pauli-Y")
+        #expect(CliffordGateClassifier.isClifford(.pauliZ), "isClifford should return true for Pauli-Z")
     }
 
     @Test("isClifford returns false for T gate")
     func isCliffordTGate() {
         let result = CliffordGateClassifier.isClifford(.tGate)
-        #expect(result == false, "isClifford should return false for T gate")
+        #expect(!result, "isClifford should return false for T gate")
     }
 
     @Test("isClifford returns false for Toffoli")
     func isCliffordToffoli() {
         let result = CliffordGateClassifier.isClifford(.toffoli)
-        #expect(result == false, "isClifford should return false for Toffoli gate")
+        #expect(!result, "isClifford should return false for Toffoli gate")
     }
 
     @Test("isClifford returns true for S gate")
     func isCliffordSGate() {
         let result = CliffordGateClassifier.isClifford(.sGate)
-        #expect(result == true, "isClifford should return true for S gate")
+        #expect(result, "isClifford should return true for S gate")
     }
 
     @Test("isClifford returns true for CZ gate")
     func isCliffordCzGate() {
         let result = CliffordGateClassifier.isClifford(.cz)
-        #expect(result == true, "isClifford should return true for CZ gate")
+        #expect(result, "isClifford should return true for CZ gate")
     }
 }
 
@@ -145,7 +145,7 @@ struct CliffordGateClassifierAnalyzeTests {
         circuit.append(.sGate, to: 0)
 
         let result = CliffordGateClassifier.analyze(circuit)
-        #expect(result.isClifford == true, "Pure Clifford circuit should have isClifford true")
+        #expect(result.isClifford, "Pure Clifford circuit should have isClifford true")
         #expect(result.tCount == 0, "Pure Clifford circuit should have tCount 0")
     }
 
@@ -157,7 +157,7 @@ struct CliffordGateClassifierAnalyzeTests {
         circuit.append(.cnot, to: [0, 1])
 
         let result = CliffordGateClassifier.analyze(circuit)
-        #expect(result.isClifford == false, "Circuit with T gate should have isClifford false")
+        #expect(!result.isClifford, "Circuit with T gate should have isClifford false")
         #expect(result.tCount == 1, "Circuit with single T gate should have tCount 1")
     }
 
@@ -170,7 +170,7 @@ struct CliffordGateClassifierAnalyzeTests {
         circuit.append(.tGate, to: 0)
 
         let result = CliffordGateClassifier.analyze(circuit)
-        #expect(result.isClifford == false, "Circuit with T gates should have isClifford false")
+        #expect(!result.isClifford, "Circuit with T gates should have isClifford false")
         #expect(result.tCount == 3, "Circuit with three T gates should have tCount 3")
     }
 
@@ -179,7 +179,7 @@ struct CliffordGateClassifierAnalyzeTests {
         let circuit = QuantumCircuit(qubits: 2)
 
         let result = CliffordGateClassifier.analyze(circuit)
-        #expect(result.isClifford == true, "Empty circuit should have isClifford true")
+        #expect(result.isClifford, "Empty circuit should have isClifford true")
         #expect(result.tCount == 0, "Empty circuit should have tCount 0")
     }
 
@@ -190,7 +190,7 @@ struct CliffordGateClassifierAnalyzeTests {
         circuit.append(.toffoli, to: [0, 1, 2])
 
         let result = CliffordGateClassifier.analyze(circuit)
-        #expect(result.isClifford == false, "Circuit with Toffoli should have isClifford false")
+        #expect(!result.isClifford, "Circuit with Toffoli should have isClifford false")
         #expect(result.tCount == 7, "Toffoli gate contributes tCount of 7")
     }
 
@@ -203,7 +203,7 @@ struct CliffordGateClassifierAnalyzeTests {
         circuit.append(.tGate, to: 1)
 
         let result = CliffordGateClassifier.analyze(circuit)
-        #expect(result.isClifford == false, "Mixed circuit should have isClifford false")
+        #expect(!result.isClifford, "Mixed circuit should have isClifford false")
         #expect(result.tCount == 2, "Mixed circuit with two T gates should have tCount 2")
     }
 }

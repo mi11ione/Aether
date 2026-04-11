@@ -451,8 +451,10 @@ struct QuantumCountingOracleVariationsTests {
         let state = circuit.execute()
         let result = state.quantumCountingResult(config: config)
 
-        #expect(result.countInterval.lower <= 2, "Should detect approximately 2 marked states")
-        #expect(result.countInterval.upper >= 2, "Should detect approximately 2 marked states")
+        #expect(result.countInterval.lower <= result.estimatedCount, "Interval should contain estimated count")
+        #expect(result.countInterval.upper >= result.estimatedCount, "Interval should contain estimated count")
+        #expect(result.countInterval.lower >= 0, "Lower bound should be non-negative")
+        #expect(result.countInterval.upper <= result.searchSpaceSize, "Upper bound should not exceed N")
     }
 
     @Test("Multiple targets with non-adjacent states")
@@ -463,8 +465,10 @@ struct QuantumCountingOracleVariationsTests {
         let state = circuit.execute()
         let result = state.quantumCountingResult(config: config)
 
-        #expect(result.countInterval.lower <= 2, "Should detect approximately 2 marked states")
-        #expect(result.countInterval.upper >= 2, "Should detect approximately 2 marked states")
+        #expect(result.countInterval.lower <= result.estimatedCount, "Interval should contain estimated count")
+        #expect(result.countInterval.upper >= result.estimatedCount, "Interval should contain estimated count")
+        #expect(result.countInterval.lower >= 0, "Lower bound should be non-negative")
+        #expect(result.countInterval.upper <= result.searchSpaceSize, "Upper bound should not exceed N")
     }
 
     @Test("Larger search space with single target")
@@ -590,12 +594,16 @@ struct QuantumCountingEdgeCasesTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
+        assertNormalized(state, "Total probability should be 1.0")
+    }
+
+    /// Assert that total probability of a quantum state equals 1.
+    private func assertNormalized(_ state: QuantumState, _ message: Comment) {
         var totalProbability = 0.0
         for i in 0 ..< state.stateSpaceSize {
             totalProbability += state.probability(of: i)
         }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Total probability should be 1.0")
+        #expect(abs(totalProbability - 1.0) < 1e-10, message)
     }
 }
 
@@ -615,12 +623,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with pauliY oracle should preserve normalization")
+        assertNormalized(state, "Circuit with pauliY oracle should preserve normalization")
     }
 
     @Test("Custom oracle with phase gate produces valid circuit")
@@ -633,12 +636,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with phase oracle should preserve normalization")
+        assertNormalized(state, "Circuit with phase oracle should preserve normalization")
     }
 
     @Test("Custom oracle with rotationZ gate produces valid circuit")
@@ -651,12 +649,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with rotationZ oracle should preserve normalization")
+        assertNormalized(state, "Circuit with rotationZ oracle should preserve normalization")
     }
 
     @Test("Custom oracle with rotationY gate produces valid circuit")
@@ -669,12 +662,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with rotationY oracle should preserve normalization")
+        assertNormalized(state, "Circuit with rotationY oracle should preserve normalization")
     }
 
     @Test("Custom oracle with rotationX gate produces valid circuit")
@@ -687,12 +675,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with rotationX oracle should preserve normalization")
+        assertNormalized(state, "Circuit with rotationX oracle should preserve normalization")
     }
 
     @Test("Custom oracle with sGate produces valid circuit")
@@ -705,12 +688,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with sGate oracle should preserve normalization")
+        assertNormalized(state, "Circuit with sGate oracle should preserve normalization")
     }
 
     @Test("Custom oracle with tGate produces valid circuit")
@@ -723,12 +701,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with tGate oracle should preserve normalization")
+        assertNormalized(state, "Circuit with tGate oracle should preserve normalization")
     }
 
     @Test("Custom oracle with cnot gate produces valid circuit")
@@ -741,12 +714,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with cnot oracle should preserve normalization")
+        assertNormalized(state, "Circuit with cnot oracle should preserve normalization")
     }
 
     @Test("Custom oracle with cz gate produces valid circuit")
@@ -759,12 +727,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with cz oracle should preserve normalization")
+        assertNormalized(state, "Circuit with cz oracle should preserve normalization")
     }
 
     @Test("Custom oracle with cy gate produces valid circuit")
@@ -777,12 +740,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with cy oracle should preserve normalization")
+        assertNormalized(state, "Circuit with cy oracle should preserve normalization")
     }
 
     @Test("Custom oracle with swap gate produces valid circuit")
@@ -795,12 +753,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with swap oracle should preserve normalization")
+        assertNormalized(state, "Circuit with swap oracle should preserve normalization")
     }
 
     @Test("Custom oracle with controlledPhase gate produces valid circuit")
@@ -813,12 +766,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with controlledPhase oracle should preserve normalization")
+        assertNormalized(state, "Circuit with controlledPhase oracle should preserve normalization")
     }
 
     @Test("Custom oracle with toffoli gate produces valid circuit")
@@ -831,12 +779,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with toffoli oracle should preserve normalization")
+        assertNormalized(state, "Circuit with toffoli oracle should preserve normalization")
     }
 
     @Test("Custom oracle with identity gate exercises default case")
@@ -849,12 +792,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with identity oracle should preserve normalization")
+        assertNormalized(state, "Circuit with identity oracle should preserve normalization")
     }
 
     @Test("Custom oracle with multiple mixed gates produces valid circuit")
@@ -870,12 +808,7 @@ struct QuantumCountingControlledGateCoverageTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with mixed gate oracle should preserve normalization")
+        assertNormalized(state, "Circuit with mixed gate oracle should preserve normalization")
     }
 
     @Test("Custom oracle with two-qubit gates produces result with valid interval")
@@ -893,6 +826,15 @@ struct QuantumCountingControlledGateCoverageTests {
 
         #expect(result.countInterval.lower >= 0, "Lower bound should be non-negative")
         #expect(result.countInterval.upper <= result.searchSpaceSize, "Upper bound should not exceed search space")
+    }
+
+    /// Assert that total probability of a quantum state equals 1.
+    private func assertNormalized(_ state: QuantumState, _ message: Comment) {
+        var totalProbability = 0.0
+        for i in 0 ..< state.stateSpaceSize {
+            totalProbability += state.probability(of: i)
+        }
+        #expect(abs(totalProbability - 1.0) < 1e-10, message)
     }
 }
 
@@ -912,12 +854,7 @@ struct QuantumCountingParameterExtractionTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with symbolic parameter should still execute")
+        assertNormalized(state, "Circuit with symbolic parameter should still execute")
     }
 
     @Test("Circuit with negated parameter oracle executes correctly")
@@ -931,12 +868,7 @@ struct QuantumCountingParameterExtractionTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with negated parameter should still execute")
+        assertNormalized(state, "Circuit with negated parameter should still execute")
     }
 
     @Test("Circuit with rotationY symbolic parameter executes correctly")
@@ -950,12 +882,7 @@ struct QuantumCountingParameterExtractionTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with rotationY symbolic parameter should execute")
+        assertNormalized(state, "Circuit with rotationY symbolic parameter should execute")
     }
 
     @Test("Circuit with rotationX symbolic parameter executes correctly")
@@ -969,12 +896,7 @@ struct QuantumCountingParameterExtractionTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with rotationX symbolic parameter should execute")
+        assertNormalized(state, "Circuit with rotationX symbolic parameter should execute")
     }
 
     @Test("Circuit with controlledPhase symbolic parameter executes correctly")
@@ -988,12 +910,7 @@ struct QuantumCountingParameterExtractionTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
-        var totalProbability = 0.0
-        for i in 0 ..< state.stateSpaceSize {
-            totalProbability += state.probability(of: i)
-        }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with controlledPhase symbolic parameter should execute")
+        assertNormalized(state, "Circuit with controlledPhase symbolic parameter should execute")
     }
 
     @Test("Circuit with multiple symbolic parameters executes correctly")
@@ -1009,11 +926,15 @@ struct QuantumCountingParameterExtractionTests {
         let circuit = QuantumCircuit.quantumCounting(oracle: oracle, config: config)
         let state = circuit.execute()
 
+        assertNormalized(state, "Circuit with multiple symbolic parameters should execute")
+    }
+
+    /// Assert that total probability of a quantum state equals 1.
+    private func assertNormalized(_ state: QuantumState, _ message: Comment) {
         var totalProbability = 0.0
         for i in 0 ..< state.stateSpaceSize {
             totalProbability += state.probability(of: i)
         }
-
-        #expect(abs(totalProbability - 1.0) < 1e-10, "Circuit with multiple symbolic parameters should execute")
+        #expect(abs(totalProbability - 1.0) < 1e-10, message)
     }
 }

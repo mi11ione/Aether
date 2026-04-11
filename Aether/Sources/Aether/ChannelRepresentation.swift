@@ -3,34 +3,48 @@
 
 import Accelerate
 
-/// Generates the n-qubit Pauli basis as tensor products of single-qubit Paulis.
+/// Computes the target column and phase for a tensor-product Pauli acting on a given row.
 @_optimize(speed)
 @_effects(readonly)
-private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
-    let singlePaulis: [[[Complex<Double>]]] = [
-        [[.one, .zero], [.zero, .one]],
-        [[.zero, .one], [.one, .zero]],
-        [[.zero, Complex(0, -1)], [Complex(0, 1), .zero]],
-        [[.one, .zero], [.zero, Complex(-1, 0)]],
-    ]
+@inline(__always)
+private func pauliApplyToRow(index: Int, row: Int, qubits: Int) -> (col: Int, phase: Complex<Double>) {
+    var targetCol = 0
+    var phase = Complex<Double>.one
 
-    if qubits == 1 {
-        return singlePaulis
-    }
+    for q in 0 ..< qubits {
+        let pauliType = (index >> (2 * q)) & 3
+        let rowBit = (row >> q) & 1
 
-    var result: [[[Complex<Double>]]] = singlePaulis
-    for _ in 1 ..< qubits {
-        var newResult: [[[Complex<Double>]]] = []
-        newResult.reserveCapacity(result.count * singlePaulis.count)
-        for existing in result {
-            for pauli in singlePaulis {
-                newResult.append(MatrixUtilities.kroneckerProduct(existing, pauli))
-            }
+        switch pauliType {
+        case 1:
+            targetCol |= (1 - rowBit) << q
+        case 2:
+            targetCol |= (1 - rowBit) << q
+            phase = phase * Complex(0, 2.0 * Double(rowBit) - 1.0)
+        case 3:
+            targetCol |= rowBit << q
+            phase = phase * Complex(1.0 - 2.0 * Double(rowBit), 0)
+        default:
+            targetCol |= rowBit << q
         }
-        result = newResult
     }
 
-    return result
+    return (targetCol, phase)
+}
+
+/// Materializes the full d×d matrix for a single tensor-product Pauli operator.
+@_optimize(speed)
+@_effects(readonly)
+private func generateSinglePauli(index: Int, qubits: Int) -> [[Complex<Double>]] {
+    let d = 1 << qubits
+    return (0 ..< d).map { row in
+        [Complex<Double>](unsafeUninitializedCapacity: d) { buffer, count in
+            buffer.initialize(repeating: .zero)
+            let (col, phase) = pauliApplyToRow(index: index, row: row, qubits: qubits)
+            buffer[col] = phase
+            count = d
+        }
+    }
 }
 
 /// Superoperator representation of a quantum channel in Liouville space.
@@ -628,19 +642,16 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
         let d = 1 << qubits
         let d2 = d * d
 
-        let paulis = generatePauliBasis(qubits: qubits)
-
         var w = [[Complex<Double>]](
             repeating: [Complex<Double>](repeating: .zero, count: d2),
             count: d2,
         )
 
-        let normFactor = 1.0 / Double(d)
+        let normFactor = Complex<Double>(1.0 / Double(d), 0)
         for i in 0 ..< d2 {
-            for j in 0 ..< d2 {
-                let rowIdx = j / d
-                let colIdx = j % d
-                w[i][j] = paulis[i][rowIdx][colIdx] * normFactor
+            for row in 0 ..< d {
+                let (col, phase) = pauliApplyToRow(index: i, row: row, qubits: qubits)
+                w[i][row * d + col] = phase * normFactor
             }
         }
 
@@ -721,7 +732,6 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
         let d = 1 << qubits
         let d2 = d * d
 
-        let paulis = generatePauliBasis(qubits: qubits)
         let normFactor = 1.0 / Double(d)
 
         var result = [[Double]](
@@ -743,8 +753,9 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
                 }
             }
 
+            let pauliJ = generateSinglePauli(index: j, qubits: qubits)
             for (kraus, kDag) in zip(krausOps, krausDags) {
-                let kPj = MatrixUtilities.matrixMultiply(kraus, paulis[j])
+                let kPj = MatrixUtilities.matrixMultiply(kraus, pauliJ)
                 let kPjKdag = MatrixUtilities.matrixMultiply(kPj, kDag)
                 for a in 0 ..< d {
                     for b in 0 ..< d {
@@ -756,9 +767,8 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
             for i in 0 ..< d2 {
                 var trace = Complex<Double>.zero
                 for a in 0 ..< d {
-                    for b in 0 ..< d {
-                        trace = trace + paulis[i][a][b] * transformed[b][a]
-                    }
+                    let (col, phase) = pauliApplyToRow(index: i, row: a, qubits: qubits)
+                    trace = trace + phase * transformed[col][a]
                 }
                 result[i][j] = trace.real * normFactor
             }
@@ -786,7 +796,6 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
         let d = 1 << qubits
         let d2 = d * d
 
-        let paulis = generatePauliBasis(qubits: qubits)
         let normFactor = 1.0 / Double(d)
 
         var result = [[Double]](
@@ -809,11 +818,10 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
                 for b in 0 ..< d {
                     var sum = Complex<Double>.zero
                     for c in 0 ..< d {
-                        for dd in 0 ..< d {
-                            let choiRow = a * d + c
-                            let choiCol = b * d + dd
-                            sum = sum + choi.matrix[choiRow][choiCol] * paulis[j][c][dd]
-                        }
+                        let (colJ, phaseJ) = pauliApplyToRow(index: j, row: c, qubits: qubits)
+                        let choiRow = a * d + c
+                        let choiCol = b * d + colJ
+                        sum = sum + choi.matrix[choiRow][choiCol] * phaseJ
                     }
                     transformed[a][b] = sum
                 }
@@ -822,9 +830,8 @@ private func generatePauliBasis(qubits: Int) -> [[[Complex<Double>]]] {
             for i in 0 ..< d2 {
                 var trace = Complex<Double>.zero
                 for a in 0 ..< d {
-                    for b in 0 ..< d {
-                        trace = trace + paulis[i][a][b] * transformed[b][a]
-                    }
+                    let (col, phase) = pauliApplyToRow(index: i, row: a, qubits: qubits)
+                    trace = trace + phase * transformed[col][a]
                 }
                 result[i][j] = trace.real * normFactor
             }

@@ -277,8 +277,10 @@ public actor DMRG {
         return (currentMPS, currentRightEnvs, energy)
     }
 
-    /// Constructs effective Hamiltonian for two-site optimization.
+    /// Constructs effective Hamiltonian for two-site optimization via BLAS-contracted MPO
+    /// tensors and flattened environment tensors.
     @_optimize(speed)
+    @_effects(readonly)
     private static func buildEffectiveHamiltonian(
         leftEnv: [[[Complex<Double>]]],
         rightEnv: [[[Complex<Double>]]],
@@ -293,87 +295,136 @@ public actor DMRG {
         let rightMPODim = rightEnv[0].count
         let rightKetDim = rightEnv[0][0].count
 
-        let physicalDimension = 2
-        let effectiveDim = max(1, leftKetDim) * physicalDimension * physicalDimension * max(1, rightKetDim)
+        let d = 2
+        let d2 = d * d
+        let effectiveDim = max(1, leftKetDim) * d2 * max(1, rightKetDim)
 
-        var flatReal = [Double](repeating: 0.0, count: effectiveDim * effectiveDim)
-        var flatImag = [Double](repeating: 0.0, count: effectiveDim * effectiveDim)
+        var flatReal = [Double](unsafeUninitializedCapacity: effectiveDim * effectiveDim) {
+            buffer, count in
+            buffer.initialize(repeating: 0.0)
+            count = effectiveDim * effectiveDim
+        }
+        var flatImag = [Double](unsafeUninitializedCapacity: effectiveDim * effectiveDim) {
+            buffer, count in
+            buffer.initialize(repeating: 0.0)
+            count = effectiveDim * effectiveDim
+        }
 
         let constrainedLeftMPODim = min(leftMPODim, mpoLeft.leftBondDimension)
         let constrainedRightMPODim = min(rightMPODim, mpoRight.rightBondDimension)
-
         let gammaDim = mpoLeft.rightBondDimension
-        let d2 = physicalDimension * physicalDimension
-        let safeLeftMPO = max(1, constrainedLeftMPODim)
-        let safeRightMPO = max(1, constrainedRightMPODim)
-        let mpoCacheStride0 = safeRightMPO * d2 * d2
-        let mpoCacheStride1 = d2 * d2
-        let mpoCacheStride2 = d2
-        var mpoCache = [Complex<Double>](repeating: .zero, count: safeLeftMPO * mpoCacheStride0)
+        let rightBondFull = mpoRight.rightBondDimension
 
-        for alphaO in 0 ..< constrainedLeftMPODim {
-            for betaO in 0 ..< constrainedRightMPODim {
-                for s1Bra in 0 ..< physicalDimension {
-                    for s2Bra in 0 ..< physicalDimension {
-                        for s1Ket in 0 ..< physicalDimension {
-                            for s2Ket in 0 ..< physicalDimension {
-                                var mpoSum: Complex<Double> = .zero
-                                for gammaO in 0 ..< gammaDim {
-                                    let wLeft = mpoLeft[alphaO, s1Ket, s1Bra, gammaO]
-                                    let wRight = mpoRight[gammaO, s2Ket, s2Bra, betaO]
-                                    mpoSum = mpoSum + wLeft * wRight
-                                }
-                                let braPhys = s1Bra * physicalDimension + s2Bra
-                                let ketPhys = s1Ket * physicalDimension + s2Ket
-                                mpoCache[alphaO * mpoCacheStride0 + betaO * mpoCacheStride1 + braPhys * mpoCacheStride2 + ketPhys] = mpoSum
-                            }
+        let mM = Int32(constrainedLeftMPODim * d2)
+        let mN = Int32(d2 * rightBondFull)
+        let mK = Int32(gammaDim)
+
+        var mpoCache = [Complex<Double>](unsafeUninitializedCapacity: Int(mM) * Int(mN)) {
+            _, count in
+            count = Int(mM) * Int(mN)
+        }
+
+        var alpha = (1.0, 0.0)
+        var beta = (0.0, 0.0)
+        mpoLeft.elements.withUnsafeBufferPointer { aPtr in
+            mpoRight.elements.withUnsafeBufferPointer { bPtr in
+                mpoCache.withUnsafeMutableBufferPointer { cPtr in
+                    withUnsafeMutablePointer(to: &alpha) { alphaPtr in
+                        withUnsafeMutablePointer(to: &beta) { betaPtr in
+                            cblas_zgemm(
+                                CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                                mM, mN, mK,
+                                OpaquePointer(alphaPtr),
+                                OpaquePointer(aPtr.baseAddress), mK,
+                                OpaquePointer(bPtr.baseAddress), mN,
+                                OpaquePointer(betaPtr),
+                                OpaquePointer(cPtr.baseAddress), mN,
+                            )
                         }
                     }
                 }
             }
         }
 
+        let mNInt = Int(mN)
+
+        let leftEnvFlat = [Complex<Double>](unsafeUninitializedCapacity: leftBraDim * leftMPODim * leftKetDim) {
+            buffer, count in
+            for i in 0 ..< leftBraDim {
+                let slice0 = leftEnv[i]
+                for j in 0 ..< leftMPODim {
+                    let slice1 = slice0[j]
+                    let base = (i * leftMPODim + j) * leftKetDim
+                    for k in 0 ..< leftKetDim {
+                        buffer[base + k] = slice1[k]
+                    }
+                }
+            }
+            count = leftBraDim * leftMPODim * leftKetDim
+        }
+
+        let rightEnvFlat = [Complex<Double>](unsafeUninitializedCapacity: rightBraDim * rightMPODim * rightKetDim) {
+            buffer, count in
+            for i in 0 ..< rightBraDim {
+                let slice0 = rightEnv[i]
+                for j in 0 ..< rightMPODim {
+                    let slice1 = slice0[j]
+                    let base = (i * rightMPODim + j) * rightKetDim
+                    for k in 0 ..< rightKetDim {
+                        buffer[base + k] = slice1[k]
+                    }
+                }
+            }
+            count = rightBraDim * rightMPODim * rightKetDim
+        }
+
+        let leftEnvStride0 = leftMPODim * leftKetDim
+        let rightEnvStride0 = rightMPODim * rightKetDim
+
         let safeRightKetDim = max(1, rightKetDim)
         let safeRightBraDim = max(1, rightBraDim)
-        let braStride0 = physicalDimension * physicalDimension * safeRightBraDim
-        let braStride1 = physicalDimension * safeRightBraDim
-        let ketStride0 = physicalDimension * physicalDimension * safeRightKetDim
-        let ketStride1 = physicalDimension * safeRightKetDim
+        let braStride0 = d2 * safeRightBraDim
+        let braStride1 = d * safeRightBraDim
+        let ketStride0 = d2 * safeRightKetDim
+        let ketStride1 = d * safeRightKetDim
 
         for alphaBra in 0 ..< leftBraDim {
-            let leftEnvAlpha = leftEnv[alphaBra]
+            let leftBase0 = alphaBra * leftEnvStride0
 
             for alphaO in 0 ..< constrainedLeftMPODim {
-                let leftEnvAlphaO = leftEnvAlpha[alphaO]
+                let leftBase1 = leftBase0 + alphaO * leftKetDim
 
                 for alphaKet in 0 ..< leftKetDim {
-                    let leftVal = leftEnvAlphaO[alphaKet]
+                    let leftVal = leftEnvFlat[leftBase1 + alphaKet]
                     if leftVal.magnitudeSquared < 1e-30 { continue }
 
                     for betaBra in 0 ..< rightBraDim {
-                        let rightEnvBeta = rightEnv[betaBra]
+                        let rightBase0 = betaBra * rightEnvStride0
 
                         for betaO in 0 ..< constrainedRightMPODim {
-                            let rightEnvBetaO = rightEnvBeta[betaO]
+                            let rightBase1 = rightBase0 + betaO * rightKetDim
 
                             for betaKet in 0 ..< rightKetDim {
-                                let rightVal = rightEnvBetaO[betaKet]
+                                let rightVal = rightEnvFlat[rightBase1 + betaKet]
                                 if rightVal.magnitudeSquared < 1e-30 { continue }
 
                                 let envProduct = leftVal * rightVal
 
-                                for braPhys in 0 ..< (physicalDimension * physicalDimension) {
-                                    let s1Bra = braPhys / physicalDimension
-                                    let s2Bra = braPhys % physicalDimension
+                                for braPhys in 0 ..< d2 {
+                                    let s1Bra = braPhys >> 1
+                                    let s2Bra = braPhys & 1
                                     let braIdx = alphaBra * braStride0 + s1Bra * braStride1 + s2Bra * safeRightBraDim + betaBra
                                     let braOffset = braIdx * effectiveDim
 
-                                    for ketPhys in 0 ..< (physicalDimension * physicalDimension) {
-                                        let s1Ket = ketPhys / physicalDimension
-                                        let s2Ket = ketPhys % physicalDimension
+                                    for ketPhys in 0 ..< d2 {
+                                        let s1Ket = ketPhys >> 1
+                                        let s2Ket = ketPhys & 1
                                         let ketIdx = alphaKet * ketStride0 + s1Ket * ketStride1 + s2Ket * safeRightKetDim + betaKet
 
-                                        let mpoVal = mpoCache[alphaO * mpoCacheStride0 + betaO * mpoCacheStride1 + braPhys * mpoCacheStride2 + ketPhys]
+                                        let cacheRow = alphaO * d2 + s1Ket * d + s1Bra
+                                        let cacheCol = (s2Ket * d + s2Bra) * rightBondFull + betaO
+                                        let mpoVal = mpoCache[cacheRow * mNInt + cacheCol]
+
                                         let contribution = envProduct * mpoVal
                                         let flatIdx = braOffset + ketIdx
                                         flatReal[flatIdx] += contribution.real
@@ -521,7 +572,6 @@ public actor DMRG {
         }
         var alpha = (1.0, 0.0)
         var beta = (0.0, 0.0)
-        // Safety: baseAddress is non-nil for all buffers since n > 1000 guarantees non-empty arrays
         flatH.withUnsafeBufferPointer { hPtr in
             flatVec.withUnsafeMutableBufferPointer { vecPtr in
                 flatResult.withUnsafeMutableBufferPointer { resPtr in
@@ -807,7 +857,7 @@ public actor DMRG {
     private func initializeRandomMPS(sites: Int) -> MatrixProductState {
         var mps = MatrixProductState(qubits: sites, maxBondDimension: maxBondDimension)
 
-        var seed: UInt64 = 42
+        var seed: UInt64 = .random(in: 0 ... .max)
 
         for site in 0 ..< sites {
             let leftDim = mps.tensors[site].leftBondDimension
@@ -979,6 +1029,11 @@ public actor DMRG {
 
         /// Creates a DMRG result with specified values.
         ///
+        /// **Example:**
+        /// ```swift
+        /// let result = Result(groundStateEnergy: -1.75, groundState: mps, sweeps: 12, convergenceHistory: energies)
+        /// ```
+        ///
         /// - Parameters:
         ///   - groundStateEnergy: Computed ground state energy
         ///   - groundState: Optimized MPS
@@ -1021,6 +1076,11 @@ public actor DMRG {
         public let maxTruncationError: Double
 
         /// Creates a progress snapshot.
+        ///
+        /// **Example:**
+        /// ```swift
+        /// let progress = Progress(sweep: 5, energy: -1.72, maxTruncationError: 1e-8)
+        /// ```
         ///
         /// - Parameters:
         ///   - sweep: Current sweep number

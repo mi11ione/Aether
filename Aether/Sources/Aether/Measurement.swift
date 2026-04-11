@@ -833,6 +833,7 @@ public enum Measurement {
         var rng = createRNG(seed: seed)
         let finalState = circuit.execute()
         let probabilities = finalState.probabilities()
+        ValidationUtilities.validateProbabilityDistribution(probabilities)
 
         let outcomes = [Int](unsafeUninitializedCapacity: shots) { buffer, count in
             for i in 0 ..< shots {
@@ -1058,7 +1059,7 @@ public enum Measurement {
             count = stateSpaceSize
         }
 
-        return QuantumState(qubits: qubits, amplitudes: amplitudes)
+        return QuantumState(qubits: qubits, rawAmplitudes: amplitudes)
     }
 
     /// Collapses state by zeroing incompatible amplitudes and renormalizing.
@@ -1088,7 +1089,7 @@ public enum Measurement {
             count = state.stateSpaceSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     /// Rotates qubit from Pauli eigenbasis to computational basis for measurement.
@@ -1132,16 +1133,18 @@ public enum Measurement {
         return sampleOutcome(probabilities: probabilities, rng: &rng)
     }
 
-    /// Samples a single outcome via roulette wheel selection over probabilities.
+    /// Samples a single outcome via Kahan-compensated roulette wheel selection.
     @usableFromInline
     static func sampleOutcome(probabilities: [Double], rng: inout any RandomNumberGenerator) -> Int {
-        ValidationUtilities.validateProbabilityDistribution(probabilities)
-
         let random = Double.random(in: 0 ..< 1, using: &rng)
 
         var accumulated = 0.0
+        var compensation = 0.0
         for i in 0 ..< probabilities.count - 1 {
-            accumulated += probabilities[i]
+            let y = probabilities[i] - compensation
+            let t = accumulated + y
+            compensation = (t - accumulated) - y
+            accumulated = t
             if accumulated >= random {
                 return i
             }

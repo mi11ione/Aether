@@ -81,7 +81,7 @@ struct TrotterConfigurationTests {
     @Test("Default configuration has isSortingByCommutation false")
     func defaultSortByCommutation() {
         let config = TrotterConfiguration()
-        #expect(config.isSortingByCommutation == false, "Default isSortingByCommutation should be false")
+        #expect(!config.isSortingByCommutation, "Default isSortingByCommutation should be false")
     }
 
     @Test("Default coefficient threshold is 1e-15")
@@ -105,7 +105,7 @@ struct TrotterConfigurationTests {
     @Test("Custom isSortingByCommutation is preserved")
     func customSortByCommutation() {
         let config = TrotterConfiguration(isSortingByCommutation: true)
-        #expect(config.isSortingByCommutation == true, "Custom isSortingByCommutation should be preserved")
+        #expect(config.isSortingByCommutation, "Custom isSortingByCommutation should be preserved")
     }
 
     @Test("Custom coefficient threshold is preserved")
@@ -125,7 +125,7 @@ struct TrotterConfigurationTests {
 
         #expect(config.order == .sixth, "Order should be sixth")
         #expect(config.steps == 50, "Steps should be 50")
-        #expect(config.isSortingByCommutation == true, "isSortingByCommutation should be true")
+        #expect(config.isSortingByCommutation, "isSortingByCommutation should be true")
         #expect(abs(config.coefficientThreshold - 1e-12) < 1e-17, "Threshold should be 1e-12")
     }
 }

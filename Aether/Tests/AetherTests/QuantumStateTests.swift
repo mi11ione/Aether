@@ -260,17 +260,14 @@ struct QuantumStateDescriptionTests {
         #expect(desc.contains("1 qubit"), "Description should mention qubit count")
     }
 
-    @Test("Near-zero state description")
+    @Test("Near-zero amplitude state description")
     func nearZeroStateDescription() {
-        let amplitudes = [
-            Complex(1e-10, 0.0),
-            Complex(1e-10, 0.0),
-            Complex(1e-10, 0.0),
-            Complex(1e-10, 0.0),
-        ]
-        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
+        var state = QuantumState(qubits: 2)
+        for i in 0 ..< 4 {
+            state.setAmplitude(i, to: Complex(1e-10, 0.0))
+        }
         let desc = state.description
-        #expect(desc.contains("near-zero"), "Near-zero state should show near-zero label")
+        #expect(desc.contains("near-zero"), "State with all sub-threshold amplitudes should show near-zero label")
     }
 }
 
@@ -282,9 +279,8 @@ struct LargeStateVectorizedTests {
     @Test("Normalize large state uses vectorized path")
     func normalizeLargeState() {
         let qubits = 7
-        let amplitudes = [Complex<Double>](repeating: Complex(1.0, 0.0), count: 128)
-        var state = QuantumState(qubits: qubits, amplitudes: amplitudes)
-        #expect(state.isNormalized(), "Auto-normalized state should be normalized")
+        var state = QuantumState(qubits: qubits)
+        #expect(state.isNormalized(), "Ground state should be normalized")
 
         for i in 0 ..< 128 {
             state.setAmplitude(i, to: Complex(2.0, 0.0))
@@ -316,13 +312,14 @@ struct LargeStateVectorizedTests {
         #expect(state.isNormalized(), "Ground state should be normalized")
     }
 
-    @Test("Large state auto-normalizes on init")
-    func largeStateAutoNormalizes() {
+    @Test("Large normalized state accepted on init")
+    func largeNormalizedStateInit() {
         let qubits = 7
-        let amplitudes = [Complex<Double>](repeating: Complex(1.0, 0.0), count: 128)
+        let invSqrtN = 1.0 / sqrt(128.0)
+        let amplitudes = [Complex<Double>](repeating: Complex(invSqrtN, 0.0), count: 128)
         let state = QuantumState(qubits: qubits, amplitudes: amplitudes)
 
-        #expect(state.isNormalized(), "Auto-normalized large state should be normalized")
+        #expect(state.isNormalized(), "Pre-normalized large state should be accepted")
     }
 }
 
@@ -358,21 +355,13 @@ struct AmplitudeMutationTests {
     }
 }
 
-/// Test suite for auto-normalization on initialization.
-/// Validates automatic state vector normalization when constructing
-/// from custom amplitudes that aren't pre-normalized.
-@Suite("Auto-Normalization")
-struct AutoNormalizationTests {
-    @Test("Unnormalized amplitudes get auto-normalized")
-    func autoNormalizeUnnormalized() {
-        let amplitudes = [Complex(2.0, 0.0), Complex(2.0, 0.0)]
-        let state = QuantumState(qubits: 1, amplitudes: amplitudes)
-
-        #expect(state.isNormalized(), "Auto-normalized state should be normalized")
-    }
-
-    @Test("Already normalized amplitudes stay unchanged")
-    func alreadyNormalizedStaysUnchanged() {
+/// Test suite for normalization enforcement on initialization.
+/// Validates that normalized amplitudes are accepted, minor drift is corrected,
+/// and the strict public init rejects grossly unnormalized vectors.
+@Suite("Normalization Enforcement")
+struct NormalizationEnforcementTests {
+    @Test("Normalized amplitudes accepted unchanged")
+    func normalizedAmplitudesAccepted() {
         let invSqrt2 = 1.0 / sqrt(2.0)
         let amplitudes = [Complex(invSqrt2, 0.0), Complex(invSqrt2, 0.0)]
         let state = QuantumState(qubits: 1, amplitudes: amplitudes)
@@ -381,14 +370,23 @@ struct AutoNormalizationTests {
         #expect(abs(state.amplitude(of: 1).real - invSqrt2) < 1e-10, "Normalized amplitude should be unchanged")
     }
 
-    @Test("Complex amplitudes auto-normalize correctly")
-    func complexAmplitudesAutoNormalize() {
+    @Test("Minor floating-point drift corrected")
+    func minorDriftCorrected() {
+        let slightlyOff = 1.0 / sqrt(2.0) + 1e-8
+        let amplitudes = [Complex(slightlyOff, 0.0), Complex(slightlyOff, 0.0)]
+        let state = QuantumState(qubits: 1, amplitudes: amplitudes)
+
+        #expect(state.isNormalized(), "State with minor drift should be renormalized")
+    }
+
+    @Test("Normalized complex amplitudes accepted")
+    func normalizedComplexAmplitudes() {
         let amplitudes = [
-            Complex(1.0, 1.0),
-            Complex(1.0, -1.0),
+            Complex(0.5, 0.5),
+            Complex(0.5, -0.5),
         ]
         let state = QuantumState(qubits: 1, amplitudes: amplitudes)
 
-        #expect(state.isNormalized(), "Complex auto-normalized state should be normalized")
+        #expect(state.isNormalized(), "Normalized complex state should be accepted")
     }
 }

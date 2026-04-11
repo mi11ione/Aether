@@ -85,8 +85,20 @@ public enum LanczosEigensolver {
         }
 
         var lanczosVectors = [[Complex<Double>]](repeating: [], count: krylovDimension + 1)
-        var alphas = [Double](repeating: 0.0, count: krylovDimension)
-        var betas = [Double](repeating: 0.0, count: krylovDimension)
+        var alphas = [Double](unsafeUninitializedCapacity: krylovDimension) {
+            buffer, count in
+            for i in 0 ..< krylovDimension {
+                buffer[i] = 0.0
+            }
+            count = krylovDimension
+        }
+        var betas = [Double](unsafeUninitializedCapacity: krylovDimension) {
+            buffer, count in
+            for i in 0 ..< krylovDimension {
+                buffer[i] = 0.0
+            }
+            count = krylovDimension
+        }
 
         var initialVector = createRandomNormalizedVector(dimension: dimension)
         var previousEigenvalue = Double.infinity
@@ -196,7 +208,13 @@ public enum LanczosEigensolver {
             count: dimension,
         )
 
-        var basisVector = [Complex<Double>](repeating: .zero, count: dimension)
+        var basisVector = [Complex<Double>](unsafeUninitializedCapacity: dimension) {
+            buffer, count in
+            for i in 0 ..< dimension {
+                buffer.initializeElement(at: i, to: .zero)
+            }
+            count = dimension
+        }
         for j in 0 ..< dimension {
             basisVector[j] = .one
             let column = await applying(basisVector)
@@ -242,7 +260,13 @@ public enum LanczosEigensolver {
         let ritzVector = result.eigenvectors[0]
 
         let dimension = lanczosVectors[0].count
-        var eigenvector = [Complex<Double>](repeating: .zero, count: dimension)
+        var eigenvector = [Complex<Double>](unsafeUninitializedCapacity: dimension) {
+            buffer, count in
+            for i in 0 ..< dimension {
+                buffer.initializeElement(at: i, to: .zero)
+            }
+            count = dimension
+        }
 
         for j in 0 ..< size {
             let coefficient = ritzVector[j]
@@ -365,12 +389,11 @@ public enum LanczosEigensolver {
         }
     }
 
-    /// Creates deterministic pseudo-random normalized vector for initial guess.
-    @_effects(readonly)
+    /// Creates pseudo-random normalized vector for Lanczos initial guess.
     @_optimize(speed)
     private static func createRandomNormalizedVector(dimension: Int) -> [Complex<Double>] {
         let vector = [Complex<Double>](unsafeUninitializedCapacity: dimension) { buffer, count in
-            var seed: UInt64 = 12345
+            var seed: UInt64 = .random(in: 0 ... .max)
             for i in 0 ..< dimension {
                 seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
                 let real = Double(Int64(bitPattern: seed)) / Double(Int64.max)

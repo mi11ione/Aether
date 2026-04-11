@@ -246,7 +246,7 @@ struct QASM3ImporterCoverageTests {
         #expect(result.circuit.count >= 1, "parser must continue after subroutine definition")
     }
 
-    @Test("Gate modifier negctrl produces controlled gate with warning")
+    @Test("Gate modifier negctrl sandwiches controlled gate with X on control")
     func parseNegctrlModifier() {
         let source = """
         OPENQASM 3.0;
@@ -255,11 +255,7 @@ struct QASM3ImporterCoverageTests {
         negctrl @ x q[0], q[1];
         """
         let result = QASM3Importer.parse(source)
-        let hasNegctrlWarning = result.diagnostics.contains {
-            $0.severity == .warning && $0.message.contains("negctrl")
-        }
-        #expect(hasNegctrlWarning, "negctrl modifier must produce warning about approximation")
-        #expect(result.circuit.count >= 1, "negctrl-modified gate must produce at least one operation")
+        #expect(result.circuit.count == 3, "negctrl @ x should produce X, CNOT, X (3 operations)")
     }
 
     @Test("Gate modifier pow applies gate repeated times")
@@ -1014,11 +1010,7 @@ struct QASM3ImporterExtendedCoverageTests {
         negctrl(2) @ x q[0], q[1], q[2];
         """
         let result = QASM3Importer.parse(source)
-        let hasNegctrlWarning = result.diagnostics.contains {
-            $0.severity == .warning && $0.message.contains("negctrl")
-        }
-        #expect(hasNegctrlWarning, "negctrl(2) must produce warning about approximation")
-        #expect(result.circuit.count >= 1, "negctrl(2) @ x must produce at least one operation")
+        #expect(result.circuit.count == 5, "negctrl(2) @ x should produce X, X, controlled gate, X, X (5 operations)")
     }
 
     @Test("Pow with non-integer exponent produces warning")

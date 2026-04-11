@@ -168,7 +168,7 @@ public enum GateApplication {
         case let .reset(qubit, _):
             applyReset(qubit: qubit, state: state)
         case let .measure(qubit, _, _):
-            applyReset(qubit: qubit, state: state)
+            applyMeasurement(qubit: qubit, state: state).state
         }
     }
 
@@ -212,7 +212,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     // MARK: - Global Phase Gate Application
@@ -255,7 +255,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     // MARK: - Two-Qubit Gate Application
@@ -309,7 +309,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     // MARK: - CNOT
@@ -343,7 +343,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     /// Apply CZ (Controlled-Z) via conditional phase flip.
@@ -375,7 +375,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     // MARK: - Toffoli Gate Application
@@ -415,7 +415,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     // MARK: - Fredkin Gate Application
@@ -461,7 +461,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     // MARK: - CCZ Gate Application
@@ -513,7 +513,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     // MARK: - iSWAP Gate Application
@@ -556,7 +556,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     // MARK: - FSWAP Gate Application
@@ -600,7 +600,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     // MARK: - RZZ Gate Application
@@ -639,7 +639,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     // MARK: - Diagonal Gate Application
@@ -673,29 +673,84 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
-    // MARK: - Reset Operation
+    // MARK: - Measurement and Reset Operations
 
-    /// Apply mid-circuit reset projecting target qubit to |0⟩ via deterministic projection.
+    /// Apply mid-circuit Born rule measurement projecting target qubit onto computational basis.
     ///
-    /// Reset is the first non-unitary operation in the simulator. Unlike unitary gates that
-    /// apply reversible transformations, reset irreversibly projects the target qubit to |0⟩
-    /// regardless of its current state. The algorithm:
+    /// Performs projective measurement following the Born rule from quantum mechanics:
+    /// 1. Compute P(0) = Σ|aᵢ|² for basis states where target qubit bit is 0
+    /// 2. Sample outcome probabilistically: outcome 0 with probability P(0), outcome 1 with P(1) = 1 - P(0)
+    /// 3. Collapse state by zeroing amplitudes inconsistent with measured outcome
+    /// 4. Renormalize remaining amplitudes by 1/√P(outcome)
     ///
-    /// 1. Compute p0 = probability of target qubit being |0⟩ by summing |amplitude[i]|² for
-    ///    all basis states i where the target qubit bit is 0.
-    /// 2. If p0 >= (1 - p0): project to the |0⟩ subspace by zeroing all amplitudes where the
-    ///    target qubit is |1⟩, then renormalize by 1/sqrt(p0).
-    /// 3. If p0 < (1 - p0): project to the |1⟩ subspace and flip to |0⟩ by copying amplitudes
-    ///    from |1⟩ positions to corresponding |0⟩ positions (differing only in the target qubit
-    ///    bit), zeroing |1⟩ positions, then renormalize by 1/sqrt(1 - p0).
+    /// Unlike ``applyReset(qubit:state:)`` which always projects to |0⟩, measurement
+    /// preserves the measured outcome: a qubit measured as |1⟩ remains in |1⟩.
     ///
-    /// This implements the quantum mechanical description of "measure then conditionally flip":
-    /// the qubit collapses to |0⟩ or |1⟩ with respective probabilities, and if |1⟩ is observed,
-    /// an X gate is applied. The deterministic variant always selects the dominant subspace to
-    /// avoid numerical instability from dividing by near-zero probabilities.
+    /// **Example:**
+    /// ```swift
+    /// let bell = QuantumCircuit.bell().execute()
+    /// let (collapsed, outcome) = GateApplication.applyMeasurement(qubit: 0, state: bell)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - qubit: Target qubit index to measure
+    ///   - state: Input quantum state
+    /// - Returns: Tuple of collapsed quantum state and measurement outcome (0 or 1)
+    /// - Precondition: qubit must be a valid index for state
+    /// - Complexity: O(2^n) time, O(2^n) space
+    @_optimize(speed)
+    @_eagerMove
+    @inlinable
+    public static func applyMeasurement(
+        qubit: Int,
+        state: QuantumState,
+    ) -> (state: QuantumState, outcome: Int) {
+        let stateSize = state.stateSpaceSize
+        let qubitMask = BitUtilities.bitMask(qubit: qubit)
+
+        var prob0 = 0.0
+        for i in 0 ..< stateSize where (i & qubitMask) == 0 {
+            let amp = state.amplitudes[i]
+            prob0 += amp.real * amp.real + amp.imaginary * amp.imaginary
+        }
+
+        var rng = SystemRandomNumberGenerator()
+        let random = Double.random(in: 0 ..< 1, using: &rng)
+        let outcome = random < prob0 ? 0 : 1
+
+        let measuredProb = outcome == 0 ? prob0 : 1.0 - prob0
+        let scale = 1.0 / max(measuredProb, probabilityFloor).squareRoot()
+        let targetBit = outcome == 0 ? 0 : qubitMask
+
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                if (i & qubitMask) == targetBit {
+                    buffer[i] = state.amplitudes[i] * scale
+                } else {
+                    buffer[i] = .zero
+                }
+            }
+            count = stateSize
+        }
+
+        return (QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes), outcome)
+    }
+
+    /// Apply mid-circuit reset projecting target qubit to |0⟩ via probabilistic measurement.
+    ///
+    /// Implements "measure then conditionally flip" following the Born rule:
+    /// 1. Compute P(0) and P(1) = 1 - P(0) for the target qubit
+    /// 2. Probabilistically sample outcome according to Born rule
+    /// 3. Collapse to measured subspace and renormalize
+    /// 4. If outcome was |1⟩, move amplitudes to |0⟩ positions (equivalent to X gate)
+    ///
+    /// The probabilistic sampling ensures correct behavior for entangled states.
+    /// Resetting one qubit of a Bell pair (|00⟩ + |11⟩)/√2 collapses the partner
+    /// qubit to either |0⟩ or |1⟩ with equal probability, rather than deterministically
+    /// selecting the dominant subspace.
     ///
     /// **Example:**
     /// ```swift
@@ -709,11 +764,10 @@ public enum GateApplication {
     ///   - qubit: Target qubit index to reset to |0⟩
     ///   - state: Input quantum state
     /// - Returns: Quantum state with target qubit projected to |0⟩ and remaining qubits
-    ///   renormalized within the projected subspace
+    ///   renormalized within the probabilistically selected subspace
     /// - Precondition: qubit must be a valid index for state
     /// - Complexity: O(2^n) time, O(2^n) space
     @_optimize(speed)
-    @_effects(readonly)
     @_eagerMove
     @inlinable
     public static func applyReset(
@@ -729,7 +783,10 @@ public enum GateApplication {
             prob0 += amp.real * amp.real + amp.imaginary * amp.imaginary
         }
 
-        if prob0 >= 1.0 - prob0 {
+        var rng = SystemRandomNumberGenerator()
+        let random = Double.random(in: 0 ..< 1, using: &rng)
+
+        if random < prob0 {
             let scale = 1.0 / max(prob0, probabilityFloor).squareRoot()
 
             let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
@@ -743,7 +800,7 @@ public enum GateApplication {
                 count = stateSize
             }
 
-            return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+            return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
         } else {
             let prob1 = 1.0 - prob0
             let scale = 1.0 / max(prob1, probabilityFloor).squareRoot()
@@ -760,7 +817,7 @@ public enum GateApplication {
                 count = stateSize
             }
 
-            return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+            return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
         }
     }
 
@@ -826,7 +883,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     // MARK: - Multi-Qubit Gate Application
@@ -885,7 +942,7 @@ public enum GateApplication {
             count = stateSize
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 }
 

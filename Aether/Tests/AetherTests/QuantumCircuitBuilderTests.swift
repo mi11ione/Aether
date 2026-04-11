@@ -330,7 +330,7 @@ struct QuantumCircuitBuilderInitTests {
             GateStep(.hadamard, on: 0)
         }
         #expect(circuit.qubits == 1, "Auto-optimized circuit should have 1 qubit")
-        #expect(circuit.isAutoOptimizing == true, "Circuit should have isAutoOptimizing enabled")
+        #expect(circuit.isAutoOptimizing, "Circuit should have isAutoOptimizing enabled")
     }
 
     @Test("Builder includes non-unitary operations")

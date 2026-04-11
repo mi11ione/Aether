@@ -219,7 +219,14 @@ public enum SVDDecomposition {
             }
         }
 
-        ValidationUtilities.validateLAPACKSuccess(info, operation: "zgesdd_ computation")
+        if info > 0 {
+            performGesvdFallback(
+                matrix: matrix, m: m, n: n, minDim: minDim,
+                singularValues: &singularValues, uMatrix: &uMatrix, vtMatrix: &vtMatrix,
+            )
+        } else {
+            ValidationUtilities.validateLAPACKSuccess(info, operation: "zgesdd_ computation")
+        }
 
         let keepCount = computeKeepCount(singularValues: singularValues, truncation: truncation)
 
@@ -369,5 +376,100 @@ public enum SVDDecomposition {
             }
             rowCount = keepRows
         }
+    }
+
+    /// Falls back to QR-based SVD (zgesvd_) when divide-and-conquer (zgesdd_) fails to converge.
+    @_optimize(speed)
+    private static func performGesvdFallback(
+        matrix: [[Complex<Double>]],
+        m: Int, n: Int, minDim: Int,
+        singularValues: inout [Double],
+        uMatrix: inout [Double],
+        vtMatrix: inout [Double],
+    ) {
+        var a = convertToColumnMajorInterleaved(matrix, rows: m, cols: n)
+
+        var jobu = CChar(Character("S").asciiValue!)
+        var jobvt = CChar(Character("S").asciiValue!)
+        var mm = __LAPACK_int(m)
+        var nn = __LAPACK_int(n)
+        var lda = __LAPACK_int(m)
+        var ldu = __LAPACK_int(m)
+        var ldvt = __LAPACK_int(minDim)
+        var lwork = __LAPACK_int(-1)
+        var info = __LAPACK_int(0)
+
+        let rworkSize = max(1, 5 * minDim)
+        var rwork = [Double](unsafeUninitializedCapacity: rworkSize) {
+            _, count in count = rworkSize
+        }
+
+        var workQuery = [Double](unsafeUninitializedCapacity: 2) {
+            _, count in count = 2
+        }
+
+        a.withUnsafeMutableBytes { aPtr in
+            singularValues.withUnsafeMutableBufferPointer { sPtr in
+                uMatrix.withUnsafeMutableBytes { uPtr in
+                    vtMatrix.withUnsafeMutableBytes { vtPtr in
+                        workQuery.withUnsafeMutableBytes { workPtr in
+                            rwork.withUnsafeMutableBufferPointer { rworkPtr in
+                                zgesvd_(
+                                    &jobu, &jobvt, &mm, &nn,
+                                    OpaquePointer(aPtr.baseAddress),
+                                    &lda,
+                                    sPtr.baseAddress,
+                                    OpaquePointer(uPtr.baseAddress),
+                                    &ldu,
+                                    OpaquePointer(vtPtr.baseAddress),
+                                    &ldvt,
+                                    OpaquePointer(workPtr.baseAddress!),
+                                    &lwork,
+                                    rworkPtr.baseAddress,
+                                    &info,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        ValidationUtilities.validateLAPACKSuccess(info, operation: "zgesvd_ workspace query")
+
+        let optimalWorkSize = max(1, Int(workQuery[0]))
+        lwork = __LAPACK_int(optimalWorkSize)
+        var work = [Double](unsafeUninitializedCapacity: 2 * optimalWorkSize) {
+            _, count in count = 2 * optimalWorkSize
+        }
+
+        a.withUnsafeMutableBytes { aPtr in
+            singularValues.withUnsafeMutableBufferPointer { sPtr in
+                uMatrix.withUnsafeMutableBytes { uPtr in
+                    vtMatrix.withUnsafeMutableBytes { vtPtr in
+                        work.withUnsafeMutableBytes { workPtr in
+                            rwork.withUnsafeMutableBufferPointer { rworkPtr in
+                                zgesvd_(
+                                    &jobu, &jobvt, &mm, &nn,
+                                    OpaquePointer(aPtr.baseAddress),
+                                    &lda,
+                                    sPtr.baseAddress,
+                                    OpaquePointer(uPtr.baseAddress),
+                                    &ldu,
+                                    OpaquePointer(vtPtr.baseAddress),
+                                    &ldvt,
+                                    OpaquePointer(workPtr.baseAddress!),
+                                    &lwork,
+                                    rworkPtr.baseAddress,
+                                    &info,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        ValidationUtilities.validateLAPACKSuccess(info, operation: "zgesvd_ fallback computation")
     }
 }

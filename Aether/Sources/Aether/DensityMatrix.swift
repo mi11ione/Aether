@@ -706,7 +706,7 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         case let .reset(qubit, _):
             applyReset(qubit: qubit)
         case let .measure(qubit, _, _):
-            applyReset(qubit: qubit)
+            applyMeasurement(qubit: qubit)
         }
     }
 
@@ -764,6 +764,39 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         return DensityMatrix(qubits: qubits, elements: newElements)
     }
 
+    /// Non-selective measurement channel ρ → P₀ρP₀ + P₁ρP₁ decohering in computational basis.
+    ///
+    /// - Complexity: O(4^n) time, O(4^n) space
+    @_optimize(speed)
+    @_effects(readonly)
+    @_eagerMove
+    private func applyMeasurement(qubit: Int) -> DensityMatrix {
+        let dim = dimension
+        let size = dim * dim
+        let mask = 1 << qubit
+
+        let newElements = [Complex<Double>](unsafeUninitializedCapacity: size) {
+            buffer, count in
+            buffer.initialize(repeating: .zero)
+
+            for row in 0 ..< dim where row & mask == 0 {
+                for col in 0 ..< dim where col & mask == 0 {
+                    buffer[row * dim + col] = elements[row * dim + col]
+                }
+            }
+
+            for row in 0 ..< dim where row & mask != 0 {
+                for col in 0 ..< dim where col & mask != 0 {
+                    buffer[row * dim + col] = elements[row * dim + col]
+                }
+            }
+
+            count = size
+        }
+
+        return DensityMatrix(qubits: qubits, elements: newElements)
+    }
+
     /// Apply reset channel on the specified qubit by tracing out and replacing with |0⟩.
     @_optimize(speed)
     @_effects(readonly)
@@ -800,44 +833,62 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
     @_effects(readonly)
     @_eagerMove
     private func applyTwoQubitGate(gate: QuantumGate, qubit0: Int, qubit1: Int) -> DensityMatrix {
-        let gateMatrix = gate.matrix()
+        let g = gate.matrix()
         let dim = dimension
         let size = dim * dim
         let mask0 = 1 << qubit0
         let mask1 = 1 << qubit1
+        let clearMask = ~mask0 & ~mask1
+
+        let uRows = [
+            (g[0][0], g[0][1], g[0][2], g[0][3]),
+            (g[1][0], g[1][1], g[1][2], g[1][3]),
+            (g[2][0], g[2][1], g[2][2], g[2][3]),
+            (g[3][0], g[3][1], g[3][2], g[3][3]),
+        ]
+
+        let uColsD = [
+            (g[0][0].conjugate, g[0][1].conjugate, g[0][2].conjugate, g[0][3].conjugate),
+            (g[1][0].conjugate, g[1][1].conjugate, g[1][2].conjugate, g[1][3].conjugate),
+            (g[2][0].conjugate, g[2][1].conjugate, g[2][2].conjugate, g[2][3].conjugate),
+            (g[3][0].conjugate, g[3][1].conjugate, g[3][2].conjugate, g[3][3].conjugate),
+        ]
 
         var newElements = [Complex<Double>](unsafeUninitializedCapacity: size) {
-            buffer, count in
-            buffer.initialize(repeating: .zero)
+            _, count in
             count = size
         }
 
         for row in 0 ..< dim {
+            let rowIdx = (((row >> qubit0) & 1) << 1) | ((row >> qubit1) & 1)
+            let rowBase = row & clearMask
+            let r0 = rowBase * dim
+            let r1 = (rowBase | mask1) * dim
+            let r2 = (rowBase | mask0) * dim
+            let r3 = (rowBase | mask0 | mask1) * dim
+
+            let (uR0, uR1, uR2, uR3) = uRows[rowIdx]
+
             for col in 0 ..< dim {
-                var sum = Complex<Double>.zero
+                let colIdx = (((col >> qubit0) & 1) << 1) | ((col >> qubit1) & 1)
+                let colBase = col & clearMask
+                let c0 = colBase
+                let c1 = colBase | mask1
+                let c2 = colBase | mask0
+                let c3 = colBase | mask0 | mask1
 
-                for a in 0 ..< 4 {
-                    let aRow = (row & ~mask0 & ~mask1) |
-                        (((a >> 1) & 1) << qubit0) |
-                        ((a & 1) << qubit1)
+                let (udC0, udC1, udC2, udC3) = uColsD[colIdx]
 
-                    for b in 0 ..< 4 {
-                        let bCol = (col & ~mask0 & ~mask1) |
-                            (((b >> 1) & 1) << qubit0) |
-                            ((b & 1) << qubit1)
+                let v0 = elements[r0 + c0] * udC0 + elements[r0 + c1] * udC1
+                    + elements[r0 + c2] * udC2 + elements[r0 + c3] * udC3
+                let v1 = elements[r1 + c0] * udC0 + elements[r1 + c1] * udC1
+                    + elements[r1 + c2] * udC2 + elements[r1 + c3] * udC3
+                let v2 = elements[r2 + c0] * udC0 + elements[r2 + c1] * udC1
+                    + elements[r2 + c2] * udC2 + elements[r2 + c3] * udC3
+                let v3 = elements[r3 + c0] * udC0 + elements[r3 + c1] * udC1
+                    + elements[r3 + c2] * udC2 + elements[r3 + c3] * udC3
 
-                        let rowIdx = (((row >> qubit0) & 1) << 1) | ((row >> qubit1) & 1)
-                        let colIdx = (((col >> qubit0) & 1) << 1) | ((col >> qubit1) & 1)
-
-                        let uElement = gateMatrix[rowIdx][a]
-                        let uDaggerElement = gateMatrix[b][colIdx].conjugate
-                        let rhoElement = elements[aRow * dim + bCol]
-
-                        sum = sum + uElement * rhoElement * uDaggerElement
-                    }
-                }
-
-                newElements[row * dim + col] = sum
+                newElements[row * dim + col] = uR0 * v0 + uR1 * v1 + uR2 * v2 + uR3 * v3
             }
         }
 
@@ -998,7 +1049,7 @@ public struct DensityMatrix: Equatable, CustomStringConvertible, Sendable {
         }
         let dominantIdx = Int(maxIdx)
         let amplitudes = eigen.eigenvectors.map { $0[dominantIdx] }
-        return QuantumState(qubits: qubits, amplitudes: amplitudes)
+        return QuantumState(qubits: qubits, rawAmplitudes: amplitudes)
     }
 
     // MARK: - CustomStringConvertible

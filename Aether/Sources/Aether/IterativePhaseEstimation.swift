@@ -421,7 +421,7 @@ public actor IterativePhaseEstimation {
             }
         }
 
-        return QuantumState(qubits: totalQubits, amplitudes: amplitudes)
+        return QuantumState(qubits: totalQubits, rawAmplitudes: amplitudes)
     }
 }
 

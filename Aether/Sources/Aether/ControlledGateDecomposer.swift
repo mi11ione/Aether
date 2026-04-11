@@ -487,63 +487,48 @@ public enum ControlledGateDecomposer {
         return result
     }
 
-    /// Extract half of a parameter value.
+    /// Extract half of a parameter value via expression tree division.
     @inline(__always)
     @_optimize(speed)
     @_effects(readonly)
     private static func halved(_ value: ParameterValue) -> ParameterValue {
         switch value {
         case let .value(v):
-            return .value(v / 2.0)
-        case let .parameter(p):
-            return .parameter(Parameter(name: p.name + "_half"))
-        case let .negatedParameter(p):
-            return .negatedParameter(Parameter(name: p.name + "_half"))
-        case let .expression(expr):
-            let evaluated = expr.evaluate(using: [:])
-            ValidationUtilities.validateEvaluatedExpression(evaluated)
-            return .value(evaluated / 2.0)
+            .value(v / 2.0)
+        default:
+            .expression(asExpression(value) / ParameterExpression(2.0))
         }
     }
 
-    /// Combine two parameter values by addition or subtraction.
+    /// Combine two parameter values via expression tree addition or subtraction.
     @inline(__always)
     @_optimize(speed)
     @_effects(readonly)
     private static func combine(_ a: ParameterValue, _ b: ParameterValue, adding: Bool) -> ParameterValue {
-        let op: (Double, Double) -> Double = adding ? { $0 + $1 } : { $0 - $1 }
-        let sep = adding ? "_plus_" : "_minus_"
-
         switch (a, b) {
         case let (.value(v1), .value(v2)):
-            return .value(op(v1, v2))
-        case let (.parameter(p1), .parameter(p2)):
-            return .parameter(Parameter(name: p1.name + sep + p2.name))
-        case let (.value(v), .parameter(p)):
-            if adding {
-                return .parameter(Parameter(name: p.name + sep + String(v)))
-            }
-            return .parameter(Parameter(name: String(v) + sep + p.name))
-        case let (.parameter(p), .value(v)):
-            return .parameter(Parameter(name: p.name + sep + String(v)))
-        case let (.negatedParameter(p1), .negatedParameter(p2)):
-            return .parameter(Parameter(name: "-" + p1.name + sep + "-" + p2.name))
-        case let (.negatedParameter(p), .value(v)):
-            return .parameter(Parameter(name: "-" + p.name + sep + String(v)))
-        case let (.value(v), .negatedParameter(p)):
-            return .parameter(Parameter(name: String(v) + sep + "-" + p.name))
-        case let (.parameter(p1), .negatedParameter(p2)):
-            return .parameter(Parameter(name: p1.name + sep + "-" + p2.name))
-        case let (.negatedParameter(p1), .parameter(p2)):
-            return .parameter(Parameter(name: "-" + p1.name + sep + p2.name))
-        case let (.expression(expr), other):
-            let evaluated = expr.evaluate(using: [:])
-            ValidationUtilities.validateEvaluatedExpression(evaluated)
-            return combine(.value(evaluated), other, adding: adding)
-        case let (other, .expression(expr)):
-            let evaluated = expr.evaluate(using: [:])
-            ValidationUtilities.validateEvaluatedExpression(evaluated)
-            return combine(other, .value(evaluated), adding: adding)
+            return .value(adding ? v1 + v2 : v1 - v2)
+        default:
+            let exprA = asExpression(a)
+            let exprB = asExpression(b)
+            return .expression(adding ? exprA + exprB : exprA - exprB)
+        }
+    }
+
+    /// Converts any ParameterValue to a ParameterExpression.
+    @inline(__always)
+    @_optimize(speed)
+    @_effects(readonly)
+    private static func asExpression(_ value: ParameterValue) -> ParameterExpression {
+        switch value {
+        case let .value(v):
+            ParameterExpression(v)
+        case let .parameter(p):
+            ParameterExpression(p)
+        case let .negatedParameter(p):
+            -ParameterExpression(p)
+        case let .expression(expr):
+            expr
         }
     }
 }

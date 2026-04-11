@@ -296,7 +296,7 @@ struct GradientDescentOptimizerTests {
 
         #expect(optimizer.learningRate == 0.1, "Default learning rate should be 0.1")
         #expect(optimizer.momentum == 0.0, "Default momentum should be 0.0")
-        #expect(optimizer.isLearningRateAdaptive == true, "Default should enable adaptive learning rate")
+        #expect(optimizer.isLearningRateAdaptive, "Default should enable adaptive learning rate")
         #expect(abs(optimizer.parameterShift - .pi / 2) < 1e-10, "Default parameter shift should be pi/2")
     }
 
@@ -311,7 +311,7 @@ struct GradientDescentOptimizerTests {
 
         #expect(optimizer.learningRate == 0.05, "Custom learning rate should be 0.05")
         #expect(optimizer.momentum == 0.9, "Custom momentum should be 0.9")
-        #expect(optimizer.isLearningRateAdaptive == false, "Custom value should disable adaptive learning rate")
+        #expect(!optimizer.isLearningRateAdaptive, "Custom value should disable adaptive learning rate")
         #expect(optimizer.parameterShift == 0.01, "Custom parameter shift should be 0.01")
     }
 

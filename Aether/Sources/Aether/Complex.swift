@@ -451,35 +451,35 @@ public struct Complex<T: ComplexScalar>: Equatable, Hashable, CustomStringConver
 
     // MARK: - Equatable
 
-    /// Epsilon-based equality for floating-point tolerance
+    /// Epsilon-quantized bucket equality for floating-point tolerance.
     ///
-    /// Two complex numbers are equal if both real and imaginary components differ by less
-    /// than epsilon (1e-10 for Double, 1e-6 for Float). Essential for quantum state comparisons
-    /// where exact floating-point equality is unreliable.
+    /// Both components are quantized to epsilon-width bins via
+    /// `Int64((value / epsilon).rounded())`; two values are equal when they fall in the
+    /// same bin. Guarantees the Hashable contract: equal values always produce identical hashes.
     ///
     /// **Example:**
     /// ```swift
     /// let z1 = Complex(1.0, 0.0)
     /// let z2 = Complex(1.0 + 1e-11, 0.0)
-    /// print(z1 == z2)  // true (within epsilon)
+    /// print(z1 == z2)  // true (same epsilon bucket)
     /// ```
     @_specialize(exported: true, where T == Double)
     @_specialize(exported: true, where T == Float)
     @_effects(readonly)
     @inlinable
     public static func == (lhs: Complex<T>, rhs: Complex<T>) -> Bool {
-        let tolerance = T.epsilon
-        return T.absoluteValue(of: lhs.real - rhs.real) < tolerance &&
-            T.absoluteValue(of: lhs.imaginary - rhs.imaginary) < tolerance
+        let invEpsilon = T.one / T.epsilon
+        return Int64((lhs.real * invEpsilon).rounded()) == Int64((rhs.real * invEpsilon).rounded()) &&
+            Int64((lhs.imaginary * invEpsilon).rounded()) == Int64((rhs.imaginary * invEpsilon).rounded())
     }
 
     // MARK: - Hashable
 
-    /// Epsilon-quantized hashing for Set and Dictionary compatibility
+    /// Epsilon-quantized hashing consistent with ``==(_:_:)`` bucket comparison.
     ///
-    /// Rounds components to epsilon boundaries before hashing, ensuring approximately
-    /// equal values (per ``==(_:_:)`` definition) hash to same bucket. Enables use in Set
-    /// and Dictionary collections without hash/equality contract violations.
+    /// Both equality and hashing quantize components to the same epsilon-width
+    /// bins via `Int64((component / epsilon).rounded())`, guaranteeing the
+    /// Hashable contract: equal values always produce identical hashes.
     ///
     /// **Example:**
     /// ```swift

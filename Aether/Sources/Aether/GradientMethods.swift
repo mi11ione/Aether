@@ -91,13 +91,13 @@ public enum GradientMethods {
 
     /// Compute all parameter gradients via adjoint (reverse-mode) differentiation.
     ///
-    /// Performs one forward pass storing intermediate statevectors, applies the observable to the
-    /// final state, then accumulates gradients by reverse-iterating through circuit gates. Each
-    /// parametric gate contributes ∂E/∂θₖ = 2·Re(⟨λⱼ|∂Uⱼ/∂θₖ|φⱼ⟩) where |φⱼ⟩ is the forward
-    /// state before gate j and |λⱼ⟩ is the adjoint state propagated backward from O|ψ⟩. This
-    /// achieves O(1) circuit evaluations for the full gradient regardless of parameter count,
-    /// compared to O(2p) for parameter shift. The default gradient method for all simulation
-    /// workloads where statevector access is available.
+    /// Performs one forward pass to obtain the final statevector, applies the observable, then
+    /// accumulates gradients by reverse-iterating through circuit gates while recomputing intermediate
+    /// states on-the-fly via inverse gate application. Each parametric gate contributes
+    /// ∂E/∂θₖ = 2·Re(⟨λⱼ|∂Uⱼ/∂θₖ|φⱼ⟩) where |φⱼ⟩ is the forward state before gate j and |λⱼ⟩
+    /// is the adjoint state propagated backward from O|ψ⟩. This achieves O(1) circuit evaluations
+    /// for the full gradient regardless of parameter count, compared to O(2p) for parameter shift.
+    /// The default gradient method for all simulation workloads where statevector access is available.
     ///
     /// - Parameters:
     ///   - circuit: Parameterized quantum circuit with symbolic parameters
@@ -106,7 +106,7 @@ public enum GradientMethods {
     /// - Returns: Gradient vector with one entry per circuit parameter
     /// - Precondition: parameters.count == circuit.parameterCount
     /// - Precondition: Circuit contains only unitary gate operations
-    /// - Complexity: O(L·2ⁿ) time for L gates and n qubits, O(L·2ⁿ) memory for intermediate states
+    /// - Complexity: O(L·2ⁿ) time for L gates and n qubits, O(2ⁿ) memory
     /// - SeeAlso: ``stochasticParameterShift(_:at:shift:)`` for hardware execution
     /// - SeeAlso: ``adjointHessian(circuit:observable:parameters:)`` for second-order information
     ///
@@ -120,6 +120,7 @@ public enum GradientMethods {
     /// ```
     @_optimize(speed)
     @_eagerMove
+    @_effects(readonly)
     public static func adjoint(
         circuit: QuantumCircuit,
         observable: Observable,
@@ -132,7 +133,6 @@ public enum GradientMethods {
         guard paramCount > 0 else { return [] }
 
         let qubitCount = circuit.qubits
-        let stateSize = 1 << qubitCount
 
         var paramNameToIndex: [String: Int] = [:]
         paramNameToIndex.reserveCapacity(paramCount)
@@ -148,25 +148,14 @@ public enum GradientMethods {
         let originalOps = circuit.operations
         let opCount = boundOps.count
 
-        var forwardStates: [[Complex<Double>]] = []
-        forwardStates.reserveCapacity(opCount + 1)
-
-        let initialAmps = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
-            buffer.initialize(repeating: .zero)
-            buffer[0] = .one
-            count = stateSize
-        }
-        forwardStates.append(initialAmps)
-
         var currentState = QuantumState(qubits: qubitCount)
         for i in 0 ..< opCount {
             currentState = GateApplication.apply(boundOps[i], state: currentState)
-            forwardStates.append(currentState.amplitudes)
         }
 
         var lambda = applyObservableToAmplitudes(
             observable,
-            amplitudes: forwardStates[opCount],
+            amplitudes: currentState.amplitudes,
             qubitCount: qubitCount,
         )
 
@@ -176,16 +165,31 @@ public enum GradientMethods {
             count = paramCount
         }
 
+        var forwardAmps = currentState.amplitudes
+
         for j in stride(from: opCount - 1, through: 0, by: -1) {
             guard case let .gate(originalGate, qubits, _) = originalOps[j] else {
                 continue
             }
 
+            guard case let .gate(boundGate, boundQubits, _) = boundOps[j] else {
+                continue
+            }
+
+            let inverseMatrix = boundGate.inverse.matrix()
+
+            let stateBeforeAmps = applyGateMatrixToAmplitudes(
+                inverseMatrix,
+                qubits: boundQubits,
+                amplitudes: forwardAmps,
+                qubitCount: qubitCount,
+            )
+
             let derivatives = computeGateDerivatives(
                 originalGate: originalGate,
                 qubits: qubits,
-                stateAfterAmplitudes: forwardStates[j + 1],
-                stateBeforeAmplitudes: forwardStates[j],
+                stateAfterAmplitudes: forwardAmps,
+                stateBeforeAmplitudes: stateBeforeAmps,
                 paramNameToIndex: paramNameToIndex,
                 parameterBindings: parameterBindings,
                 qubitCount: qubitCount,
@@ -196,14 +200,14 @@ public enum GradientMethods {
                 gradient[entry.parameterIndex] += 2.0 * entry.signMultiplier * ip.real
             }
 
-            if case let .gate(boundGate, boundQubits, _) = boundOps[j] {
-                lambda = applyGateMatrixToAmplitudes(
-                    boundGate.inverse.matrix(),
-                    qubits: boundQubits,
-                    amplitudes: lambda,
-                    qubitCount: qubitCount,
-                )
-            }
+            lambda = applyGateMatrixToAmplitudes(
+                inverseMatrix,
+                qubits: boundQubits,
+                amplitudes: lambda,
+                qubitCount: qubitCount,
+            )
+
+            forwardAmps = stateBeforeAmps
         }
 
         return gradient

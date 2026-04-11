@@ -738,8 +738,12 @@ func sampleOutcomesFromDistribution(
     var cdf = [Double](unsafeUninitializedCapacity: probabilities.count) {
         buffer, count in
         var cumulative = 0.0
+        var compensation = 0.0
         for i in 0 ..< probabilities.count {
-            cumulative += max(0, probabilities[i])
+            let y = max(0, probabilities[i]) - compensation
+            let t = cumulative + y
+            compensation = (t - cumulative) - y
+            cumulative = t
             buffer[i] = cumulative
         }
         count = probabilities.count

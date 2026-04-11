@@ -139,34 +139,34 @@ struct ParameterExpressionIsSymbolicTests {
     @Test("Constant expression is not symbolic")
     func constantNotSymbolic() {
         let expr = ParameterExpression(3.14)
-        #expect(expr.isSymbolic == false, "Constant should not be symbolic")
+        #expect(!expr.isSymbolic, "Constant should not be symbolic")
     }
 
     @Test("Parameter expression is symbolic")
     func parameterIsSymbolic() {
         let theta = Parameter(name: "theta")
         let expr = ParameterExpression(theta)
-        #expect(expr.isSymbolic == true, "Parameter should be symbolic")
+        #expect(expr.isSymbolic, "Parameter should be symbolic")
     }
 
     @Test("Expression with parameter is symbolic")
     func expressionWithParameterIsSymbolic() {
         let theta = Parameter(name: "theta")
         let expr = ParameterExpression(2.0) * ParameterExpression(theta)
-        #expect(expr.isSymbolic == true, "Expression containing parameter should be symbolic")
+        #expect(expr.isSymbolic, "Expression containing parameter should be symbolic")
     }
 
     @Test("Expression of only constants is not symbolic")
     func expressionOfConstantsNotSymbolic() {
         let expr = ParameterExpression(2.0) + ParameterExpression(3.0)
-        #expect(expr.isSymbolic == false, "Expression of constants only should not be symbolic")
+        #expect(!expr.isSymbolic, "Expression of constants only should not be symbolic")
     }
 
     @Test("Unary expression with parameter is symbolic")
     func unaryExpressionWithParameterIsSymbolic() {
         let theta = Parameter(name: "theta")
         let expr = ParameterExpression.sin(ParameterExpression(theta))
-        #expect(expr.isSymbolic == true, "sin(theta) should be symbolic")
+        #expect(expr.isSymbolic, "sin(theta) should be symbolic")
     }
 }
 

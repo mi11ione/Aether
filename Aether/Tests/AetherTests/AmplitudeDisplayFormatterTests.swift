@@ -60,7 +60,7 @@ struct AmplitudeDisplayFormatterFilteringTests {
     @Test("Amplitudes below threshold are omitted from output")
     func thresholdFiltering() {
         let state = QuantumState(qubits: 2, amplitudes: [
-            Complex(0.999, 0.0), Complex(0.001, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0),
+            Complex(0.9999995, 0.0), Complex(0.001, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0),
         ])
         let output = AmplitudeDisplayFormatter.render(state, threshold: 0.01)
 
@@ -94,7 +94,7 @@ struct AmplitudeDisplayFormatterFilteringTests {
     @Test("Zero threshold includes all non-zero amplitudes")
     func zeroThreshold() {
         let state = QuantumState(qubits: 1, amplitudes: [
-            Complex(0.99, 0.0), Complex(0.01, 0.0),
+            Complex(sqrt(0.99), 0.0), Complex(sqrt(0.01), 0.0),
         ])
         let output = AmplitudeDisplayFormatter.render(state, threshold: 0.0)
 
@@ -192,8 +192,10 @@ struct AmplitudeDisplayFormatterPhaseTests {
 struct AmplitudeDisplayFormatterSortingAndEnumTests {
     @Test("Entries are sorted by descending probability")
     func sortedByDescendingProbability() throws {
+        let sqrtPoint04 = sqrt(0.04)
+        let sqrtPoint96 = sqrt(0.96)
         let state = QuantumState(qubits: 2, amplitudes: [
-            Complex(0.2, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(0.9, 0.0),
+            Complex(sqrtPoint04, 0.0), Complex(0.0, 0.0), Complex(0.0, 0.0), Complex(sqrtPoint96, 0.0),
         ])
         let output = AmplitudeDisplayFormatter.render(state)
         let lines = output.split(separator: "\n")

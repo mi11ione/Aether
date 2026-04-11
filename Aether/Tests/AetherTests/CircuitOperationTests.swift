@@ -49,7 +49,7 @@ struct ResetParameterizationTests {
     @Test("Reset is not parameterized")
     func resetIsNotParameterized() {
         let op = CircuitOperation.reset(qubit: 0)
-        #expect(op.isParameterized == false, "Reset operations should never be parameterized")
+        #expect(!op.isParameterized, "Reset operations should never be parameterized")
     }
 
     @Test("Gate operation delegates isParameterized to underlying gate")
@@ -70,13 +70,13 @@ struct ResetUnitarityTests {
     @Test("Reset is not unitary")
     func resetIsNotUnitary() {
         let op = CircuitOperation.reset(qubit: 0)
-        #expect(op.isUnitary == false, "Reset operations are irreversible and should report as non-unitary")
+        #expect(!op.isUnitary, "Reset operations are irreversible and should report as non-unitary")
     }
 
     @Test("Gate operation is unitary")
     func gateIsUnitary() {
         let op = CircuitOperation.gate(.hadamard, qubits: [0])
-        #expect(op.isUnitary == true, "Gate operations should report as unitary")
+        #expect(op.isUnitary, "Gate operations should report as unitary")
     }
 }
 

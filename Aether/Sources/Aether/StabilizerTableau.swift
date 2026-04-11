@@ -33,7 +33,8 @@ import GameplayKit
     /// **Example:**
     /// ```swift
     /// let tableau = StabilizerTableau(qubits: 5)
-    /// print(tableau.qubits)  // 5
+    /// let n = tableau.qubits
+    /// print(n)  // 5
     /// ```
     public let qubits: Int
 
@@ -45,7 +46,8 @@ import GameplayKit
     /// **Example:**
     /// ```swift
     /// let tableau = StabilizerTableau(qubits: 2)
-    /// print(tableau.isStabilizerState)  // true
+    /// let valid = tableau.isStabilizerState
+    /// print(valid)  // true
     /// ```
     @inlinable
     public var isStabilizerState: Bool {
@@ -59,7 +61,8 @@ import GameplayKit
     /// **Example:**
     /// ```swift
     /// let tableau = StabilizerTableau(qubits: 100)
-    /// print(tableau.memoryUsage)  // ~5000 bytes
+    /// let bytes = tableau.memoryUsage
+    /// print(bytes)  // ~5000 bytes
     /// ```
     @inlinable
     public var memoryUsage: Int {
@@ -74,7 +77,8 @@ import GameplayKit
     /// **Example:**
     /// ```swift
     /// let tableau = StabilizerTableau(qubits: 3)
-    /// // Initial state: |000>
+    /// print(tableau.qubits)  // 3
+    /// print(tableau.isStabilizerState)  // true
     /// ```
     ///
     /// - Parameter qubits: Number of qubits (must be positive)
@@ -114,6 +118,7 @@ import GameplayKit
     ///   - gate: Single-qubit Clifford gate to apply
     ///   - qubit: Target qubit index (0 to n-1)
     /// - Precondition: `qubit` must be in range 0 to n-1
+    /// - Precondition: `gate` must be a single-qubit Clifford gate
     /// - Complexity: O(n)
     @inlinable
     @_optimize(speed)
@@ -145,7 +150,7 @@ import GameplayKit
             applyS(qubit)
             applyHadamard(qubit)
         default:
-            break
+            ValidationUtilities.validateSingleQubitCliffordGate(gate)
         }
     }
 
@@ -165,6 +170,7 @@ import GameplayKit
     ///   - gate: Multi-qubit Clifford gate to apply
     ///   - qubits: Target qubit indices (order depends on gate type)
     /// - Precondition: `qubits` must contain exactly 2 indices, each in range 0 to n-1
+    /// - Precondition: `gate` must be a multi-qubit Clifford gate (cnot, cz, or swap)
     /// - Complexity: O(n)
     @inlinable
     @_optimize(speed)
@@ -188,7 +194,7 @@ import GameplayKit
             applyCNOT(control: qubits[1], target: qubits[0])
             applyCNOT(control: qubits[0], target: qubits[1])
         default:
-            break
+            ValidationUtilities.validateMultiQubitCliffordGate(gate)
         }
     }
 
@@ -323,6 +329,77 @@ import GameplayKit
         }
 
         return random ? 1 : 0
+    }
+
+    /// Projects qubit onto a specified measurement outcome without randomness.
+    ///
+    /// Unlike ``measure(_:seed:)`` which randomly selects an outcome for non-stabilized qubits,
+    /// this method forces the collapse to `outcome`. Returns the coefficient scaling factor
+    /// for the stabilizer rank decomposition, or nil if the outcome is inconsistent with a
+    /// deterministic stabilizer eigenvalue.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var tableau = StabilizerTableau(qubits: 2)
+    /// tableau.apply(.hadamard, to: 0)
+    /// let scale = tableau.projectMeasurement(0, outcome: 0)
+    /// // scale ≈ 0.707 (1/√2, random case forced to |0⟩)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - qubit: Qubit index to measure (0 to n-1)
+    ///   - outcome: Desired measurement outcome (0 or 1)
+    /// - Returns: Coefficient scaling factor (1.0 for deterministic match, 1/√2 for random),
+    ///   or nil if deterministic outcome does not match
+    /// - Precondition: `qubit` must be in range 0 to n-1
+    /// - Precondition: `outcome` must be 0 or 1
+    /// - Complexity: O(n^2)
+    ///
+    /// - SeeAlso: ``measure(_:seed:)``
+    @inlinable
+    @_optimize(speed)
+    public mutating func projectMeasurement(_ qubit: Int, outcome: Int) -> Double? {
+        ValidationUtilities.validateQubitIndex(qubit, qubits: n)
+        ValidationUtilities.validateBinaryValue(outcome, name: "outcome")
+
+        var anticommutingRow: Int? = nil
+        for row in n ..< 2 * n {
+            if getX(row: row, qubit: qubit) {
+                anticommutingRow = row
+                break
+            }
+        }
+
+        guard let p = anticommutingRow else {
+            var phase = false
+            for row in n ..< 2 * n {
+                if getZ(row: row, qubit: qubit) {
+                    phase = phase != getPhase(row: row)
+                }
+            }
+            let deterministicOutcome = phase ? 1 : 0
+            return deterministicOutcome == outcome ? 1.0 : nil
+        }
+
+        for row in 0 ..< 2 * n where row != p {
+            if getX(row: row, qubit: qubit) {
+                rowMultiply(target: row, source: p)
+            }
+        }
+
+        let destabRow = p - n
+        copyRow(from: p, to: destabRow)
+        clearRow(p)
+        setZ(row: p, qubit: qubit, value: true)
+        setPhase(row: p, value: outcome == 1)
+
+        for row in n ..< 2 * n where row != p {
+            if getZ(row: row, qubit: qubit) {
+                rowMultiply(target: row, source: p)
+            }
+        }
+
+        return 1.0 / 2.0.squareRoot()
     }
 
     /// Computes the amplitude of a specific computational basis state.
@@ -489,52 +566,52 @@ import GameplayKit
             }
         }
 
-        var newQueryX = ContiguousArray<Bool>(repeating: false, count: n)
-        var newQueryZ = ContiguousArray<Bool>(repeating: false, count: n)
+        var usedRow = ContiguousArray<Bool>(repeating: false, count: n)
 
-        var currentWeight = 0
         for q in 0 ..< n {
-            if queryX[q] { currentWeight += 1 }
-            if queryZ[q] { currentWeight += 1 }
-        }
-
-        var changed = true
-        while changed, currentWeight > 0 {
-            changed = false
-
-            for row in n ..< 2 * n {
-                for q in 0 ..< n {
-                    newQueryX[q] = queryX[q]
-                    newQueryZ[q] = queryZ[q]
-                }
-                var tempPhase = 0
-
-                for q in 0 ..< n {
-                    let sX = getX(row: row, qubit: q)
-                    let sZ = getZ(row: row, qubit: q)
-                    tempPhase += pauliMultPhase(x1: sX, z1: sZ, x2: queryX[q], z2: queryZ[q])
-                    newQueryX[q] = queryX[q] != sX
-                    newQueryZ[q] = queryZ[q] != sZ
-                }
-
-                var newWeight = 0
-                for q in 0 ..< n {
-                    if newQueryX[q] { newWeight += 1 }
-                    if newQueryZ[q] { newWeight += 1 }
-                }
-
-                if newWeight < currentWeight {
-                    queryX = newQueryX
-                    queryZ = newQueryZ
-                    currentWeight = newWeight
-                    phaseAccum += tempPhase
-                    if getPhase(row: row) {
-                        phaseAccum += 2
-                    }
-                    changed = true
+            if !queryX[q] { continue }
+            var pivotIdx = -1
+            for ri in 0 ..< n {
+                if usedRow[ri] { continue }
+                if getX(row: n + ri, qubit: q) {
+                    pivotIdx = ri
                     break
                 }
             }
+            if pivotIdx < 0 { continue }
+            usedRow[pivotIdx] = true
+            let row = n + pivotIdx
+            for qi in 0 ..< n {
+                let sX = getX(row: row, qubit: qi)
+                let sZ = getZ(row: row, qubit: qi)
+                phaseAccum += pauliMultPhase(x1: sX, z1: sZ, x2: queryX[qi], z2: queryZ[qi])
+                queryX[qi] = queryX[qi] != sX
+                queryZ[qi] = queryZ[qi] != sZ
+            }
+            if getPhase(row: row) { phaseAccum += 2 }
+        }
+
+        for q in 0 ..< n {
+            if !queryZ[q] { continue }
+            var pivotIdx = -1
+            for ri in 0 ..< n {
+                if usedRow[ri] { continue }
+                if getZ(row: n + ri, qubit: q) {
+                    pivotIdx = ri
+                    break
+                }
+            }
+            if pivotIdx < 0 { return 0.0 }
+            usedRow[pivotIdx] = true
+            let row = n + pivotIdx
+            for qi in 0 ..< n {
+                let sX = getX(row: row, qubit: qi)
+                let sZ = getZ(row: row, qubit: qi)
+                phaseAccum += pauliMultPhase(x1: sX, z1: sZ, x2: queryX[qi], z2: queryZ[qi])
+                queryX[qi] = queryX[qi] != sX
+                queryZ[qi] = queryZ[qi] != sZ
+            }
+            if getPhase(row: row) { phaseAccum += 2 }
         }
 
         let isIdentity = queryX.allSatisfy { !$0 } && queryZ.allSatisfy { !$0 }
@@ -566,6 +643,7 @@ import GameplayKit
     /// - Returns: Array of n-qubit measurement outcomes (each 0 to 2^n-1)
     /// - Precondition: `shots` must be positive
     /// - Complexity: O(shots * n^2)
+    @_eagerMove
     @inlinable
     @_optimize(speed)
     public mutating func sample(shots: Int, seed: UInt64?) -> [Int] {
@@ -598,6 +676,41 @@ import GameplayKit
         }
 
         return results
+    }
+
+    /// Converts the stabilizer state to a full statevector representation.
+    ///
+    /// Computes all 2^n complex amplitudes from the stabilizer tableau by
+    /// evaluating the amplitude of each computational basis state. The
+    /// result is a normalized ``QuantumState`` suitable for statevector
+    /// operations and ``BackendDispatch`` interoperability.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// var tableau = StabilizerTableau(qubits: 2)
+    /// tableau.apply(.hadamard, to: 0)
+    /// tableau.apply(.cnot, to: [0, 1])
+    /// let state = tableau.toQuantumState()
+    /// ```
+    ///
+    /// - Returns: Full statevector quantum state
+    /// - Precondition: Number of qubits must be 20 or fewer
+    /// - Complexity: O(n^2 * 2^n) where n is the number of qubits
+    /// - SeeAlso: ``amplitude(of:)``
+    @_optimize(speed)
+    @_effects(readonly)
+    @_eagerMove
+    public func toQuantumState() -> QuantumState {
+        ValidationUtilities.validateStabilizerToStatevectorLimit(n)
+
+        let stateSize = 1 << n
+        let amplitudes = [Complex<Double>](unsafeUninitializedCapacity: stateSize) { buffer, count in
+            for i in 0 ..< stateSize {
+                buffer[i] = self.amplitude(of: i) ?? .zero
+            }
+            count = stateSize
+        }
+        return QuantumState(qubits: n, rawAmplitudes: amplitudes)
     }
 
     /// Human-readable description of the stabilizer tableau.

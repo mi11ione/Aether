@@ -341,7 +341,7 @@ struct ContinuousWalkTests {
     @Test("QuantumCircuit extension delegates correctly")
     func quantumCircuitExtension() {
         let graph = WalkGraph.hypercube(dimension: 2)
-        let circuit = QuantumCircuit.quantumWalk(on: graph, method: .continuous(time: 0.5, trotterSteps: 10))
+        let circuit = QuantumWalk.walk(on: graph, method: .continuous(time: 0.5, trotterSteps: 10))
         let state = circuit.execute()
         let result = state.walkResult(graph: graph, steps: 0)
         var total = 0.0

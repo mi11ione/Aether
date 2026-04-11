@@ -159,7 +159,7 @@ public actor SparseHamiltonian {
         let value: Complex<Double>
     }
 
-    /// Builds COO matrix from observable terms.
+    /// Builds COO matrix from observable terms via sorted merge.
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
@@ -167,50 +167,56 @@ public actor SparseHamiltonian {
         from observable: Observable,
         dimension: Int,
     ) -> [COOElement] {
-        var elements: [MatrixIndex: Complex<Double>] = [:]
-        elements.reserveCapacity(observable.terms.count * dimension)
+        let terms = observable.terms
+        let totalEntries = terms.count * dimension
 
-        for (coefficient, pauliString) in observable.terms {
-            let pauliMatrix = pauliStringToSparseMatrix(
-                pauliString,
-                dimension: dimension,
-            )
+        guard totalEntries > 0 else { return [] }
 
-            for element in pauliMatrix {
-                let index = MatrixIndex(row: element.row, col: element.col)
-                elements[index, default: .zero] += coefficient * element.value
+        var rawEntries = [COOElement](unsafeUninitializedCapacity: totalEntries) {
+            buffer, count in
+            var idx = 0
+            for (coefficient, pauliString) in terms {
+                for row in 0 ..< dimension {
+                    let (col, phase) = pauliString.applyToRow(row: row)
+                    buffer.initializeElement(at: idx, to: COOElement(row: row, col: col, value: coefficient * phase))
+                    idx += 1
+                }
             }
+            count = totalEntries
+        }
+
+        rawEntries.sort { lhs, rhs in
+            if lhs.row != rhs.row { return lhs.row < rhs.row }
+            return lhs.col < rhs.col
         }
 
         let toleranceSq = cooZeroThreshold * cooZeroThreshold
-        let nonZeros: [COOElement] = elements.compactMap { index, value -> COOElement? in
-            guard value.magnitudeSquared > toleranceSq else { return nil }
-            return COOElement(row: index.row, col: index.col, value: value)
+        var merged = [COOElement]()
+        merged.reserveCapacity(dimension)
+
+        var currentRow = rawEntries[0].row
+        var currentCol = rawEntries[0].col
+        var currentValue = rawEntries[0].value
+
+        for i in 1 ..< totalEntries {
+            let entry = rawEntries[i]
+            if entry.row == currentRow, entry.col == currentCol {
+                currentValue = currentValue + entry.value
+            } else {
+                if currentValue.magnitudeSquared > toleranceSq {
+                    merged.append(COOElement(row: currentRow, col: currentCol, value: currentValue))
+                }
+                currentRow = entry.row
+                currentCol = entry.col
+                currentValue = entry.value
+            }
         }
 
-        return nonZeros.sorted { lhs, rhs in
-            if lhs.row != rhs.row {
-                return lhs.row < rhs.row
-            }
-            return lhs.col < rhs.col
+        if currentValue.magnitudeSquared > toleranceSq {
+            merged.append(COOElement(row: currentRow, col: currentCol, value: currentValue))
         }
-    }
 
-    /// Converts Pauli string to sparse matrix elements.
-    @_optimize(speed)
-    @_eagerMove
-    @_effects(readonly)
-    private static func pauliStringToSparseMatrix(
-        _ pauliString: PauliString,
-        dimension: Int,
-    ) -> [COOElement] {
-        return [COOElement](unsafeUninitializedCapacity: dimension) { buffer, count in
-            for row in 0 ..< dimension {
-                let (col, phase) = pauliString.applyToRow(row: row)
-                buffer.initializeElement(at: row, to: COOElement(row: row, col: col, value: phase))
-            }
-            count = dimension
-        }
+        return merged
     }
 
     // MARK: - Backend Construction
@@ -221,9 +227,9 @@ public actor SparseHamiltonian {
         dimension: Int,
     ) -> Backend? {
         guard !cooMatrix.isEmpty else { return nil }
-        guard let device = MTLCreateSystemDefaultDevice() else { return nil }
-        guard let commandQueue = device.makeCommandQueue() else { return nil }
-        guard let library = MetalUtilities.loadLibrary(device: device) else { return nil }
+        guard let device = MetalResources.device else { return nil }
+        guard let commandQueue = MetalResources.commandQueue else { return nil }
+        guard let library = MetalResources.library else { return nil }
         guard let kernelFunction = library.makeFunction(name: "csrSparseMatVec") else { return nil }
         guard let pipelineState = try? device.makeComputePipelineState(function: kernelFunction) else { return nil }
 
@@ -767,12 +773,6 @@ public actor SparseHamiltonian {
 }
 
 // MARK: - Supporting Types
-
-/// Matrix index for sparse construction hash table.
-private struct MatrixIndex: Hashable {
-    let row: Int
-    let col: Int
-}
 
 /// Diagnostic statistics for sparse Hamiltonian representation.
 @frozen

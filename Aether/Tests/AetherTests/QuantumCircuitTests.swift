@@ -496,6 +496,26 @@ struct QFTCircuitTests {
             }
         }
     }
+
+    @Test("QFT produces correct phases with R_k = 2π/2^k angles")
+    func qftCorrectPhases() {
+        var amplitudes = [Complex<Double>](repeating: .zero, count: 4)
+        amplitudes[2] = .one
+        let state = QuantumState(qubits: 2, amplitudes: amplitudes)
+
+        let qft = QuantumCircuit.qft(qubits: 2)
+        let result = qft.execute(on: state)
+
+        let half = 0.5
+        #expect(abs(result.amplitude(of: 0).real - half) < 1e-10, "QFT|2⟩ at |0⟩ real part must be 0.5")
+        #expect(abs(result.amplitude(of: 0).imaginary) < 1e-10, "QFT|2⟩ at |0⟩ imaginary part must be 0")
+        #expect(abs(result.amplitude(of: 1).real + half) < 1e-10, "QFT|2⟩ at |1⟩ real part must be -0.5")
+        #expect(abs(result.amplitude(of: 1).imaginary) < 1e-10, "QFT|2⟩ at |1⟩ imaginary part must be 0")
+        #expect(abs(result.amplitude(of: 2).real) < 1e-10, "QFT|2⟩ at |2⟩ real part must be 0 (purely imaginary)")
+        #expect(abs(result.amplitude(of: 2).imaginary - half) < 1e-10, "QFT|2⟩ at |2⟩ imaginary part must be 0.5")
+        #expect(abs(result.amplitude(of: 3).real) < 1e-10, "QFT|2⟩ at |3⟩ real part must be 0 (purely imaginary)")
+        #expect(abs(result.amplitude(of: 3).imaginary + half) < 1e-10, "QFT|2⟩ at |3⟩ imaginary part must be -0.5")
+    }
 }
 
 /// Test suite for state caching in step-through execution.
@@ -787,7 +807,7 @@ struct GroverCircuitTests {
             "1": -0.3,
             "2": 0.8,
             "0-1": 0.2,
-            "12": 0.4,
+            "1-2": 0.4,
         ]
 
         let problem = QuantumCircuit.IsingProblem(fromDictionary: dictionary, qubits: 3)
@@ -804,17 +824,17 @@ struct GroverCircuitTests {
         #expect(problem.transverseField.allSatisfy { $0 == 1.0 }, "All transverse fields should default to 1.0")
     }
 
-    @Test("Ising problem dictionary supports multiple key formats")
+    @Test("Ising problem dictionary supports separator key formats")
     func isingProblemDictionaryKeyFormats() {
         let dictionary: [String: Double] = [
-            "01": 0.1,
+            "0-1": 0.1,
             "1-2": 0.2,
             "0,2": 0.3,
         ]
 
         let problem = QuantumCircuit.IsingProblem(fromDictionary: dictionary, qubits: 3)
 
-        #expect(problem.couplings[0][1] == 0.1, "Key format '01' should set coupling (0,1) to 0.1")
+        #expect(problem.couplings[0][1] == 0.1, "Key format '0-1' should set coupling (0,1) to 0.1")
         #expect(problem.couplings[1][2] == 0.2, "Key format '1-2' should set coupling (1,2) to 0.2")
         #expect(problem.couplings[0][2] == 0.3, "Key format '0,2' should set coupling (0,2) to 0.3")
     }

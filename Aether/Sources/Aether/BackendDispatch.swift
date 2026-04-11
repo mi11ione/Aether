@@ -159,7 +159,13 @@ public enum BackendDispatch {
         let selectedBackend = backend ?? selectBackend(for: circuit)
 
         switch selectedBackend {
-        case .tableau, .extendedStabilizer, .statevector:
+        case .tableau:
+            return await executeTableau(circuit)
+
+        case let .extendedStabilizer(maxRank):
+            return await executeExtendedStabilizer(circuit, maxRank: maxRank)
+
+        case .statevector:
             return circuit.execute()
 
         case .densityMatrix:
@@ -168,6 +174,28 @@ public enum BackendDispatch {
         case let .mps(bondDimension):
             return executeMPS(circuit, bondDimension: bondDimension)
         }
+    }
+
+    /// Executes the circuit using stabilizer tableau simulation.
+    @usableFromInline
+    static func executeTableau(_ circuit: QuantumCircuit) async -> QuantumState {
+        guard circuit.qubits <= 20 else {
+            return circuit.execute()
+        }
+        let simulator = CliffordSimulator()
+        let tableau = await simulator.execute(circuit)
+        return tableau.toQuantumState()
+    }
+
+    /// Executes the circuit using extended stabilizer simulation.
+    @usableFromInline
+    static func executeExtendedStabilizer(_ circuit: QuantumCircuit, maxRank: Int) async -> QuantumState {
+        guard circuit.qubits <= 20 else {
+            return circuit.execute()
+        }
+        let simulator = ExtendedStabilizerSimulator(maxRank: maxRank)
+        let state = await simulator.execute(circuit)
+        return state.toQuantumState()
     }
 
     /// Executes the circuit using density matrix simulation.
@@ -189,9 +217,9 @@ public enum BackendDispatch {
             case let .gate(gate, qubits, _):
                 MPSGateApplication.apply(gate, to: qubits, mps: &mps)
             case let .reset(qubit, _):
-                MPSGateApplication.apply(.pauliX, to: [qubit], mps: &mps)
+                MPSGateApplication.reset(qubit, mps: &mps)
             case let .measure(qubit, _, _):
-                MPSGateApplication.apply(.pauliZ, to: [qubit], mps: &mps)
+                MPSGateApplication.measure(qubit, mps: &mps)
             }
         }
 

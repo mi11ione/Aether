@@ -560,7 +560,7 @@ public struct MatrixProductState: Sendable, Equatable, CustomStringConvertible {
             count = stateSpaceSize
         }
 
-        return QuantumState(qubits: qubits, amplitudes: amplitudes)
+        return QuantumState(qubits: qubits, rawAmplitudes: amplitudes)
     }
 
     /// Computes expectation value <psi|P|psi> for a Pauli string operator.

@@ -123,27 +123,62 @@ public struct ConvergenceCriteria: Sendable {
     /// Typical values: 1000 (default), 500 (fast), 2000 (thorough)
     public let maxIterations: Int
 
+    /// Per-parameter (lower, upper) bounds for constrained optimization.
+    ///
+    /// When set, parameters are clamped to [lower, upper] after each update step.
+    /// Prevents floating-point precision degradation from extreme parameter values
+    /// and enforces physical constraints (e.g., rotation angles in [-π, π]).
+    /// Array length must match the number of parameters.
+    ///
+    /// Typical values: nil (unconstrained, default), [(-π, π)] repeated for rotations
+    public let parameterBounds: [(lower: Double, upper: Double)]?
+
     /// Create convergence criteria with specified thresholds
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let bounded = ConvergenceCriteria(
+    ///     parameterBounds: [(-Double.pi, Double.pi), (-Double.pi, Double.pi)]
+    /// )
+    /// ```
     ///
     /// - Parameters:
     ///   - energyTolerance: Energy change threshold (default: 1e-6)
     ///   - gradientNormTolerance: Gradient norm threshold, nil to disable (default: nil)
     ///   - maxIterations: Maximum iterations (default: 1000)
+    ///   - parameterBounds: Per-parameter (lower, upper) bounds, nil for unconstrained (default: nil)
     /// - Precondition: energyTolerance > 0, maxIterations > 0, gradientNormTolerance > 0 if provided
+    /// - Precondition: Each bound must have lower <= upper
     public init(
         energyTolerance: Double = 1e-6,
         gradientNormTolerance: Double? = nil,
         maxIterations: Int = 1000,
+        parameterBounds: [(lower: Double, upper: Double)]? = nil,
     ) {
         ValidationUtilities.validatePositiveDouble(energyTolerance, name: "energyTolerance")
         ValidationUtilities.validatePositiveInt(maxIterations, name: "maxIterations")
         if let gnt = gradientNormTolerance {
             ValidationUtilities.validatePositiveDouble(gnt, name: "gradientNormTolerance")
         }
+        if let bounds = parameterBounds {
+            for (i, bound) in bounds.enumerated() {
+                ValidationUtilities.validateParameterBound(bound.lower, bound.upper, index: i)
+            }
+        }
 
         self.energyTolerance = energyTolerance
         self.gradientNormTolerance = gradientNormTolerance
         self.maxIterations = maxIterations
+        self.parameterBounds = parameterBounds
+    }
+
+    /// Clamps parameters to bounds if configured.
+    @inlinable
+    func clampToBounds(_ parameters: inout [Double]) {
+        guard let parameterBounds else { return }
+        for i in 0 ..< min(parameters.count, parameterBounds.count) {
+            parameters[i] = min(max(parameters[i], parameterBounds[i].lower), parameterBounds[i].upper)
+        }
     }
 }
 
@@ -417,6 +452,7 @@ public struct NelderMeadOptimizer: Optimizer {
             var negAlpha = -alpha
             vDSP_vsmulD(centroid, 1, &onePlusAlpha, &reflected, 1, vDSP_Length(n))
             vDSP_vsmaD(simplex[n].parameters, 1, &negAlpha, reflected, 1, &reflected, 1, vDSP_Length(n))
+            convergenceCriteria.clampToBounds(&reflected)
             let reflectedValue: Double = await objectiveFunction(reflected)
             functionEvaluations += 1
 
@@ -483,6 +519,7 @@ public struct NelderMeadOptimizer: Optimizer {
                 for i in 1 ... n {
                     vDSP_vsmulD(simplex[0].parameters, 1, &oneMinusSigma, &newParams, 1, vDSP_Length(n))
                     vDSP_vsmaD(simplex[i].parameters, 1, &sigmaVal, newParams, 1, &newParams, 1, vDSP_Length(n))
+                    convergenceCriteria.clampToBounds(&newParams)
                     simplex[i].parameters = newParams
                     simplex[i].value = await objectiveFunction(simplex[i].parameters)
                 }
@@ -689,6 +726,7 @@ public struct GradientDescentOptimizer: Optimizer {
             var negLR = -currentLearningRate
             vDSP_vsmaD(gradient, 1, &negLR, velocity, 1, &velocity, 1, vDSP_Length(n))
             vDSP_vaddD(currentParameters, 1, velocity, 1, &currentParameters, 1, vDSP_Length(n))
+            convergenceCriteria.clampToBounds(&currentParameters)
 
             let newValue: Double = await objectiveFunction(currentParameters)
             functionEvaluations += 1
@@ -968,6 +1006,7 @@ public struct LBFGSBOptimizer: Optimizer {
             }
 
             params = newParams
+            convergenceCriteria.clampToBounds(&params)
             cost = newCost
             gradient = newGradient
             valueHistory.append(cost)
@@ -1325,6 +1364,7 @@ public struct SPSAOptimizer: Optimizer {
 
             var negAkGrad = -ak * gradientApprox
             vDSP_vsmaD(delta, 1, &negAkGrad, params, 1, &params, 1, vDSP_Length(n))
+            convergenceCriteria.clampToBounds(&params)
 
             let newValue: Double = await objectiveFunction(params)
             functionEvaluations += 1
@@ -1573,6 +1613,7 @@ public struct COBYLAOptimizer: Optimizer {
 
             if ratio > acceptRatio {
                 bestParameters = trialParameters
+                convergenceCriteria.clampToBounds(&bestParameters)
                 bestValue = trialValue
                 valueHistory.append(bestValue)
 

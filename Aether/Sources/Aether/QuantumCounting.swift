@@ -485,7 +485,7 @@ public extension QuantumState {
         let estimatedCount = max(0, min(searchSpaceSize, Int(Foundation.round(estimatedCountDouble))))
 
         let basePhaseError = 1.0 / Double(precisionStateSize)
-        let phaseError = max(basePhaseError * 8, 0.20)
+        let phaseError = basePhaseError * 8
         let (lowerCount, upperCount) = computeCountInterval(
             measuredPhase: measuredPhase,
             phaseError: phaseError,

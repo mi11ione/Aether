@@ -403,7 +403,7 @@ public struct SLSQPOptimizer: Optimizer {
         )
     }
 
-    /// Compute finite-difference gradient of any scalar function
+    /// Compute quantum parameter-shift gradient via (f(θ+s) - f(θ-s)) / (2 sin s).
     @_optimize(speed)
     @_eagerMove
     private func finiteDifferenceGradient(
@@ -416,6 +416,7 @@ public struct SLSQPOptimizer: Optimizer {
         }
         var paramsPlus = params
         var paramsMinus = params
+        let divisor = 2.0 * sin(parameterShift)
 
         for i in 0 ..< n {
             paramsPlus[i] = params[i] + parameterShift
@@ -426,7 +427,7 @@ public struct SLSQPOptimizer: Optimizer {
             let valueMinus = await function(paramsMinus)
             paramsMinus[i] = params[i]
 
-            gradient[i] = (valuePlus - valueMinus) / (2.0 * parameterShift)
+            gradient[i] = (valuePlus - valueMinus) / divisor
         }
         return gradient
     }

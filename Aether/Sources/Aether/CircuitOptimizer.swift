@@ -733,13 +733,13 @@ public enum CircuitOptimizer {
         let uMagicT = transpose(uMagic)
         let m = QuantumGate.matrixMultiply(uMagicT, uMagic)
 
-        let eigenvalues = computeEigenvaluesQR(m)
+        let (eigenvalues, eigenvectors) = computeEigendecompositionQR(m)
 
         let (c0, c1, c2) = extractKAKCoordinatesFromEigenvalues(eigenvalues)
 
         let cnotCount = optimalCNOTCount(c0, c1, c2)
 
-        let (k1, k2) = computeLocalUnitaries(u, c0: c0, c1: c1, c2: c2)
+        let (k1, k2) = computeLocalUnitariesFromEigenvectors(uMagic, eigenvectors: eigenvectors, c0: c0, c1: c1, c2: c2)
 
         return buildKAKCircuitWithLocals(k1: k1, k2: k2, c0: c0, c1: c1, c2: c2, cnotCount: cnotCount)
     }
@@ -764,24 +764,29 @@ public enum CircuitOptimizer {
     @_effects(readonly)
     private static func transpose(_ m: [[Complex<Double>]]) -> [[Complex<Double>]] {
         let n = m.count
-        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: n), count: n)
-        for i in 0 ..< n {
-            for j in 0 ..< n {
-                result[i][j] = m[j][i]
+        return (0 ..< n).map { i in
+            [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
+                for j in 0 ..< n {
+                    buffer.initializeElement(at: j, to: m[j][i])
+                }
+                count = n
             }
         }
-        return result
     }
 
-    /// Compute eigenvalues of 4x4 complex matrix using QR iteration.
+    /// Compute eigenvalues and eigenvectors of 4x4 complex matrix using QR iteration.
     @_optimize(speed)
     @_eagerMove
     @_effects(readonly)
-    private static func computeEigenvaluesQR(_ matrix: [[Complex<Double>]]) -> [Complex<Double>] {
+    private static func computeEigendecompositionQR(
+        _ matrix: [[Complex<Double>]],
+    ) -> (eigenvalues: [Complex<Double>], eigenvectors: [[Complex<Double>]]) {
         var a = matrix
         let n = 4
         let maxIterations = 100
         let tolerance = eigenvalueTolerance
+
+        var v = MatrixUtilities.identityMatrix(dimension: n)
 
         for _ in 0 ..< maxIterations {
             var converged = true
@@ -807,9 +812,12 @@ public enum CircuitOptimizer {
             a[1][1] = a[1][1] + shift
             a[2][2] = a[2][2] + shift
             a[3][3] = a[3][3] + shift
+
+            v = QuantumGate.matrixMultiply(v, q)
         }
 
-        return (0 ..< n).map { a[$0][$0] }
+        let eigenvalues = (0 ..< n).map { a[$0][$0] }
+        return (eigenvalues, v)
     }
 
     /// Wilkinson shift for QR iteration improving convergence.
@@ -915,18 +923,27 @@ public enum CircuitOptimizer {
         let p2 = ph1 / 2.0
         let p3 = ph0 / 2.0
 
-        var c0 = (p0 + p3) / 2.0
-        var c1 = (p0 - p2) / 2.0
-        var c2 = (p0 - p1) / 2.0
+        var c0 = (p0 + p1) / 2.0
+        var c1 = (p0 + p2) / 2.0
+        var c2 = (p0 + p3) / 2.0
 
         c0 = normalizeAngle(c0)
         c1 = normalizeAngle(c1)
         c2 = normalizeAngle(c2)
 
         var s0 = abs(c0), s1 = abs(c1), s2 = abs(c2)
+
         if s0 < s1 { swap(&s0, &s1) }
         if s1 < s2 { swap(&s1, &s2) }
+        if s0 < s1 { swap(&s0, &s1) }
+
         if s0 > .pi / 4 { s0 = .pi / 2 - s0 }
+        if s1 > .pi / 4 { s1 = .pi / 2 - s1 }
+        if s2 > .pi / 4 { s2 = .pi / 2 - s2 }
+
+        if s0 < s1 { swap(&s0, &s1) }
+        if s1 < s2 { swap(&s1, &s2) }
+        if s0 < s1 { swap(&s0, &s1) }
 
         return (s0, s1, s2)
     }
@@ -949,24 +966,36 @@ public enum CircuitOptimizer {
         return 3
     }
 
-    /// Compute local unitaries K1 = A1 tensor B1 and K2 = A2 tensor B2 from polar decomposition.
+    /// Compute local unitaries from eigenvectors of U_B^T U_B.
     @_optimize(speed)
+    @_eagerMove
     @_effects(readonly)
-    private static func computeLocalUnitaries(
-        _ u: [[Complex<Double>]],
+    private static func computeLocalUnitariesFromEigenvectors(
+        _ uMagic: [[Complex<Double>]],
+        eigenvectors: [[Complex<Double>]],
         c0: Double,
         c1: Double,
         c2: Double,
     ) -> (k1: (a: [[Complex<Double>]], b: [[Complex<Double>]]), k2: (a: [[Complex<Double>]], b: [[Complex<Double>]])) {
         let expD = buildCanonicalEntangler(c0, c1, c2)
+        let expDDagger = MatrixUtilities.hermitianConjugate(expD)
 
-        let canonicalGate = QuantumGate.matrixMultiply(QuantumGate.matrixMultiply(Self.magicBasis, expD), Self.magicBasisDagger)
+        let k2Magic = eigenvectors
+        let k2MagicInv = MatrixUtilities.hermitianConjugate(k2Magic)
 
-        let dDagger = MatrixUtilities.hermitianConjugate(canonicalGate)
-        let uDagger = MatrixUtilities.hermitianConjugate(u)
+        let k1Magic = QuantumGate.matrixMultiply(
+            QuantumGate.matrixMultiply(uMagic, k2MagicInv),
+            expDDagger,
+        )
 
-        let k2Full = QuantumGate.matrixMultiply(dDagger, uDagger)
-        let k1Full = QuantumGate.matrixMultiply(u, QuantumGate.matrixMultiply(canonicalGate, MatrixUtilities.hermitianConjugate(k2Full)))
+        let k2Full = QuantumGate.matrixMultiply(
+            QuantumGate.matrixMultiply(Self.magicBasis, k2Magic),
+            Self.magicBasisDagger,
+        )
+        let k1Full = QuantumGate.matrixMultiply(
+            QuantumGate.matrixMultiply(Self.magicBasis, k1Magic),
+            Self.magicBasisDagger,
+        )
 
         let (a1, b1) = extractTensorFactors(k1Full)
         let (a2, b2) = extractTensorFactors(k2Full)
@@ -1014,16 +1043,12 @@ public enum CircuitOptimizer {
         let iA = refI / 2, iB = refI % 2
         let jA = refJ / 2, jB = refJ % 2
 
-        var a = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: 2), count: 2)
         let refVal = k[refI][refJ]
 
-        for i in 0 ..< 2 {
-            for j in 0 ..< 2 {
-                let idx = 2 * i + iB
-                let jdx = 2 * j + jB
-                a[i][j] = k[idx][jdx] / refVal
-            }
-        }
+        var a: [[Complex<Double>]] = [
+            [k[iB][jB] / refVal, k[iB][2 + jB] / refVal],
+            [k[2 + iB][jB] / refVal, k[2 + iB][2 + jB] / refVal],
+        ]
 
         let normA = hypot(a[0][0].magnitude, a[0][1].magnitude)
         if normA > normTolerance {
@@ -1035,14 +1060,10 @@ public enum CircuitOptimizer {
             }
         }
 
-        var b = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: 2), count: 2)
-        for i in 0 ..< 2 {
-            for j in 0 ..< 2 {
-                let idx = 2 * iA + i
-                let jdx = 2 * jA + j
-                b[i][j] = k[idx][jdx] / refVal
-            }
-        }
+        var b: [[Complex<Double>]] = [
+            [k[2 * iA][2 * jA] / refVal, k[2 * iA][2 * jA + 1] / refVal],
+            [k[2 * iA + 1][2 * jA] / refVal, k[2 * iA + 1][2 * jA + 1] / refVal],
+        ]
 
         let normB = hypot(b[0][0].magnitude, b[0][1].magnitude)
         if normB > normTolerance {

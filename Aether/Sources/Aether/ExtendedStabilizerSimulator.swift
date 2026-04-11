@@ -74,7 +74,9 @@ public actor ExtendedStabilizerSimulator {
     /// - Parameter circuit: Quantum circuit to execute
     /// - Returns: Final extended stabilizer state after applying all gates
     /// - Precondition: Circuit T-count must not exceed 50
+    /// - Precondition: Stabilizer rank must not exceed maxRank
     /// - Complexity: O(gates * 2^t) where t = T-count
+    @_eagerMove
     @_optimize(speed)
     public func execute(_ circuit: QuantumCircuit) async -> ExtendedStabilizerState {
         let initial = ExtendedStabilizerState(qubits: circuit.qubits, maxRank: maxRank)
@@ -100,7 +102,9 @@ public actor ExtendedStabilizerSimulator {
     ///   - initial: Initial extended stabilizer state
     /// - Returns: Final extended stabilizer state after applying all gates
     /// - Precondition: Circuit T-count must not exceed 50
+    /// - Precondition: Stabilizer rank must not exceed maxRank
     /// - Complexity: O(gates * 2^t) where t = T-count
+    @_eagerMove
     @_optimize(speed)
     public func execute(_ circuit: QuantumCircuit, from initial: ExtendedStabilizerState) async -> ExtendedStabilizerState {
         let analysis = CliffordGateClassifier.analyze(circuit)
@@ -148,7 +152,7 @@ public actor ExtendedStabilizerSimulator {
     @_optimize(speed)
     public func amplitude(_ circuit: QuantumCircuit, of basisState: Int) async -> Complex<Double> {
         let state = await execute(circuit)
-        return computeAmplitude(state: state, basisState: basisState)
+        return state.amplitude(of: basisState)
     }
 
     /// Samples measurement outcomes from the circuit output distribution.
@@ -218,6 +222,10 @@ public actor ExtendedStabilizerSimulator {
         switch gate {
         case .tGate:
             state.apply(.tGate, to: qubits[0])
+        case let .phase(angle):
+            if case .value = angle {
+                state.apply(gate, to: qubits[0])
+            }
         case .toffoli:
             applyToffoliDecomposition(to: qubits, state: &state)
         case .ccz:
@@ -255,25 +263,24 @@ public actor ExtendedStabilizerSimulator {
         }
     }
 
-    /// Decomposes Toffoli into Clifford+T gates.
+    /// Decomposes Toffoli into Clifford+T gates (Barenco et al. 15-gate form).
     @_optimize(speed)
     private func applyToffoliDecomposition(to qubits: [Int], state: inout ExtendedStabilizerState) {
         let (q0, q1, q2) = (qubits[0], qubits[1], qubits[2])
         state.apply(.hadamard, to: q2)
         state.apply(.cnot, to: [q1, q2])
-        state.apply(.tGate, to: q2)
-        state = applyGate(.tGate.inverse, to: [q2], state: state)
+        state.apply(.tGate.inverse, to: q2)
         state.apply(.cnot, to: [q0, q2])
         state.apply(.tGate, to: q2)
         state.apply(.cnot, to: [q1, q2])
-        state = applyGate(.tGate.inverse, to: [q2], state: state)
+        state.apply(.tGate.inverse, to: q2)
         state.apply(.cnot, to: [q0, q2])
         state.apply(.tGate, to: q1)
         state.apply(.tGate, to: q2)
         state.apply(.cnot, to: [q0, q1])
         state.apply(.hadamard, to: q2)
         state.apply(.tGate, to: q0)
-        state = applyGate(.tGate.inverse, to: [q1], state: state)
+        state.apply(.tGate.inverse, to: q1)
         state.apply(.cnot, to: [q0, q1])
     }
 
@@ -282,17 +289,17 @@ public actor ExtendedStabilizerSimulator {
     private func applyCCZDecomposition(to qubits: [Int], state: inout ExtendedStabilizerState) {
         let (q0, q1, q2) = (qubits[0], qubits[1], qubits[2])
         state.apply(.cnot, to: [q1, q2])
-        state = applyGate(.tGate.inverse, to: [q2], state: state)
+        state.apply(.tGate.inverse, to: q2)
         state.apply(.cnot, to: [q0, q2])
         state.apply(.tGate, to: q2)
         state.apply(.cnot, to: [q1, q2])
-        state = applyGate(.tGate.inverse, to: [q2], state: state)
+        state.apply(.tGate.inverse, to: q2)
         state.apply(.cnot, to: [q0, q2])
         state.apply(.tGate, to: q1)
         state.apply(.tGate, to: q2)
         state.apply(.cnot, to: [q0, q1])
         state.apply(.tGate, to: q0)
-        state = applyGate(.tGate.inverse, to: [q1], state: state)
+        state.apply(.tGate.inverse, to: q1)
         state.apply(.cnot, to: [q0, q1])
     }
 
@@ -341,14 +348,6 @@ public actor ExtendedStabilizerSimulator {
         state.apply(.cnot, to: qubits)
         applyRotationDecomposition(type, angle: .value(-halfTheta), to: qubits[1], state: &state)
         state.apply(.cnot, to: qubits)
-    }
-
-    /// Computes amplitude by summing contributions from all stabilizer terms.
-    @_optimize(speed)
-    @_effects(readonly)
-    @inline(__always)
-    private func computeAmplitude(state: ExtendedStabilizerState, basisState: Int) -> Complex<Double> {
-        state.amplitude(of: basisState)
     }
 
     /// Samples measurement outcomes using CDF binary search.

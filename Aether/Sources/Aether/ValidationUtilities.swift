@@ -77,6 +77,24 @@ public enum ValidationUtilities {
         )
     }
 
+    /// Validate that insert index is within bounds [0, bound] (inclusive)
+    ///
+    /// - Parameters:
+    ///   - index: Insert position to validate
+    ///   - bound: Array count (index == bound inserts at end)
+    ///   - name: Descriptive name for error message
+    /// - Precondition: 0 <= index <= bound
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateInsertIndex(_ index: Int, bound: Int, name: String) {
+        precondition(
+            index >= 0 && index <= bound,
+            "\(name) \(index) out of bounds for insert (valid range: 0...\(bound))",
+        )
+    }
+
     /// Validate that qubit index is within bounds
     ///
     /// - Parameters:
@@ -399,6 +417,36 @@ public enum ValidationUtilities {
         precondition(matrix.allSatisfy { $0.count == n }, "\(name) must be square (got \(matrix.count)x\(matrix[0].count))")
     }
 
+    /// Validate that a Double matrix is symmetric (M_ij = M_ji within tolerance).
+    ///
+    /// Required for coupling matrices in Ising models where J_ij = J_ji
+    /// ensures a physical Hamiltonian H = Σ J_ij σ_i σ_j.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let J = [[0.0, -0.5], [-0.5, 0.0]]
+    /// ValidationUtilities.validateSymmetricMatrix(J, name: "Couplings")
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - matrix: Square matrix to validate
+    ///   - name: Matrix name for error message
+    ///   - tolerance: Maximum allowed asymmetry (default: 1e-10)
+    /// - Precondition: matrix[i][j] ≈ matrix[j][i] for all i, j
+    /// - Complexity: O(n²) where n is the matrix dimension
+    @_effects(readonly)
+    static func validateSymmetricMatrix(_ matrix: [[Double]], name: String, tolerance: Double = 1e-10) {
+        let n = matrix.count
+        for i in 0 ..< n {
+            for j in (i + 1) ..< n {
+                precondition(
+                    abs(matrix[i][j] - matrix[j][i]) < tolerance,
+                    "\(name) must be symmetric ([\(i)][\(j)]=\(matrix[i][j]) ≠ [\(j)][\(i)]=\(matrix[j][i]))",
+                )
+            }
+        }
+    }
+
     /// Validate that two matrices have same dimensions
     ///
     /// - Parameters:
@@ -522,6 +570,51 @@ public enum ValidationUtilities {
         precondition(abs(norm - 1.0) < tolerance, "Basis state must be normalized (got norm² = \(norm))")
     }
 
+    /// Validate that a pre-computed norm squared is approximately unity.
+    ///
+    /// Catches grossly unnormalized amplitude vectors while allowing minor
+    /// floating-point drift from unitary operations.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let normSq = amplitudes.reduce(0.0) { $0 + $1.magnitudeSquared }
+    /// ValidationUtilities.validateApproximateNormalization(normSq)
+    /// ```
+    ///
+    /// - Parameter normSquared: Pre-computed Σ|cᵢ|²
+    /// - Precondition: |normSquared - 1.0| < 1e-6
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateApproximateNormalization(_ normSquared: Double) {
+        precondition(
+            abs(normSquared - 1.0) < 1e-6,
+            "Amplitude vector must be approximately normalized (Σ|cᵢ|² = \(normSquared), expected ≈ 1.0)",
+        )
+    }
+
+    /// Validate that a pre-computed norm squared is positive.
+    ///
+    /// Rejects zero-norm amplitude vectors which represent physically invalid quantum states
+    /// and would cause division by zero during normalization.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let normSq = amplitudes.reduce(0.0) { $0 + $1.magnitudeSquared }
+    /// ValidationUtilities.validateNonZeroNorm(normSq)
+    /// ```
+    ///
+    /// - Parameter normSquared: Pre-computed Σ|cᵢ|²
+    /// - Precondition: normSquared > 0
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateNonZeroNorm(_ normSquared: Double) {
+        precondition(normSquared > 0.0, "Amplitude vector must have non-zero norm (Σ|cᵢ|² = \(normSquared))")
+    }
+
     /// Validate that gate requires exactly one qubit
     ///
     /// - Parameter qubits: Qubit array
@@ -628,6 +721,57 @@ public enum ValidationUtilities {
     public static func validateCliffordCircuit(_ circuit: QuantumCircuit) {
         let analysis = CliffordGateClassifier.analyze(circuit)
         precondition(analysis.isClifford, "CliffordSimulator requires Clifford-only circuits (found \(analysis.tCount) T-equivalent gates)")
+    }
+
+    /// Validates that a gate is a single-qubit Clifford supported by ``StabilizerTableau``.
+    ///
+    /// The stabilizer formalism (Gottesman-Knill theorem) restricts efficient simulation to
+    /// Clifford gates. Non-Clifford gates (T, rotations, custom unitaries) cannot be
+    /// represented in the tableau and must be rejected.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// ValidationUtilities.validateSingleQubitCliffordGate(.hadamard)
+    /// ```
+    ///
+    /// - Parameter gate: Gate to validate
+    /// - Precondition: Gate must be a supported single-qubit Clifford
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    public static func validateSingleQubitCliffordGate(_ gate: QuantumGate) {
+        switch gate {
+        case .identity, .pauliX, .pauliY, .pauliZ, .hadamard, .sGate, .sx, .sy:
+            break
+        default:
+            preconditionFailure("StabilizerTableau only supports single-qubit Clifford gates (got \(gate.fullName))")
+        }
+    }
+
+    /// Validates that a gate is a multi-qubit Clifford supported by ``StabilizerTableau``.
+    ///
+    /// Only CNOT, CZ, and SWAP are directly supported on the tableau. Other multi-qubit
+    /// Clifford gates (CY, CH, iSWAP) require decomposition via ``CliffordSimulator``.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// ValidationUtilities.validateMultiQubitCliffordGate(.cnot)
+    /// ```
+    ///
+    /// - Parameter gate: Gate to validate
+    /// - Precondition: Gate must be a supported multi-qubit Clifford
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    public static func validateMultiQubitCliffordGate(_ gate: QuantumGate) {
+        switch gate {
+        case .cnot, .cz, .swap:
+            break
+        default:
+            preconditionFailure("StabilizerTableau only supports CNOT, CZ, and SWAP multi-qubit gates (got \(gate.fullName))")
+        }
     }
 
     /// Validates that a circuit contains only unitary operations.
@@ -1059,7 +1203,7 @@ public enum ValidationUtilities {
     static func validateCouplingKeyFormat(_ count: Int, key: String) {
         precondition(
             count == 1 || count == 2,
-            "Invalid coupling key '\(key)': must specify 1-2 qubits (e.g., '0' for local field, '01' or '0-1' for coupling)",
+            "Invalid coupling key '\(key)': must specify 1-2 qubits (e.g., '0' for local field, '0-1' for coupling)",
         )
     }
 
@@ -1393,6 +1537,24 @@ public enum ValidationUtilities {
         )
     }
 
+    /// Validate that qubit count is within limit for stabilizer to statevector conversion.
+    ///
+    /// Converting stabilizer tableau or extended stabilizer state to full statevector
+    /// requires computing all 2^n amplitudes, limiting practical conversion to small systems.
+    ///
+    /// - Parameter qubits: Number of qubits to validate
+    /// - Precondition: qubits <= 20
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateStabilizerToStatevectorLimit(_ qubits: Int) {
+        precondition(
+            qubits <= 20,
+            "Stabilizer to statevector conversion limited to 20 qubits (got \(qubits))",
+        )
+    }
+
     /// Validate LAPACK operation succeeded (info == 0).
     ///
     /// LAPACK routines return info=0 on success, negative values for invalid arguments,
@@ -1705,5 +1867,65 @@ public enum ValidationUtilities {
     @inline(__always)
     static func validateInternalNode(_ isInternal: Bool) {
         precondition(isInternal, "Child bond subscript requires internal node")
+    }
+
+    /// Validate that a parameter bound has lower <= upper.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// ValidationUtilities.validateParameterBound(-Double.pi, Double.pi, index: 0)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - lower: Lower bound value
+    ///   - upper: Upper bound value
+    ///   - index: Parameter index for error message
+    /// - Precondition: lower <= upper
+    /// - Complexity: O(1)
+    @_effects(readonly)
+    @inlinable
+    @inline(__always)
+    static func validateParameterBound(_ lower: Double, _ upper: Double, index: Int) {
+        precondition(lower <= upper, "Parameter bound at index \(index) must have lower ≤ upper (got \(lower) > \(upper))")
+    }
+
+    /// Parse and validate an integer literal string, guarding against overflow.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let value = ValidationUtilities.validatedIntegerLiteral("42")
+    /// ```
+    ///
+    /// - Parameter text: Digit string from lexer scanner
+    /// - Returns: Parsed integer value
+    /// - Precondition: text must represent a valid Int (no overflow)
+    /// - Complexity: O(n) where n is the string length
+    @inlinable
+    @inline(__always)
+    static func validatedIntegerLiteral(_ text: String) -> Int {
+        guard let value = Int(text) else {
+            preconditionFailure("Integer literal '\(text)' exceeds representable range")
+        }
+        return value
+    }
+
+    /// Parse and validate a real number literal string.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let value = ValidationUtilities.validatedRealLiteral("3.14e2")
+    /// ```
+    ///
+    /// - Parameter text: Numeric string from lexer scanner
+    /// - Returns: Parsed double value
+    /// - Precondition: text must represent a valid Double
+    /// - Complexity: O(n) where n is the string length
+    @inlinable
+    @inline(__always)
+    static func validatedRealLiteral(_ text: String) -> Double {
+        guard let value = Double(text) else {
+            preconditionFailure("Invalid real literal '\(text)'")
+        }
+        return value
     }
 }

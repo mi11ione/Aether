@@ -101,11 +101,11 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         }
     }
 
-    /// Initialize custom quantum state from amplitude vector
+    /// Initialize quantum state from normalized amplitude vector.
     ///
-    /// Creates arbitrary superposition state from provided complex amplitudes. Automatically normalizes
-    /// if amplitude vector is not already normalized (within tolerance 1e-10). Useful for preparing
-    /// specific quantum states like |+⟩, |−⟩, Bell states, GHZ states, etc.
+    /// Creates arbitrary superposition state from provided complex amplitudes. Amplitudes must be
+    /// approximately normalized (Σ|cᵢ|² ≈ 1 within 1e-6). Minor floating-point drift from
+    /// unitary operations is corrected; grossly unnormalized vectors are rejected.
     ///
     /// **Example:**
     /// ```swift
@@ -116,10 +116,11 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     ///
     /// - Parameters:
     ///   - qubits: Number of qubits
-    ///   - amplitudes: Array of 2^n complex amplitudes (auto-normalizes if needed)
+    ///   - amplitudes: Array of 2^n complex amplitudes (must be approximately normalized)
     /// - Complexity: O(2^n)
     /// - Precondition: amplitudes.count == 2^qubits
-    /// - Note: Auto-normalizes if Σ|cᵢ|² ≠ 1
+    /// - Precondition: Σ|cᵢ|² ≈ 1.0 (within 1e-6)
+    /// - SeeAlso: ``isNormalized()``
     public init(qubits: Int, amplitudes: [Complex<Double>]) {
         ValidationUtilities.validatePositiveQubits(qubits)
         ValidationUtilities.validateAmplitudeCount(amplitudes, qubits: qubits)
@@ -128,13 +129,49 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
         self.amplitudes = amplitudes
 
         let sumSquared = computeNormSquared()
-        if abs(sumSquared - 1.0) > normalizationTolerance, sumSquared > normalizationMinimum {
+        ValidationUtilities.validateApproximateNormalization(sumSquared)
+
+        if abs(sumSquared - 1.0) > normalizationTolerance {
             let invNorm = 1.0 / sqrt(sumSquared)
             self.amplitudes = [Complex<Double>](unsafeUninitializedCapacity: amplitudes.count) { buffer, count in
                 for i in amplitudes.indices {
                     buffer[i] = amplitudes[i] * invNorm
                 }
                 count = amplitudes.count
+            }
+        }
+    }
+
+    /// Initialize quantum state from potentially unnormalized amplitude vector.
+    ///
+    /// Internal initializer for code paths that produce amplitudes with arbitrary norm
+    /// (post-selection, representation conversion, trajectory evolution). Automatically
+    /// normalizes any positive-norm vector. Rejects zero-norm vectors.
+    ///
+    /// - Parameters:
+    ///   - qubits: Number of qubits
+    ///   - rawAmplitudes: Array of 2^n complex amplitudes (auto-normalizes)
+    /// - Complexity: O(2^n)
+    /// - Precondition: rawAmplitudes.count == 2^qubits
+    /// - Precondition: Σ|cᵢ|² > 0 (non-zero norm)
+    @usableFromInline
+    init(qubits: Int, rawAmplitudes: [Complex<Double>]) {
+        ValidationUtilities.validatePositiveQubits(qubits)
+        ValidationUtilities.validateAmplitudeCount(rawAmplitudes, qubits: qubits)
+
+        self.qubits = qubits
+        amplitudes = rawAmplitudes
+
+        let sumSquared = computeNormSquared()
+        ValidationUtilities.validateNonZeroNorm(sumSquared)
+
+        if abs(sumSquared - 1.0) > normalizationTolerance {
+            let invNorm = 1.0 / sqrt(sumSquared)
+            amplitudes = [Complex<Double>](unsafeUninitializedCapacity: rawAmplitudes.count) { buffer, count in
+                for i in rawAmplitudes.indices {
+                    buffer[i] = rawAmplitudes[i] * invNorm
+                }
+                count = rawAmplitudes.count
             }
         }
     }
@@ -377,8 +414,8 @@ public struct QuantumState: Equatable, CustomStringConvertible, Sendable {
     ///
     /// **Example:**
     /// ```swift
-    /// var state = QuantumState(qubits: 1, amplitudes: [Complex(3, 0), Complex(4, 0)])
-    /// state.normalize()  // Now [3/5, 4/5] since √(3² + 4²) = 5
+    /// var state = QuantumState(qubits: 2)
+    /// state.normalize()  // Restores exact Σ|cᵢ|² = 1 after floating-point drift
     /// ```
     ///
     /// - Complexity: O(2^n) with vectorization for large states

@@ -325,7 +325,11 @@ public enum LindbladSolver {
         var ldagLProducts = [[Complex<Double>]]()
         ldagLProducts.reserveCapacity(flatOps.count)
         for i in 0 ..< flatOps.count {
-            var product = [Complex<Double>](repeating: .zero, count: dim * dim)
+            var product = [Complex<Double>](unsafeUninitializedCapacity: dim * dim) {
+                buffer, count in
+                buffer.initialize(repeating: .zero)
+                count = dim * dim
+            }
             matrixMultiplyFlat(flatDags[i], flatOps[i], &product, dim: dim)
             ldagLProducts.append(product)
         }
@@ -342,7 +346,11 @@ public enum LindbladSolver {
         var currentMethod: IntegrationMethod = .rk45
 
         let windowSize = configuration.stiffnessThreshold
-        var recentOutcomes = [Bool](repeating: true, count: windowSize)
+        var recentOutcomes = [Bool](unsafeUninitializedCapacity: windowSize) {
+            buffer, count in
+            buffer.initialize(repeating: true)
+            count = windowSize
+        }
         var outcomeIndex = 0
         var runningRejectionCount = 0
 
@@ -421,11 +429,15 @@ public enum LindbladSolver {
                     hMatrix: hMatrix,
                     jumpData: jumpData,
                     dim: dim,
-                    atol: configuration.absoluteTolerance,
-                    rtol: configuration.relativeTolerance,
                 )
 
-                acceptedSteps += 1
+                if accepted {
+                    acceptedSteps += 1
+                } else {
+                    rejectedSteps += 1
+                    h = h * minStepShrinkFactor
+                    h = max(minimumStepSize, h)
+                }
             }
 
             if accepted {
@@ -461,7 +473,11 @@ public enum LindbladSolver {
     @_effects(readonly)
     @_optimize(speed)
     private static func buildHamiltonianMatrix(_ hamiltonian: Observable, dimension: Int) -> [Complex<Double>] {
-        var hMatrix = [Complex<Double>](repeating: .zero, count: dimension * dimension)
+        var hMatrix = [Complex<Double>](unsafeUninitializedCapacity: dimension * dimension) {
+            buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = dimension * dimension
+        }
 
         for term in hamiltonian.terms {
             let coeff = term.coefficient
@@ -658,8 +674,7 @@ public enum LindbladSolver {
 
     // MARK: - TR-BDF2 Step
 
-    /// Performs single TR-BDF2 step for stiff dynamics.
-    @_effects(readonly)
+    /// Performs single TR-BDF2 step for stiff dynamics via direct linear solve.
     @_optimize(speed)
     private static func trBdf2Step(
         rhoVec: [Complex<Double>],
@@ -668,40 +683,25 @@ public enum LindbladSolver {
         hMatrix: [Complex<Double>],
         jumpData: JumpOperatorData,
         dim: Int,
-        atol: Double,
-        rtol: Double,
     ) -> (rhoNew: [Complex<Double>], accepted: Bool) {
         let n2 = rhoVec.count
         let gamma = trBdf2Gamma
 
-        let gammaH2 = Complex<Double>(gamma * h * 0.5, 0)
-        var yGamma = [Complex<Double>](unsafeUninitializedCapacity: n2) {
+        let superop = constructSuperoperator(hMatrix: hMatrix, jumpData: jumpData, dim: dim)
+
+        let alpha1 = gamma * h * 0.5
+        let alpha1C = Complex<Double>(alpha1, 0)
+        let rhs1 = [Complex<Double>](unsafeUninitializedCapacity: n2) {
             buffer, count in
             for i in 0 ..< n2 {
-                buffer[i] = rhoVec[i] + gammaH2 * f0[i]
+                buffer[i] = rhoVec[i] + alpha1C * f0[i]
             }
             count = n2
         }
 
-        var residual = [Complex<Double>](repeating: .zero, count: n2)
-
-        for _ in 0 ..< maxNewtonIterations {
-            let fGamma = computeLindbladRHS(yGamma, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
-            for i in 0 ..< n2 {
-                residual[i] = yGamma[i] - rhoVec[i] - gammaH2 * (f0[i] + fGamma[i])
-            }
-
-            let resNorm = vectorNorm(residual)
-            let rhoNorm = vectorNorm(yGamma)
-            let tol = atol + rtol * rhoNorm
-            if resNorm < tol { break }
-
-            for i in 0 ..< n2 {
-                yGamma[i] = yGamma[i] - residual[i]
-            }
+        guard let yGamma = solveJacobianSystem(superop: superop, alpha: alpha1, rhs: rhs1, n2: n2) else {
+            return (rhoVec, false)
         }
-
-        let fGamma = computeLindbladRHS(yGamma, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
 
         let oneMinusGamma = 1.0 - gamma
         let twoMinusGamma = 2.0 - gamma
@@ -710,35 +710,123 @@ public enum LindbladSolver {
         let c2 = recipGammaTwoMinusGamma
         let c3 = oneMinusGamma * oneMinusGamma * recipGammaTwoMinusGamma
 
-        let cc1h = Complex<Double>(c1 * h, 0)
+        let alpha2 = c1 * h
         let cc2 = Complex<Double>(c2, 0)
         let cc3 = Complex<Double>(c3, 0)
 
-        var yNew = [Complex<Double>](unsafeUninitializedCapacity: n2) {
+        let rhs2 = [Complex<Double>](unsafeUninitializedCapacity: n2) {
             buffer, count in
             for i in 0 ..< n2 {
-                buffer[i] = cc2 * yGamma[i] - cc3 * rhoVec[i] + cc1h * fGamma[i]
+                buffer[i] = cc2 * yGamma[i] - cc3 * rhoVec[i]
             }
             count = n2
         }
 
-        for _ in 0 ..< maxNewtonIterations {
-            let fNew = computeLindbladRHS(yNew, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
-            for i in 0 ..< n2 {
-                residual[i] = yNew[i] - cc2 * yGamma[i] + cc3 * rhoVec[i] - cc1h * fNew[i]
-            }
-
-            let resNorm = vectorNorm(residual)
-            let rhoNorm = vectorNorm(yNew)
-            let tol = atol + rtol * rhoNorm
-            if resNorm < tol { break }
-
-            for i in 0 ..< n2 {
-                yNew[i] = yNew[i] - residual[i]
-            }
+        guard let yNew = solveJacobianSystem(superop: superop, alpha: alpha2, rhs: rhs2, n2: n2) else {
+            return (rhoVec, false)
         }
 
         return (yNew, true)
+    }
+
+    /// Construct Lindblad superoperator L in column-major layout by probing with basis vectors.
+    @_optimize(speed)
+    @_eagerMove
+    private static func constructSuperoperator(
+        hMatrix: [Complex<Double>],
+        jumpData: JumpOperatorData,
+        dim: Int,
+    ) -> [Complex<Double>] {
+        let n2 = dim * dim
+
+        var basis = [Complex<Double>](unsafeUninitializedCapacity: n2) {
+            buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = n2
+        }
+
+        return [Complex<Double>](unsafeUninitializedCapacity: n2 * n2) {
+            buffer, count in
+            for k in 0 ..< n2 {
+                basis[k] = .one
+                let col = computeLindbladRHS(basis, hMatrix: hMatrix, jumpData: jumpData, dim: dim)
+                for i in 0 ..< n2 {
+                    buffer[k * n2 + i] = col[i]
+                }
+                basis[k] = .zero
+            }
+            count = n2 * n2
+        }
+    }
+
+    /// Solve (I - α·L)·x = rhs using LAPACK zgesv_ LU factorization.
+    @_optimize(speed)
+    @_eagerMove
+    private static func solveJacobianSystem(
+        superop: [Complex<Double>],
+        alpha: Double,
+        rhs: [Complex<Double>],
+        n2: Int,
+    ) -> [Complex<Double>]? {
+        let alphaC = Complex<Double>(alpha, 0)
+
+        var jacobian = [Double](unsafeUninitializedCapacity: 2 * n2 * n2) {
+            buffer, count in
+            for col in 0 ..< n2 {
+                for row in 0 ..< n2 {
+                    let superIdx = col * n2 + row
+                    let val = (row == col ? Complex<Double>.one : .zero) - alphaC * superop[superIdx]
+                    let idx = 2 * (col * n2 + row)
+                    buffer[idx] = val.real
+                    buffer[idx + 1] = val.imaginary
+                }
+            }
+            count = 2 * n2 * n2
+        }
+
+        var b = [Double](unsafeUninitializedCapacity: 2 * n2) {
+            buffer, count in
+            for i in 0 ..< n2 {
+                buffer[2 * i] = rhs[i].real
+                buffer[2 * i + 1] = rhs[i].imaginary
+            }
+            count = 2 * n2
+        }
+
+        var nn = __LAPACK_int(n2)
+        var nrhs = __LAPACK_int(1)
+        var lda = __LAPACK_int(n2)
+        var ldb = __LAPACK_int(n2)
+        var pivots = [__LAPACK_int](unsafeUninitializedCapacity: n2) {
+            _, count in count = n2
+        }
+        var info = __LAPACK_int(0)
+
+        jacobian.withUnsafeMutableBytes { aPtr in
+            b.withUnsafeMutableBytes { bPtr in
+                pivots.withUnsafeMutableBufferPointer { pPtr in
+                    zgesv_(
+                        &nn, &nrhs,
+                        OpaquePointer(aPtr.baseAddress),
+                        &lda,
+                        pPtr.baseAddress,
+                        OpaquePointer(bPtr.baseAddress),
+                        &ldb,
+                        &info,
+                    )
+                }
+            }
+        }
+
+        guard info == 0 else { return nil }
+
+        return [Complex<Double>](unsafeUninitializedCapacity: n2) {
+            buffer, count in
+            for i in 0 ..< n2 {
+                buffer[i] = Complex(b[2 * i], b[2 * i + 1])
+            }
+            count = n2
+        }
     }
 
     // MARK: - Positivity Enforcement
@@ -767,10 +855,12 @@ public enum LindbladSolver {
     @_effects(readonly)
     @_optimize(speed)
     private static func enforcePositivityEigenvalue(_ rhoVec: [Complex<Double>], dim: Int) -> [Complex<Double>] {
-        var matrix = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: dim), count: dim)
-        for i in 0 ..< dim {
-            for j in 0 ..< dim {
-                matrix[i][j] = rhoVec[i * dim + j]
+        let matrix = (0 ..< dim).map { i in
+            [Complex<Double>](unsafeUninitializedCapacity: dim) { buffer, count in
+                for j in 0 ..< dim {
+                    buffer.initializeElement(at: j, to: rhoVec[i * dim + j])
+                }
+                count = dim
             }
         }
 
@@ -796,7 +886,11 @@ public enum LindbladSolver {
         }
 
         let wDag = hermitianConjugateFlat(wFlat, dim: dim)
-        var result = [Complex<Double>](repeating: .zero, count: dim * dim)
+        var result = [Complex<Double>](unsafeUninitializedCapacity: dim * dim) {
+            buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = dim * dim
+        }
         matrixMultiplyFlat(wFlat, wDag, &result, dim: dim)
 
         return result
@@ -852,7 +946,11 @@ public enum LindbladSolver {
         }
 
         let lDag = hermitianConjugateFlat(lMatrix, dim: dim)
-        var result = [Complex<Double>](repeating: .zero, count: dim * dim)
+        var result = [Complex<Double>](unsafeUninitializedCapacity: dim * dim) {
+            buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = dim * dim
+        }
         matrixMultiplyFlat(lMatrix, lDag, &result, dim: dim)
 
         return result
@@ -948,60 +1046,28 @@ public enum LindbladSolver {
         _ c: inout [Complex<Double>],
         dim: Int,
     ) {
-        let n = dim
-        let nn = n * n
-        let nn2 = nn * 2
-
-        var aInterleaved = [Double](unsafeUninitializedCapacity: nn2) {
-            buffer, count in
-            for i in 0 ..< nn {
-                buffer[i * 2] = a[i].real
-                buffer[i * 2 + 1] = a[i].imaginary
-            }
-            count = nn2
-        }
-
-        var bInterleaved = [Double](unsafeUninitializedCapacity: nn2) {
-            buffer, count in
-            for i in 0 ..< nn {
-                buffer[i * 2] = b[i].real
-                buffer[i * 2 + 1] = b[i].imaginary
-            }
-            count = nn2
-        }
-
-        var cInterleaved = [Double](unsafeUninitializedCapacity: nn2) {
-            _, count in
-            count = nn2
-        }
-
         var alpha = (1.0, 0.0)
         var beta = (0.0, 0.0)
+        let n = Int32(dim)
 
-        aInterleaved.withUnsafeMutableBufferPointer { aPtr in
-            bInterleaved.withUnsafeMutableBufferPointer { bPtr in
-                cInterleaved.withUnsafeMutableBufferPointer { cPtr in
+        a.withUnsafeBufferPointer { aPtr in
+            b.withUnsafeBufferPointer { bPtr in
+                c.withUnsafeMutableBufferPointer { cPtr in
                     withUnsafeMutablePointer(to: &alpha) { alphaPtr in
                         withUnsafeMutablePointer(to: &beta) { betaPtr in
                             cblas_zgemm(
-                                CblasRowMajor,
-                                CblasNoTrans,
-                                CblasNoTrans,
-                                Int32(n), Int32(n), Int32(n),
+                                CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                                n, n, n,
                                 OpaquePointer(alphaPtr),
-                                OpaquePointer(aPtr.baseAddress), Int32(n),
-                                OpaquePointer(bPtr.baseAddress), Int32(n),
+                                OpaquePointer(aPtr.baseAddress), n,
+                                OpaquePointer(bPtr.baseAddress), n,
                                 OpaquePointer(betaPtr),
-                                OpaquePointer(cPtr.baseAddress), Int32(n),
+                                OpaquePointer(cPtr.baseAddress), n,
                             )
                         }
                     }
                 }
             }
-        }
-
-        for i in 0 ..< nn {
-            c[i] = Complex(cInterleaved[i * 2], cInterleaved[i * 2 + 1])
         }
     }
 

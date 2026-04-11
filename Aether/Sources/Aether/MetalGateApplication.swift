@@ -8,10 +8,10 @@ import Metal
 ///
 /// Compiles compute shaders once at app launch and shares them globally.
 /// Prevents expensive re-compilation when creating multiple simulators.
-private enum MetalResources {
-    fileprivate static let device: MTLDevice? = MTLCreateSystemDefaultDevice()
-    fileprivate static let commandQueue: MTLCommandQueue? = device?.makeCommandQueue()
-    fileprivate static let library: MTLLibrary? = {
+enum MetalResources {
+    static let device: MTLDevice? = MTLCreateSystemDefaultDevice()
+    static let commandQueue: MTLCommandQueue? = device?.makeCommandQueue()
+    static let library: MTLLibrary? = {
         guard let device else { return nil }
         return MetalUtilities.loadLibrary(device: device)
     }()
@@ -337,7 +337,7 @@ public actor MetalGateApplication {
         case let .reset(qubit, _):
             GateApplication.applyReset(qubit: qubit, state: state)
         case let .measure(qubit, _, _):
-            GateApplication.applyReset(qubit: qubit, state: state)
+            GateApplication.applyMeasurement(qubit: qubit, state: state).state
         }
     }
 
@@ -400,7 +400,7 @@ public actor MetalGateApplication {
             return GateApplication.apply(gate, to: qubit, state: state)
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     /// Dispatch CNOT gate to GPU via dedicated Metal kernel.
@@ -445,7 +445,7 @@ public actor MetalGateApplication {
             return GateApplication.apply(.cnot, to: [control, target], state: state)
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     /// Dispatch arbitrary two-qubit gate to GPU via 4x4 matrix kernel.
@@ -494,7 +494,7 @@ public actor MetalGateApplication {
             return GateApplication.apply(gate, to: [control, target], state: state)
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 
     /// Dispatch Toffoli/Fredkin gate to GPU via dedicated three-qubit kernel.
@@ -541,7 +541,7 @@ public actor MetalGateApplication {
             return GateApplication.apply(.toffoli, to: [control1, control2, target], state: state)
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: newAmplitudes)
     }
 }
 

@@ -468,8 +468,10 @@ public actor HHLAlgorithm {
 
         let evolvedExtended = qspCircuit.execute(on: extendedInitial)
 
-        let solutionState = projectToSystemQubits(state: evolvedExtended)
-        let successProb = computeAncillaSuccessProbability(state: evolvedExtended)
+        let unpreparedState = prepareCircuit.inversed().execute(on: evolvedExtended)
+
+        let solutionState = projectToSystemQubits(state: unpreparedState)
+        let successProb = computeAncillaSuccessProbability(state: unpreparedState)
 
         let actualDegree = phaseAngles.polynomialDegree
 
@@ -575,7 +577,7 @@ public actor HHLAlgorithm {
         let precisionMask = precisionStateSize - 1
         let hhlAncillaBit = 1 << hhlAncillaQubit
         let inversionScale = alpha / problem.conditionNumber
-        let eigenvalueThreshold = inversionScale * 0.01
+        let eigenvalueThreshold = alpha / Double(precisionStateSize)
 
         var amplitudes = state.amplitudes
 
@@ -611,7 +613,7 @@ public actor HHLAlgorithm {
             )
         }
 
-        return QuantumState(qubits: state.qubits, amplitudes: amplitudes)
+        return QuantumState(qubits: state.qubits, rawAmplitudes: amplitudes)
     }
 
     /// Extracts solution state from QPE-based HHL output.
@@ -660,7 +662,7 @@ public actor HHLAlgorithm {
             )
         }
 
-        var solutionState = QuantumState(qubits: systemQubits, amplitudes: solutionAmplitudes)
+        var solutionState = QuantumState(qubits: systemQubits, rawAmplitudes: solutionAmplitudes)
 
         var normSq = 0.0
         for i in 0 ..< systemSize {
@@ -691,44 +693,25 @@ public actor HHLAlgorithm {
             count = newSize
         }
 
-        return QuantumState(qubits: totalQubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: totalQubits, rawAmplitudes: newAmplitudes)
     }
 
-    /// Projects extended state back to system qubits by partial trace over ancillas.
+    /// Post-selects extended state on ancilla=|0⟩ to recover system-qubit state.
     @_optimize(speed)
     @_eagerMove
     private func projectToSystemQubits(state: QuantumState) -> QuantumState {
         let systemQubits = problem.systemQubits
         let systemSize = 1 << systemQubits
-        let ancillaSize = state.stateSpaceSize / systemSize
 
-        var projectedAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: systemSize) {
+        let projectedAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: systemSize) {
             buffer, count in
-            buffer.initialize(repeating: .zero)
+            for i in 0 ..< systemSize {
+                buffer[i] = state.amplitude(of: i)
+            }
             count = systemSize
         }
 
-        for i in 0 ..< systemSize {
-            var sumSquared = 0.0
-            for a in 0 ..< ancillaSize {
-                let fullIndex = i + a * systemSize
-                if fullIndex < state.stateSpaceSize {
-                    sumSquared += state.amplitude(of: fullIndex).magnitudeSquared
-                }
-            }
-            let amplitude = state.amplitude(of: i)
-            let norm = Foundation.sqrt(sumSquared)
-            if norm > Self.amplitudeThreshold {
-                let ampMag = Foundation.sqrt(max(amplitude.magnitudeSquared, Self.amplitudeThreshold))
-                let invMag = 1.0 / ampMag
-                projectedAmplitudes[i] = Complex(
-                    norm * amplitude.real * invMag,
-                    norm * amplitude.imaginary * invMag,
-                )
-            }
-        }
-
-        return QuantumState(qubits: systemQubits, amplitudes: projectedAmplitudes)
+        return QuantumState(qubits: systemQubits, rawAmplitudes: projectedAmplitudes)
     }
 
     /// Computes post-selection success probability from extended state.

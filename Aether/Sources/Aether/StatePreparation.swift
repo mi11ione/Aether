@@ -57,7 +57,7 @@ public extension QuantumState {
             count = stateSpaceSize
         }
 
-        return QuantumState(qubits: qubits, amplitudes: amplitudes)
+        return QuantumState(qubits: qubits, rawAmplitudes: amplitudes)
     }
 
     // MARK: - W State Preparation
@@ -100,7 +100,7 @@ public extension QuantumState {
             count = stateSpaceSize
         }
 
-        return QuantumState(qubits: qubits, amplitudes: amplitudes)
+        return QuantumState(qubits: qubits, rawAmplitudes: amplitudes)
     }
 
     // MARK: - Dicke State Preparation
@@ -165,7 +165,7 @@ public extension QuantumState {
             count = stateSpaceSize
         }
 
-        return QuantumState(qubits: qubits, amplitudes: amplitudes)
+        return QuantumState(qubits: qubits, rawAmplitudes: amplitudes)
     }
 
     /// Enumerates all n-bit integers with exactly k bits set via Gosper's hack.

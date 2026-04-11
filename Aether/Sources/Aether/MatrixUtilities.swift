@@ -46,6 +46,7 @@ public enum MatrixUtilities {
     /// - Complexity: O(n³) with BLAS hardware acceleration (SIMD, cache optimization)
     /// - Precondition: Both matrices must be square with matching dimensions
     @_optimize(speed)
+    @_effects(readonly)
     @inlinable
     @_eagerMove
     public static func matrixMultiply(_ a: [[Complex<Double>]], _ b: [[Complex<Double>]]) -> [[Complex<Double>]] {
@@ -55,49 +56,46 @@ public enum MatrixUtilities {
 
         let n = a.count
         let nn = n * n
-        let nn2 = nn * 2
 
-        var aInterleaved = [Double](unsafeUninitializedCapacity: nn2) {
+        let aFlat = [Complex<Double>](unsafeUninitializedCapacity: nn) {
             buffer, count in
             for i in 0 ..< n {
+                let row = a[i]
+                let base = i * n
                 for j in 0 ..< n {
-                    let idx = (i * n + j) * 2
-                    buffer[idx] = a[i][j].real
-                    buffer[idx + 1] = a[i][j].imaginary
+                    buffer[base + j] = row[j]
                 }
             }
-            count = nn2
+            count = nn
         }
 
-        var bInterleaved = [Double](unsafeUninitializedCapacity: nn2) {
+        let bFlat = [Complex<Double>](unsafeUninitializedCapacity: nn) {
             buffer, count in
             for i in 0 ..< n {
+                let row = b[i]
+                let base = i * n
                 for j in 0 ..< n {
-                    let idx = (i * n + j) * 2
-                    buffer[idx] = b[i][j].real
-                    buffer[idx + 1] = b[i][j].imaginary
+                    buffer[base + j] = row[j]
                 }
             }
-            count = nn2
+            count = nn
         }
 
-        var resultInterleaved = [Double](unsafeUninitializedCapacity: nn2) {
+        var cFlat = [Complex<Double>](unsafeUninitializedCapacity: nn) {
             _, count in
-            count = nn2
+            count = nn
         }
 
         var alpha = (1.0, 0.0)
         var beta = (0.0, 0.0)
 
-        aInterleaved.withUnsafeMutableBufferPointer { aPtr in
-            bInterleaved.withUnsafeMutableBufferPointer { bPtr in
-                resultInterleaved.withUnsafeMutableBufferPointer { cPtr in
+        aFlat.withUnsafeBufferPointer { aPtr in
+            bFlat.withUnsafeBufferPointer { bPtr in
+                cFlat.withUnsafeMutableBufferPointer { cPtr in
                     withUnsafeMutablePointer(to: &alpha) { alphaPtr in
                         withUnsafeMutablePointer(to: &beta) { betaPtr in
                             cblas_zgemm(
-                                CblasRowMajor,
-                                CblasNoTrans,
-                                CblasNoTrans,
+                                CblasRowMajor, CblasNoTrans, CblasNoTrans,
                                 Int32(n), Int32(n), Int32(n),
                                 OpaquePointer(alphaPtr),
                                 OpaquePointer(aPtr.baseAddress), Int32(n),
@@ -112,10 +110,10 @@ public enum MatrixUtilities {
         }
 
         return (0 ..< n).map { i in
-            [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
+            let base = i * n
+            return [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
                 for j in 0 ..< n {
-                    let idx = (i * n + j) * 2
-                    buffer[j] = Complex(resultInterleaved[idx], resultInterleaved[idx + 1])
+                    buffer[j] = cFlat[base + j]
                 }
                 count = n
             }

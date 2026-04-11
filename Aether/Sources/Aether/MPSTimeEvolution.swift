@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 Roman Zhuzhgov
 // Licensed under the Apache License, Version 2.0
 
-import Foundation
+import Accelerate
 
 private let cbrt4 = pow(4.0, 1.0 / 3.0)
 private let fifthRoot4 = pow(4.0, 1.0 / 5.0)
@@ -344,7 +344,10 @@ public actor MPSTimeEvolution {
         var singleSiteGates: [[[Complex<Double>]]]? = nil
         if abs(h) > 1e-15 {
             let xGate = TEBDGates.xEvolution(angle: h * dt)
-            singleSiteGates = Array(repeating: xGate, count: mps.qubits)
+            singleSiteGates = [[[Complex<Double>]]](unsafeUninitializedCapacity: mps.qubits) { buffer, count in
+                buffer.initialize(repeating: xGate)
+                count = mps.qubits
+            }
         }
 
         let zzAngle = J * dt
@@ -678,17 +681,197 @@ public actor MPSTimeEvolution {
         return gatesApplied
     }
 
-    /// Scale gate matrix phases by the given factor.
+    /// Compute U^factor via eigendecomposition for Suzuki-Trotter fractional steps.
     @_optimize(speed)
-    @_effects(readonly)
+    @_eagerMove
     private func scaleGate(_ gate: [[Complex<Double>]], factor: Double) -> [[Complex<Double>]] {
         guard abs(factor - 1.0) > 1e-15 else { return gate }
 
-        return gate.map { row in
-            row.map { element in
-                let scaledPhase = element.phase * factor
-                let mag = element.magnitude
-                return Complex(mag * cos(scaledPhase), mag * sin(scaledPhase))
+        let n = gate.count
+
+        guard abs(factor) > 1e-15 else {
+            return MatrixUtilities.identityMatrix(dimension: n)
+        }
+
+        var a = [Double](unsafeUninitializedCapacity: 2 * n * n) {
+            buffer, count in
+            for col in 0 ..< n {
+                for row in 0 ..< n {
+                    let idx = 2 * (col * n + row)
+                    buffer[idx] = gate[row][col].real
+                    buffer[idx + 1] = gate[row][col].imaginary
+                }
+            }
+            count = 2 * n * n
+        }
+
+        var eigenvals = [Double](unsafeUninitializedCapacity: 2 * n) {
+            _, count in count = 2 * n
+        }
+        var vr = [Double](unsafeUninitializedCapacity: 2 * n * n) {
+            _, count in count = 2 * n * n
+        }
+        var dummyVL = [Double](unsafeUninitializedCapacity: 2) {
+            _, count in count = 2
+        }
+
+        var jobvl = CChar(Character("N").asciiValue!)
+        var jobvr = CChar(Character("V").asciiValue!)
+        var nn = __LAPACK_int(n)
+        var lda = __LAPACK_int(n)
+        var ldvl = __LAPACK_int(1)
+        var ldvr = __LAPACK_int(n)
+        var lwork = __LAPACK_int(-1)
+        var info = __LAPACK_int(0)
+        var rwork = [Double](unsafeUninitializedCapacity: 2 * n) {
+            _, count in count = 2 * n
+        }
+
+        var workQuery = [Double](unsafeUninitializedCapacity: 2) {
+            _, count in count = 2
+        }
+
+        a.withUnsafeMutableBytes { aPtr in
+            eigenvals.withUnsafeMutableBytes { wPtr in
+                dummyVL.withUnsafeMutableBytes { vlPtr in
+                    vr.withUnsafeMutableBytes { vrPtr in
+                        workQuery.withUnsafeMutableBytes { workPtr in
+                            rwork.withUnsafeMutableBufferPointer { rworkPtr in
+                                zgeev_(
+                                    &jobvl, &jobvr, &nn,
+                                    OpaquePointer(aPtr.baseAddress),
+                                    &lda,
+                                    OpaquePointer(wPtr.baseAddress),
+                                    OpaquePointer(vlPtr.baseAddress), &ldvl,
+                                    OpaquePointer(vrPtr.baseAddress),
+                                    &ldvr,
+                                    OpaquePointer(workPtr.baseAddress!),
+                                    &lwork,
+                                    rworkPtr.baseAddress,
+                                    &info,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        ValidationUtilities.validateLAPACKSuccess(info, operation: "zgeev_ workspace query")
+
+        let optWork = max(1, Int(workQuery[0]))
+        lwork = __LAPACK_int(optWork)
+        var work = [Double](unsafeUninitializedCapacity: 2 * optWork) {
+            _, count in
+            count = 2 * optWork
+        }
+
+        a.withUnsafeMutableBytes { aPtr in
+            eigenvals.withUnsafeMutableBytes { wPtr in
+                dummyVL.withUnsafeMutableBytes { vlPtr in
+                    vr.withUnsafeMutableBytes { vrPtr in
+                        work.withUnsafeMutableBytes { workPtr in
+                            rwork.withUnsafeMutableBufferPointer { rworkPtr in
+                                zgeev_(
+                                    &jobvl, &jobvr, &nn,
+                                    OpaquePointer(aPtr.baseAddress),
+                                    &lda,
+                                    OpaquePointer(wPtr.baseAddress),
+                                    OpaquePointer(vlPtr.baseAddress), &ldvl,
+                                    OpaquePointer(vrPtr.baseAddress),
+                                    &ldvr,
+                                    OpaquePointer(workPtr.baseAddress!),
+                                    &lwork,
+                                    rworkPtr.baseAddress,
+                                    &info,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        ValidationUtilities.validateLAPACKSuccess(info, operation: "zgeev_ eigensolver")
+
+        let scaledEig = [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
+            for k in 0 ..< n {
+                let phase = atan2(eigenvals[2 * k + 1], eigenvals[2 * k])
+                let sp = phase * factor
+                buffer[k] = Complex(cos(sp), sin(sp))
+            }
+            count = n
+        }
+
+        var vinv = vr
+        var pivots = [__LAPACK_int](unsafeUninitializedCapacity: n) {
+            _, count in count = n
+        }
+        var nLU = __LAPACK_int(n)
+        var ldaLU = __LAPACK_int(n)
+        var infoLU = __LAPACK_int(0)
+
+        vinv.withUnsafeMutableBytes { vPtr in
+            pivots.withUnsafeMutableBufferPointer { pPtr in
+                zgetrf_(&nLU, &nLU, OpaquePointer(vPtr.baseAddress), &ldaLU, pPtr.baseAddress, &infoLU)
+            }
+        }
+
+        ValidationUtilities.validateLAPACKSuccess(infoLU, operation: "zgetrf_")
+
+        var lworkInv = __LAPACK_int(-1)
+        var infoInv = __LAPACK_int(0)
+        var wqInv = [Double](unsafeUninitializedCapacity: 2) {
+            _, count in count = 2
+        }
+
+        vinv.withUnsafeMutableBytes { vPtr in
+            pivots.withUnsafeMutableBufferPointer { pPtr in
+                wqInv.withUnsafeMutableBytes { wkPtr in
+                    zgetri_(
+                        &nLU, OpaquePointer(vPtr.baseAddress), &ldaLU,
+                        pPtr.baseAddress,
+                        OpaquePointer(wkPtr.baseAddress!), &lworkInv, &infoInv,
+                    )
+                }
+            }
+        }
+
+        let optInv = max(1, Int(wqInv[0]))
+        lworkInv = __LAPACK_int(optInv)
+        var workInv = [Double](unsafeUninitializedCapacity: 2 * optInv) {
+            _, count in
+            count = 2 * optInv
+        }
+
+        vinv.withUnsafeMutableBytes { vPtr in
+            pivots.withUnsafeMutableBufferPointer { pPtr in
+                workInv.withUnsafeMutableBytes { wkPtr in
+                    zgetri_(
+                        &nLU, OpaquePointer(vPtr.baseAddress), &ldaLU,
+                        pPtr.baseAddress,
+                        OpaquePointer(wkPtr.baseAddress!), &lworkInv, &infoInv,
+                    )
+                }
+            }
+        }
+
+        ValidationUtilities.validateLAPACKSuccess(infoInv, operation: "zgetri_")
+
+        return (0 ..< n).map { i in
+            [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
+                for j in 0 ..< n {
+                    var sum: Complex<Double> = .zero
+                    for k in 0 ..< n {
+                        let vIdx = 2 * (k * n + i)
+                        let vIK = Complex(vr[vIdx], vr[vIdx + 1])
+                        let viIdx = 2 * (j * n + k)
+                        let viKJ = Complex(vinv[viIdx], vinv[viIdx + 1])
+                        sum = sum + vIK * scaledEig[k] * viKJ
+                    }
+                    buffer[j] = sum
+                }
+                count = n
             }
         }
     }

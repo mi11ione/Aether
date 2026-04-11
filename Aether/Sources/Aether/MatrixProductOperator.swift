@@ -540,8 +540,10 @@
         return transfer
     }
 
-    /// Propagates transfer matrix with intermediate caching for better performance.
+    /// Propagates transfer matrix using flat contiguous arrays for cache-friendly access.
     @_optimize(speed)
+    @_effects(readonly)
+    @_eagerMove
     private static func propagateTransferMatrixOptimized(
         transfer: TransferMatrix,
         braTensor: MPSTensor,
@@ -559,16 +561,31 @@
         let mpoElements = mpoTensor.elements
         let ketElements = ketTensor.elements
 
-        var braMpoIntermediate: BraMPOCache = [[[[Complex<Double>]]]](
-            repeating: [[[Complex<Double>]]](
-                repeating: [[Complex<Double>]](
-                    repeating: [Complex<Double>](repeating: .zero, count: mpoRightDim),
-                    count: braRightDim,
-                ),
-                count: 2,
-            ),
-            count: mpoLeftDim,
-        )
+        let tBraStride = mpoLeftDim * ketLeftDim
+        let tMpoStride = ketLeftDim
+        let transferFlat = [Complex<Double>](unsafeUninitializedCapacity: braLeftDim * tBraStride) {
+            buffer, count in
+            for i in 0 ..< braLeftDim {
+                let s0 = transfer[i]
+                for j in 0 ..< mpoLeftDim {
+                    let s1 = s0[j]
+                    let base = i * tBraStride + j * tMpoStride
+                    for k in 0 ..< ketLeftDim {
+                        buffer[base + k] = s1[k]
+                    }
+                }
+            }
+            count = braLeftDim * tBraStride
+        }
+
+        let iStride0 = 2 * braRightDim * mpoRightDim
+        let iStride1 = braRightDim * mpoRightDim
+        let iStride2 = mpoRightDim
+        var intermediate = [Complex<Double>](unsafeUninitializedCapacity: mpoLeftDim * iStride0) {
+            buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = mpoLeftDim * iStride0
+        }
 
         for alphaO in 0 ..< mpoLeftDim {
             for alphaBra in 0 ..< braLeftDim {
@@ -578,7 +595,8 @@
                         let braConj = Complex(braElements[braIdx].real, -braElements[braIdx].imaginary)
 
                         for alphaKet in 0 ..< ketLeftDim {
-                            let transferElement = transfer[alphaBra][alphaO][alphaKet]
+                            let tIdx = alphaBra * tBraStride + alphaO * tMpoStride + alphaKet
+                            let transferElement = transferFlat[tIdx]
                             if transferElement.magnitudeSquared < transferMatrixSkipThreshold {
                                 continue
                             }
@@ -587,10 +605,10 @@
 
                             for physKet in 0 ..< 2 {
                                 let mpoIdx = alphaO * (4 * mpoRightDim) + physKet * (2 * mpoRightDim) + physBra * mpoRightDim
+                                let iBase = alphaO * iStride0 + physKet * iStride1 + betaBra * iStride2
 
                                 for betaO in 0 ..< mpoRightDim {
-                                    let mpoElement = mpoElements[mpoIdx + betaO]
-                                    braMpoIntermediate[alphaO][physKet][betaBra][betaO] = braMpoIntermediate[alphaO][physKet][betaBra][betaO] + scaledBra * mpoElement
+                                    intermediate[iBase + betaO] = intermediate[iBase + betaO] + scaledBra * mpoElements[mpoIdx + betaO]
                                 }
                             }
                         }
@@ -599,13 +617,13 @@
             }
         }
 
-        var newTransfer: TransferMatrix = [[[Complex<Double>]]](
-            repeating: [[Complex<Double>]](
-                repeating: [Complex<Double>](repeating: .zero, count: ketRightDim),
-                count: mpoRightDim,
-            ),
-            count: braRightDim,
-        )
+        let nStride0 = mpoRightDim * ketRightDim
+        let nStride1 = ketRightDim
+        var newTransferFlat = [Complex<Double>](unsafeUninitializedCapacity: braRightDim * nStride0) {
+            buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = braRightDim * nStride0
+        }
 
         for alphaKet in 0 ..< ketLeftDim {
             for physKet in 0 ..< 2 {
@@ -614,10 +632,12 @@
                     let ketElement = ketElements[ketIdx]
 
                     for betaBra in 0 ..< braRightDim {
+                        let nBase = betaBra * nStride0
                         for betaO in 0 ..< mpoRightDim {
+                            let nIdx = nBase + betaO * nStride1 + betaKet
                             for alphaO in 0 ..< mpoLeftDim {
-                                let intermediate = braMpoIntermediate[alphaO][physKet][betaBra][betaO]
-                                newTransfer[betaBra][betaO][betaKet] = newTransfer[betaBra][betaO][betaKet] + intermediate * ketElement
+                                let iIdx = alphaO * iStride0 + physKet * iStride1 + betaBra * iStride2 + betaO
+                                newTransferFlat[nIdx] = newTransferFlat[nIdx] + intermediate[iIdx] * ketElement
                             }
                         }
                     }
@@ -625,6 +645,25 @@
             }
         }
 
-        return newTransfer
+        var result: TransferMatrix = []
+        result.reserveCapacity(braRightDim)
+        for i in 0 ..< braRightDim {
+            var mpoSlice: [[Complex<Double>]] = []
+            mpoSlice.reserveCapacity(mpoRightDim)
+            for j in 0 ..< mpoRightDim {
+                let base = i * nStride0 + j * nStride1
+                let ketSlice = [Complex<Double>](unsafeUninitializedCapacity: ketRightDim) {
+                    buffer, count in
+                    for k in 0 ..< ketRightDim {
+                        buffer[k] = newTransferFlat[base + k]
+                    }
+                    count = ketRightDim
+                }
+                mpoSlice.append(ketSlice)
+            }
+            result.append(mpoSlice)
+        }
+
+        return result
     }
 }

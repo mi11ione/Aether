@@ -85,7 +85,8 @@ public struct WalkGraph: Sendable {
     /// **Example:**
     /// ```swift
     /// let graph = WalkGraph.cycle(vertices: 8)
-    /// let qubits = graph.positionQubits  // 3
+    /// let qubits = graph.positionQubits
+    /// print(qubits)  // 3
     /// ```
     ///
     /// - Complexity: O(1)
@@ -99,7 +100,8 @@ public struct WalkGraph: Sendable {
     /// **Example:**
     /// ```swift
     /// let graph = WalkGraph.complete(vertices: 4)
-    /// let deg = graph.degree(of: 0)  // 3
+    /// let deg = graph.degree(of: 0)
+    /// print(deg)  // 3
     /// ```
     ///
     /// - Parameter vertex: Vertex index in range 0..<vertexCount
@@ -124,7 +126,8 @@ public struct WalkGraph: Sendable {
     /// **Example:**
     /// ```swift
     /// let graph = WalkGraph.complete(vertices: 5)
-    /// let maxDeg = graph.maxDegree  // 4
+    /// let maxDeg = graph.maxDegree
+    /// print(maxDeg)  // 4
     /// ```
     ///
     /// - Complexity: O(n²)
@@ -142,7 +145,8 @@ public struct WalkGraph: Sendable {
     /// **Example:**
     /// ```swift
     /// let cycle = WalkGraph.cycle(vertices: 6)
-    /// let regular = cycle.isRegular  // true
+    /// let regular = cycle.isRegular
+    /// print(regular)  // true
     /// ```
     ///
     /// - Complexity: O(n²)
@@ -163,7 +167,8 @@ public struct WalkGraph: Sendable {
     /// **Example:**
     /// ```swift
     /// let graph = WalkGraph.cycle(vertices: 4)
-    /// let lap = graph.laplacian  // 16-element flat array
+    /// let lap = graph.laplacian
+    /// print(lap.count)  // 16
     /// ```
     ///
     /// - Complexity: O(n²)
@@ -265,6 +270,7 @@ public struct WalkGraph: Sendable {
     /// **Example:**
     /// ```swift
     /// let graph = WalkGraph.complete(vertices: 8)
+    /// let deg = graph.maxDegree
     /// let circuit = QuantumWalk.search(on: graph, marked: [3])
     /// ```
     ///
@@ -451,6 +457,7 @@ public enum WalkCoin: Sendable {
 ///
 /// **Example:**
 /// ```swift
+/// let graph = WalkGraph.cycle(vertices: 8)
 /// let discrete = WalkMethod.discrete(coin: .grover, steps: 20)
 /// let continuous = WalkMethod.continuous(time: 1.5, trotterSteps: 20)
 /// ```
@@ -505,7 +512,8 @@ public struct WalkResult: Sendable, CustomStringConvertible {
     /// **Example:**
     /// ```swift
     /// let result = WalkResult(vertexProbabilities: [0.5, 0.0, 0.5], mostProbableVertex: 0, steps: 10)
-    /// print(result.description)
+    /// let text = result.description
+    /// print(text)
     /// ```
     @inlinable
     public var description: String {
@@ -615,6 +623,9 @@ public enum QuantumWalk {
     /// - Returns: Quantum circuit implementing the walk
     /// - Precondition: initialVertex must be in range 0..<graph.vertexCount
     /// - Precondition: Graph must have at least 2 vertices
+    /// - Precondition: steps > 0 (discrete)
+    /// - Precondition: time >= 0 (continuous)
+    /// - Precondition: trotterSteps > 0 (continuous)
     /// - Complexity: O(steps · n²) for discrete, O(trotterSteps · terms) for continuous
     ///
     /// - SeeAlso: ``WalkGraph``
@@ -637,7 +648,7 @@ public enum QuantumWalk {
         case let .continuous(time, trotterSteps):
             ValidationUtilities.validateNonNegativeDouble(time, name: "time")
             ValidationUtilities.validatePositiveInt(trotterSteps, name: "trotterSteps")
-            return buildContinuousWalk(graph: graph, time: time, initialVertex: initialVertex)
+            return buildContinuousWalk(graph: graph, time: time, trotterSteps: trotterSteps, initialVertex: initialVertex)
         }
     }
 
@@ -709,10 +720,11 @@ public enum QuantumWalk {
         )
         circuit.append(.customUnitary(matrix: statePrep), to: allQubits)
 
-        let walkGate = QuantumGate.customUnitary(matrix: walkMatrix)
-
-        for _ in 0 ..< numSteps {
-            circuit.append(walkGate, to: allQubits)
+        if numSteps > 1 {
+            let poweredMatrix = MatrixUtilities.matrixPower(walkMatrix, exponent: numSteps)
+            circuit.append(.customUnitary(matrix: poweredMatrix), to: allQubits)
+        } else if numSteps == 1 {
+            circuit.append(.customUnitary(matrix: walkMatrix), to: allQubits)
         }
 
         return circuit
@@ -780,10 +792,12 @@ public enum QuantumWalk {
         prepareInitialState(circuit: &circuit, vertex: initialVertex, posQubits: posQubits, coinQubits: coinQubits)
 
         let allQubits = Array(0 ..< totalQubits)
-        let walkGate = QuantumGate.customUnitary(matrix: walkMatrix)
 
-        for _ in 0 ..< steps {
-            circuit.append(walkGate, to: allQubits)
+        if steps > 1 {
+            let poweredMatrix = MatrixUtilities.matrixPower(walkMatrix, exponent: steps)
+            circuit.append(.customUnitary(matrix: poweredMatrix), to: allQubits)
+        } else {
+            circuit.append(.customUnitary(matrix: walkMatrix), to: allQubits)
         }
 
         return circuit
@@ -809,6 +823,7 @@ public enum QuantumWalk {
     }
 
     /// Builds the full walk operator W = S · (I_pos ⊗ C) as a matrix.
+    @_eagerMove
     @_optimize(speed)
     @_effects(readonly)
     private static func buildWalkOperator(
@@ -825,10 +840,11 @@ public enum QuantumWalk {
 
         let coinFullMatrix = tensorProductIdentityCoin(posDim: posDim, coinMatrix: coinMatrix, dim: dim)
 
-        return matrixMultiply(shiftMatrix, coinFullMatrix)
+        return MatrixUtilities.matrixMultiply(shiftMatrix, coinFullMatrix)
     }
 
     /// Builds search walk operator with -I coin at marked vertices.
+    @_eagerMove
     @_optimize(speed)
     @_effects(readonly)
     private static func buildSearchWalkOperator(
@@ -856,10 +872,11 @@ public enum QuantumWalk {
 
         let shiftMatrix = buildShiftMatrix(graph: graph, coinDim: coinDim, dim: dim)
 
-        return matrixMultiply(shiftMatrix, coinFullMatrix)
+        return MatrixUtilities.matrixMultiply(shiftMatrix, coinFullMatrix)
     }
 
     /// Builds coin unitary matrix for the specified coin type.
+    @_eagerMove
     @_optimize(speed)
     @_effects(readonly)
     private static func buildCoinMatrix(
@@ -927,6 +944,7 @@ public enum QuantumWalk {
     }
 
     /// Builds the negative identity matrix for marked vertex coin.
+    @_eagerMove
     @_effects(readonly)
     private static func buildNegativeIdentity(coinDim: Int) -> [[Complex<Double>]] {
         var matrix = [[Complex<Double>]](
@@ -940,6 +958,7 @@ public enum QuantumWalk {
     }
 
     /// Builds shift matrix S where S|v,j⟩ = |neighbor_j(v), reverseIndex⟩.
+    @_eagerMove
     @_optimize(speed)
     @_effects(readonly)
     private static func buildShiftMatrix(
@@ -986,6 +1005,7 @@ public enum QuantumWalk {
     }
 
     /// Builds I_pos ⊗ C (tensor product of identity on position with coin).
+    @_eagerMove
     @_optimize(speed)
     @_effects(readonly)
     private static func tensorProductIdentityCoin(
@@ -1012,6 +1032,7 @@ public enum QuantumWalk {
     }
 
     /// Builds position-dependent coin matrix for search (Grover at unmarked, -I at marked).
+    @_eagerMove
     @_optimize(speed)
     @_effects(readonly)
     private static func buildSearchCoinMatrix(
@@ -1042,6 +1063,7 @@ public enum QuantumWalk {
     }
 
     /// Builds state preparation unitary mapping |0⟩ to uniform superposition over valid walk states.
+    @_eagerMove
     @_optimize(speed)
     @_effects(readonly)
     private static func buildSearchStatePreparation(
@@ -1072,6 +1094,7 @@ public enum QuantumWalk {
     }
 
     /// Builds a Householder unitary U such that U|0⟩ = |target⟩.
+    @_eagerMove
     @_optimize(speed)
     @_effects(readonly)
     private static func buildHouseholderUnitary(
@@ -1109,98 +1132,64 @@ public enum QuantumWalk {
 
     // MARK: - Continuous Walk Construction
 
-    /// Builds continuous-time quantum walk circuit via eigendecomposition.
+    /// Builds continuous-time walk via first-order Trotter: exp(-iHt) ≈ [Π_e exp(-iH_e·dt)]^s.
     @_optimize(speed)
     @_eagerMove
     private static func buildContinuousWalk(
         graph: WalkGraph,
         time: Double,
+        trotterSteps: Int,
         initialVertex: Int,
     ) -> QuantumCircuit {
         let posQubits = graph.positionQubits
         let dim = 1 << posQubits
-
-        let adjacencyComplex = buildAdjacencyComplex(graph: graph, dim: dim)
-        let eigenResult = HermitianEigenDecomposition.decompose(matrix: adjacencyComplex)
-
-        let evolutionMatrix = buildEvolutionMatrix(
-            eigenvalues: eigenResult.eigenvalues,
-            eigenvectors: eigenResult.eigenvectors,
-            time: time,
-            dim: dim,
-        )
-
-        var circuit = QuantumCircuit(qubits: posQubits)
-
-        for bit in 0 ..< posQubits {
-            if (initialVertex >> bit) & 1 == 1 {
-                circuit.append(.pauliX, to: bit)
-            }
-        }
-
-        let allQubits = Array(0 ..< posQubits)
-        circuit.append(.customUnitary(matrix: evolutionMatrix), to: allQubits)
-
-        return circuit
-    }
-
-    /// Builds adjacency matrix as complex matrix padded to power-of-2 dimension.
-    @_optimize(speed)
-    @_effects(readonly)
-    private static func buildAdjacencyComplex(graph: WalkGraph, dim: Int) -> [[Complex<Double>]] {
         let n = graph.vertexCount
-        var matrix = [[Complex<Double>]](
-            repeating: [Complex<Double>](repeating: .zero, count: dim),
-            count: dim,
-        )
-        for i in 0 ..< n {
-            let rowStart = i * n
-            for j in 0 ..< n {
-                matrix[i][j] = Complex(graph.adjacencyMatrix[rowStart + j], 0.0)
-            }
-        }
-        return matrix
-    }
+        let dt = time / Double(trotterSteps)
 
-    /// Computes exp(-iAt) = U · diag(exp(-iλₖt)) · U†.
-    @_optimize(speed)
-    @_effects(readonly)
-    private static func buildEvolutionMatrix(
-        eigenvalues: [Double],
-        eigenvectors: [[Complex<Double>]],
-        time: Double,
-        dim: Int,
-    ) -> [[Complex<Double>]] {
-        var result = [[Complex<Double>]](
-            repeating: [Complex<Double>](repeating: .zero, count: dim),
-            count: dim,
-        )
-
-        for k in 0 ..< dim {
-            let angle = -eigenvalues[k] * time
-            let phase = Complex(cos(angle), sin(angle))
-            let vec = eigenvectors[k]
+        var stepMatrix = [[Complex<Double>]](unsafeUninitializedCapacity: dim) {
+            buffer, count in
             for i in 0 ..< dim {
-                let scaledVi = vec[i] * phase
-                for j in 0 ..< dim {
-                    result[i][j] = result[i][j] + scaledVi * vec[j].conjugate
+                buffer[i] = [Complex<Double>](unsafeUninitializedCapacity: dim) { inner, innerCount in
+                    for j in 0 ..< dim {
+                        inner[j] = i == j ? .one : .zero
+                    }
+                    innerCount = dim
+                }
+            }
+            count = dim
+        }
+
+        for u in 0 ..< n {
+            let rowStart = u * n
+            for v in (u + 1) ..< n {
+                let weight = graph.adjacencyMatrix[rowStart + v]
+                if abs(weight) < Self.epsilon { continue }
+                let angle = weight * dt
+                let cosA = Complex<Double>(cos(angle), 0.0)
+                let mISinA = Complex<Double>(0.0, -sin(angle))
+                for i in 0 ..< dim {
+                    let oldU = stepMatrix[i][u]
+                    let oldV = stepMatrix[i][v]
+                    stepMatrix[i][u] = oldU * cosA + oldV * mISinA
+                    stepMatrix[i][v] = oldU * mISinA + oldV * cosA
                 }
             }
         }
 
-        return result
-    }
+        var circuit = QuantumCircuit(qubits: posQubits)
 
-    // MARK: - Matrix Utilities
+        prepareInitialState(circuit: &circuit, vertex: initialVertex, posQubits: posQubits, coinQubits: 0)
 
-    /// Multiplies two dim×dim complex matrices via BLAS-accelerated ``MatrixUtilities``.
-    @_optimize(speed)
-    @_effects(readonly)
-    private static func matrixMultiply(
-        _ a: [[Complex<Double>]],
-        _ b: [[Complex<Double>]],
-    ) -> [[Complex<Double>]] {
-        MatrixUtilities.matrixMultiply(a, b)
+        let allQubits = Array(0 ..< posQubits)
+
+        if trotterSteps > 1 {
+            let poweredMatrix = MatrixUtilities.matrixPower(stepMatrix, exponent: trotterSteps)
+            circuit.append(.customUnitary(matrix: poweredMatrix), to: allQubits)
+        } else {
+            circuit.append(.customUnitary(matrix: stepMatrix), to: allQubits)
+        }
+
+        return circuit
     }
 
     // MARK: - Pauli Decomposition Helpers
@@ -1251,44 +1240,6 @@ public enum QuantumWalk {
             }
         }
         return ops
-    }
-}
-
-// MARK: - QuantumCircuit Extension
-
-public extension QuantumCircuit {
-    /// Creates a quantum walk circuit on a graph.
-    ///
-    /// Convenience entry point delegating to ``QuantumWalk/walk(on:method:initialVertex:)``.
-    /// For discrete walks, the circuit operates on positionQubits + coinQubits qubits.
-    /// For continuous walks, only positionQubits are used.
-    ///
-    /// **Example:**
-    /// ```swift
-    /// let circuit = QuantumCircuit.quantumWalk(
-    ///     on: WalkGraph.hypercube(dimension: 3),
-    ///     method: .discrete(coin: .grover, steps: 15)
-    /// )
-    /// let state = circuit.execute()
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - graph: Graph topology for the walk
-    ///   - method: Walk type (discrete or continuous)
-    ///   - initialVertex: Starting vertex (default 0)
-    /// - Returns: Quantum circuit implementing the walk
-    /// - Precondition: initialVertex must be in range 0..<graph.vertexCount
-    /// - Precondition: Graph must have at least 2 vertices
-    /// - Complexity: O(steps · n²) for discrete, O(trotterSteps · terms) for continuous
-    ///
-    /// - SeeAlso: ``QuantumWalk``
-    @_eagerMove
-    static func quantumWalk(
-        on graph: WalkGraph,
-        method: WalkMethod,
-        initialVertex: Int = 0,
-    ) -> QuantumCircuit {
-        QuantumWalk.walk(on: graph, method: method, initialVertex: initialVertex)
     }
 }
 

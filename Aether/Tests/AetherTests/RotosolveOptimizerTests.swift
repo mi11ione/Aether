@@ -13,13 +13,13 @@ struct RotosolveOptimizerConfigTests {
     @Test("Create Rotosolve optimizer with defaults")
     func createWithDefaults() {
         let optimizer = RotosolveOptimizer()
-        #expect(optimizer.isNFTEnabled == false, "NFT should be disabled by default")
+        #expect(!optimizer.isNFTEnabled, "NFT should be disabled by default")
     }
 
     @Test("Create Rotosolve optimizer with NFT enabled")
     func createWithNFTEnabled() {
         let optimizer = RotosolveOptimizer(isNFTEnabled: true)
-        #expect(optimizer.isNFTEnabled == true, "NFT should be enabled when requested")
+        #expect(optimizer.isNFTEnabled, "NFT should be enabled when requested")
     }
 }
 

@@ -93,6 +93,11 @@ public enum GateSynthesis {
 
         /// Create Euler decomposition from rotation angles and global phase.
         ///
+        /// **Example:**
+        /// ```swift
+        /// let decomp = EulerDecomposition(alpha: 0.5, beta: 1.2, gamma: -0.3, globalPhase: 0.1)
+        /// ```
+        ///
         /// - Parameters:
         ///   - alpha: First outer rotation angle
         ///   - beta: Middle rotation angle controlling the polar tilt
@@ -292,7 +297,7 @@ public enum GateSynthesis {
         let d = matrix[1][1]
 
         let det = a * d - matrix[0][1] * c
-        let globalPhase = det.phase / 2.0
+        let detPhaseHalf = det.phase / 2.0
 
         let cosBetaHalf = min(1.0, max(0.0, a.magnitude))
         let beta = 2.0 * acos(cosBetaHalf)
@@ -305,14 +310,18 @@ public enum GateSynthesis {
             gamma = normalizeAngle(d.phase - a.phase)
         } else if abs(beta - .pi) < angleTolerance {
             alpha = 0.0
-            gamma = normalizeAngle(-2.0 * (c.phase - globalPhase))
+            gamma = normalizeAngle(-2.0 * (c.phase - detPhaseHalf))
         } else {
             alpha = normalizeAngle(c.phase - a.phase)
-            gamma = normalizeAngle(2.0 * globalPhase - a.phase - c.phase)
+            gamma = normalizeAngle(2.0 * detPhaseHalf - a.phase - c.phase)
         }
 
         alpha = normalizeAngle(alpha)
         gamma = normalizeAngle(gamma)
+
+        let globalPhase = cosBetaHalf > angleTolerance
+            ? normalizeAngle(a.phase + (alpha + gamma) / 2.0)
+            : normalizeAngle(c.phase - (alpha - gamma) / 2.0)
 
         return EulerDecomposition(
             alpha: alpha,
@@ -428,7 +437,7 @@ public enum GateSynthesis {
 
     // MARK: - Ross-Selinger Clifford+T Synthesis
 
-    /// Synthesize Clifford+T approximation via Ross-Selinger gridpoint search.
+    /// Synthesize Clifford+T approximation via Z[ω] gridpoint search.
     @_optimize(speed)
     @_eagerMove
     private static func rossSelingerSynthesize(
@@ -437,9 +446,15 @@ public enum GateSynthesis {
     ) -> [QuantumGate] {
         var result: [QuantumGate] = []
 
-        let zGamma = approximateZRotation(euler.gamma, precision: precision / 3.0)
-        let yBeta = synthesizeYRotation(euler.beta, precision: precision / 3.0)
-        let zAlpha = approximateZRotation(euler.alpha, precision: precision / 3.0)
+        var nonZeroCount = 0
+        if abs(euler.gamma) >= angleTolerance { nonZeroCount += 1 }
+        if abs(euler.beta) >= angleTolerance { nonZeroCount += 1 }
+        if abs(euler.alpha) >= angleTolerance { nonZeroCount += 1 }
+        let perAnglePrecision = nonZeroCount > 0 ? precision / Double(nonZeroCount) : precision
+
+        let zGamma = approximateZRotation(euler.gamma, precision: perAnglePrecision)
+        let yBeta = synthesizeYRotation(euler.beta, precision: perAnglePrecision)
+        let zAlpha = approximateZRotation(euler.alpha, precision: perAnglePrecision)
 
         result.append(contentsOf: zGamma)
         result.append(contentsOf: yBeta)
@@ -466,7 +481,17 @@ public enum GateSynthesis {
             return gates
         }
 
-        return gridSynthesizeZ(normalizedAngle, precision: precision)
+        let gridResult = gridSynthesizeZ(normalizedAngle, precision: precision)
+        if !gridResult.isEmpty { return gridResult }
+
+        let piQuarter = Double.pi / 4.0
+        let nearestJ = Int((normalizedAngle / piQuarter).rounded())
+        let nearestAngle = Double(nearestJ) * piQuarter
+        if abs(normalizeAngle(nearestAngle - normalizedAngle)) <= precision {
+            return tPowerGates(nearestJ)
+        }
+
+        return []
     }
 
     /// Synthesize Ry(theta) as H Rz(theta) H using Clifford+T.
@@ -491,33 +516,24 @@ public enum GateSynthesis {
         return result
     }
 
-    /// Check if angle is an exact Clifford Z-rotation (multiple of pi/2).
+    /// Check if angle is an exact T-power rotation (multiple of pi/4).
+    @_eagerMove
     @_effects(readonly)
     private static func exactCliffordZ(_ theta: Double) -> [QuantumGate]? {
-        let piHalf = Double.pi / 2.0
         let normalized = normalizeAngle(theta)
-
-        if abs(abs(normalized) - .pi) < angleTolerance {
-            return [.sGate, .sGate]
-        }
-        if abs(normalized - piHalf) < angleTolerance {
-            return [.sGate]
-        }
-        if abs(normalized + piHalf) < angleTolerance {
-            return [.sGate, .sGate, .sGate]
-        }
         let piQuarter = Double.pi / 4.0
-        if abs(normalized - piQuarter) < angleTolerance {
-            return [.tGate]
-        }
-        if abs(normalized + piQuarter) < angleTolerance {
-            return [.tGate, .tGate, .tGate, .tGate, .tGate, .tGate, .tGate]
+        let nearestJ = Int((normalized / piQuarter).rounded())
+        let nearestAngle = Double(nearestJ) * piQuarter
+
+        if abs(normalizeAngle(nearestAngle - normalized)) < angleTolerance {
+            return tPowerGates(nearestJ)
         }
 
         return nil
     }
 
     /// Check if angle is an exact Clifford Y-rotation.
+    @_eagerMove
     @_effects(readonly)
     private static func exactCliffordY(_ theta: Double) -> [QuantumGate]? {
         let normalized = normalizeAngle(theta)
@@ -529,111 +545,386 @@ public enum GateSynthesis {
         return nil
     }
 
-    /// Grid-based Z-rotation Clifford+T synthesis with increasing T-count search.
+    // MARK: - Z[ω] Ring for Clifford+T Synthesis
+
+    private struct ZOmega: Sendable, Equatable {
+        let a: Int
+        let b: Int
+        let c: Int
+        let d: Int
+
+        static let zero = ZOmega(a: 0, b: 0, c: 0, d: 0)
+        static let one = ZOmega(a: 1, b: 0, c: 0, d: 0)
+
+        @_optimize(speed)
+        @inline(__always)
+        static func + (l: ZOmega, r: ZOmega) -> ZOmega {
+            ZOmega(a: l.a + r.a, b: l.b + r.b, c: l.c + r.c, d: l.d + r.d)
+        }
+
+        @_optimize(speed)
+        @inline(__always)
+        static func - (l: ZOmega, r: ZOmega) -> ZOmega {
+            ZOmega(a: l.a - r.a, b: l.b - r.b, c: l.c - r.c, d: l.d - r.d)
+        }
+
+        @_optimize(speed)
+        @inline(__always)
+        static prefix func - (x: ZOmega) -> ZOmega {
+            ZOmega(a: -x.a, b: -x.b, c: -x.c, d: -x.d)
+        }
+
+        @_optimize(speed)
+        static func * (l: ZOmega, r: ZOmega) -> ZOmega {
+            ZOmega(
+                a: l.a * r.a - l.b * r.d - l.c * r.c - l.d * r.b,
+                b: l.a * r.b + l.b * r.a - l.c * r.d - l.d * r.c,
+                c: l.a * r.c + l.b * r.b + l.c * r.a - l.d * r.d,
+                d: l.a * r.d + l.b * r.c + l.c * r.b + l.d * r.a,
+            )
+        }
+
+        @_optimize(speed)
+        func timesOmegaPower(_ n: Int) -> ZOmega {
+            switch ((n % 8) + 8) % 8 {
+            case 0: self
+            case 1: ZOmega(a: -d, b: a, c: b, d: c)
+            case 2: ZOmega(a: -c, b: -d, c: a, d: b)
+            case 3: ZOmega(a: -b, b: -c, c: -d, d: a)
+            case 4: ZOmega(a: -a, b: -b, c: -c, d: -d)
+            case 5: ZOmega(a: d, b: -a, c: -b, d: -c)
+            case 6: ZOmega(a: c, b: d, c: -a, d: -b)
+            case 7: ZOmega(a: b, b: c, c: d, d: -a)
+            default: self
+            }
+        }
+
+        var conjugate: ZOmega {
+            ZOmega(a: a, b: -d, c: -c, d: -b)
+        }
+
+        @_optimize(speed)
+        var toComplex: Complex<Double> {
+            let s = 1.0 / 2.0.squareRoot()
+            return Complex(Double(a) + Double(b - d) * s, Double(c) + Double(b + d) * s)
+        }
+
+        var squaredMagnitude: (int: Int, sqrt2: Int) {
+            let p = self * conjugate
+            return (p.a, p.b)
+        }
+
+        var isDivisibleByTwo: Bool {
+            (a & 1) == 0 && (b & 1) == 0 && (c & 1) == 0 && (d & 1) == 0
+        }
+
+        var dividedByTwo: ZOmega {
+            ZOmega(a: a >> 1, b: b >> 1, c: c >> 1, d: d >> 1)
+        }
+
+        var isDivisibleByEta: Bool {
+            (a & 1) == (c & 1) && (b & 1) == (d & 1)
+        }
+
+        var dividedByEta: ZOmega {
+            ZOmega(a: (b - d) >> 1, b: (a + c) >> 1, c: (b + d) >> 1, d: (c - a) >> 1)
+        }
+    }
+
+    private struct ZOmMat: Sendable {
+        var m00: ZOmega
+        var m01: ZOmega
+        var m10: ZOmega
+        var m11: ZOmega
+        var denomExp: Int
+
+        var isAllDivisibleByTwo: Bool {
+            m00.isDivisibleByTwo && m01.isDivisibleByTwo
+                && m10.isDivisibleByTwo && m11.isDivisibleByTwo
+        }
+
+        var dividedByTwo: ZOmMat {
+            ZOmMat(
+                m00: m00.dividedByTwo, m01: m01.dividedByTwo,
+                m10: m10.dividedByTwo, m11: m11.dividedByTwo,
+                denomExp: denomExp - 2,
+            )
+        }
+
+        func rightMultiplyTj(_ j: Int) -> ZOmMat {
+            ZOmMat(
+                m00: m00, m01: m01.timesOmegaPower(j),
+                m10: m10, m11: m11.timesOmegaPower(j),
+                denomExp: denomExp,
+            )
+        }
+
+        func rightMultiplyH() -> ZOmMat {
+            ZOmMat(
+                m00: m00 + m01, m01: m00 - m01,
+                m10: m10 + m11, m11: m10 - m11,
+                denomExp: denomExp + 1,
+            )
+        }
+
+        func rightMultiplyX() -> ZOmMat {
+            ZOmMat(
+                m00: m01, m01: m00, m10: m11, m11: m10,
+                denomExp: denomExp,
+            )
+        }
+
+        var isAllDivisibleByEta: Bool {
+            m00.isDivisibleByEta && m01.isDivisibleByEta
+                && m10.isDivisibleByEta && m11.isDivisibleByEta
+        }
+
+        var dividedByEta: ZOmMat {
+            ZOmMat(
+                m00: m00.dividedByEta, m01: m01.dividedByEta,
+                m10: m10.dividedByEta, m11: m11.dividedByEta,
+                denomExp: denomExp - 1,
+            )
+        }
+    }
+
+    // MARK: - Clifford+T Grid Synthesis
+
+    /// Z[ω]-based Clifford+T synthesis via lattice enumeration and exact decomposition.
     @_optimize(speed)
     @_eagerMove
     private static func gridSynthesizeZ(
         _ theta: Double,
         precision: Double,
     ) -> [QuantumGate] {
-        let maxTCount = max(4, Int(ceil(3.0 * log2(1.0 / precision))))
+        guard let mat = zomegaGridSearch(theta: theta, precision: precision) else {
+            return []
+        }
+        guard let gates = exactSynthesizeCliffordT(mat) else {
+            return []
+        }
+        if verifyCliffordTSequence(gates, target: theta, precision: precision * 2.0) {
+            return gates
+        }
+        return []
+    }
 
-        var best: [QuantumGate] = []
-        for tCount in 1 ... maxTCount {
-            if let gates = searchGridPoint(theta, tCount: tCount, precision: precision) {
-                best = gates
-                break
+    /// Search Z[ω] lattice for a unitary approximating Rz(theta) within precision.
+    @_optimize(speed)
+    private static func zomegaGridSearch(
+        theta: Double,
+        precision: Double,
+    ) -> ZOmMat? {
+        let target = Complex<Double>(phase: -theta / 2.0)
+        let clampedPrecision = max(precision, 1e-9)
+        let minK = max(4, Int(ceil(2.0 * log2(1.0 / clampedPrecision))))
+        let maxK = min(minK + 30, 62)
+        let invSqrt2 = 1.0 / 2.0.squareRoot()
+        let precisionSq = precision * precision
+
+        for k in minK ... maxK {
+            let scale = pow(2.0, Double(k) / 2.0)
+            let zx = target.real * scale
+            let zy = target.imaginary * scale
+            let powerOf2 = 1 << k
+
+            var bestDistSq = Double.infinity
+            var bestU = ZOmega.zero
+            var bestV = ZOmega.zero
+
+            for a1 in -4 ... 4 {
+                for a3 in -4 ... 4 {
+                    let shiftX = Double(a1 - a3) * invSqrt2
+                    let shiftY = Double(a1 + a3) * invSqrt2
+                    let a0 = Int((zx - shiftX).rounded())
+                    let a2 = Int((zy - shiftY).rounded())
+
+                    let u = ZOmega(a: a0, b: a1, c: a2, d: a3)
+                    let uc = u.toComplex
+                    let dx = uc.real - zx
+                    let dy = uc.imaginary - zy
+                    let distSq = dx * dx + dy * dy
+
+                    if distSq >= bestDistSq { continue }
+
+                    let mag = u.squaredMagnitude
+                    let remainInt = powerOf2 - mag.int
+                    let remainSqrt2 = -mag.sqrt2
+                    let remainReal = Double(remainInt) + Double(remainSqrt2) * 2.0.squareRoot()
+                    let maxRemain = max(precisionSq * Double(powerOf2), 4.0)
+
+                    if remainReal < -0.5 || remainReal > maxRemain { continue }
+
+                    if let v = solveNormEquation(intPart: remainInt, sqrt2Part: remainSqrt2) {
+                        let approxErrSq = distSq / (scale * scale)
+                        if approxErrSq < precisionSq {
+                            bestDistSq = distSq
+                            bestU = u
+                            bestV = v
+                        }
+                    }
+                }
+            }
+
+            if bestDistSq < Double.infinity {
+                return ZOmMat(
+                    m00: bestU, m01: -bestV.conjugate,
+                    m10: bestV, m11: bestU.conjugate,
+                    denomExp: k,
+                )
             }
         }
-        return best
+        return nil
     }
 
-    /// Search for a grid point at the given T-count that approximates the target angle.
+    /// Find Z[ω] element with given squared magnitude via four-square decomposition.
     @_optimize(speed)
     @_effects(readonly)
-    private static func searchGridPoint(
-        _ theta: Double,
-        tCount: Int,
-        precision: Double,
-    ) -> [QuantumGate]? {
-        let targetCos = cos(theta / 2.0)
-        let targetSin = sin(theta / 2.0)
+    private static func solveNormEquation(intPart n0: Int, sqrt2Part n1: Int) -> ZOmega? {
+        if n0 == 0, n1 == 0 { return .zero }
+        if n0 < 0 { return nil }
+        let realValue = Double(n0) + Double(n1) * 2.0.squareRoot()
+        if realValue < -0.5 { return nil }
 
-        let scale = pow(2.0, Double(tCount) / 2.0)
-        let scaledCos = targetCos * scale
-        let scaledSin = targetSin * scale
-
-        let intCos = Int(round(scaledCos))
-        let intSin = Int(round(scaledSin))
-
-        let actualCos = Double(intCos) / scale
-        let actualSin = Double(intSin) / scale
-
-        let normSq = actualCos * actualCos + actualSin * actualSin
-        if abs(normSq - 1.0) > precision {
-            return nil
+        let bound = min(Int(Double(max(n0, 1)).squareRoot()) + 1, 14)
+        for v0 in -bound ... bound {
+            let r0 = v0 * v0
+            if r0 > n0 { continue }
+            for v1 in -bound ... bound {
+                let r01 = r0 + v1 * v1
+                if r01 > n0 { continue }
+                for v2 in -bound ... bound {
+                    let r012 = r01 + v2 * v2
+                    if r012 > n0 { continue }
+                    let v3sq = n0 - r012
+                    let v3abs = Int(Double(v3sq).squareRoot().rounded())
+                    if v3abs * v3abs != v3sq { continue }
+                    for v3 in v3abs == 0 ? [0] : [-v3abs, v3abs] {
+                        let sqrt2Coeff = v0 * (v1 - v3) + v2 * (v1 + v3)
+                        if sqrt2Coeff == n1 {
+                            return ZOmega(a: v0, b: v1, c: v2, d: v3)
+                        }
+                    }
+                }
+            }
         }
-
-        let achievedAngle = 2.0 * atan2(actualSin, actualCos)
-        let angleError = abs(normalizeAngle(achievedAngle - theta))
-        if angleError > precision {
-            return nil
-        }
-
-        return tCountToGateSequence(intCos: intCos, intSin: intSin, tCount: tCount)
+        return nil
     }
 
-    /// Convert grid point integers to a Clifford+T gate sequence.
+    /// Recursively decompose a Z[ω] unitary matrix into Clifford+T gates.
     @_optimize(speed)
     @_eagerMove
-    @_effects(readonly)
-    private static func tCountToGateSequence(
-        intCos: Int,
-        intSin: Int,
-        tCount: Int,
-    ) -> [QuantumGate] {
-        var gates: [QuantumGate] = []
+    private static func exactSynthesizeCliffordT(
+        _ matrix: ZOmMat,
+        depth: Int = 0,
+    ) -> [QuantumGate]? {
+        var m = matrix
+        if depth > 200 { return nil }
 
-        var remaining = tCount
-        var cosCoeff = intCos
-        var sinCoeff = intSin
+        while m.isAllDivisibleByEta, m.denomExp > 0 {
+            m = m.dividedByEta
+        }
 
-        while remaining > 0 {
-            let cosOdd = cosCoeff & 1
-            let sinOdd = sinCoeff & 1
+        if m.denomExp <= 0 {
+            return identifyDenomZero(m)
+        }
 
-            if cosOdd == 0, sinOdd == 0 {
-                cosCoeff /= 2
-                sinCoeff /= 2
-                remaining -= 2
-            } else if cosOdd == 1, sinOdd == 0 {
-                gates.append(.tGate)
-                let newCos = cosCoeff + sinCoeff
-                let newSin = -cosCoeff + sinCoeff
-                cosCoeff = newCos
-                sinCoeff = newSin
-                remaining -= 1
-            } else if cosOdd == 0, sinOdd == 1 {
-                gates.append(.tGate)
-                gates.append(.tGate)
-                gates.append(.tGate)
-                let newCos = cosCoeff - sinCoeff
-                let newSin = cosCoeff + sinCoeff
-                cosCoeff = newCos
-                sinCoeff = newSin
-                remaining -= 1
-            } else {
+        for j in 0 ..< 8 {
+            let afterTH = m.rightMultiplyTj(8 - j).rightMultiplyH()
+            if afterTH.isAllDivisibleByTwo {
+                let reduced = afterTH.dividedByTwo
+                guard let rest = exactSynthesizeCliffordT(reduced, depth: depth + 1) else { continue }
+                var gates = rest
                 gates.append(.hadamard)
-                gates.append(.tGate)
-                let newCos = cosCoeff + sinCoeff
-                let newSin = cosCoeff - sinCoeff
-                cosCoeff = newCos / 2
-                sinCoeff = newSin / 2
-                remaining -= 1
+                gates.append(contentsOf: tPowerGates(j))
+                return gates
             }
         }
 
-        return gates
+        let swapped = m.rightMultiplyX()
+        for j in 0 ..< 8 {
+            let afterTH = swapped.rightMultiplyTj(8 - j).rightMultiplyH()
+            if afterTH.isAllDivisibleByTwo {
+                let reduced = afterTH.dividedByTwo
+                guard let rest = exactSynthesizeCliffordT(reduced, depth: depth + 1) else { continue }
+                var gates = rest
+                gates.append(.hadamard)
+                gates.append(contentsOf: tPowerGates(j))
+                gates.append(.hadamard)
+                gates.append(.sGate)
+                gates.append(.sGate)
+                gates.append(.hadamard)
+                return gates
+            }
+        }
+
+        return nil
+    }
+
+    /// Identify a denominator-zero Z[ω] matrix as a Clifford gate sequence.
+    @_eagerMove
+    @_effects(readonly)
+    private static func identifyDenomZero(_ mat: ZOmMat) -> [QuantumGate]? {
+        if mat.m01 == .zero, mat.m10 == .zero {
+            let j = ((omegaPower(mat.m11) - omegaPower(mat.m00)) % 8 + 8) % 8
+            return tPowerGates(j)
+        }
+        if mat.m00 == .zero, mat.m11 == .zero {
+            let j = ((omegaPower(mat.m01) - omegaPower(mat.m10)) % 8 + 8) % 8
+            var gates: [QuantumGate] = [.hadamard, .sGate, .sGate, .hadamard]
+            gates.append(contentsOf: tPowerGates(j))
+            return gates
+        }
+        return nil
+    }
+
+    /// Determine which power of omega (0-7) equals the given Z[ω] unit.
+    @_effects(readonly)
+    private static func omegaPower(_ u: ZOmega) -> Int {
+        for n in 0 ..< 8 {
+            if ZOmega.one.timesOmegaPower(n) == u { return n }
+        }
+        return 0
+    }
+
+    /// Map T-gate power index (mod 8) to the corresponding gate sequence.
+    @_eagerMove
+    @_effects(readonly)
+    private static func tPowerGates(_ j: Int) -> [QuantumGate] {
+        switch ((j % 8) + 8) % 8 {
+        case 0: []
+        case 1: [.tGate]
+        case 2: [.sGate]
+        case 3: [.sGate, .tGate]
+        case 4: [.sGate, .sGate]
+        case 5: [.sGate, .sGate, .tGate]
+        case 6: [.sGate, .sGate, .sGate]
+        case 7: [.sGate, .sGate, .sGate, .tGate]
+        default: []
+        }
+    }
+
+    /// Verify a Clifford+T gate sequence approximates Rz(theta) within precision.
+    @_optimize(speed)
+    @_effects(readonly)
+    private static func verifyCliffordTSequence(
+        _ gates: [QuantumGate],
+        target theta: Double,
+        precision: Double,
+    ) -> Bool {
+        if gates.isEmpty { return false }
+        var product = makeIdentity(2)
+        for gate in gates {
+            product = multiply2x2(product, gate.matrix())
+        }
+        let rz = QuantumGate.rotationZ(theta).matrix()
+        let adj: [[Complex<Double>]] = [
+            [product[0][0].conjugate, product[1][0].conjugate],
+            [product[0][1].conjugate, product[1][1].conjugate],
+        ]
+        let check = multiply2x2(adj, rz)
+        let trace = check[0][0] + check[1][1]
+        return trace.magnitude > 2.0 - 2.0 * precision
     }
 
     // MARK: - Shannon Decomposition
@@ -699,10 +990,11 @@ public enum GateSynthesis {
 
         let leftUpper = MatrixUtilities.matrixMultiply(u0, vDag)
 
-        var sqrtD = [Complex<Double>](repeating: .zero, count: halfDim)
-        for i in 0 ..< halfDim {
-            let phase = d[i].phase / 2.0
-            sqrtD[i] = Complex(phase: phase)
+        let sqrtD = [Complex<Double>](unsafeUninitializedCapacity: halfDim) { buffer, count in
+            for i in 0 ..< halfDim {
+                buffer.initializeElement(at: i, to: Complex(phase: d[i].phase / 2.0))
+            }
+            count = halfDim
         }
 
         var w = makeIdentity(halfDim)
@@ -717,10 +1009,12 @@ public enum GateSynthesis {
         let vGates = shannonRecursive(v, qubits: targetQubits)
         result.append(contentsOf: vGates)
 
-        var phaseAngles = [Double](repeating: 0.0, count: dim)
-        for i in 0 ..< halfDim {
-            phaseAngles[i] = sqrtD[i].phase
-            phaseAngles[halfDim + i] = -sqrtD[i].phase
+        let phaseAngles = [Double](unsafeUninitializedCapacity: dim) { buffer, count in
+            for i in 0 ..< halfDim {
+                buffer.initializeElement(at: i, to: sqrtD[i].phase)
+                buffer.initializeElement(at: halfDim + i, to: -sqrtD[i].phase)
+            }
+            count = dim
         }
         let allQubits = [controlQubit] + targetQubits
         let multiplexGates = diagonalDecompose(phaseAngles, qubits: allQubits)
@@ -759,9 +1053,11 @@ public enum GateSynthesis {
         let rightGates = demultiplexUnitaries(r1Dag, r2Dag, controlQubit: controlQubit, targetQubits: targetQubits)
         result.append(contentsOf: rightGates)
 
-        var ryAngles = [Double](repeating: 0.0, count: halfDim)
-        for i in 0 ..< halfDim {
-            ryAngles[i] = 2.0 * acos(max(-1.0, min(1.0, cosines[i])))
+        let ryAngles = [Double](unsafeUninitializedCapacity: halfDim) { buffer, count in
+            for i in 0 ..< halfDim {
+                buffer.initializeElement(at: i, to: 2.0 * acos(max(-1.0, min(1.0, cosines[i]))))
+            }
+            count = halfDim
         }
         let csGates = uniformlyControlledRy(ryAngles, targetQubit: controlQubit, controlQubits: targetQubits)
         result.append(contentsOf: csGates)
@@ -793,9 +1089,12 @@ public enum GateSynthesis {
         result.append(contentsOf: vDagGates)
 
         let eigenCount = eigenvalues.count
-        var phaseAngles = [Double](repeating: 0.0, count: 2 * eigenCount)
-        for i in 0 ..< eigenCount {
-            phaseAngles[eigenCount + i] = eigenvalues[i].phase
+        let phaseAngles = [Double](unsafeUninitializedCapacity: 2 * eigenCount) { buffer, count in
+            buffer.initialize(repeating: 0.0)
+            for i in 0 ..< eigenCount {
+                buffer[eigenCount + i] = eigenvalues[i].phase
+            }
+            count = 2 * eigenCount
         }
         let allQubits = [controlQubit] + targetQubits
         let phaseGates = diagonalDecompose(phaseAngles, qubits: allQubits)
@@ -827,11 +1126,17 @@ public enum GateSynthesis {
         }
 
         let halfN = n / 2
-        var sumAngles = [Double](repeating: 0.0, count: halfN)
-        var diffAngles = [Double](repeating: 0.0, count: halfN)
-        for i in 0 ..< halfN {
-            sumAngles[i] = (angles[i] + angles[i + halfN]) / 2.0
-            diffAngles[i] = (angles[i] - angles[i + halfN]) / 2.0
+        let sumAngles = [Double](unsafeUninitializedCapacity: halfN) { buffer, count in
+            for i in 0 ..< halfN {
+                buffer.initializeElement(at: i, to: (angles[i] + angles[i + halfN]) / 2.0)
+            }
+            count = halfN
+        }
+        let diffAngles = [Double](unsafeUninitializedCapacity: halfN) { buffer, count in
+            for i in 0 ..< halfN {
+                buffer.initializeElement(at: i, to: (angles[i] - angles[i + halfN]) / 2.0)
+            }
+            count = halfN
         }
 
         let remainingControls = Array(controlQubits.dropFirst())
@@ -866,9 +1171,11 @@ public enum GateSynthesis {
 
         let (eigenvalues, eigenvectors) = symmetricEigendecompose(product)
 
-        var cosines = [Double](repeating: 0.0, count: n)
-        for i in 0 ..< n {
-            cosines[i] = max(0.0, min(1.0, eigenvalues[i])).squareRoot()
+        let cosines = [Double](unsafeUninitializedCapacity: n) { buffer, count in
+            for i in 0 ..< n {
+                buffer.initializeElement(at: i, to: max(0.0, min(1.0, eigenvalues[i])).squareRoot())
+            }
+            count = n
         }
 
         let r1 = eigenvectors
@@ -889,9 +1196,11 @@ public enum GateSynthesis {
             }
         }
 
-        var sines = [Double](repeating: 0.0, count: n)
-        for i in 0 ..< n {
-            sines[i] = max(0.0, 1.0 - cosines[i] * cosines[i]).squareRoot()
+        let sines = [Double](unsafeUninitializedCapacity: n) { buffer, count in
+            for i in 0 ..< n {
+                buffer.initializeElement(at: i, to: max(0.0, 1.0 - cosines[i] * cosines[i]).squareRoot())
+            }
+            count = n
         }
 
         let l1Dag = MatrixUtilities.hermitianConjugate(l1)
@@ -941,7 +1250,11 @@ public enum GateSynthesis {
                     matrix[i][j] = .zero
                 }
                 for k in 0 ..< n {
-                    var candidate = [Complex<Double>](repeating: .zero, count: n)
+                    var candidate = [Complex<Double>](unsafeUninitializedCapacity: n) {
+                        buffer, count in
+                        buffer.initialize(repeating: .zero)
+                        count = n
+                    }
                     candidate[k] = .one
                     var valid = true
                     for prev in 0 ..< i {
@@ -1002,13 +1315,14 @@ public enum GateSynthesis {
         colStart: Int,
         size: Int,
     ) -> [[Complex<Double>]] {
-        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: size), count: size)
-        for i in 0 ..< size {
-            for j in 0 ..< size {
-                result[i][j] = matrix[rowStart + i][colStart + j]
+        (0 ..< size).map { i in
+            [Complex<Double>](unsafeUninitializedCapacity: size) { buffer, count in
+                for j in 0 ..< size {
+                    buffer.initializeElement(at: j, to: matrix[rowStart + i][colStart + j])
+                }
+                count = size
             }
         }
-        return result
     }
 
     /// Build identity matrix.
@@ -1016,11 +1330,13 @@ public enum GateSynthesis {
     @_eagerMove
     @_effects(readonly)
     private static func makeIdentity(_ n: Int) -> [[Complex<Double>]] {
-        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: n), count: n)
-        for i in 0 ..< n {
-            result[i][i] = .one
+        (0 ..< n).map { i in
+            [Complex<Double>](unsafeUninitializedCapacity: n) { buffer, count in
+                buffer.initialize(repeating: .zero)
+                buffer[i] = .one
+                count = n
+            }
         }
-        return result
     }
 
     /// 2x2 matrix multiply (avoid overhead of general NxN for small matrices).
@@ -1093,7 +1409,7 @@ public enum GateSynthesis {
         return Complex(phase: z.phase / 2.0) * mag
     }
 
-    /// Diagonalize a unitary matrix U = V D V† using QR iteration (analytical 2x2 fast path).
+    /// Diagonalize a unitary matrix U = V D V† via shifted QR with Wilkinson shift.
     @_optimize(speed)
     @_eagerMove
     private static func diagonalizeUnitary(
@@ -1120,7 +1436,15 @@ public enum GateSynthesis {
             }
             if offDiagNorm < tolerance * tolerance { break }
 
-            let shift = a[n - 1][n - 1]
+            let trSub = a[n - 2][n - 2] + a[n - 1][n - 1]
+            let detSub = a[n - 2][n - 2] * a[n - 1][n - 1] - a[n - 2][n - 1] * a[n - 1][n - 2]
+            let disc = trSub * trSub - 4.0 * detSub
+            let sqrtDisc = complexSqrt(disc)
+            let lam1 = (trSub + sqrtDisc) * 0.5
+            let lam2 = (trSub - sqrtDisc) * 0.5
+            let corner = a[n - 1][n - 1]
+            let shift = (lam1 - corner).magnitude < (lam2 - corner).magnitude ? lam1 : lam2
+
             for i in 0 ..< n {
                 a[i][i] = a[i][i] - shift
             }
@@ -1138,7 +1462,7 @@ public enum GateSynthesis {
         return (diagonal, vAccum)
     }
 
-    /// Symmetric eigendecomposition for Hermitian positive-semidefinite matrices.
+    /// Hermitian eigendecomposition via LAPACK zheev (analytical 2x2 fast path).
     @_optimize(speed)
     @_eagerMove
     private static func symmetricEigendecompose(
@@ -1151,8 +1475,23 @@ public enum GateSynthesis {
             return (diag.map(\.real), vecs)
         }
 
-        let eigenvalues = (0 ..< n).map { matrix[$0][$0].real }
-        return (eigenvalues, makeIdentity(n))
+        let result = HermitianEigenDecomposition.decompose(matrix: matrix)
+
+        let eigenvectorMatrix = [[Complex<Double>]](unsafeUninitializedCapacity: n) {
+            buffer, count in
+            for row in 0 ..< n {
+                buffer[row] = [Complex<Double>](unsafeUninitializedCapacity: n) {
+                    rowBuffer, rowCount in
+                    for col in 0 ..< n {
+                        rowBuffer[col] = result.eigenvectors[col][row]
+                    }
+                    rowCount = n
+                }
+            }
+            count = n
+        }
+
+        return (result.eigenvalues, eigenvectorMatrix)
     }
 
     /// QR decomposition via Householder reflections.
@@ -1177,9 +1516,12 @@ public enum GateSynthesis {
             if normX < 1e-15 { continue }
 
             let alpha = -normX * Complex(phase: r[k][k].phase)
-            var v = [Complex<Double>](repeating: .zero, count: xCount)
-            for i in 0 ..< xCount {
-                v[i] = r[k + i][k]
+            var v = [Complex<Double>](unsafeUninitializedCapacity: xCount) {
+                buffer, count in
+                for i in 0 ..< xCount {
+                    buffer.initializeElement(at: i, to: r[k + i][k])
+                }
+                count = xCount
             }
             v[0] = v[0] - alpha
 
@@ -1229,7 +1571,12 @@ public enum GateSynthesis {
         let n = a.count
         let m = b[0].count
         let p = b.count
-        var result = [[Complex<Double>]](repeating: [Complex<Double>](repeating: .zero, count: m), count: n)
+        var result = (0 ..< n).map { _ in
+            [Complex<Double>](unsafeUninitializedCapacity: m) { buffer, count in
+                buffer.initialize(repeating: .zero)
+                count = m
+            }
+        }
         for i in 0 ..< n {
             for k in 0 ..< p {
                 let aik = a[i][k]

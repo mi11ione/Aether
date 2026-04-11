@@ -371,18 +371,14 @@ struct EdgeCasesAndValidationTests {
         }
     }
 
-    @Test("Arbitrary state initialization auto-normalizes")
-    func arbitraryStateAutoNormalization() {
-        let unnormalized = [
-            Complex(1.0, 0.0),
-            Complex(1.0, 0.0),
-            Complex(1.0, 0.0),
-            Complex(1.0, 0.0),
-        ]
+    @Test("Pre-normalized uniform superposition accepted")
+    func normalizedUniformSuperposition() {
+        let amp = Complex(0.5, 0.0)
+        let normalized = [amp, amp, amp, amp]
 
-        let state = QuantumState(qubits: 2, amplitudes: unnormalized)
+        let state = QuantumState(qubits: 2, amplitudes: normalized)
 
-        #expect(state.isNormalized(), "State should be auto-normalized")
+        #expect(state.isNormalized(), "Pre-normalized state should be accepted")
 
         for i in 0 ..< 4 {
             #expect(abs(state.amplitude(of: i).magnitude - 0.5) < 1e-10, "All amplitudes should be 0.5 for uniform superposition")

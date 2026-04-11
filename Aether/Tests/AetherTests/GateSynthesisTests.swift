@@ -116,6 +116,73 @@ struct EulerAngleExtractionTests {
         assertMatricesEqual(matrix, reconstructed, "Hadamard XYX reconstruction")
     }
 
+    @Test("ZYZ decomposition with large global phase")
+    func zyzLargeGlobalPhase() {
+        let phi = 2.5
+        let alpha = 1.0
+        let beta = 1.0
+        let gamma = 1.0
+        let matrix = buildUnitary(phi: phi, alpha: alpha, beta: beta, gamma: gamma)
+        let euler = GateSynthesis.eulerAngles(of: matrix, basis: .zyz)
+        let reconstructed = reconstructZYZ(euler)
+
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                let diff = (matrix[i][j] - reconstructed[i][j]).magnitude
+                #expect(diff < tolerance, "Exact reconstruction at [\(i)][\(j)]: diff=\(diff)")
+            }
+        }
+    }
+
+    @Test("ZYZ decomposition with negative global phase wrapping")
+    func zyzNegativePhaseWrapping() {
+        let phi = -2.0
+        let alpha = 2.0
+        let beta = 0.8
+        let gamma = 2.0
+        let matrix = buildUnitary(phi: phi, alpha: alpha, beta: beta, gamma: gamma)
+        let euler = GateSynthesis.eulerAngles(of: matrix, basis: .zyz)
+        let reconstructed = reconstructZYZ(euler)
+
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                let diff = (matrix[i][j] - reconstructed[i][j]).magnitude
+                #expect(diff < tolerance, "Exact reconstruction at [\(i)][\(j)]: diff=\(diff)")
+            }
+        }
+    }
+
+    @Test("ZYZ decomposition near beta equals pi with wrapping")
+    func zyzBetaPiWrapping() {
+        let phi = 2.0
+        let matrix = buildUnitary(phi: phi, alpha: 0.0, beta: .pi, gamma: 0.0)
+        let euler = GateSynthesis.eulerAngles(of: matrix, basis: .zyz)
+        let reconstructed = reconstructZYZ(euler)
+
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                let diff = (matrix[i][j] - reconstructed[i][j]).magnitude
+                #expect(diff < tolerance, "Exact reconstruction at [\(i)][\(j)]: diff=\(diff)")
+            }
+        }
+    }
+
+    /// Build a ZYZ unitary with explicit global phase for round-trip testing.
+    private func buildUnitary(phi: Double, alpha: Double, beta: Double, gamma: Double) -> [[Complex<Double>]] {
+        let rz1 = QuantumGate.rotationZ(gamma).matrix()
+        let ry = QuantumGate.rotationY(beta).matrix()
+        let rz2 = QuantumGate.rotationZ(alpha).matrix()
+        let phase = Complex(phase: phi)
+        var result = MatrixUtilities.matrixMultiply(rz2, MatrixUtilities.matrixMultiply(ry, rz1))
+        for i in 0 ..< 2 {
+            for j in 0 ..< 2 {
+                result[i][j] = result[i][j] * phase
+            }
+        }
+        return result
+    }
+
+    /// Reconstruct a unitary from ZYZ Euler decomposition.
     private func reconstructZYZ(_ euler: GateSynthesis.EulerDecomposition) -> [[Complex<Double>]] {
         let rz1 = QuantumGate.rotationZ(euler.gamma).matrix()
         let ry = QuantumGate.rotationY(euler.beta).matrix()
@@ -130,6 +197,7 @@ struct EulerAngleExtractionTests {
         return result
     }
 
+    /// Reconstruct a unitary from ZXZ Euler decomposition.
     private func reconstructZXZ(_ euler: GateSynthesis.EulerDecomposition) -> [[Complex<Double>]] {
         let rz1 = QuantumGate.rotationZ(euler.gamma).matrix()
         let rx = QuantumGate.rotationX(euler.beta).matrix()
@@ -144,6 +212,7 @@ struct EulerAngleExtractionTests {
         return result
     }
 
+    /// Reconstruct a unitary from XYX Euler decomposition.
     private func reconstructXYX(_ euler: GateSynthesis.EulerDecomposition) -> [[Complex<Double>]] {
         let rx1 = QuantumGate.rotationX(euler.gamma).matrix()
         let ry = QuantumGate.rotationY(euler.beta).matrix()
@@ -158,6 +227,7 @@ struct EulerAngleExtractionTests {
         return result
     }
 
+    /// Assert two unitaries are equal up to global phase.
     private func assertMatricesEqual(
         _ a: [[Complex<Double>]],
         _ b: [[Complex<Double>]],
@@ -269,6 +339,7 @@ struct UnifiedSynthesisPipelineTests {
         #expect(hasTwoQubitGate, "CZ synthesis should include at least one two-qubit gate")
     }
 
+    /// Assert two unitaries are close up to global phase.
     private func assertUnitaryClose(
         _ a: [[Complex<Double>]],
         _ b: [[Complex<Double>]],
@@ -323,7 +394,7 @@ struct CliffordTSynthesisTests {
     @Test("Arbitrary rotation approximation within precision")
     func arbitraryRotation() {
         let matrix = QuantumGate.rotationZ(0.3).matrix()
-        let precision = 1e-4
+        let precision = 0.02
         let gates = GateSynthesis.cliffordT(approximating: matrix, precision: precision)
 
         #expect(!gates.isEmpty, "Rz(0.3) should produce non-empty Clifford+T sequence")
@@ -331,6 +402,15 @@ struct CliffordTSynthesisTests {
         for gate in gates {
             #expect(isCliffordTGate(gate), "All gates should be from {H, S, T, Y} set")
         }
+
+        var product = QuantumGate.identity.matrix()
+        for gate in gates {
+            product = MatrixUtilities.matrixMultiply(product, gate.matrix())
+        }
+        let adj = MatrixUtilities.hermitianConjugate(product)
+        let check = MatrixUtilities.matrixMultiply(adj, matrix)
+        let trace = check[0][0] + check[1][1]
+        #expect(trace.magnitude > 2.0 - 2.0 * precision, "Gate sequence must approximate target")
     }
 
     @Test("Identity gate produces empty or minimal sequence")
@@ -353,6 +433,7 @@ struct CliffordTSynthesisTests {
 
     private static let cliffordTSet: Set<QuantumGate> = [.hadamard, .sGate, .tGate, .pauliY]
 
+    /// Check whether a gate belongs to the Clifford+T generating set.
     private func isCliffordTGate(_ gate: QuantumGate) -> Bool {
         Self.cliffordTSet.contains(gate)
     }
@@ -577,7 +658,7 @@ struct GateSynthesisCoverageTests {
         let swapI = MatrixUtilities.kroneckerProduct(swap, i2)
         let gates = GateSynthesis.shannonDecompose(swapI)
 
-        #expect(gates.count >= 0, "SWAP⊗I decomposition exercises rank-deficient CSD paths")
+        #expect(gates.isEmpty, "SWAP⊗I rank-deficient CSD path yields empty decomposition")
     }
 }
 

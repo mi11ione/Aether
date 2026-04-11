@@ -18,19 +18,16 @@ import Accelerate
 ///
 /// **Example:**
 /// ```swift
-/// var ttn = TreeTensorNetwork(topology: .binary(depth: 2))
-/// let leaf0 = TreeTensorNode.leaf(physicalDimension: 2, elements: [.one, .zero])
-/// let leaf1 = TreeTensorNode.leaf(physicalDimension: 2, elements: [.one, .zero])
-/// let internal0 = TreeTensorNode.internal(childBondDimensions: [2, 2], elements: [.one, .zero, .zero, .one])
-/// ttn.setNode(at: 0, tensor: internal0)
-/// ttn.setNode(at: 1, tensor: leaf0)
-/// ttn.setNode(at: 2, tensor: leaf1)
+/// var ttn = TreeTensorNetwork(topology: .binary(depth: 1))
+/// ttn.setNode(at: 0, tensor: .internal(childBondDimensions: [2, 2], elements: [.one, .zero, .zero, .one]))
+/// ttn.setNode(at: 1, tensor: .leaf(physicalDimension: 2, elements: [.one, .zero]))
+/// ttn.setNode(at: 2, tensor: .leaf(physicalDimension: 2, elements: [.one, .zero]))
 /// let amplitude = ttn.contract()
 /// ```
 ///
 /// - SeeAlso: ``TreeTensorNode``
 /// - SeeAlso: ``MatrixProductState``
-public struct TreeTensorNetwork: Sendable {
+@frozen public struct TreeTensorNetwork: Sendable {
     /// Topology specification for the tree tensor network.
     ///
     /// Defines the structure of the tensor network graph. Binary topology creates a perfect binary tree
@@ -40,8 +37,9 @@ public struct TreeTensorNetwork: Sendable {
     /// ```swift
     /// let binary = TreeTensorNetwork.Topology.binary(depth: 3)
     /// let custom = TreeTensorNetwork.Topology.custom(adjacency: [[1, 2], [], []])
+    /// let ttn = TreeTensorNetwork(topology: binary)
     /// ```
-    public enum Topology: Sendable, Equatable {
+    @frozen public enum Topology: Sendable, Equatable {
         /// Perfect binary tree with specified depth (root at depth 0).
         ///
         /// Creates a complete binary tree where:
@@ -53,6 +51,8 @@ public struct TreeTensorNetwork: Sendable {
         /// **Example:**
         /// ```swift
         /// let topology = TreeTensorNetwork.Topology.binary(depth: 2)
+        /// let ttn = TreeTensorNetwork(topology: topology)
+        /// print(ttn)
         /// ```
         case binary(depth: Int)
 
@@ -63,7 +63,9 @@ public struct TreeTensorNetwork: Sendable {
         ///
         /// **Example:**
         /// ```swift
-        /// let topology = TreeTensorNetwork.Topology.custom(adjacency: [[1, 2], [3, 4], [], [], []])
+        /// let adjacency = [[1, 2], [3, 4], [], [], []]
+        /// let topology = TreeTensorNetwork.Topology.custom(adjacency: adjacency)
+        /// let ttn = TreeTensorNetwork(topology: topology)
         /// ```
         case custom(adjacency: [[Int]])
     }
@@ -88,6 +90,8 @@ public struct TreeTensorNetwork: Sendable {
     /// **Example:**
     /// ```swift
     /// let ttn = TreeTensorNetwork(topology: .binary(depth: 3))
+    /// let leaf = TreeTensorNode.leaf(physicalDimension: 2, elements: [.one, .zero])
+    /// print(ttn)
     /// ```
     ///
     /// - Parameter topology: Tree structure specification
@@ -172,6 +176,7 @@ public struct TreeTensorNetwork: Sendable {
     /// - Complexity: O(chi^3 x n log n) where chi is bond dimension, n is number of leaves
     /// - Precondition: All nodes must be set before contraction
     @_optimize(speed)
+    @_effects(readonly)
     public func contract() -> Complex<Double> {
         var contracted = [Int: [Complex<Double>]](minimumCapacity: nodeCount)
 
@@ -212,6 +217,7 @@ public struct TreeTensorNetwork: Sendable {
 
     /// Contracts two child tensors with an internal node tensor.
     @_optimize(speed)
+    @_effects(readonly)
     private static func contractChildTensors(
         left: [Complex<Double>],
         right: [Complex<Double>],
@@ -260,8 +266,9 @@ public struct TreeTensorNetwork: Sendable {
         return result
     }
 
-    /// Performs BLAS-accelerated contraction for large tensor dimensions.
+    /// BLAS-accelerated contraction: result = Σᵢⱼ left[i] · W[i,j] · right[j] via zgemv + zdotu.
     @_optimize(speed)
+    @_effects(readonly)
     private static func contractWithBLAS(
         left: [Complex<Double>],
         right: [Complex<Double>],
@@ -272,40 +279,86 @@ public struct TreeTensorNetwork: Sendable {
         let m = effectiveLeftDim
         let n = effectiveRightDim
 
-        var outerProduct = [Double](repeating: 0.0, count: m * n * 2)
+        var matrixInterleaved = [Double](unsafeUninitializedCapacity: m * n * 2) {
+            buffer, count in
+            for i in 0 ..< m {
+                for j in 0 ..< n {
+                    let val = internalNode[child0: i, child1: j]
+                    let idx = (i * n + j) * 2
+                    buffer[idx] = val.real
+                    buffer[idx + 1] = val.imaginary
+                }
+            }
+            count = m * n * 2
+        }
 
-        for i in 0 ..< m {
-            for j in 0 ..< n {
-                let prod = left[i] * right[j]
-                let idx = (i * n + j) * 2
-                outerProduct[idx] = prod.real
-                outerProduct[idx + 1] = prod.imaginary
+        var leftInterleaved = [Double](unsafeUninitializedCapacity: m * 2) {
+            buffer, count in
+            for i in 0 ..< m {
+                buffer[i * 2] = left[i].real
+                buffer[i * 2 + 1] = left[i].imaginary
+            }
+            count = m * 2
+        }
+
+        var rightInterleaved = [Double](unsafeUninitializedCapacity: n * 2) {
+            buffer, count in
+            for i in 0 ..< n {
+                buffer[i * 2] = right[i].real
+                buffer[i * 2 + 1] = right[i].imaginary
+            }
+            count = n * 2
+        }
+
+        var vInterleaved = [Double](unsafeUninitializedCapacity: n * 2) {
+            _, count in
+            count = n * 2
+        }
+
+        var alpha = (1.0, 0.0)
+        var beta = (0.0, 0.0)
+
+        matrixInterleaved.withUnsafeMutableBufferPointer { matPtr in
+            leftInterleaved.withUnsafeMutableBufferPointer { leftPtr in
+                vInterleaved.withUnsafeMutableBufferPointer { vPtr in
+                    withUnsafePointer(to: &alpha) { alphaPtr in
+                        withUnsafePointer(to: &beta) { betaPtr in
+                            cblas_zgemv(
+                                CblasRowMajor,
+                                CblasTrans,
+                                Int32(m),
+                                Int32(n),
+                                OpaquePointer(alphaPtr),
+                                OpaquePointer(matPtr.baseAddress),
+                                Int32(n),
+                                OpaquePointer(leftPtr.baseAddress),
+                                1,
+                                OpaquePointer(betaPtr),
+                                OpaquePointer(vPtr.baseAddress),
+                                1,
+                            )
+                        }
+                    }
+                }
             }
         }
 
-        let bondLeft = internalNode.childBondDimensions[0]
-        let bondRight = internalNode.childBondDimensions[1]
-
-        var internalInterleaved = [Double](repeating: 0.0, count: bondLeft * bondRight * 2)
-        for i in 0 ..< bondLeft {
-            for j in 0 ..< bondRight {
-                let val = internalNode[child0: i, child1: j]
-                let idx = (i * bondRight + j) * 2
-                internalInterleaved[idx] = val.real
-                internalInterleaved[idx + 1] = val.imaginary
+        var dotResult = (0.0, 0.0)
+        vInterleaved.withUnsafeMutableBufferPointer { vPtr in
+            rightInterleaved.withUnsafeMutableBufferPointer { rightPtr in
+                withUnsafeMutablePointer(to: &dotResult) { resPtr in
+                    cblas_zdotu_sub(
+                        Int32(n),
+                        OpaquePointer(vPtr.baseAddress),
+                        1,
+                        OpaquePointer(rightPtr.baseAddress),
+                        1,
+                        OpaquePointer(resPtr),
+                    )
+                }
             }
         }
 
-        var result: Complex<Double> = .zero
-        for i in 0 ..< m {
-            for j in 0 ..< n {
-                let outerIdx = (i * n + j) * 2
-                let outerVal = Complex<Double>(outerProduct[outerIdx], outerProduct[outerIdx + 1])
-                let internalIdx = (i * bondRight + j) * 2
-                let internalVal = Complex<Double>(internalInterleaved[internalIdx], internalInterleaved[internalIdx + 1])
-                result = result + outerVal * internalVal
-            }
-        }
-        return [result]
+        return [Complex<Double>(dotResult.0, dotResult.1)]
     }
 }

@@ -488,6 +488,15 @@ struct ExecutionConsistencyPropertyTests {
             newAmplitudes[i] = sum
         }
 
+        var normSq = 0.0
+        for amp in newAmplitudes {
+            normSq += amp.real * amp.real + amp.imaginary * amp.imaginary
+        }
+        let invNorm = 1.0 / sqrt(normSq)
+        for i in 0 ..< dim {
+            newAmplitudes[i] = Complex(newAmplitudes[i].real * invNorm, newAmplitudes[i].imaginary * invNorm)
+        }
+
         return QuantumState(qubits: state.qubits, amplitudes: newAmplitudes)
     }
 }

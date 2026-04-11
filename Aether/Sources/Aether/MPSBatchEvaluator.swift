@@ -508,7 +508,7 @@ public actor MPSBatchEvaluator {
                 ampCount = dimension
             }
 
-            resultStates.append(QuantumState(qubits: qubits, amplitudes: amplitudes))
+            resultStates.append(QuantumState(qubits: qubits, rawAmplitudes: amplitudes))
         }
 
         return resultStates
@@ -573,7 +573,7 @@ public actor MPSBatchEvaluator {
                 }
             }
 
-            resultStates.append(QuantumState(qubits: initialState.qubits, amplitudes: result))
+            resultStates.append(QuantumState(qubits: initialState.qubits, rawAmplitudes: result))
         }
 
         return resultStates

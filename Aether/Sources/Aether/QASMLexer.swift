@@ -236,26 +236,30 @@ public enum QASMLexer: Sendable {
         }
 
         if index < scalars.endIndex, scalars[index] == "e" || scalars[index] == "E" {
-            hasDecimalPoint = true
-            index = scalars.index(after: index)
-            length += 1
-            if index < scalars.endIndex, scalars[index] == "+" || scalars[index] == "-" {
-                index = scalars.index(after: index)
-                length += 1
+            var lookAhead = scalars.index(after: index)
+            if lookAhead < scalars.endIndex, scalars[lookAhead] == "+" || scalars[lookAhead] == "-" {
+                lookAhead = scalars.index(after: lookAhead)
             }
-            while index < scalars.endIndex, isDigit(scalars[index]) {
+            if lookAhead < scalars.endIndex, isDigit(scalars[lookAhead]) {
+                hasDecimalPoint = true
                 index = scalars.index(after: index)
                 length += 1
+                if index < scalars.endIndex, scalars[index] == "+" || scalars[index] == "-" {
+                    index = scalars.index(after: index)
+                    length += 1
+                }
+                while index < scalars.endIndex, isDigit(scalars[index]) {
+                    index = scalars.index(after: index)
+                    length += 1
+                }
             }
         }
 
         let text = String(scalars[start ..< index])
         if hasDecimalPoint {
-            let value = Double(text)!
-            return (.real(value), index, length)
+            return (.real(ValidationUtilities.validatedRealLiteral(text)), index, length)
         }
-        let value = Int(text)!
-        return (.integer(value), index, length)
+        return (.integer(ValidationUtilities.validatedIntegerLiteral(text)), index, length)
     }
 
     /// Scan string literal from after opening quote to past closing quote.

@@ -299,7 +299,7 @@ public enum ApproximateQFT {
                 let maxControl = min(target + truncation, n)
                 for control in stride(from: maxControl - 1, through: target + 1, by: -1) {
                     let k = control - target + 1
-                    let theta = -Double.pi / Double(1 << k)
+                    let theta = -2.0 * Double.pi / Double(1 << k)
                     circuit.append(.controlledPhase(theta), to: [qubits[control], qubits[target]])
                 }
                 circuit.append(.hadamard, to: qubits[target])
@@ -311,7 +311,7 @@ public enum ApproximateQFT {
                 let maxControl = min(target + truncation, n)
                 for control in (target + 1) ..< maxControl {
                     let k = control - target + 1
-                    let theta = Double.pi / Double(1 << k)
+                    let theta = 2.0 * Double.pi / Double(1 << k)
                     circuit.append(.controlledPhase(theta), to: [qubits[control], qubits[target]])
                 }
             }

@@ -55,13 +55,13 @@ struct MeasureParameterizationTests {
     @Test("Measure is not parameterized")
     func measureIsNotParameterized() {
         let op = CircuitOperation.measure(qubit: 0)
-        #expect(op.isParameterized == false, "Measure operations should never be parameterized")
+        #expect(!op.isParameterized, "Measure operations should never be parameterized")
     }
 
     @Test("Measure with classicalBit is not parameterized")
     func measureWithClassicalBitIsNotParameterized() {
         let op = CircuitOperation.measure(qubit: 1, classicalBit: 1)
-        #expect(op.isParameterized == false, "Measure operations with classical bit should never be parameterized")
+        #expect(!op.isParameterized, "Measure operations with classical bit should never be parameterized")
     }
 }
 
@@ -155,7 +155,7 @@ struct MeasureUnitarityTests {
     @Test("Measure is not unitary")
     func measureIsNotUnitary() {
         let op = CircuitOperation.measure(qubit: 0)
-        #expect(op.isUnitary == false, "Measurement operations are irreversible and should report as non-unitary")
+        #expect(!op.isUnitary, "Measurement operations are irreversible and should report as non-unitary")
     }
 }
 
@@ -379,9 +379,9 @@ struct QuantumCircuitExecuteOnStateMeasureTests {
 }
 
 /// Validates GateApplication.applyReset correctly projects the
-/// measured qubit state onto the computational basis and
+/// target qubit to |0⟩ via measure-and-conditionally-flip and
 /// renormalizes the resulting amplitude vector.
-@Suite("GateApplication Measure via applyReset")
+@Suite("GateApplication Reset Operation")
 struct GateApplicationMeasureTests {
     @Test("applyReset on ground state returns ground state unchanged")
     func applyResetOnGroundState() {
@@ -407,6 +407,86 @@ struct GateApplicationMeasureTests {
         let result = GateApplication.applyReset(qubit: 0, state: flipped)
         let prob0 = result.probability(of: 0)
         #expect(prob0 > 0.99, "Applying reset/measure on |1> should collapse to |0> with probability near 1.0")
+    }
+}
+
+/// Validates GateApplication.applyMeasurement performs Born rule
+/// probabilistic collapse returning correct outcome and properly
+/// projected post-measurement state across basis and entangled inputs.
+@Suite("GateApplication Born Rule Measurement")
+struct GateApplicationBornRuleMeasurementTests {
+    @Test("applyMeasurement on |0> always returns outcome 0 and |0> state")
+    func measureGroundState() {
+        let state = QuantumState(qubits: 1)
+        let (result, outcome) = GateApplication.applyMeasurement(qubit: 0, state: state)
+        #expect(outcome == 0, "Measuring |0> must always yield outcome 0")
+        #expect(result.probability(of: 0) > 0.99, "Post-measurement state must be |0> when measuring |0>")
+    }
+
+    @Test("applyMeasurement on |1> always returns outcome 1 and |1> state")
+    func measureExcitedState() {
+        let state = QuantumState(qubits: 1)
+        let flipped = GateApplication.apply(.pauliX, to: [0], state: state)
+        let (result, outcome) = GateApplication.applyMeasurement(qubit: 0, state: flipped)
+        #expect(outcome == 1, "Measuring |1> must always yield outcome 1")
+        #expect(result.probability(of: 1) > 0.99, "Post-measurement state must be |1> when measuring |1>")
+    }
+
+    @Test("applyMeasurement preserves normalization")
+    func measurePreservesNormalization() {
+        let state = QuantumState(qubits: 2)
+        let afterH = GateApplication.apply(.hadamard, to: [0], state: state)
+        let (result, _) = GateApplication.applyMeasurement(qubit: 0, state: afterH)
+        let totalProb = result.amplitudes.reduce(0.0) { $0 + $1.real * $1.real + $1.imaginary * $1.imaginary }
+        #expect(abs(totalProb - 1.0) < 1e-10, "Post-measurement state must be normalized")
+    }
+
+    @Test("applyMeasurement on superposition produces both outcomes over many trials")
+    func measureSuperpositionBothOutcomes() {
+        let state = QuantumState(qubits: 1)
+        let plus = GateApplication.apply(.hadamard, to: [0], state: state)
+        var count0 = 0
+        var count1 = 0
+        for _ in 0 ..< 200 {
+            let (_, outcome) = GateApplication.applyMeasurement(qubit: 0, state: plus)
+            if outcome == 0 { count0 += 1 } else { count1 += 1 }
+        }
+        #expect(count0 > 30, "Born rule on |+> must produce outcome 0 with appreciable frequency over 200 trials")
+        #expect(count1 > 30, "Born rule on |+> must produce outcome 1 with appreciable frequency over 200 trials")
+    }
+
+    @Test("applyMeasurement on Bell state produces correlated outcomes")
+    func measureBellStateCorrelation() {
+        let invSqrt2 = 1.0 / sqrt(2.0)
+        let bell = QuantumState(qubits: 2, amplitudes: [
+            Complex(invSqrt2, 0.0), .zero, .zero, Complex(invSqrt2, 0.0),
+        ])
+        for _ in 0 ..< 100 {
+            let (result, outcome) = GateApplication.applyMeasurement(qubit: 0, state: bell)
+            if outcome == 0 {
+                #expect(result.probability(of: 0) > 0.99, "Measuring qubit 0 as |0> in Bell state must collapse to |00>")
+            } else {
+                #expect(result.probability(of: 3) > 0.99, "Measuring qubit 0 as |1> in Bell state must collapse to |11>")
+            }
+        }
+    }
+
+    @Test("applyMeasurement outcome is consistent with collapsed state")
+    func measureOutcomeMatchesState() {
+        let state = QuantumState(qubits: 2)
+        let afterH = GateApplication.apply(.hadamard, to: [0], state: state)
+        for _ in 0 ..< 100 {
+            let (result, outcome) = GateApplication.applyMeasurement(qubit: 0, state: afterH)
+            let prob0 = result.probability(of: 0) + result.probability(of: 2)
+            let prob1 = result.probability(of: 1) + result.probability(of: 3)
+            if outcome == 0 {
+                #expect(prob0 > 0.99, "Outcome 0 must correspond to qubit 0 being in |0> subspace")
+                #expect(prob1 < 0.01, "Outcome 0 must have no probability in |1> subspace")
+            } else {
+                #expect(prob1 > 0.99, "Outcome 1 must correspond to qubit 0 being in |1> subspace")
+                #expect(prob0 < 0.01, "Outcome 1 must have no probability in |0> subspace")
+            }
+        }
     }
 }
 
@@ -468,7 +548,7 @@ struct QuantumCircuitMeasureBuildingTests {
         var circuit = QuantumCircuit(qubits: 2)
         circuit.append(.measure, to: 0)
         #expect(circuit.count == 1, "Circuit should have 1 operation after appending measure")
-        #expect(circuit.operations[0].isUnitary == false, "Appended measure operation should be non-unitary")
+        #expect(!circuit.operations[0].isUnitary, "Appended measure operation should be non-unitary")
     }
 
     @Test("Insert measure via NonUnitaryOperation places measure at correct index")
@@ -478,7 +558,7 @@ struct QuantumCircuitMeasureBuildingTests {
         circuit.append(.pauliX, to: 1)
         circuit.insert(.measure, to: 0, at: 1)
         #expect(circuit.count == 3, "Circuit should have 3 operations after inserting measure")
-        #expect(circuit.operations[1].isUnitary == false, "Inserted measure at index 1 should be non-unitary")
+        #expect(!circuit.operations[1].isUnitary, "Inserted measure at index 1 should be non-unitary")
     }
 
     @Test("append with measure CircuitOperation adds to circuit")
@@ -497,7 +577,7 @@ struct QuantumCircuitMeasureBuildingTests {
 }
 
 /// Validates GateApplication.apply dispatches measure operations
-/// to the applyReset path, collapsing the qubit state onto
+/// through Born rule measurement, collapsing the qubit state onto
 /// a computational basis state while preserving normalization.
 @Suite("GateApplication Apply Measure Dispatch")
 struct GateApplicationApplyMeasureDispatchTests {
@@ -510,14 +590,14 @@ struct GateApplicationApplyMeasureDispatchTests {
         #expect(prob0 > 0.99, "GateApplication.apply with measure on |0> should preserve ground state")
     }
 
-    @Test("apply with measure operation on |1> collapses to |0>")
+    @Test("apply with measure operation on |1> preserves |1> via Born rule")
     func applyMeasureOnExcitedState() {
         let state = QuantumState(qubits: 1)
         let flipped = GateApplication.apply(.pauliX, to: [0], state: state)
         let op = CircuitOperation.measure(qubit: 0)
         let result = GateApplication.apply(op, state: flipped)
-        let prob0 = result.probability(of: 0)
-        #expect(prob0 > 0.99, "GateApplication.apply with measure on |1> should collapse to |0> via reset path")
+        let prob1 = result.probability(of: 1)
+        #expect(prob1 > 0.99, "Born rule measurement on |1> must collapse to |1> with probability 1.0")
     }
 
     @Test("apply with measure on 2-qubit state preserves normalization")
@@ -544,8 +624,8 @@ struct GateApplicationApplyMeasureDispatchTests {
 }
 
 /// Validates MetalGateApplication.apply dispatches measure operations
-/// to the GateApplication.applyReset fallback path when the Metal
-/// executor encounters a non-unitary measurement operation.
+/// through Born rule measurement when the Metal executor encounters
+/// a non-unitary measurement operation.
 @Suite("MetalGateApplication Measure Fallback")
 struct MetalGateApplicationMeasureFallbackTests {
     @Test("Metal apply with measure falls back to CPU reset path")
@@ -560,7 +640,7 @@ struct MetalGateApplicationMeasureFallbackTests {
         #expect(prob0 > 0.99, "MetalGateApplication.apply with measure on |0> should fall back to CPU and preserve ground state")
     }
 
-    @Test("Metal apply with measure on excited state collapses to ground")
+    @Test("Metal apply with measure on excited state preserves |1> via Born rule")
     func metalApplyMeasureOnExcitedState() async {
         guard let metal = MetalGateApplication() else {
             return
@@ -569,8 +649,8 @@ struct MetalGateApplicationMeasureFallbackTests {
         let flipped = GateApplication.apply(.pauliX, to: [0], state: state)
         let op = CircuitOperation.measure(qubit: 0)
         let result = await metal.apply(op, state: flipped)
-        let prob0 = result.probability(of: 0)
-        #expect(prob0 > 0.99, "MetalGateApplication.apply with measure on |1> should fall back to CPU and collapse to |0>")
+        let prob1 = result.probability(of: 1)
+        #expect(prob1 > 0.99, "MetalGateApplication Born rule measurement on |1> must collapse to |1> with probability 1.0")
     }
 
     @Test("Metal apply with measure preserves normalization on 2-qubit state")
@@ -588,8 +668,8 @@ struct MetalGateApplicationMeasureFallbackTests {
 }
 
 /// Validates DensityMatrix.applying dispatches measure operations
-/// to the applyReset path, projecting the density matrix onto
-/// a computational basis state while preserving trace normalization.
+/// through the non-selective measurement channel, decohering in
+/// computational basis while preserving populations and trace.
 @Suite("DensityMatrix Measure Application")
 struct DensityMatrixMeasureApplicationTests {
     @Test("DensityMatrix applying measure on ground state preserves state")
@@ -601,14 +681,14 @@ struct DensityMatrixMeasureApplicationTests {
         #expect(prob0 > 0.99, "DensityMatrix.applying measure on |0><0| should preserve ground state density matrix")
     }
 
-    @Test("DensityMatrix applying measure on excited state projects to ground")
+    @Test("DensityMatrix applying measure on excited state preserves |1><1|")
     func applyingMeasureOnExcitedState() {
         let rho = DensityMatrix(qubits: 1)
         let excited = rho.applying(.pauliX, to: 0)
         let op = CircuitOperation.measure(qubit: 0)
         let result = excited.applying(op)
-        let prob0 = result.probability(of: 0)
-        #expect(prob0 > 0.99, "DensityMatrix.applying measure on |1><1| should project to |0><0| via reset path")
+        let prob1 = result.probability(of: 1)
+        #expect(prob1 > 0.99, "Non-selective measurement on |1><1| must preserve populations, keeping probability of |1> near 1.0")
     }
 
     @Test("DensityMatrix applying measure preserves trace on 2-qubit system")
@@ -645,7 +725,7 @@ struct CircuitJSONDecoderMeasureGuardFailureTests {
         """
         let data = try #require(json.data(using: .utf8))
         let result = CircuitJSONDecoder.decode(from: data)
-        #expect(result.succeeded == false, "Decoding measurement with empty qubits should produce an error diagnostic")
+        #expect(!result.succeeded, "Decoding measurement with empty qubits should produce an error diagnostic")
     }
 
     @Test("Decode measurement with empty qubits skips the operation")

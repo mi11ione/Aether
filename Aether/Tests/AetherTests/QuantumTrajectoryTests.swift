@@ -17,7 +17,7 @@ struct TrajectoryConfigurationTests {
         #expect(config.trajectories == 1000, "Default trajectories should be 1000")
         #expect(config.seed == nil, "Default seed should be nil")
         #expect(config.timeSteps == 1000, "Default timeSteps should be 1000")
-        #expect(config.shouldStoreIndividualTrajectories == false, "Default shouldStoreIndividualTrajectories should be false")
+        #expect(!config.shouldStoreIndividualTrajectories, "Default shouldStoreIndividualTrajectories should be false")
     }
 
     @Test("Custom configuration values")
@@ -32,7 +32,7 @@ struct TrajectoryConfigurationTests {
         #expect(config.trajectories == 50, "Custom trajectories should be 50")
         #expect(config.seed == 12345, "Custom seed should be 12345")
         #expect(config.timeSteps == 200, "Custom timeSteps should be 200")
-        #expect(config.shouldStoreIndividualTrajectories == true, "shouldStoreIndividualTrajectories should be true")
+        #expect(config.shouldStoreIndividualTrajectories, "shouldStoreIndividualTrajectories should be true")
     }
 
     @Test("Partial custom configuration")
@@ -42,7 +42,7 @@ struct TrajectoryConfigurationTests {
         #expect(config.trajectories == 100, "Trajectories should be 100")
         #expect(config.seed == 42, "Seed should be 42")
         #expect(config.timeSteps == 1000, "TimeSteps should use default 1000")
-        #expect(config.shouldStoreIndividualTrajectories == false, "shouldStoreIndividualTrajectories should use default false")
+        #expect(!config.shouldStoreIndividualTrajectories, "shouldStoreIndividualTrajectories should use default false")
     }
 }
 

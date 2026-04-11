@@ -164,7 +164,7 @@ struct AmplitudeEstimationConfigurationTests {
         let config = AmplitudeEstimationConfiguration(precisionQubits: 6)
 
         #expect(config.precisionQubits == 6, "Precision qubits should be 6")
-        #expect(config.useIterative == false, "Default useIterative should be false")
+        #expect(!config.useIterative, "Default useIterative should be false")
     }
 
     @Test("Configuration with minimum precision qubits")
@@ -186,7 +186,7 @@ struct AmplitudeEstimationConfigurationTests {
         let config = AmplitudeEstimationConfiguration(precisionQubits: 8, useIterative: true)
 
         #expect(config.precisionQubits == 8, "Precision qubits should be 8")
-        #expect(config.useIterative == true, "useIterative should be true")
+        #expect(config.useIterative, "useIterative should be true")
     }
 
     @Test("Configuration with useIterative false explicit")
@@ -194,7 +194,7 @@ struct AmplitudeEstimationConfigurationTests {
         let config = AmplitudeEstimationConfiguration(precisionQubits: 4, useIterative: false)
 
         #expect(config.precisionQubits == 4, "Precision qubits should be 4")
-        #expect(config.useIterative == false, "useIterative should be false")
+        #expect(!config.useIterative, "useIterative should be false")
     }
 
     @Test("Configuration stores precision independently of iterative flag")

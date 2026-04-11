@@ -283,7 +283,7 @@ struct PhasePrecisionAnalysisInitializationTests {
             "maxAbsoluteError should be 1/1024",
         )
         #expect(
-            analysis.isFloat64Required == false,
+            !analysis.isFloat64Required,
             "isFloat64Required should be false for 10 bits",
         )
     }
@@ -302,7 +302,7 @@ struct PhasePrecisionAnalysisInitializationTests {
             "precisionBits should be 20",
         )
         #expect(
-            analysis.isFloat64Required == true,
+            analysis.isFloat64Required,
             "isFloat64Required should be true for 20 bits",
         )
     }
@@ -390,7 +390,7 @@ struct PhaseEstimationPrecisionAnalysisTests {
             "precisionBits should be 15 or fewer for this configuration",
         )
         #expect(
-            analysis.isFloat64Required == false,
+            !analysis.isFloat64Required,
             "isFloat64Required should be false for 15 or fewer bits",
         )
     }
@@ -404,7 +404,7 @@ struct PhaseEstimationPrecisionAnalysisTests {
 
         if analysis.precisionBits > 15 {
             #expect(
-                analysis.isFloat64Required == true,
+                analysis.isFloat64Required,
                 "isFloat64Required should be true for more than 15 bits",
             )
         }
@@ -650,7 +650,7 @@ struct Float64RequirementThresholdTests {
         )
 
         #expect(
-            analysis.isFloat64Required == false,
+            !analysis.isFloat64Required,
             "14 bits should not require Float64",
         )
     }
@@ -665,7 +665,7 @@ struct Float64RequirementThresholdTests {
         )
 
         #expect(
-            analysis.isFloat64Required == false,
+            !analysis.isFloat64Required,
             "15 bits should not require Float64",
         )
     }
@@ -680,7 +680,7 @@ struct Float64RequirementThresholdTests {
         )
 
         #expect(
-            analysis.isFloat64Required == true,
+            analysis.isFloat64Required,
             "16 bits should require Float64",
         )
     }
@@ -695,7 +695,7 @@ struct Float64RequirementThresholdTests {
         )
 
         #expect(
-            analysis.isFloat64Required == true,
+            analysis.isFloat64Required,
             "20 bits should require Float64",
         )
     }
@@ -709,7 +709,7 @@ struct Float64RequirementThresholdTests {
 
         if analysis.precisionBits > 15 {
             #expect(
-                analysis.isFloat64Required == true,
+                analysis.isFloat64Required,
                 "high precision analysis should require Float64 when bits > 15",
             )
         }

@@ -184,6 +184,37 @@ struct NumberTheoryModularPowTests {
         let result = NumberTheory.modularPow(base: 3, exponent: 5, modulus: 7)
         #expect(result == 5, "3^5 = 243 = 34*7 + 5, so 3^5 mod 7 = 5")
     }
+
+    @Test("Modular power with large modulus uses overflow-safe multiplication")
+    func modularPowLargeModulusOverflowSafe() {
+        let p = 4_000_000_007
+        let a = 2_000_000_003
+        let result = NumberTheory.modularPow(base: a, exponent: p - 1, modulus: p)
+        #expect(result == 1, "By Fermat's little theorem, a^(p-1) mod p = 1 for prime p")
+    }
+
+    @Test("Modular power with modulus exceeding sqrt(Int.max) computes correctly")
+    func modularPowLargeModulusSquare() {
+        let m = 5_000_000_029
+        let result = NumberTheory.modularPow(base: m - 1, exponent: 2, modulus: m)
+        #expect(result == 1, "(m-1)^2 mod m = 1 since (m-1)^2 = m(m-2) + 1")
+    }
+}
+
+/// Test suite for NumberTheory.isPrime with large numbers near overflow boundary.
+/// Validates that Miller-Rabin witness test uses overflow-safe
+/// modular squaring for moduli exceeding sqrt(Int.max).
+@Suite("NumberTheory - isPrime Large Number Overflow Safety")
+struct NumberTheoryIsPrimeLargeOverflowTests {
+    @Test("isPrime correctly identifies large prime above sqrt(Int.max)")
+    func isPrimeLargePrime() {
+        #expect(NumberTheory.isPrime(4_000_000_007), "4000000007 is prime")
+    }
+
+    @Test("isPrime correctly identifies large composite above sqrt(Int.max)")
+    func isPrimeLargeComposite() {
+        #expect(!NumberTheory.isPrime(10_002_200_057), "10002200057 = 100003 * 100019, composite")
+    }
 }
 
 /// Test suite for NumberTheory.modularInverse computing multiplicative inverse.
@@ -1342,6 +1373,19 @@ struct NumberTheoryIsPerfectPowerOverflowTests {
         let result = NumberTheory.isPerfectPower(9)
         #expect(result != nil, "9 should be detected as perfect power")
         #expect(result?.base == 3 && result!.exp == 2, "9 = 3^2")
+    }
+
+    @Test("isPerfectPower large non-power avoids overflow in rootPlus1 path")
+    func isPerfectPowerLargeNonPowerOverflow() {
+        let result = NumberTheory.isPerfectPower(9_000_000_000_000_000_001)
+        #expect(result == nil, "9*10^18+1 is not a perfect power and must not crash")
+    }
+
+    @Test("isPerfectPower large perfect square detected correctly")
+    func isPerfectPowerLargeSquare() {
+        let result = NumberTheory.isPerfectPower(9_000_000_000_000_000_000)
+        #expect(result != nil, "9*10^18 = 3000000000^2 is a perfect square")
+        #expect(result?.base == 3_000_000_000 && result!.exp == 2, "9*10^18 = 3000000000^2")
     }
 }
 

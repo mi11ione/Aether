@@ -91,7 +91,7 @@ struct GPUProfilerTests {
 
         let profile = await GPUProfiler.profile(circuit, precisionPolicy: .accurate)
 
-        #expect(profile.didUseGPU == false, "Accurate policy should force CPU-only execution")
+        #expect(!profile.didUseGPU, "Accurate policy should force CPU-only execution")
         #expect(abs(profile.gpuTimeMs) < 1e-10, "GPU time should be zero when CPU-only")
         #expect(abs(profile.utilizationPercent) < 1e-10, "GPU utilization should be zero when CPU-only")
     }
@@ -116,6 +116,6 @@ struct GPUProfilerTests {
 
         let profile = await GPUProfiler.profile(circuit, precisionPolicy: .fast)
 
-        #expect(profile.didUseGPU == false, "Small circuits below GPU threshold should use CPU")
+        #expect(!profile.didUseGPU, "Small circuits below GPU threshold should use CPU")
     }
 }

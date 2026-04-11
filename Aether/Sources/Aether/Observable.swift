@@ -175,16 +175,7 @@ public struct Observable: CustomStringConvertible, Sendable {
     @_optimize(speed)
     public func variance(of state: QuantumState) -> Double {
         let mean = expectationValue(of: state)
-        let meanSquared = squared().expectationValue(of: state)
-        return meanSquared.addingProduct(-mean, mean)
-    }
-
-    /// Computes O² by expanding all Pauli string products and combining like terms.
-    @_optimize(speed)
-    @_eagerMove
-    private func squared() -> Observable {
-        var coefficientMap: [PauliString: Double] = [:]
-        coefficientMap.reserveCapacity(terms.count * terms.count)
+        var meanSquared = 0.0
 
         for i in 0 ..< terms.count {
             let ci = terms[i].coefficient
@@ -198,16 +189,13 @@ public struct Observable: CustomStringConvertible, Sendable {
                 let coefficient = ci * cj * phase.real
 
                 if abs(coefficient) > 1e-15 {
-                    coefficientMap[product, default: 0.0] += coefficient
+                    let pExp = Self.pauliExpectation(of: product, for: state)
+                    meanSquared = meanSquared.addingProduct(coefficient, pExp)
                 }
             }
         }
 
-        let squaredTerms: PauliTerms = coefficientMap.compactMap { key, value in
-            abs(value) > 1e-15 ? (coefficient: value, pauliString: key) : nil
-        }
-
-        return Observable(terms: squaredTerms)
+        return max(0.0, meanSquared.addingProduct(-mean, mean))
     }
 
     /// Multiplies two Pauli strings using standard Pauli algebra with phase tracking.

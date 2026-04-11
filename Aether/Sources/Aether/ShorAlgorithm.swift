@@ -87,9 +87,23 @@ public enum NumberTheory {
         return (oldR, oldS, oldT)
     }
 
+    /// Overflow-safe modular multiplication using full-width arithmetic.
+    @usableFromInline
+    @_optimize(speed)
+    @_effects(readonly)
+    static func mulmod(_ a: Int, _ b: Int, _ modulus: Int) -> Int {
+        let ua = UInt(bitPattern: a)
+        let ub = UInt(bitPattern: b)
+        let um = UInt(bitPattern: modulus)
+        let (high, low) = ua.multipliedFullWidth(by: ub)
+        return Int(bitPattern: um.dividingFullWidth((high, low)).remainder)
+    }
+
     /// Computes modular exponentiation using repeated squaring.
     ///
     /// Efficiently computes base^exponent mod modulus in O(log exponent) time.
+    /// Uses full-width arithmetic internally to avoid intermediate overflow
+    /// when modulus exceeds √(Int.max).
     ///
     /// **Example:**
     /// ```swift
@@ -122,9 +136,9 @@ public enum NumberTheory {
 
         while exp > 0 {
             if exp & 1 == 1 {
-                result = (result * b) % modulus
+                result = mulmod(result, b, modulus)
             }
-            b = (b * b) % modulus
+            b = mulmod(b, b, modulus)
             exp >>= 1
         }
 
@@ -278,15 +292,31 @@ public enum NumberTheory {
             let rootPlus1 = root + 1
             power = 1
             for _ in 0 ..< k {
-                power *= rootPlus1
-                if power > n { break }
+                let (product, didOverflow) = power.multipliedReportingOverflow(by: rootPlus1)
+                if didOverflow || product > n { break }
+                power = product
             }
         }
 
         return nil
     }
 
-    /// Computes integer k-th root using binary search.
+    /// Computes the integer k-th root of n via binary search.
+    ///
+    /// Returns the largest integer r such that r^k <= n. Handles edge cases
+    /// gracefully: returns 0 for non-positive inputs, returns n for k = 1.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let cubeRoot = NumberTheory.integerRoot(27, 3)  // 3
+    /// let sqrtFloor = NumberTheory.integerRoot(10, 2)  // 3 (since 3^2 = 9 <= 10)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - n: Value to take the root of
+    ///   - k: Root degree
+    /// - Returns: Largest integer r where r^k <= n, or 0 if n <= 0 or k <= 0
+    /// - Complexity: O(k * log(n))
     @_optimize(speed)
     @_effects(readonly)
     @inlinable
@@ -369,7 +399,7 @@ public enum NumberTheory {
         }
 
         for _ in 0 ..< r - 1 {
-            x = (x * x) % n
+            x = mulmod(x, x, n)
             if x == n - 1 {
                 return true
             }
@@ -580,6 +610,14 @@ public struct ShorPeriodResult: Sendable, CustomStringConvertible {
     public let precisionQubits: Int
 
     /// Create period finding result.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let result = ShorPeriodResult(
+    ///     measuredPhase: 0.25, phaseNumerator: 1, phaseDenominator: 4,
+    ///     candidatePeriods: [4], verifiedPeriod: 4, measurementOutcome: 128, precisionQubits: 9
+    /// )
+    /// ```
     public init(
         measuredPhase: Double,
         phaseNumerator: Int,
@@ -653,6 +691,14 @@ public struct ShorResult: Sendable, CustomStringConvertible {
     public let failureReason: ShorFailureReason?
 
     /// Create factorization result.
+    ///
+    /// **Example:**
+    /// ```swift
+    /// let result = ShorResult(
+    ///     numberToFactor: 15, factors: (3, 5), period: 4,
+    ///     base: 7, attempts: 1, isSuccessful: true, failureReason: nil
+    /// )
+    /// ```
     public init(
         numberToFactor: Int,
         factors: (p: Int, q: Int)?,
@@ -753,7 +799,7 @@ public struct ModularMultiplicationUnitary: Sendable {
 
         for x in 0 ..< dim {
             let target: Int = if x < modulus {
-                (multiplier * x) % modulus
+                NumberTheory.mulmod(multiplier, x, modulus)
             } else {
                 x
             }
@@ -881,7 +927,7 @@ public extension QuantumCircuit {
         for target in (0 ..< count).reversed() {
             for control in (target + 1 ..< count).reversed() {
                 let k = control - target + 1
-                let theta = -Double.pi / Double(1 << k)
+                let theta = -2.0 * Double.pi / Double(1 << k)
                 gates.append((.controlledPhase(theta), [start + control, start + target]))
             }
             gates.append((.hadamard, [start + target]))
@@ -940,7 +986,13 @@ public extension QuantumState {
         let precisionQubits = config.effectivePrecisionQubits
         let precisionStateSize = 1 << precisionQubits
 
-        var precisionProbabilities = [Double](repeating: 0.0, count: precisionStateSize)
+        var precisionProbabilities = [Double](unsafeUninitializedCapacity: precisionStateSize) {
+            buffer, count in
+            for i in 0 ..< precisionStateSize {
+                buffer[i] = 0.0
+            }
+            count = precisionStateSize
+        }
 
         for basisIndex in 0 ..< stateSpaceSize {
             let precisionIndex = basisIndex % precisionStateSize

@@ -173,7 +173,7 @@ struct TreeTensorNodeTypePropertiesTests {
         let node = TreeTensorNode.leaf(physicalDimension: 2, elements: [.one, .zero])
 
         #expect(
-            node.isInternal == false,
+            !node.isInternal,
             "Leaf node isInternal should return false",
         )
     }
@@ -193,7 +193,7 @@ struct TreeTensorNodeTypePropertiesTests {
         let node = TreeTensorNode.internal(childBondDimensions: [2, 2], elements: [.one, .zero, .zero, .one])
 
         #expect(
-            node.isLeaf == false,
+            !node.isLeaf,
             "Internal node isLeaf should return false",
         )
     }

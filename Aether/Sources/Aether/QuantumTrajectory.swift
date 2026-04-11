@@ -412,10 +412,12 @@ public enum QuantumTrajectory {
         var psi = initialState.amplitudes
         var jumpCounts = [Int](repeating: 0, count: numOperators)
         var scratch = [Complex<Double>](repeating: .zero, count: dimension)
+        var rkK = [Complex<Double>](repeating: .zero, count: dimension)
+        var rkTmp = [Complex<Double>](repeating: .zero, count: dimension)
         var jumpProbs = [Double](repeating: 0.0, count: numOperators)
 
         for _ in 0 ..< timeSteps {
-            applyNonHermitianStep(psi: psi, hEff: hEff, dt: dt, dimension: dimension, result: &scratch)
+            applyRK4Step(psi: psi, hEff: hEff, dt: dt, dimension: dimension, result: &scratch, k: &rkK, tmp: &rkTmp)
 
             let normSquared = computeNormSquared(scratch, dimension: dimension)
             let dp = 1.0 - normSquared
@@ -442,7 +444,7 @@ public enum QuantumTrajectory {
             swap(&psi, &scratch)
         }
 
-        let finalState = QuantumState(qubits: initialState.qubits, amplitudes: psi)
+        let finalState = QuantumState(qubits: initialState.qubits, rawAmplitudes: psi)
         return (finalState, jumpCounts)
     }
 
@@ -487,41 +489,95 @@ public enum QuantumTrajectory {
         }
     }
 
-    /// Applies one Euler step under the effective non-Hermitian Hamiltonian.
+    /// Applies one RK4 step under the effective non-Hermitian Hamiltonian.
+    ///
+    /// Fourth-order Runge-Kutta integration of dψ/dt = -iH_eff·ψ provides
+    /// O(dt^4) local error vs O(dt) for Euler, enabling stable evolution
+    /// with larger time steps and stiff Hamiltonians.
     @_optimize(speed)
-    private static func applyNonHermitianStep(
+    private static func applyRK4Step(
         psi: [Complex<Double>],
         hEff: [Complex<Double>],
         dt: Double,
         dimension: Int,
         result: inout [Complex<Double>],
+        k: inout [Complex<Double>],
+        tmp: inout [Complex<Double>],
+    ) {
+        // k1 = dt · f(ψ) = (-i·dt) · H_eff · ψ
+        hEffMultiply(hEff: hEff, input: psi, output: &k, dt: dt, dimension: dimension)
+        for i in 0 ..< dimension {
+            result[i] = k[i]
+        }
+
+        // k2 = dt · f(ψ + k1/2)
+        for i in 0 ..< dimension {
+            tmp[i] = psi[i] + k[i] * 0.5
+        }
+        hEffMultiply(hEff: hEff, input: tmp, output: &k, dt: dt, dimension: dimension)
+        for i in 0 ..< dimension {
+            result[i] = result[i] + k[i] * 2.0
+        }
+
+        // k3 = dt · f(ψ + k2/2)
+        for i in 0 ..< dimension {
+            tmp[i] = psi[i] + k[i] * 0.5
+        }
+        hEffMultiply(hEff: hEff, input: tmp, output: &k, dt: dt, dimension: dimension)
+        for i in 0 ..< dimension {
+            result[i] = result[i] + k[i] * 2.0
+        }
+
+        // k4 = dt · f(ψ + k3)
+        for i in 0 ..< dimension {
+            tmp[i] = psi[i] + k[i]
+        }
+        hEffMultiply(hEff: hEff, input: tmp, output: &k, dt: dt, dimension: dimension)
+        for i in 0 ..< dimension {
+            result[i] = result[i] + k[i]
+        }
+
+        // ψ_new = ψ + (k1 + 2k2 + 2k3 + k4) / 6
+        let sixth = 1.0 / 6.0
+        for i in 0 ..< dimension {
+            result[i] = psi[i] + result[i] * sixth
+        }
+    }
+
+    /// Computes output = (-i·dt) · H_eff · input via BLAS-dispatched matrix-vector multiply.
+    @_optimize(speed)
+    private static func hEffMultiply(
+        hEff: [Complex<Double>],
+        input: [Complex<Double>],
+        output: inout [Complex<Double>],
+        dt: Double,
+        dimension: Int,
     ) {
         if dimension <= 4 {
             let minusIDt = Complex<Double>(0.0, -dt)
             for i in 0 ..< dimension {
-                var sum = psi[i]
+                var sum = Complex<Double>.zero
                 for j in 0 ..< dimension {
-                    sum = sum + minusIDt * hEff[i * dimension + j] * psi[j]
+                    sum = sum + hEff[i * dimension + j] * input[j]
                 }
-                result[i] = sum
+                output[i] = minusIDt * sum
             }
         } else {
             var alpha = (0.0, -dt)
-            var beta = (1.0, 0.0)
+            var beta = (0.0, 0.0)
             withUnsafePointer(to: &alpha) { alphaPtr in
                 withUnsafePointer(to: &beta) { betaPtr in
                     hEff.withUnsafeBufferPointer { hPtr in
-                        psi.withUnsafeBufferPointer { psiPtr in
-                            result.withUnsafeMutableBufferPointer { resPtr in
-                                resPtr.baseAddress!.update(from: psiPtr.baseAddress!, count: dimension) // Safety: both buffers have dimension elements where dimension >= 5
+                        input.withUnsafeBufferPointer { inPtr in
+                            output.withUnsafeMutableBufferPointer { outPtr in
                                 cblas_zgemv(
                                     CblasRowMajor, CblasNoTrans,
                                     Int32(dimension), Int32(dimension),
                                     OpaquePointer(alphaPtr),
-                                    OpaquePointer(hPtr.baseAddress), Int32(dimension), // Safety: hEff has dimension² elements
-                                    OpaquePointer(psiPtr.baseAddress), 1,
+                                    OpaquePointer(hPtr.baseAddress), Int32(dimension),
+                                    OpaquePointer(inPtr.baseAddress), 1,
                                     OpaquePointer(betaPtr),
-                                    OpaquePointer(resPtr.baseAddress), 1,
+                                    OpaquePointer(outPtr.baseAddress), 1,
                                 )
                             }
                         }

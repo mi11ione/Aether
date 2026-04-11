@@ -498,12 +498,15 @@ struct StabilizerEquatableTests {
 /// unseeded sampling, and expectationValue weight reduction.
 @Suite("StabilizerTableau Coverage Edge Cases")
 struct StabilizerTableauCoverageTests {
-    @Test("Unsupported multi-qubit gate is silently ignored")
-    func unsupportedMultiQubitGate() {
+    @Test("SWAP gate exchanges qubit states correctly")
+    func swapExchangesQubits() {
         var tableau = StabilizerTableau(qubits: 2)
-        let before = tableau
-        tableau.apply(.hadamard, to: [0, 1])
-        #expect(tableau == before, "Unsupported gate should leave state unchanged")
+        tableau.apply(.pauliX, to: 0)
+        tableau.apply(.swap, to: [0, 1])
+        let (p0q0, _) = tableau.probability(of: 0, measuring: .z)
+        let (_, p1q1) = tableau.probability(of: 1, measuring: .z)
+        #expect(abs(p0q0 - 1.0) < 1e-10, "Qubit 0 should be |0> after SWAP")
+        #expect(abs(p1q1 - 1.0) < 1e-10, "Qubit 1 should be |1> after SWAP")
     }
 
     @Test("CZ gate phase-flip condition triggers correctly")

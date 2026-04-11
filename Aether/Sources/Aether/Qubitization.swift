@@ -370,7 +370,9 @@ public struct QSPPhaseAngles: Sendable {
 public enum QuantumSignalProcessing {
     private static let besselNearZeroThreshold = 1e-10
     private static let besselConvergenceEpsilon = 1e-15
-    private static let besselMaxIterations = 50
+    private static let besselMaxIterations = 200
+    private static let qspMaxIterations = 3000
+    private static let qspConvergenceThreshold = 1e-13
     /// Computes QSP phase angles for the specified target function.
     ///
     /// Determines the optimal polynomial degree and computes phase angles that approximate
@@ -572,16 +574,19 @@ public enum QuantumSignalProcessing {
             effectiveDegree = k
         }
 
-        effectiveDegree = max(1, effectiveDegree)
+        effectiveDegree = max(2, effectiveDegree)
+        if effectiveDegree % 2 != 0 { effectiveDegree += 1 }
 
-        var chebyshevCoeffs = [Double](repeating: 0.0, count: effectiveDegree + 1)
+        var chebyshevCoeffs = [Double](unsafeUninitializedCapacity: effectiveDegree + 1) {
+            buffer, count in
+            buffer.initialize(repeating: 0.0)
+            count = effectiveDegree + 1
+        }
 
         chebyshevCoeffs[0] = approximateBessel(order: 0, argument: absTime)
-        var sign = -1.0
-        for k in 1 ... effectiveDegree {
-            let bessel = approximateBessel(order: k, argument: absTime)
-            chebyshevCoeffs[k] = sign * 2.0 * bessel
-            sign = -sign
+        for m in 1 ... effectiveDegree / 2 {
+            let sign = m % 2 == 0 ? 1.0 : -1.0
+            chebyshevCoeffs[2 * m] = sign * 2.0 * approximateBessel(order: 2 * m, argument: absTime)
         }
 
         let phases = chebyshevToQSPPhases(coefficients: chebyshevCoeffs, targetDegree: effectiveDegree)
@@ -611,10 +616,15 @@ public enum QuantumSignalProcessing {
     ) -> QSPPhaseAngles {
         let effectiveDegree = min(maxDegree, Int(ceil(log(2.0 / epsilon) / (1.0 - abs(threshold) + 0.01))))
 
-        var chebyshevCoeffs = [Double](repeating: 0.0, count: effectiveDegree + 1)
+        var chebyshevCoeffs = [Double](unsafeUninitializedCapacity: effectiveDegree + 1) {
+            buffer, count in
+            buffer.initialize(repeating: 0.0)
+            count = effectiveDegree + 1
+        }
 
         for k in stride(from: 1, through: effectiveDegree, by: 2) {
-            chebyshevCoeffs[k] = 4.0 / (Double.pi * Double(k))
+            let sign = ((k - 1) / 2) % 2 == 0 ? 1.0 : -1.0
+            chebyshevCoeffs[k] = sign * 4.0 / (Double.pi * Double(k))
         }
 
         let phases = chebyshevToQSPPhases(coefficients: chebyshevCoeffs, targetDegree: effectiveDegree)
@@ -637,11 +647,26 @@ public enum QuantumSignalProcessing {
     ) -> QSPPhaseAngles {
         let kappa = max(1.0, condition)
         let effectiveDegree = min(maxDegree, Int(ceil(kappa * log(2.0 * kappa / epsilon))))
+        let delta = 1.0 / kappa
 
-        var chebyshevCoeffs = [Double](repeating: 0.0, count: effectiveDegree + 1)
+        var chebyshevCoeffs = [Double](unsafeUninitializedCapacity: effectiveDegree + 1) {
+            buffer, count in
+            buffer.initialize(repeating: 0.0)
+            count = effectiveDegree + 1
+        }
+
+        let numNodes = max(4 * effectiveDegree, 64)
+        let invNodes = 2.0 / Double(numNodes)
 
         for k in stride(from: 1, through: effectiveDegree, by: 2) {
-            chebyshevCoeffs[k] = 2.0 / kappa
+            var ck = 0.0
+            for j in 0 ..< numNodes {
+                let theta = Double.pi * (Double(j) + 0.5) / Double(numNodes)
+                let x = cos(theta)
+                let fx = abs(x) >= delta ? 1.0 / (kappa * x) : kappa * x
+                ck += fx * cos(Double(k) * theta)
+            }
+            chebyshevCoeffs[k] = ck * invNodes
         }
 
         let phases = chebyshevToQSPPhases(coefficients: chebyshevCoeffs, targetDegree: effectiveDegree)
@@ -658,7 +683,11 @@ public enum QuantumSignalProcessing {
     @_optimize(speed)
     @_effects(readonly)
     private static func computeChebyshevPhases(degree: Int) -> QSPPhaseAngles {
-        var chebyshevCoeffs = [Double](repeating: 0.0, count: degree + 1)
+        var chebyshevCoeffs = [Double](unsafeUninitializedCapacity: degree + 1) {
+            buffer, count in
+            buffer.initialize(repeating: 0.0)
+            count = degree + 1
+        }
         chebyshevCoeffs[degree] = 1.0
 
         let phases = chebyshevToQSPPhases(coefficients: chebyshevCoeffs, targetDegree: degree)
@@ -690,7 +719,7 @@ public enum QuantumSignalProcessing {
         )
     }
 
-    /// Converts Chebyshev coefficients to QSP phase angles.
+    /// Converts Chebyshev coefficients to QSP phase angles via gradient optimization.
     @_optimize(speed)
     @_effects(readonly)
     private static func chebyshevToQSPPhases(
@@ -701,37 +730,213 @@ public enum QuantumSignalProcessing {
         ValidationUtilities.validateArrayCount(coefficients, expected: numPhases, name: "coefficients")
 
         if numPhases == 1 {
-            let c0 = coefficients[0]
-            return [acos(min(1.0, max(-1.0, c0))) / 2.0]
+            return [acos(min(1.0, max(-1.0, coefficients[0]))) / 2.0]
         }
 
         if numPhases == 2 {
-            return [Double.pi / 4.0, -Double.pi / 4.0]
+            let c1 = min(1.0, max(-1.0, coefficients[1]))
+            let halfAngle = acos(c1) / 2.0
+            return [halfAngle, halfAngle]
         }
 
-        var phases = [Double](repeating: 0.0, count: numPhases)
+        let numSamples = max(2 * numPhases, 16)
+        let invSamples = 1.0 / Double(numSamples)
 
-        let totalCoeffMagnitude = coefficients.reduce(0.0) { $0 + abs($1) }
-        let scale = totalCoeffMagnitude > 1.0 ? 1.0 / totalCoeffMagnitude : 1.0
-
-        phases[0] = Double.pi / 4.0 * scale
-
-        for i in 1 ..< numPhases - 1 {
-            let coeff = coefficients[i]
-            phases[i] = coeff * Double.pi / 4.0
+        let sampleCosines = [Double](unsafeUninitializedCapacity: numSamples) {
+            buffer, count in
+            for j in 0 ..< numSamples {
+                buffer[j] = cos(Double.pi * (2.0 * Double(j) + 1.0) / (2.0 * Double(numSamples)))
+            }
+            count = numSamples
         }
 
-        phases[numPhases - 1] = -Double.pi / 4.0 * scale
+        let sampleSines = [Double](unsafeUninitializedCapacity: numSamples) {
+            buffer, count in
+            for j in 0 ..< numSamples {
+                buffer[j] = sqrt(max(0.0, 1.0 - sampleCosines[j] * sampleCosines[j]))
+            }
+            count = numSamples
+        }
+
+        let targetValues = [Double](unsafeUninitializedCapacity: numSamples) {
+            buffer, count in
+            for j in 0 ..< numSamples {
+                buffer[j] = evaluateChebyshevPolynomial(coefficients, at: sampleCosines[j])
+            }
+            count = numSamples
+        }
+
+        var phases = [Double](unsafeUninitializedCapacity: numPhases) {
+            buffer, count in
+            buffer.initialize(repeating: 0.0)
+            count = numPhases
+        }
+        var gradient = [Double](unsafeUninitializedCapacity: numPhases) {
+            buffer, count in
+            buffer.initialize(repeating: 0.0)
+            count = numPhases
+        }
+        var phaseEp = [Complex<Double>](unsafeUninitializedCapacity: numPhases) {
+            buffer, count in
+            buffer.initialize(repeating: .one)
+            count = numPhases
+        }
+        var phaseEm = [Complex<Double>](unsafeUninitializedCapacity: numPhases) {
+            buffer, count in
+            buffer.initialize(repeating: .one)
+            count = numPhases
+        }
+        var phaseDep = [Complex<Double>](unsafeUninitializedCapacity: numPhases) {
+            buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = numPhases
+        }
+        var phaseDem = [Complex<Double>](unsafeUninitializedCapacity: numPhases) {
+            buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = numPhases
+        }
+        var pf00 = [Complex<Double>](unsafeUninitializedCapacity: numPhases + 1) {
+            buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = numPhases + 1
+        }
+        var pf01 = [Complex<Double>](unsafeUninitializedCapacity: numPhases + 1) {
+            buffer, count in
+            buffer.initialize(repeating: .zero)
+            count = numPhases + 1
+        }
+
+        var eta = 0.1
+        var prevLoss = Double.infinity
+
+        for _ in 0 ..< qspMaxIterations {
+            for k in 0 ..< numPhases {
+                gradient[k] = 0.0
+            }
+            var loss = 0.0
+
+            for k in 0 ..< numPhases {
+                let cp = cos(phases[k])
+                let sp = sin(phases[k])
+                phaseEp[k] = Complex(cp, -sp)
+                phaseEm[k] = Complex(cp, sp)
+                phaseDep[k] = Complex(-sp, -cp)
+                phaseDem[k] = Complex(-sp, cp)
+            }
+
+            for j in 0 ..< numSamples {
+                let ct = sampleCosines[j]
+                let st = sampleSines[j]
+
+                pf00[0] = .one
+                pf01[0] = .zero
+
+                for k in 0 ..< numPhases {
+                    let ep = phaseEp[k]
+                    let em = phaseEm[k]
+                    let a00: Complex<Double>
+                    let a01: Complex<Double>
+                    let a10: Complex<Double>
+                    let a11: Complex<Double>
+                    if k == 0 {
+                        a00 = ep; a01 = .zero; a10 = .zero; a11 = em
+                    } else {
+                        a00 = ep * ct; a01 = em * st; a10 = ep * -st; a11 = em * ct
+                    }
+                    pf00[k + 1] = pf00[k] * a00 + pf01[k] * a10
+                    pf01[k + 1] = pf00[k] * a01 + pf01[k] * a11
+                }
+
+                let value = pf00[numPhases].real
+                let residual = value - targetValues[j]
+                loss += residual * residual
+
+                var sf00: Complex<Double> = .one
+                var sf10: Complex<Double> = .zero
+
+                for k in stride(from: numPhases - 1, through: 0, by: -1) {
+                    let dep = phaseDep[k]
+                    let dem = phaseDem[k]
+                    let da00: Complex<Double>
+                    let da01: Complex<Double>
+                    let da10: Complex<Double>
+                    let da11: Complex<Double>
+                    if k == 0 {
+                        da00 = dep; da01 = .zero; da10 = .zero; da11 = dem
+                    } else {
+                        da00 = dep * ct; da01 = dem * st; da10 = dep * -st; da11 = dem * ct
+                    }
+
+                    let pd00 = pf00[k] * da00 + pf01[k] * da10
+                    let pd01 = pf00[k] * da01 + pf01[k] * da11
+                    let dm00 = pd00 * sf00 + pd01 * sf10
+                    gradient[k] += 2.0 * residual * dm00.real
+
+                    let ep = phaseEp[k]
+                    let em = phaseEm[k]
+                    let a00: Complex<Double>
+                    let a01: Complex<Double>
+                    let a10: Complex<Double>
+                    let a11: Complex<Double>
+                    if k == 0 {
+                        a00 = ep; a01 = .zero; a10 = .zero; a11 = em
+                    } else {
+                        a00 = ep * ct; a01 = em * st; a10 = ep * -st; a11 = em * ct
+                    }
+                    let nsf00 = a00 * sf00 + a01 * sf10
+                    let nsf10 = a10 * sf00 + a11 * sf10
+                    sf00 = nsf00
+                    sf10 = nsf10
+                }
+            }
+
+            loss *= invSamples
+            if loss < qspConvergenceThreshold { break }
+
+            if loss > prevLoss { eta *= 0.5 }
+            prevLoss = loss
+
+            for k in 0 ..< numPhases {
+                phases[k] -= eta * gradient[k] * invSamples
+            }
+        }
 
         return phases
     }
 
-    /// Approximates the Bessel function J_n(x) via power series.
+    /// Evaluates Chebyshev expansion via Clenshaw recurrence.
+    @_optimize(speed)
+    @_effects(readonly)
+    @inline(__always)
+    private static func evaluateChebyshevPolynomial(
+        _ coefficients: [Double],
+        at x: Double,
+    ) -> Double {
+        let n = coefficients.count
+        if n <= 1 { return n == 0 ? 0.0 : coefficients[0] }
+
+        var b1 = 0.0
+        var b2 = 0.0
+        let twox = 2.0 * x
+        for k in stride(from: n - 1, through: 1, by: -1) {
+            let temp = twox * b1 - b2 + coefficients[k]
+            b2 = b1
+            b1 = temp
+        }
+        return x * b1 - b2 + coefficients[0]
+    }
+
+    /// Approximates J_n(x) via power series or Hankel asymptotic expansion (DLMF 10.17).
     @_optimize(speed)
     @_effects(readonly)
     private static func approximateBessel(order: Int, argument: Double) -> Double {
         if argument < besselNearZeroThreshold {
             return order == 0 ? 1.0 : 0.0
+        }
+
+        if argument > Double(max(20, 2 * order)) {
+            return besselAsymptotic(order: order, argument: argument)
         }
 
         let halfArg = argument / 2.0
@@ -756,6 +961,42 @@ public enum QuantumSignalProcessing {
         }
 
         return sum
+    }
+
+    /// Hankel asymptotic expansion of J_n(x) for large x (DLMF 10.17.3-4).
+    @_optimize(speed)
+    @_effects(readonly)
+    private static func besselAsymptotic(order: Int, argument: Double) -> Double {
+        let nu = Double(order)
+        let mu = 4.0 * nu * nu
+        let omega = argument - (nu * 0.5 + 0.25) * Double.pi
+
+        var aPrev = 1.0
+        var p = 1.0
+        var q = 0.0
+        let invArg = 1.0 / argument
+        var invArgPow = 1.0
+
+        for k in 1 ... 20 {
+            let twoKMinus1 = Double(2 * k - 1)
+            let aK = aPrev * (mu - twoKMinus1 * twoKMinus1) / (8.0 * Double(k))
+            invArgPow *= invArg
+
+            if k & 1 == 1 {
+                let m = k >> 1
+                let sign = (m & 1 == 0) ? 1.0 : -1.0
+                q += sign * aK * invArgPow
+            } else {
+                let m = k >> 1
+                let sign = (m & 1 == 0) ? 1.0 : -1.0
+                p += sign * aK * invArgPow
+            }
+
+            if abs(aK * invArgPow) < 1e-16 * max(abs(p), abs(q), 1.0) { break }
+            aPrev = aK
+        }
+
+        return sqrt(2.0 / (Double.pi * argument)) * (p * cos(omega) - q * sin(omega))
     }
 }
 
@@ -1492,47 +1733,35 @@ public actor Qubitization {
         let newSize = 1 << totalQubits
         let oldSize = state.stateSpaceSize
 
-        var newAmplitudes = [Complex<Double>](repeating: .zero, count: newSize)
-
-        for i in 0 ..< oldSize {
-            newAmplitudes[i] = state.amplitudes[i]
+        let newAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: newSize) { buffer, count in
+            for i in 0 ..< oldSize {
+                buffer.initializeElement(at: i, to: state.amplitudes[i])
+            }
+            for i in oldSize ..< newSize {
+                buffer.initializeElement(at: i, to: .zero)
+            }
+            count = newSize
         }
 
-        return QuantumState(qubits: totalQubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: totalQubits, rawAmplitudes: newAmplitudes)
     }
 
-    /// Projects an extended state back to system qubits by partial trace.
+    /// Post-selects extended state on ancilla=|0⟩ to recover system-qubit state.
     @_optimize(speed)
     @_eagerMove
     private func projectToSystemQubits(state: QuantumState) -> QuantumState {
         let systemQubits = systemQubits
         let systemSize = 1 << systemQubits
-        let ancillaSize = state.stateSpaceSize / systemSize
 
-        var projectedAmplitudes = [Complex<Double>](repeating: .zero, count: systemSize)
-
-        for i in 0 ..< systemSize {
-            var sumSquared = 0.0
-            for a in 0 ..< ancillaSize {
-                let fullIndex = i + a * systemSize
-                if fullIndex < state.stateSpaceSize {
-                    sumSquared += state.amplitude(of: fullIndex).magnitudeSquared
-                }
+        let projectedAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: systemSize) {
+            buffer, count in
+            for i in 0 ..< systemSize {
+                buffer[i] = state.amplitude(of: i)
             }
-            let amplitude = state.amplitude(of: i)
-            let norm = sqrt(sumSquared)
-            if norm > Self.amplitudeThreshold {
-                let ampMagSq = amplitude.magnitudeSquared
-                if ampMagSq > Self.amplitudeThreshold {
-                    let invMag = 1.0 / sqrt(ampMagSq)
-                    projectedAmplitudes[i] = Complex(norm * amplitude.real * invMag, norm * amplitude.imaginary * invMag)
-                } else {
-                    projectedAmplitudes[i] = Complex(norm, 0.0)
-                }
-            }
+            count = systemSize
         }
 
-        return QuantumState(qubits: systemQubits, amplitudes: projectedAmplitudes)
+        return QuantumState(qubits: systemQubits, rawAmplitudes: projectedAmplitudes)
     }
 }
 

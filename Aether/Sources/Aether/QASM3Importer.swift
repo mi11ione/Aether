@@ -757,30 +757,10 @@ private func parseModifiers(_ state: inout ParserState) -> [GateModifier] {
         skipNewlines(&state)
         let token = currentToken(&state)
         switch token {
-        case .keyword("ctrl"):
-            advance(&state)
-            skipNewlines(&state)
-            var count = 1
-            if case .symbol("(") = currentToken(&state) {
-                advance(&state)
-                count = parseIntegerLiteral(&state)
-                expect(&state, symbol: ")")
-            }
-            skipNewlines(&state)
-            expect(&state, symbol: "@")
-            modifiers.append(.ctrl(count))
-        case .keyword("negctrl"):
-            advance(&state)
-            skipNewlines(&state)
-            var count = 1
-            if case .symbol("(") = currentToken(&state) {
-                advance(&state)
-                count = parseIntegerLiteral(&state)
-                expect(&state, symbol: ")")
-            }
-            skipNewlines(&state)
-            expect(&state, symbol: "@")
-            modifiers.append(.negctrl(count))
+        case .keyword("ctrl"), .keyword("negctrl"):
+            let isNegated = token == .keyword("negctrl")
+            let count = parseControlCount(&state)
+            modifiers.append(isNegated ? .negctrl(count) : .ctrl(count))
         case .keyword("inv"):
             advance(&state)
             skipNewlines(&state)
@@ -799,6 +779,21 @@ private func parseModifiers(_ state: inout ParserState) -> [GateModifier] {
             return modifiers
         }
     }
+}
+
+/// Parse a control modifier count with optional parenthesized value and trailing @.
+private func parseControlCount(_ state: inout ParserState) -> Int {
+    advance(&state)
+    skipNewlines(&state)
+    var count = 1
+    if case .symbol("(") = currentToken(&state) {
+        advance(&state)
+        count = parseIntegerLiteral(&state)
+        expect(&state, symbol: ")")
+    }
+    skipNewlines(&state)
+    expect(&state, symbol: "@")
+    return count
 }
 
 /// Parse a gate call with optional parameters, qubit arguments, and applied modifiers.
@@ -837,6 +832,7 @@ private func parseGateCall(_ state: inout ParserState, modifiers: [GateModifier]
 
     var gate = baseGateResolved
     var hasCtrl = false
+    var negativeControlQubits = [Int]()
 
     for modifier in modifiers.reversed() {
         switch modifier {
@@ -844,17 +840,12 @@ private func parseGateCall(_ state: inout ParserState, modifiers: [GateModifier]
             gate = gate.inverse
         case let .ctrl(count):
             hasCtrl = true
-            if count == 1, qubitArgs.count >= 2 {
-                let controlQubits = [qubitArgs[0]]
-                gate = .controlled(gate: gate, controls: controlQubits)
-            } else {
-                let controlQubits = Array(qubitArgs.prefix(count))
-                gate = .controlled(gate: gate, controls: controlQubits)
-            }
+            let controlQubits = Array(qubitArgs.prefix(count))
+            gate = .controlled(gate: gate, controls: controlQubits)
         case let .negctrl(count):
             hasCtrl = true
-            addWarning(&state, "negctrl modifier approximated as ctrl")
             let controlQubits = Array(qubitArgs.prefix(count))
+            negativeControlQubits.append(contentsOf: controlQubits)
             gate = .controlled(gate: gate, controls: controlQubits)
         case let .pow(exponent):
             guard exponent.isFinite else {
@@ -877,7 +868,14 @@ private func parseGateCall(_ state: inout ParserState, modifiers: [GateModifier]
         let (baseGate, controls) = gate.flattenControlled()
         let targetQubits = qubitArgs.filter { !controls.contains($0) }
         let allQubits = controls + targetQubits
+
+        for qubit in negativeControlQubits {
+            state.operations.append(.gate(.pauliX, qubits: [qubit]))
+        }
         state.operations.append(.gate(.controlled(gate: baseGate, controls: controls), qubits: allQubits))
+        for qubit in negativeControlQubits {
+            state.operations.append(.gate(.pauliX, qubits: [qubit]))
+        }
     } else {
         state.operations.append(.gate(gate, qubits: qubitArgs))
     }

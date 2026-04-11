@@ -820,35 +820,23 @@ public enum TimeEvolution {
             count = newSize
         }
 
-        return QuantumState(qubits: totalQubits, amplitudes: newAmplitudes)
+        return QuantumState(qubits: totalQubits, rawAmplitudes: newAmplitudes)
     }
 
-    /// Projects an extended state back to system qubits by tracing out ancillas.
+    /// Post-selects extended state on ancilla=|0⟩ to recover system-qubit state.
     @_optimize(speed)
     @_effects(readonly)
     @_eagerMove
     private static func projectToSystemQubits(state: QuantumState, systemQubits: Int) -> QuantumState {
         let systemSize = 1 << systemQubits
-        let ancillaSize = state.stateSpaceSize / systemSize
 
         let projectedAmplitudes = [Complex<Double>](unsafeUninitializedCapacity: systemSize) { buffer, count in
             for i in 0 ..< systemSize {
-                var sumSquared = 0.0
-                for a in 0 ..< ancillaSize {
-                    sumSquared += state.amplitude(of: i + a * systemSize).magnitudeSquared
-                }
-                let amplitude = state.amplitude(of: i)
-                let norm = sqrt(sumSquared)
-                if norm > epsilon {
-                    let scale = norm / sqrt(amplitude.magnitudeSquared)
-                    buffer.initializeElement(at: i, to: Complex(amplitude.real * scale, amplitude.imaginary * scale))
-                } else {
-                    buffer.initializeElement(at: i, to: .zero)
-                }
+                buffer.initializeElement(at: i, to: state.amplitude(of: i))
             }
             count = systemSize
         }
 
-        return QuantumState(qubits: systemQubits, amplitudes: projectedAmplitudes)
+        return QuantumState(qubits: systemQubits, rawAmplitudes: projectedAmplitudes)
     }
 }
